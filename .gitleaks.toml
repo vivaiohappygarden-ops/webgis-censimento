@@ -1,0 +1,15 @@
+# Configurazione gitleaks per la CI (job "Security scan").
+#
+# I file in docs/ sono documentazione tecnica con payload JSON di ESEMPIO
+# (token fittizi, idempotency key, UUID) che il rilevatore "generic-api-key"
+# scambia per segreti reali. La documentazione è esclusa dalla scansione;
+# tutto il codice, le configurazioni e i workflow restano controllati.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Esempi fittizi nella documentazione tecnica"
+paths = [
+  '''docs/.*\.md$''',
+]
