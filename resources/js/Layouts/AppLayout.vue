@@ -12,11 +12,11 @@ const can = (permission) => permissions.value.includes(permission);
 
 const nav = computed(() =>
     [
-        { label: 'Mappa', href: '/mappa', icon: '🗺️', show: can('assets.view') },
-        { label: 'Censimento', href: '/censimento', icon: '🌳', show: can('assets.view') },
-        { label: 'VTA', href: '/vta', icon: '🩺', show: can('assets.view') },
-        { label: 'Territorio', href: '/territorio', icon: '🏘️', show: can('clients.view') },
-        { label: 'Catalogo', href: '/catalogo', icon: '📚', show: can('catalog.view') },
+        { label: 'Mappa', href: '/mappa', show: can('assets.view') },
+        { label: 'Censimento', href: '/censimento', show: can('assets.view') },
+        { label: 'VTA', href: '/vta', show: can('assets.view') },
+        { label: 'Territorio', href: '/territorio', show: can('clients.view') },
+        { label: 'Catalogo', href: '/catalogo', show: can('catalog.view') },
     ].filter((item) => item.show)
 );
 
@@ -28,12 +28,9 @@ const logout = () => router.post('/logout');
 <template>
     <div class="flex h-screen overflow-hidden">
         <aside class="flex w-56 shrink-0 flex-col border-r border-gray-200 bg-white">
-            <div class="flex items-center gap-2 border-b border-gray-100 px-4 py-4">
-                <span class="text-2xl">🌳</span>
-                <div>
-                    <div class="text-sm font-semibold leading-tight">WebGIS Censimento</div>
-                    <div class="text-xs text-gray-500">{{ user?.organization?.name }}</div>
-                </div>
+            <div class="border-b border-gray-100 px-4 py-4">
+                <div class="text-sm font-semibold leading-tight">WebGIS Censimento</div>
+                <div class="text-xs text-gray-500">{{ user?.organization?.name }}</div>
             </div>
 
             <div class="px-3 pt-3">
@@ -41,7 +38,7 @@ const logout = () => router.post('/logout');
                     class="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400 transition hover:border-green-600 hover:text-gray-600"
                     @click="palette?.toggle(true)"
                 >
-                    <span>🔎 Cerca…</span>
+                    <span>Cerca…</span>
                     <kbd class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">Ctrl K</kbd>
                 </button>
             </div>
@@ -51,14 +48,11 @@ const logout = () => router.post('/logout');
                     v-for="item in nav"
                     :key="item.href"
                     :href="item.href"
-                    class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition"
+                    class="block rounded-lg px-3 py-2 text-sm font-medium transition"
                     :class="isActive(item.href)
                         ? 'bg-green-50 text-green-800'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
-                >
-                    <span>{{ item.icon }}</span>
-                    <span>{{ item.label }}</span>
-                </Link>
+                >{{ item.label }}</Link>
             </nav>
 
             <div class="border-t border-gray-100 p-3">

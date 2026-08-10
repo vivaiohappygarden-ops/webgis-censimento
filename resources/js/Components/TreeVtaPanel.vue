@@ -102,7 +102,7 @@ onMounted(loadAssessments);
 
 <template>
     <div class="mt-6 rounded-xl border border-gray-200 bg-white p-6">
-        <h2 class="text-sm font-semibold">🌳 Scheda albero</h2>
+        <h2 class="text-sm font-semibold">Scheda albero</h2>
 
         <div class="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
             <label class="block text-xs">
@@ -165,7 +165,7 @@ onMounted(loadAssessments);
                     v-if="canUpdate"
                     class="rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-800"
                     @click="showVtaForm = ! showVtaForm"
-                >＋ Nuova valutazione</button>
+                >+ Nuova valutazione</button>
             </div>
 
             <form v-if="showVtaForm" class="mt-3 space-y-2 rounded-xl bg-green-50/50 p-3" @submit.prevent="saveVta">

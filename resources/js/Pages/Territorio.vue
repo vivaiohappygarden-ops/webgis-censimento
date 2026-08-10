@@ -124,7 +124,7 @@ onMounted(loadClients);
                             v-if="canManage"
                             class="rounded-lg bg-green-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-800"
                             @click="forms.client.open = ! forms.client.open"
-                        >＋ Nuovo</button>
+                        >+ Nuovo</button>
                     </header>
 
                     <form v-if="forms.client.open" class="space-y-2 border-b border-gray-100 bg-green-50/40 p-3" @submit.prevent="saveClient">
@@ -166,7 +166,7 @@ onMounted(loadClients);
                             v-if="canManage && selectedClient"
                             class="rounded-lg bg-green-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-800"
                             @click="forms.site.open = ! forms.site.open"
-                        >＋ Nuova</button>
+                        >+ Nuova</button>
                     </header>
 
                     <form v-if="forms.site.open && selectedClient" class="space-y-2 border-b border-gray-100 bg-green-50/40 p-3" @submit.prevent="saveSite">
@@ -205,7 +205,7 @@ onMounted(loadClients);
                             v-if="canManage && selectedSite"
                             class="rounded-lg bg-green-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-800"
                             @click="forms.locality.open = ! forms.locality.open"
-                        >＋ Nuova</button>
+                        >+ Nuova</button>
                     </header>
 
                     <form v-if="forms.locality.open && selectedSite" class="space-y-2 border-b border-gray-100 bg-green-50/40 p-3" @submit.prevent="saveLocality">

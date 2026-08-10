@@ -35,10 +35,10 @@ onMounted(async () => {
                 </div>
                 <div class="flex gap-2">
                     <a href="/api/v1/exports/cam?layer=P1&format=geojson" class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50">
-                        ⬇️ Export CAM P1 (GeoJSON)
+                        Export CAM P1 (GeoJSON)
                     </a>
                     <a href="/api/v1/exports/cam?layer=P1&format=shapefile" class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50">
-                        ⬇️ Shapefile RDN2008
+                        Export CAM P1 (Shapefile RDN2008)
                     </a>
                 </div>
             </div>
@@ -85,7 +85,7 @@ onMounted(async () => {
                 <!-- Scaduti -->
                 <div class="rounded-xl border border-gray-200 bg-white">
                     <h2 class="border-b border-gray-100 px-4 py-3 text-sm font-semibold text-red-700">
-                        ⚠️ Ricontrolli scaduti ({{ data.overdue_count }})
+                        Ricontrolli scaduti ({{ data.overdue_count }})
                     </h2>
                     <table v-if="data.overdue.length" class="w-full text-sm">
                         <tbody class="divide-y divide-gray-50">
@@ -102,13 +102,13 @@ onMounted(async () => {
                             </tr>
                         </tbody>
                     </table>
-                    <p v-else class="px-4 py-5 text-sm text-gray-400">Nessun ricontrollo scaduto. 👏</p>
+                    <p v-else class="px-4 py-5 text-sm text-gray-400">Nessun ricontrollo scaduto.</p>
                 </div>
 
                 <!-- In scadenza -->
                 <div class="rounded-xl border border-gray-200 bg-white">
                     <h2 class="border-b border-gray-100 px-4 py-3 text-sm font-semibold text-amber-700">
-                        ⏳ In scadenza nei prossimi 30 giorni ({{ data.upcoming_count }})
+                        In scadenza nei prossimi 30 giorni ({{ data.upcoming_count }})
                     </h2>
                     <table v-if="data.upcoming.length" class="w-full text-sm">
                         <tbody class="divide-y divide-gray-50">

@@ -106,7 +106,7 @@ const measure = (row) => {
                     v-if="canCreate"
                     class="rounded-lg bg-green-700 px-3 py-2 text-sm font-medium text-white hover:bg-green-800"
                     @click="openImporter"
-                >⬆️ Importa GeoJSON</button>
+                >Importa GeoJSON</button>
             </div>
 
             <div class="mb-4 flex gap-3">
@@ -225,7 +225,7 @@ const measure = (row) => {
                                 <p v-if="importer.report.dropped_properties.length" class="mt-2 text-xs text-gray-500">
                                     Proprietà ignorate (non definite come campi del tipo): {{ importer.report.dropped_properties.join(', ') }}
                                 </p>
-                                <p v-if="! importer.report.dry_run" class="mt-2 font-medium text-green-700">Import completato ✓</p>
+                                <p v-if="! importer.report.dry_run" class="mt-2 font-medium text-green-700">Import completato</p>
                             </div>
 
                             <div class="flex gap-2">

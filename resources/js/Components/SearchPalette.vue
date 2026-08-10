@@ -65,7 +65,6 @@ defineExpose({ toggle });
         <div v-if="open" class="fixed inset-0 z-50 bg-black/30 p-4 pt-24" @click.self="toggle(false)">
             <div class="mx-auto w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
                 <div class="flex items-center gap-2 border-b border-gray-100 px-4">
-                    <span class="text-gray-400">🔎</span>
                     <input
                         ref="inputEl"
                         v-model="query"
@@ -85,7 +84,6 @@ defineExpose({ toggle });
                             class="flex w-full items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-left hover:bg-blue-100"
                             @click="go(`/censimento/${results.tag_match.asset.id}`)"
                         >
-                            <span>🏷️</span>
                             <span class="font-medium">Tag {{ results.tag_match.tag_uid }}</span>
                             <span class="text-gray-500">→ {{ results.tag_match.asset.census_code || results.tag_match.asset.type_name }}</span>
                         </button>
@@ -98,7 +96,6 @@ defineExpose({ toggle });
                                 class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-green-50"
                                 @click="go(`/censimento/${a.id}`)"
                             >
-                                <span>🌳</span>
                                 <span class="font-medium">{{ a.census_code || '—' }}</span>
                                 <span class="truncate text-gray-500">{{ a.type_name }}</span>
                             </button>
@@ -112,7 +109,6 @@ defineExpose({ toggle });
                                 class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-green-50"
                                 @click="go('/mappa')"
                             >
-                                <span>📐</span>
                                 <span class="font-medium">{{ a.name }}</span>
                                 <span class="text-gray-400">{{ a.code }}</span>
                             </button>
@@ -126,7 +122,6 @@ defineExpose({ toggle });
                                 class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-green-50"
                                 @click="go('/territorio')"
                             >
-                                <span>📍</span>
                                 <span class="font-medium">{{ l.name }}</span>
                                 <span class="text-gray-400">{{ l.site_name }}</span>
                             </button>

@@ -29,9 +29,9 @@ const selected = ref(null);
 const areas = ref([]);
 const localities = ref([]);
 const pointTypes = ref([]);
-const creating = reactive({ active: false, typeId: '', areaId: '', saving: false, message: '' });
+const creating = reactive({ active: false, typeId: '', areaId: '', saving: false, message: '', ok: false });
 const drawing = reactive({
-    active: false, vertices: [], name: '', code: '', localityId: '', saving: false, message: '',
+    active: false, vertices: [], name: '', code: '', localityId: '', saving: false, message: '', ok: false,
 });
 const canCreateAreas = computed(() => (page.props.auth?.user?.permissions ?? []).includes('areas.create'));
 const assetLayers = ['assets-fill', 'assets-line', 'assets-point'];
@@ -72,6 +72,7 @@ function resetDrawing() {
 
 async function saveDrawnArea() {
     if (drawing.vertices.length < 3 || !drawing.localityId || !drawing.name) {
+        drawing.ok = false;
         drawing.message = 'Servono almeno 3 vertici, una località e un nome.';
         return;
     }
@@ -87,10 +88,12 @@ async function saveDrawnArea() {
         });
         areas.value.push(data.data);
         refreshAreasSource();
-        drawing.message = `Area salvata ✓ (${Number(data.data.computed_area_sqm).toLocaleString('it-IT')} m²)`;
+        drawing.ok = true;
+        drawing.message = `Area salvata (${Number(data.data.computed_area_sqm).toLocaleString('it-IT')} m²)`;
         Object.assign(drawing, { vertices: [], name: '', code: '' });
         updateDrawPreview();
     } catch (err) {
+        drawing.ok = false;
         drawing.message = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
             ?? err.response?.data?.message ?? 'Errore nel salvataggio';
     } finally {
@@ -122,9 +125,11 @@ async function onMapClick(e) {
             survey_method: 'manual_map',
             geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
         });
-        creating.message = 'Elemento salvato ✓';
+        creating.ok = true;
+        creating.message = 'Elemento salvato';
         refreshTiles();
     } catch (err) {
+        creating.ok = false;
         creating.message = err.response?.data?.message ?? 'Errore nel salvataggio';
     } finally {
         creating.saving = false;
@@ -281,7 +286,7 @@ onBeforeUnmount(() => map?.remove());
                     <hr class="my-3 border-gray-200">
                     <label class="flex cursor-pointer items-center gap-2 text-sm font-medium">
                         <input v-model="drawing.active" type="checkbox" class="rounded border-gray-300" @change="resetDrawing">
-                        📐 Disegna area
+                        Disegna area
                     </label>
                     <div v-if="drawing.active" class="mt-2 space-y-2">
                         <p class="text-xs text-gray-500">
@@ -301,7 +306,7 @@ onBeforeUnmount(() => map?.remove());
                             >{{ drawing.saving ? 'Salvataggio…' : 'Salva area' }}</button>
                             <button class="rounded-lg border border-gray-300 px-2 py-1.5 text-xs" @click="resetDrawing">Ricomincia</button>
                         </div>
-                        <p v-if="drawing.message" class="text-xs font-medium" :class="drawing.message.includes('✓') ? 'text-green-700' : 'text-red-600'">
+                        <p v-if="drawing.message" class="text-xs font-medium" :class="drawing.ok ? 'text-green-700' : 'text-red-600'">
                             {{ drawing.message }}
                         </p>
                     </div>
@@ -311,7 +316,7 @@ onBeforeUnmount(() => map?.remove());
                     <hr class="my-3 border-gray-200">
                     <label class="flex cursor-pointer items-center gap-2 text-sm font-medium">
                         <input v-model="creating.active" type="checkbox" class="rounded border-gray-300">
-                        ➕ Nuovo elemento
+                        Nuovo elemento
                     </label>
                     <div v-if="creating.active" class="mt-2 space-y-2">
                         <select v-model="creating.areaId" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs">
@@ -325,7 +330,7 @@ onBeforeUnmount(() => map?.remove());
                         <p class="text-xs text-gray-500">
                             {{ creating.saving ? 'Salvataggio…' : 'Clicca sulla mappa per posizionare l\'elemento.' }}
                         </p>
-                        <p v-if="creating.message" class="text-xs font-medium" :class="creating.message.includes('✓') ? 'text-green-700' : 'text-red-600'">
+                        <p v-if="creating.message" class="text-xs font-medium" :class="creating.ok ? 'text-green-700' : 'text-red-600'">
                             {{ creating.message }}
                         </p>
                     </div>

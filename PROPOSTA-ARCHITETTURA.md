@@ -3,14 +3,13 @@
 **Piattaforma WebGIS professionale per la gestione del verde**
 Analisi dei requisiti e proposta tecnica — versione 0.2 del 10/08/2026
 
-> **Stato: IN ATTESA DI APPROVAZIONE.** Come richiesto dal prompt (§109), questo documento è l'unico
-> deliverable di questa fase. Nessun codice applicativo è stato scritto. Lo sviluppo parte solo dopo
-> approvazione esplicita di questa proposta.
+> **Stato: APPROVATA il 10/08/2026** dal committente ("approvato"). Lo sviluppo è in corso secondo
+> la roadmap del §15.
 >
 > **Aggiornamento 10/08/2026 — decisioni ricevute dal committente**: hosting = piano economico Aruba
 > (§7.2); dispositivi di campo = terminali Zebra + smartphone, con barcode/QR/NFC (§12); clienti PA
-> attesi entro 6-12 mesi → export CAM anticipato alla Fase 2 (§15). Approvazione dell'architettura:
-> in attesa — richiesta una spiegazione non tecnica, aggiunta come §0.
+> attesi entro 6-12 mesi → export CAM anticipato alla Fase 2 (§15); stile grafico dell'interfaccia =
+> molto analitico, senza emoji (tipografia sobria, dati in evidenza, niente icone pittografiche).
 
 ---
 

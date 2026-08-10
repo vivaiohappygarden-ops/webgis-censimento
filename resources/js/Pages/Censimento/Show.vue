@@ -146,7 +146,7 @@ onBeforeUnmount(() => map?.remove());
                                     v-if="canUpdate && ! editing"
                                     class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
                                     @click="editing = true"
-                                >✏️ Modifica</button>
+                                >Modifica</button>
                                 <span
                                     class="rounded-full px-3 py-1 text-xs font-medium"
                                     :class="asset.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'"
@@ -235,7 +235,7 @@ onBeforeUnmount(() => map?.remove());
                         <div class="flex items-center justify-between">
                             <h2 class="text-sm font-semibold">Fotografie ({{ asset.photos?.length ?? 0 }})</h2>
                             <label v-if="canUpdate" class="cursor-pointer rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800">
-                                {{ uploading ? 'Caricamento…' : '📷 Carica foto' }}
+                                {{ uploading ? 'Caricamento…' : 'Carica foto' }}
                                 <input type="file" accept="image/jpeg,image/png,image/webp" class="hidden" :disabled="uploading" @change="uploadPhoto">
                             </label>
                         </div>
