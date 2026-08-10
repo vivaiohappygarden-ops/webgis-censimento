@@ -1,16 +1,22 @@
 # PROPOSTA-ARCHITETTURA
 
 **Piattaforma WebGIS professionale per la gestione del verde**
-Analisi dei requisiti e proposta tecnica — versione 0.1 del 10/08/2026
+Analisi dei requisiti e proposta tecnica — versione 0.2 del 10/08/2026
 
 > **Stato: IN ATTESA DI APPROVAZIONE.** Come richiesto dal prompt (§109), questo documento è l'unico
 > deliverable di questa fase. Nessun codice applicativo è stato scritto. Lo sviluppo parte solo dopo
 > approvazione esplicita di questa proposta.
+>
+> **Aggiornamento 10/08/2026 — decisioni ricevute dal committente**: hosting = piano economico Aruba
+> (§7.2); dispositivi di campo = terminali Zebra + smartphone, con barcode/QR/NFC (§12); clienti PA
+> attesi entro 6-12 mesi → export CAM anticipato alla Fase 2 (§15). Approvazione dell'architettura:
+> in attesa — richiesta una spiegazione non tecnica, aggiunta come §0.
 
 ---
 
 ## Indice
 
+0. [In parole semplici](#0-in-parole-semplici)
 1. [Documenti analizzati](#1-documenti-analizzati)
 2. [Riepilogo ragionato dei requisiti](#2-riepilogo-ragionato-dei-requisiti)
 3. [Matrice dei requisiti](#3-matrice-dei-requisiti)
@@ -28,6 +34,48 @@ Analisi dei requisiti e proposta tecnica — versione 0.1 del 10/08/2026
 15. [Roadmap di sviluppo per fasi](#15-roadmap-di-sviluppo-per-fasi)
 16. [Rischi tecnici e mitigazioni](#16-rischi-tecnici-e-mitigazioni)
 17. [Domande indispensabili prima di iniziare](#17-domande-indispensabili-prima-di-iniziare)
+
+---
+
+## 0. In parole semplici
+
+Sintesi per chi non mastica i tecnicismi.
+
+**Cosa costruiamo.** Tre pezzi che lavorano insieme:
+
+1. **Il gestionale in ufficio** — un sito web riservato dove vedi su mappa tutto ciò che gestisci
+   (alberi, prati, siepi, giochi, impianti di irrigazione), apri le schede, programmi i lavori delle
+   squadre e stampi report e computi.
+2. **L'app per il campo** — sul telefono o sul palmare Zebra: l'operatore vede i suoi lavori,
+   inquadra il QR o avvicina il tag NFC sulla pianta e gli si apre la scheda giusta, scatta le foto,
+   chiude l'intervento. Funziona anche **senza segnale**: salva tutto sul dispositivo e sincronizza
+   da sola appena torna la linea.
+3. **L'archivio centrale** — il database geografico: ogni oggetto ha posizione, foto, storia,
+   controlli e costi. È il "catasto del verde" da cui nasce tutto il resto.
+
+**Le tecnologie scelte, tradotte.**
+
+- *PostgreSQL + PostGIS* = l'archivio. Database professionale gratuito; PostGIS gli insegna a
+  lavorare con le mappe (es. calcola da solo i m² di un prato dal disegno del poligono).
+- *Laravel* = il telaio del gestionale: fondamenta prefabbricate e collaudate da milioni di siti
+  (accessi, permessi, sicurezza già pronti), su cui costruiamo solo le stanze che servono a noi.
+- *PWA* = l'app di campo: si installa dal browser senza passare dagli store e sa lavorare offline.
+- *Docker* = scatole preconfezionate: il software si installa identico sul tuo PC, su Aruba o su
+  qualunque altro fornitore. Zero dipendenza da un fornitore specifico.
+- *Object Storage S3* = l'armadio delle foto e dei documenti: paghi solo lo spazio usato, centesimi
+  al GB.
+- *MapLibre* = la mappa interattiva (stile Google Maps, ma open source e gratuita).
+
+**Perché non WordPress**: è fatto per siti e blog, non per un gestionale con mappa, milioni di
+oggetti e app offline — lo useremmo contro la sua natura, con più costi e più rischi.
+
+**Quanto costa l'infrastruttura** (piano economico scelto): 0 € durante lo sviluppo → ~3-4 €/mese
+quando mettiamo online la demo → ~10-20 €/mese al debutto col primo utilizzo reale → ~40-70 €/mese
+solo quando arriveranno clienti/PA che richiedono garanzie di servizio elevate.
+
+**Come procediamo**: a fasi (§15), e ogni fase consegna qualcosa di usabile: prima il censimento su
+mappa, poi alberi e controlli di stabilità con l'export per i Comuni, poi l'app di campo offline,
+poi lavori e rendicontazione. Ogni fase termina con una demo e con la tua approvazione.
 
 ---
 
@@ -422,18 +470,29 @@ listino [cloud.it/prezzi](https://www.cloud.it/prezzi)).
   Da usare solo previa conferma scritta del supporto Aruba; fino ad allora PostgreSQL self-managed
   in container.
 
-### 7.2 Cosa acquistare (proposta)
+### 7.2 Cosa acquistare — piano economico (scelto dal committente il 10/08/2026)
 
-| Ambiente | Servizio Aruba | Taglio consigliato | Costo indicativo |
+Acquisti scaglionati: si compra solo quando la fase lo richiede.
+
+| Quando | Servizio Aruba | Taglio | Costo indicativo |
 |---|---|---|---|
-| DEV + STAGING | **Cloud VPS** (linea OpenStack) | 2 vCPU / 4 GB / 60 GB SSD, Ubuntu 24.04 LTS — due stack Docker Compose isolati (dev, staging) sullo stesso host | ~6–9 €/mese |
-| PRODUZIONE | **Cloud Server PRO** (OpenStack, storage ridondato, SLA 99,95%, scalabile a caldo) | 4 vCPU / 8–16 GB / 160 GB NVMe, Ubuntu 24.04 LTS — Docker Compose: app+worker+PostgreSQL/PostGIS+Redis | ~40–70 €/mese |
-| Foto/documenti | **Cloud Object Storage** (S3-compatible confermato) | bucket separati prod/staging; pay-per-use ~0,011 €/GB/mese | ~1–3 €/mese fino a ~200 GB (pacchetto 1 TB: 28,99 €/mese) |
-| Backup off-site | Bucket Object Storage **in data center diverso** da quello di produzione (dump `pg_dump` giornalieri cifrati + WAL + volumi) **+ Cloud Backup 50/100** per l'immagine VM | 50–100 GB | ~8–15 €/mese totali |
-| DNS/SSL | Dominio già su Aruba; DNS Aruba; certificati **Let's Encrypt** sul server (gratis) | — | 0 € |
-| Email transazionali | SMTP Aruba del dominio per iniziare; in caso di volumi, provider transazionale dedicato | — | 0 € iniziali |
+| Oggi (Fasi 0-2) | **Nessun acquisto**: sviluppo in Docker sul PC locale | — | 0 € |
+| Demo/staging (da Fase 3) | **Cloud VPS** (linea OpenStack) | 1-2 vCPU / 2 GB, Ubuntu 24.04 LTS | ~3–4 €/mese |
+| Go-live pilota | **Cloud VPS** (linea OpenStack) | 2-4 vCPU / 4-8 GB / 60-80 GB SSD — Docker Compose completo (app+worker+PostgreSQL/PostGIS+Redis) | ~6–15 €/mese |
+| Foto/documenti | **Cloud Object Storage** (S3-compatible confermato) | bucket separati prod/staging, pay-per-use ~0,011 €/GB/mese | ~1–3 €/mese fino a ~200 GB |
+| Backup off-site | Bucket Object Storage **in data center diverso** da quello di produzione (dump `pg_dump` giornalieri cifrati + volumi) | 50–100 GB | ~1–2 €/mese |
+| DNS/SSL/email | Dominio e DNS già su Aruba; certificati **Let's Encrypt** (gratis); SMTP Aruba del dominio | — | 0 € |
 
-**Totale stimato: ~60–95 €/mese +IVA** per l'intera infrastruttura a regime (dev+staging+prod+storage+backup).
+**Totale al go-live del pilota: ~10–20 €/mese +IVA.**
+
+Trade-off accettato: il VPS di produzione pilota non ha storage ridondato né SLA 99,95%.
+Mitigazione: backup off-site giornalieri **testati** (restore di prova periodico) — in caso di guasto
+si ripristina su un VPS nuovo in poche ore (RPO 24h, 1h per il DB con archiviazione WAL; RTO ~4h).
+
+**Percorso di upgrade** (quando arrivano clienti paganti o PA con SLA contrattuali): produzione
+migrata via snapshot su **Cloud Server PRO** 4 vCPU / 8-16 GB (~40–70 €/mese, storage ridondato,
+SLA 99,95%, scalabile a caldo) e backup VM aggiuntivo con Cloud Backup 50/100 (6,99–12,99 €/mese).
+Il piano "standard" resta quindi il traguardo, non il punto di partenza.
 
 Note:
 
@@ -445,10 +504,10 @@ Note:
   a qualunque provider senza modifiche applicative.
 - Tutti i data center proposti sono in Italia (rilevante per clienti PA e GDPR).
 
-**Azione richiesta a te**: nessun acquisto immediato. Per la Fase 1 di sviluppo basta l'ambiente
-locale; il primo acquisto sensato è il **VPS dev/staging (~6 €/mese)** alla fine della Fase 1, e il
-Cloud Server PRO di produzione solo al go-live del pilota. Se mi confermi quale abbonamento Aruba hai
-già attivo (hosting condiviso? un Cloud Server esistente?), rifinisco il piano acquisti.
+**Azione richiesta a te**: nessun acquisto immediato. Il primo acquisto sarà il VPS di staging
+(~3-4 €/mese) all'inizio della Fase 3, quando servirà la demo online dell'app di campo — te lo
+segnalerò io al momento giusto. Resta utile sapere quale abbonamento Aruba hai già attivo (hosting
+condiviso? dominio? PEC?).
 
 ---
 
@@ -659,8 +718,12 @@ sensibili resta il login utente + permessi.
 
 Prima dello sviluppo (Fase 0) produrremo `ZEBRA-INTEGRATION.md` con: modelli target, matrice
 DataWedge (profili, intent, keystroke), NFC (NTAG213/215/216, password protection, lock bytes),
-RFID, stampa ZPL, SDK necessari e limitazioni — come richiesto da §98. **Serve conoscere i modelli
-Zebra previsti** (domanda Q4).
+RFID, stampa ZPL, SDK necessari e limitazioni — come richiesto da §98.
+
+**Confermato dal committente (10/08/2026)**: in campo si useranno sia terminali Zebra sia smartphone
+consumer; tecnologie richieste: **barcode, QR code e NFC**. I modelli esatti non sono ancora
+definiti: ZEBRA-INTEGRATION.md includerà quindi anche una raccomandazione d'acquisto
+(terminale + tag NFC + stampante etichette).
 
 ---
 
@@ -716,12 +779,12 @@ Documento di dettaglio: `SECURITY.md` (Fase 1).
 |---|---|---|---|
 | **0 — Fondazioni** | Setup repo/CI/CD, Docker, scheletro Laravel+PWA, decisioni finali; **ZEBRA-INTEGRATION.md**, **OFFLINE-SYNC.md**, **GIS-DATA-MODEL.md**; schema DB core; seed catalogo MD v2.1 | Ambiente dev funzionante, documenti tecnici, ER definitivo | 2-3 settimane |
 | **1 — Core GIS + Censimento** | Tenancy, auth/RBAC, clienti/contratti/località/aree, Catalog Manager, CRUD asset con mappa (MVT), foto/documenti, ricerca globale, audit/versioning | Censimento utilizzabile da backoffice | 6-8 settimane |
-| **2 — Alberi & VTA** | Scheda albero completa, timeline, VTA/VSA con difetti e classi, strumentali, scadenzario, dashboard, bilancio arboreo, dedicati/monumentali | Catasto alberi conforme L.10/2013 | 4-6 settimane |
+| **2 — Alberi & VTA** | Scheda albero completa, timeline, VTA/VSA con difetti e classi, strumentali, scadenzario, dashboard, bilancio arboreo, dedicati/monumentali; **anticipo CAM** (decisione 10/08/2026, clienti PA entro 6-12 mesi): import/export shapefile RDN2008 di alberi e aree secondo il profilo base del Modello Dati v2.1 | Catasto alberi conforme L.10/2013 + primo export CAM | 5-7 settimane |
 | **3 — Mobile offline v1** | PWA operatore (I MIEI LAVORI/MAPPA/SCANSIONA/…), offline working set + sync, censimento massivo, scan barcode/NFC web, indicatore sync | Operatività in campo su smartphone | 6-8 settimane |
 | **4 — Lavori & Economia** | ODL workflow, programmazione (agenda/calendario/Gantt/mappa), squadre/mezzi/materiali, consuntivazione campo, listini, cicli ordinari, straordinaria, SAL, report economici | Ciclo lavori end-to-end | 6-8 settimane |
 | **5 — Qualità & Ispezioni** | Template checklist, ispezioni, giri ispettivi, aree gioco EN1176, segnalazioni, NC, SLA | Modulo sicurezza/qualità completo | 4-5 settimane |
 | **6 — Zebra & stampa** | Wrapper Android (DataWedge intent, NFC nativo), associazione massiva, stampa ZPL, test su device reali | Integrazione rugged certificata | 3-4 settimane |
-| **7 — Import/Export CAM & Report** | Wizard import 7 step, GDAL, profilo CAM/MD import+export, collaudo rilievi, generatore PDF template, export massivi | Conformità CAM dimostrabile | 4-5 settimane |
+| **7 — Import/Export CAM & Report** | Wizard import 7 step, GDAL, **completamento** profilo CAM/MD import+export (tutte le macro-categorie; il profilo base alberi/aree è anticipato in Fase 2), collaudo rilievi, generatore PDF template, export massivi | Conformità CAM completa dimostrabile | 4-5 settimane |
 | **8 — Portali & Irrigazione** | Portale cliente, portale pubblico + QR pubblico, modulo irrigazione completo, gestione idrica base | Prodotto completo v1.0 | 5-6 settimane |
 | **9+ — Evoluzioni** | Meteo/Water/Benefits (motori pluggable), ottimizzazione giri (OSRM), IoT, AI assistant, RFID UHF, detection anomalie | Moduli opzionali | a seguire |
 
