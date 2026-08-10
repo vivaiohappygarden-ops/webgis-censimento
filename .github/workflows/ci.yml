@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+
+jobs:
+  test:
+    name: Test (PHP 8.4, PostgreSQL 16 + PostGIS 3.4)
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: webgis_test
+          POSTGRES_USER: webgis
+          POSTGRES_PASSWORD: webgis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U webgis -d webgis_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: pdo_pgsql, pgsql, gd, exif, intl, zip, bcmath, redis
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_DATABASE: webgis_test
+          DB_USERNAME: webgis
+          DB_PASSWORD: webgis
+
+      - name: Run tests
+        run: php artisan test
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_DATABASE: webgis_test
+          DB_USERNAME: webgis
+          DB_PASSWORD: webgis
+          REDIS_HOST: 127.0.0.1
+
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+
+      - name: Composer audit (vulnerabilità dipendenze)
+        run: |
+          composer install --no-interaction --prefer-dist --no-progress
+          composer audit
+
+      - name: Secret scanning (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

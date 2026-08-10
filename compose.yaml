@@ -1,0 +1,68 @@
+# Ambiente di SVILUPPO — solo i servizi di infrastruttura.
+# L'applicazione Laravel gira sull'host: `php artisan serve` (vedi README).
+#
+# Avvio:    docker compose up -d
+# Stato:    docker compose ps
+# Arresto:  docker compose down          (i dati restano nei volumi)
+# Reset:    docker compose down -v       (ATTENZIONE: cancella i dati)
+
+name: webgis-censimento
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: webgis
+      POSTGRES_USER: webgis
+      POSTGRES_PASSWORD: webgis
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webgis -d webgis"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Object storage S3-compatible locale (in produzione: Aruba Cloud Object Storage)
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: webgis
+      MINIO_ROOT_PASSWORD: webgis-dev-secret
+    ports:
+      - "127.0.0.1:9000:9000"   # API S3
+      - "127.0.0.1:9001:9001"   # Console web
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Cattura tutte le email inviate in sviluppo: UI su http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "127.0.0.1:1025:1025"   # SMTP
+      - "127.0.0.1:8025:8025"   # UI
+
+volumes:
+  dbdata:
+  redisdata:
+  miniodata:
