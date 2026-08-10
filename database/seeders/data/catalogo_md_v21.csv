@@ -1,0 +1,388 @@
+codice,geo,tp_code,tp_nome,ts_code,ts_nome,att_code,descrizione,foto_riferimento_rilevante
+S101000,S,1,Vegetazione,01,PRATO,000,prato generico,no
+S101016,S,1,Vegetazione,01,PRATO,016,prato in erba,si
+S101017,S,1,Vegetazione,01,PRATO,017,sterrato,si
+S101050,S,1,Vegetazione,01,PRATO,050,prato in carreggiabile erbosa/green paving,si
+S101051,S,1,Vegetazione,01,PRATO,051,prato in scarpata/fossetti,si
+S101052,S,1,Vegetazione,01,PRATO,052,prato in linea tramviaria,si
+S101053,S,1,Vegetazione,01,PRATO,053,prato su campi cimiteriali,si
+S101115,S,1,Vegetazione,01,PRATO,115,prato incolto,si
+S101117,S,1,Vegetazione,01,PRATO,117,prato marginale,si
+S101118,S,1,Vegetazione,01,PRATO,118,prato/campo agricolo,si
+S101119,S,1,Vegetazione,01,PRATO,119,prato fiorito,si
+S101120,S,1,Vegetazione,01,PRATO,120,prato fiorito spontaneo,si
+S101124,S,1,Vegetazione,01,PRATO,124,prato in fosso di confine,si
+S101126,S,1,Vegetazione,01,PRATO,126,area sotto siepe,no
+S101816,S,1,Vegetazione,01,PRATO,816,prato in banchina,si
+S101851,S,1,Vegetazione,01,PRATO,851,prato in banchina scarpata,si
+S102000,S,1,Vegetazione,02,AIUOLA,000,aiuola generica,no
+S102101,S,1,Vegetazione,02,AIUOLA,101,aiuola cespuglio macchia,si
+S102102,S,1,Vegetazione,02,AIUOLA,102,aiuola erbacee perenni,si
+S102103,S,1,Vegetazione,02,AIUOLA,103,aiuola erbacee annuali,si
+S102111,S,1,Vegetazione,02,AIUOLA,111,aiuola pensile intensivo,si
+S102112,S,1,Vegetazione,02,AIUOLA,112,aiuola pensile estensivo,si
+S102113,S,1,Vegetazione,02,AIUOLA,113,aiuola verde verticale,si
+S102121,S,1,Vegetazione,02,AIUOLA,121,aiuola fiorita di pregio,si
+S102122,S,1,Vegetazione,02,AIUOLA,122,aiuola fiorita perenne,si
+S102455,S,1,Vegetazione,02,AIUOLA,455,aiuola con griglia,si
+S103100,S,1,Vegetazione,03,PIANTA,100,bosco,si
+S103101,S,1,Vegetazione,03,PIANTA,101,cespuglio macchia/tappezzante,si
+S103114,S,1,Vegetazione,03,PIANTA,114,vegetazione acquatica,si
+S103115,S,1,Vegetazione,03,PIANTA,115,rovo/sterpaglia,si
+S103123,S,1,Vegetazione,03,PIANTA,123,gruppo di alberi,si
+S103160,S,1,Vegetazione,03,PIANTA,160,forestazione urbana,si
+S103259,S,1,Vegetazione,03,PIANTA,259,cespuglio macchia in vaso/fioriera,si
+S103292,S,1,Vegetazione,03,PIANTA,292,cespuglio macchia in fioriera sospesa,si
+L103104,L,1,Vegetazione,03,PIANTA,104,filare stradale,si
+L103105,L,1,Vegetazione,03,PIANTA,105,filare - in area a verde o pedonale,si
+L103106,L,1,Vegetazione,03,PIANTA,106,filare - in area a verde o pedonale con proiezione su strada,si
+L103107,L,1,Vegetazione,03,PIANTA,107,siepe,si
+L103116,L,1,Vegetazione,03,PIANTA,116,ciglio stradale,si
+L103125,L,1,Vegetazione,03,PIANTA,125,rampicante,si
+P103108,P,1,Vegetazione,03,PIANTA,108,albero,si
+P103109,P,1,Vegetazione,03,PIANTA,109,cespuglio singolo/arbusto,si
+P103259,P,1,Vegetazione,03,PIANTA,259,pianta in vaso/fioriera,si
+S204000,S,2,Arredo urbano,04,ACQUA,000,specchio d'acqua generico,no
+S204150,S,2,Arredo urbano,04,ACQUA,150,stagno,si
+S204151,S,2,Arredo urbano,04,ACQUA,151,corso d'acqua,si
+S204152,S,2,Arredo urbano,04,ACQUA,152,specchio d'acqua di una fontana,si
+S204153,S,2,Arredo urbano,04,ACQUA,153,lago artificiale,si
+S204154,S,2,Arredo urbano,04,ACQUA,154,cava,si
+S204155,S,2,Arredo urbano,04,ACQUA,155,fossato con acqua,si
+S204156,S,2,Arredo urbano,04,ACQUA,156,fontanile,si
+S205000,S,2,Arredo urbano,05,PAVIMENTAZIONE,000,pavimentazione generica,no
+S205001,S,2,Arredo urbano,05,PAVIMENTAZIONE,001,pavimentazione in sabbia,si
+S205002,S,2,Arredo urbano,05,PAVIMENTAZIONE,002,pavimentazione in ghiaia,si
+S205003,S,2,Arredo urbano,05,PAVIMENTAZIONE,003,pavimentazione in calcestre,si
+S205004,S,2,Arredo urbano,05,PAVIMENTAZIONE,004,pavimentazione in pietra,si
+S205005,S,2,Arredo urbano,05,PAVIMENTAZIONE,005,pavimentazione in asfalto,si
+S205006,S,2,Arredo urbano,05,PAVIMENTAZIONE,006,pavimentazione in autobloccanti,si
+S205007,S,2,Arredo urbano,05,PAVIMENTAZIONE,007,pavimentazione in lastre calcestruzzo,si
+S205008,S,2,Arredo urbano,05,PAVIMENTAZIONE,008,pavimentazione in ciotoli,si
+S205009,S,2,Arredo urbano,05,PAVIMENTAZIONE,009,pavimentazione in granulato sferoidale di quarzo,si
+S205010,S,2,Arredo urbano,05,PAVIMENTAZIONE,010,pavimentazione in cemento,si
+S205011,S,2,Arredo urbano,05,PAVIMENTAZIONE,011,pavimentazione in mattoni,si
+S205012,S,2,Arredo urbano,05,PAVIMENTAZIONE,012,pavimentazione in legno,si
+S205013,S,2,Arredo urbano,05,PAVIMENTAZIONE,013,pavimentazione in gomma,si
+S205015,S,2,Arredo urbano,05,PAVIMENTAZIONE,015,pavimentazione in erba sintetica,si
+S205018,S,2,Arredo urbano,05,PAVIMENTAZIONE,018,Roccia,si
+S205019,S,2,Arredo urbano,05,PAVIMENTAZIONE,019,pavimentazione in plastica,si
+S205020,S,2,Arredo urbano,05,PAVIMENTAZIONE,020,pavimentazione in resina,si
+S205021,S,2,Arredo urbano,05,PAVIMENTAZIONE,021,pavimentazione in piastrelle,si
+S205022,S,2,Arredo urbano,05,PAVIMENTAZIONE,022,pavimentazione in vetro cemento,si
+S205023,S,2,Arredo urbano,05,PAVIMENTAZIONE,023,pavimentazione in lamiera,si
+S205024,S,2,Arredo urbano,05,PAVIMENTAZIONE,024,pavimentazione in ferro,si
+S205025,S,2,Arredo urbano,05,PAVIMENTAZIONE,025,pavimentazione in terra rossa,si
+S205026,S,2,Arredo urbano,05,PAVIMENTAZIONE,026,pavimentazione in metallo (Corten),si
+S205027,S,2,Arredo urbano,05,PAVIMENTAZIONE,027,pavimentazione in legno composito,si
+S205054,S,2,Arredo urbano,05,PAVIMENTAZIONE,054,pavimentazione in corteccia,si
+S205057,S,2,Arredo urbano,05,PAVIMENTAZIONE,057,pavimentazione in porfido,si
+L205000,L,2,Arredo urbano,05,PAVIMENTAZIONE,000,percorso/sentiero pavimentato,no
+S242000,S,2,Arredo urbano,42,PAVIMENTAZIONE ANTITRAUMA,000,pavimentazione antitrauma generica,no
+S242001,S,2,Arredo urbano,42,PAVIMENTAZIONE ANTITRAUMA,001,pavimentazione antitrauma in sabbia,si
+S242002,S,2,Arredo urbano,42,PAVIMENTAZIONE ANTITRAUMA,002,pavimentazione antitrauma in ghiaia,si
+S242013,S,2,Arredo urbano,42,PAVIMENTAZIONE ANTITRAUMA,013,pavimentazione antitrauma in gomma,si
+S242015,S,2,Arredo urbano,42,PAVIMENTAZIONE ANTITRAUMA,015,pavimentazione antitrauma in erba sintetica,si
+S242054,S,2,Arredo urbano,42,PAVIMENTAZIONE ANTITRAUMA,054,pavimentazione antitrauma in corteccia,si
+S206000,S,2,Arredo urbano,06,IMPIANTO SPORT PALLAVOLO-BASKET,000,campo pallavolo-basket generico,no
+S206001,S,2,Arredo urbano,06,IMPIANTO SPORT PALLAVOLO-BASKET,001,campo pallavolo-basket in sabbia,si
+S206005,S,2,Arredo urbano,06,IMPIANTO SPORT PALLAVOLO-BASKET,005,campo pallavolo-basket in asfalto,si
+S206009,S,2,Arredo urbano,06,IMPIANTO SPORT PALLAVOLO-BASKET,009,campo pallavolo-basket in granulato sferoidale di quarzo,si
+S206010,S,2,Arredo urbano,06,IMPIANTO SPORT PALLAVOLO-BASKET,010,campo pallavolo-basket in cemento,si
+S206013,S,2,Arredo urbano,06,IMPIANTO SPORT PALLAVOLO-BASKET,013,campo pallavolo-basket in gomma,si
+S206015,S,2,Arredo urbano,06,IMPIANTO SPORT PALLAVOLO-BASKET,015,campo pallavolo-basket in erba sintetica,si
+S206020,S,2,Arredo urbano,06,IMPIANTO SPORT PALLAVOLO-BASKET,020,campo pallavolo-basket in resina,si
+S207000,S,2,Arredo urbano,07,IMPIANTO SPORT CAMPO BOCCE,000,campo bocce generico,no
+S207001,S,2,Arredo urbano,07,IMPIANTO SPORT CAMPO BOCCE,001,campo bocce in sabbia,si
+S207003,S,2,Arredo urbano,07,IMPIANTO SPORT CAMPO BOCCE,003,campo bocce in calcestre,si
+S207005,S,2,Arredo urbano,07,IMPIANTO SPORT CAMPO BOCCE,005,campo bocce in asfalto,si
+S207009,S,2,Arredo urbano,07,IMPIANTO SPORT CAMPO BOCCE,009,campo bocce in granulato sferoidale di quarzo,si
+S207010,S,2,Arredo urbano,07,IMPIANTO SPORT CAMPO BOCCE,010,campo bocce in cemento,si
+S207013,S,2,Arredo urbano,07,IMPIANTO SPORT CAMPO BOCCE,013,campo bocce in gomma,si
+S207015,S,2,Arredo urbano,07,IMPIANTO SPORT CAMPO BOCCE,015,campo bocce in erba sintetica,si
+S208000,S,2,Arredo urbano,08,IMPIANTO SPORT PISTA SCHETTINAGGIO,000,pista schettinaggio generica,no
+S208005,S,2,Arredo urbano,08,IMPIANTO SPORT PISTA SCHETTINAGGIO,005,pista schettinaggio in asfalto,si
+S208007,S,2,Arredo urbano,08,IMPIANTO SPORT PISTA SCHETTINAGGIO,007,pista schettinaggio in lastre di calcestruzzo,si
+S208009,S,2,Arredo urbano,08,IMPIANTO SPORT PISTA SCHETTINAGGIO,009,pista schettinaggio in granulato sferoidale di quarzo,si
+S208010,S,2,Arredo urbano,08,IMPIANTO SPORT PISTA SCHETTINAGGIO,010,pista schettinaggio in cemento,si
+S208012,S,2,Arredo urbano,08,IMPIANTO SPORT PISTA SCHETTINAGGIO,012,pista schettinaggio in legno,si
+S208013,S,2,Arredo urbano,08,IMPIANTO SPORT PISTA SCHETTINAGGIO,013,pista schettinaggio in gomma,si
+S208020,S,2,Arredo urbano,08,IMPIANTO SPORT PISTA SCHETTINAGGIO,020,pista schettinaggio in resina,si
+S209000,S,2,Arredo urbano,09,IMPIANTO SPORT CALCIO,000,campo da calcio generico,no
+S209001,S,2,Arredo urbano,09,IMPIANTO SPORT CALCIO,001,campo da calcio in sabbia,si
+S209015,S,2,Arredo urbano,09,IMPIANTO SPORT CALCIO,015,campo da calcio in erba sintetica,si
+S209016,S,2,Arredo urbano,09,IMPIANTO SPORT CALCIO,016,campo da calcio in erba,si
+S209017,S,2,Arredo urbano,09,IMPIANTO SPORT CALCIO,017,campo da calcio sterrato,si
+S210000,S,2,Arredo urbano,10,IMPIANTO SPORT CALCETTO,000,campo da calcetto generico,no
+S210001,S,2,Arredo urbano,10,IMPIANTO SPORT CALCETTO,001,campo da calcetto in sabbia,si
+S210005,S,2,Arredo urbano,10,IMPIANTO SPORT CALCETTO,005,campo da calcetto in asfalto,si
+S210009,S,2,Arredo urbano,10,IMPIANTO SPORT CALCETTO,009,campo da calcetto in granulato sferoidale di quarzo,si
+S210010,S,2,Arredo urbano,10,IMPIANTO SPORT CALCETTO,010,campo da calcetto in cemento,si
+S210012,S,2,Arredo urbano,10,IMPIANTO SPORT CALCETTO,012,campo da calcetto in legno,si
+S210013,S,2,Arredo urbano,10,IMPIANTO SPORT CALCETTO,013,campo da calcetto in gomma,si
+S210015,S,2,Arredo urbano,10,IMPIANTO SPORT CALCETTO,015,campo da calcetto in erba sintetica,si
+S210016,S,2,Arredo urbano,10,IMPIANTO SPORT CALCETTO,016,campo da calcetto in erba,si
+S211000,S,2,Arredo urbano,11,IMPIANTO SPORT ALTRO,000,campo sportivo altro generico,no
+S211001,S,2,Arredo urbano,11,IMPIANTO SPORT ALTRO,001,campo sportivo altro in sabbia,si
+S211003,S,2,Arredo urbano,11,IMPIANTO SPORT ALTRO,003,campo sportivo altro in calcestre,no
+S211005,S,2,Arredo urbano,11,IMPIANTO SPORT ALTRO,005,campo sportivo altro in asfalto,no
+S211009,S,2,Arredo urbano,11,IMPIANTO SPORT ALTRO,009,campo sportivo altro in granulato sferoidale di quarzo,no
+S211010,S,2,Arredo urbano,11,IMPIANTO SPORT ALTRO,010,campo sportivo altro in cemento,no
+S211012,S,2,Arredo urbano,11,IMPIANTO SPORT ALTRO,012,campo sportivo altro in legno,no
+S211013,S,2,Arredo urbano,11,IMPIANTO SPORT ALTRO,013,campo sportivo altro in gomma,no
+S211015,S,2,Arredo urbano,11,IMPIANTO SPORT ALTRO,015,campo sportivo altro in erba sintetica,no
+S211016,S,2,Arredo urbano,11,IMPIANTO SPORT ALTRO,016,campo sportivo altro in erba,no
+S211020,S,2,Arredo urbano,11,IMPIANTO SPORT ALTRO,020,campo sportivo altro in resina,no
+S211025,S,2,Arredo urbano,11,IMPIANTO SPORT ALTRO,025,campo sportivo altro in terra rossa,no
+S228000,S,2,Arredo urbano,28,IMPIANTO SPORT PISTA CICLABILE,000,pista ciclabile generica,no
+S228002,S,2,Arredo urbano,28,IMPIANTO SPORT PISTA CICLABILE,002,pista ciclabile in ghiaia,si
+S228003,S,2,Arredo urbano,28,IMPIANTO SPORT PISTA CICLABILE,003,pista ciclabile in calcestre,si
+S228004,S,2,Arredo urbano,28,IMPIANTO SPORT PISTA CICLABILE,004,pista ciclabile in pietra naturale,si
+S228005,S,2,Arredo urbano,28,IMPIANTO SPORT PISTA CICLABILE,005,pista ciclabile in asfalto,si
+S228006,S,2,Arredo urbano,28,IMPIANTO SPORT PISTA CICLABILE,006,pista ciclabile in autobloccanti,si
+S228009,S,2,Arredo urbano,28,IMPIANTO SPORT PISTA CICLABILE,009,pista ciclabile in granulato sferoidale di quarzo,si
+S228010,S,2,Arredo urbano,28,IMPIANTO SPORT PISTA CICLABILE,010,pista ciclabile in cemento,si
+S228012,S,2,Arredo urbano,28,IMPIANTO SPORT PISTA CICLABILE,012,pista ciclabile in legno,si
+S228020,S,2,Arredo urbano,28,IMPIANTO SPORT PISTA CICLABILE,020,pista ciclabile in resina,si
+L228000,L,2,Arredo urbano,28,IMPIANTO SPORT PISTA CICLABILE,000,percorso/sentiero ciclabile,si
+S229000,S,2,Arredo urbano,29,IMPIANTO SPORT PISTA SKATEBOARD,000,pista skateboard generica,no
+S229005,S,2,Arredo urbano,29,IMPIANTO SPORT PISTA SKATEBOARD,005,pista skateboard in asfalto,si
+S229009,S,2,Arredo urbano,29,IMPIANTO SPORT PISTA SKATEBOARD,009,pista skateboard in granulato sferoidale di quarzo,si
+S229010,S,2,Arredo urbano,29,IMPIANTO SPORT PISTA SKATEBOARD,010,pista skateboard in cemento,si
+S229012,S,2,Arredo urbano,29,IMPIANTO SPORT PISTA SKATEBOARD,012,pista skateboard in legno,si
+S229019,S,2,Arredo urbano,29,IMPIANTO SPORT PISTA SKATEBOARD,019,pista skateboard in plastica,si
+S229020,S,2,Arredo urbano,29,IMPIANTO SPORT PISTA SKATEBOARD,020,pista skateboard in resina,si
+S229024,S,2,Arredo urbano,29,IMPIANTO SPORT PISTA SKATEBOARD,024,pista skateboard in ferro,si
+S233000,S,2,Arredo urbano,33,IMPIANTO SPORT RUGBY,000,campo da rugby generico,no
+S233016,S,2,Arredo urbano,33,IMPIANTO SPORT RUGBY,016,campo da rugby in erba,si
+S234000,S,2,Arredo urbano,34,IMPIANTO SPORT TENNIS,000,campo da tennis generico,no
+S234001,S,2,Arredo urbano,34,IMPIANTO SPORT TENNIS,001,campo da tennis in sabbia,si
+S234005,S,2,Arredo urbano,34,IMPIANTO SPORT TENNIS,005,campo da tennis in asfalto,si
+S234009,S,2,Arredo urbano,34,IMPIANTO SPORT TENNIS,009,campo da tennis in granulato sferoidale di quarzo,si
+S234010,S,2,Arredo urbano,34,IMPIANTO SPORT TENNIS,010,campo da tennis in cemento,si
+S234013,S,2,Arredo urbano,34,IMPIANTO SPORT TENNIS,013,campo da tennis in gomma,si
+S234015,S,2,Arredo urbano,34,IMPIANTO SPORT TENNIS,015,campo da tennis in erba sintetica,si
+S234016,S,2,Arredo urbano,34,IMPIANTO SPORT TENNIS,016,campo da tennis in erba,si
+S234025,S,2,Arredo urbano,34,IMPIANTO SPORT TENNIS,025,campo da tennis in terra rossa,si
+S235000,S,2,Arredo urbano,35,IMPIANTO SPORT SOFTBALL,000,campo da softball generico,no
+S235016,S,2,Arredo urbano,35,IMPIANTO SPORT SOFTBALL,016,campo da softball in erba normale,si
+S236000,S,2,Arredo urbano,36,IMPIANTO SPORT BASEBALL,000,campo da baseball generico,no
+S236016,S,2,Arredo urbano,36,IMPIANTO SPORT BASEBALL,016,campo da baseball in erba,si
+S237000,S,2,Arredo urbano,37,IMPIANTO SPORT PISTA ATLETICA,000,pista di atletica generica,no
+S237005,S,2,Arredo urbano,37,IMPIANTO SPORT PISTA ATLETICA,005,pista di atletica in asfalto,si
+S237010,S,2,Arredo urbano,37,IMPIANTO SPORT PISTA ATLETICA,010,pista di atletica in cemento,si
+S237013,S,2,Arredo urbano,37,IMPIANTO SPORT PISTA ATLETICA,013,pista di atletica in gomma,si
+S238000,S,2,Arredo urbano,38,IMPIANTO SPORT MINI CALCIO,000,campo mini calcio generico,no
+S238015,S,2,Arredo urbano,38,IMPIANTO SPORT MINI CALCIO,015,campo mini calcio in erba sintetica,si
+S238016,S,2,Arredo urbano,38,IMPIANTO SPORT MINI CALCIO,016,campo mini calcio in erba,si
+S239000,S,2,Arredo urbano,39,IMPIANTO SPORT MINI BASKET,000,campo mini basket generico,si
+S239010,S,2,Arredo urbano,39,IMPIANTO SPORT MINI BASKET,010,campo mini basket in cemento,si
+S239012,S,2,Arredo urbano,39,IMPIANTO SPORT MINI BASKET,012,campo mini basket in legno,si
+S239013,S,2,Arredo urbano,39,IMPIANTO SPORT MINI BASKET,013,campo mini basket in gomma,si
+S239020,S,2,Arredo urbano,39,IMPIANTO SPORT MINI BASKET,020,campo mini basket in resina,si
+S212000,S,2,Arredo urbano,12,EDIFICATO,000,edificio generico,si
+S212207,S,2,Arredo urbano,12,EDIFICATO,207,box/garage,si
+S212214,S,2,Arredo urbano,12,EDIFICATO,214,magazzino,si
+S213000,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,000,manufatto edilizio generico,si
+S213200,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,200,fontana,si
+S213201,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,201,monumento,si
+S213202,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,202,edicola/chiosco,si
+S213203,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,203,pergolato,si
+S213204,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,204,servizi igienici autopulenti,si
+S213205,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,205,servizi igienici fissi,si
+S213206,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,206,basamento/pilastro,si
+S213208,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,208,impianto tecnologico,si
+S213209,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,209,gradinata,si
+S213210,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,210,tensostruttura,si
+S213211,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,211,tettoia,si
+S213212,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,212,muro areale,si
+S213213,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,213,panchina areale,no
+S213451,S,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,451,grata/botola,si
+P213201,P,2,Arredo urbano,13,MANUFATTO EDILIZIO ARCHITETTONICO,201,monumento/statua - punto,si
+S231000,S,2,Arredo urbano,31,SCALA/RAMPA,000,scala/rampa generica,no
+S231004,S,2,Arredo urbano,31,SCALA/RAMPA,004,scala/rampa in pietra naturale,si
+S231005,S,2,Arredo urbano,31,SCALA/RAMPA,005,scala/rampa in asfalto,si
+S231006,S,2,Arredo urbano,31,SCALA/RAMPA,006,scala/rampa in autobloccanti,si
+S231007,S,2,Arredo urbano,31,SCALA/RAMPA,007,scala/rampa in lastre calcestruzzo,si
+S231010,S,2,Arredo urbano,31,SCALA/RAMPA,010,scala/rampa in cemento,si
+S231011,S,2,Arredo urbano,31,SCALA/RAMPA,011,scala/rampa in mattoni,si
+S231012,S,2,Arredo urbano,31,SCALA/RAMPA,012,scala/rampa in legno,si
+S231021,S,2,Arredo urbano,31,SCALA/RAMPA,021,scala/rampa in piastrelle,si
+S231023,S,2,Arredo urbano,31,SCALA/RAMPA,023,scala/rampa in lamiera,si
+S231024,S,2,Arredo urbano,31,SCALA/RAMPA,024,scala/rampa in ferro,si
+S231026,S,2,Arredo urbano,31,SCALA/RAMPA,026,scala/rampa in metallo (Corten),si
+S231057,S,2,Arredo urbano,31,SCALA/RAMPA,057,scala/rampa in porfido,si
+L214256,L,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,256,rastrelliera porta biciclette - linea,si
+L214259,L,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,259,fioriera - linea,si
+L214262,L,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,262,"dissuasore archetto ad ""U""",si
+L214291,L,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,291,rastrelliera porta biciclette bike sharing - linea,si
+L214292,L,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,292,fioriera sospesa - linea,si
+P214000,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,000,manufatto di arredo generico,no
+P214250,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,250,gioco singolo,si
+P214251,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,251,gioco complesso,si
+P214252,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,252,bacheca,si
+P214253,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,253,cartello info verde,si
+P214254,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,254,cartello pubblicitario,si
+P214255,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,255,cartello segnaletico,si
+P214256,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,256,rastrelliera porta biciclette - punto,si
+P214259,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,259,fioriera - punto,si
+P214260,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,260,"dissuasore ""panettone in cemento fisso""",si
+P214261,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,261,dissuasore di sosta,si
+P214263,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,263,colonnina S.O.S.,si
+P214264,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,264,attrezzo percorso vita,si
+P214265,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,265,palo,si
+P214266,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,266,distributore porta paletta cani,si
+P214267,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,267,lampione,si
+P214268,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,268,canestro basket,si
+P214269,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,269,porta calcio,si
+P214270,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,270,porta calcetto,si
+P214271,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,271,cippo/lapide,si
+P214272,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,272,tavolo picnic,si
+P214273,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,273,palo sabbionaia aree cani,si
+P214274,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,274,catarifrangente,si
+P214275,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,275,pennone bandiera,si
+P214276,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,276,impianto semaforico,si
+P214277,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,277,colonnina gas,si
+P214278,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,278,camino aerazione,no
+P214279,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,279,palo telecamera,si
+P214280,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,280,torre faro,si
+P214281,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,281,faro a pavimento,si
+P214284,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,284,cisterna d'acqua,si
+P214285,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,285,porta rugby,si
+P214286,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,286,rete da pallavolo,si
+P214287,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,287,rete da tennis,si
+P214288,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,288,attrezzo sportivo,no
+P214289,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,289,protezione catodica,si
+P214290,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,290,tavolo da ping-pong,si
+P214291,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,291,rastrelliera porta biciclette bike sharing - punto,si
+P214292,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,292,fioriera sospesa - punto,si
+P214293,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,293,canestro mini basket,si
+P214294,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,294,nido uccelli,si
+P214295,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,295,porta mini calcio,si
+P214296,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,296,seduta d'arredo/sdraio,si
+P214297,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,297,colonnina energia elettrica,si
+P214298,P,2,Arredo urbano,14,MANUFATTO D'ARREDO URBANO,298,attrezzo Agility Dog,si
+L215000,L,2,Arredo urbano,15,MURO,000,muro generico - linea,no
+L215004,L,2,Arredo urbano,15,MURO,004,muro in pietra naturale,si
+L215010,L,2,Arredo urbano,15,MURO,010,muro in cemento,si
+L215055,L,2,Arredo urbano,15,MURO,055,muro a secco,si
+L216000,L,2,Arredo urbano,16,CORDOLO,000,cordolo generico,no
+L216004,L,2,Arredo urbano,16,CORDOLO,004,cordolo in pietra,si
+L216007,L,2,Arredo urbano,16,CORDOLO,007,cordolo in lastre calcestruzzo,si
+L216010,L,2,Arredo urbano,16,CORDOLO,010,cordolo in cemento,si
+L216012,L,2,Arredo urbano,16,CORDOLO,012,cordolo in legno,si
+L216014,L,2,Arredo urbano,16,CORDOLO,014,cordolo in ceppo gentile,si
+L216019,L,2,Arredo urbano,16,CORDOLO,019,cordolo in PVC,si
+L216024,L,2,Arredo urbano,16,CORDOLO,024,cordolo in ferro,si
+L216026,L,2,Arredo urbano,16,CORDOLO,026,cordolo in metallo (Corten),si
+L216057,L,2,Arredo urbano,16,CORDOLO,057,cordolo in porfido,si
+L217000,L,2,Arredo urbano,17,RECINZIONE,000,recinzione generica,no
+L217300,L,2,Arredo urbano,17,RECINZIONE,300,recinzione tipo rete plastificata alta,si
+L217301,L,2,Arredo urbano,17,RECINZIONE,301,recinzione tipo area cani,si
+L217302,L,2,Arredo urbano,17,RECINZIONE,302,recinzione con manufatti metallici,si
+L217303,L,2,Arredo urbano,17,RECINZIONE,303,recinzione tipo orsogrill,si
+L217304,L,2,Arredo urbano,17,RECINZIONE,304,recinzione con manufatti metallici su muretto,si
+L217305,L,2,Arredo urbano,17,RECINZIONE,305,recinzione tipo profilo in ferro bassa a delimitazione aiuole,si
+L217306,L,2,Arredo urbano,17,RECINZIONE,306,recinzione tipo barriera continua in metallo (guardrail),si
+L217307,L,2,Arredo urbano,17,RECINZIONE,307,"recinzione in legno ""tipo steccato""",si
+L217308,L,2,Arredo urbano,17,RECINZIONE,308,recinzione tipo rete pastificata/legno bordura aiuole,si
+L217309,L,2,Arredo urbano,17,RECINZIONE,309,"recinzione ""tipo corda""",si
+L218000,L,2,Arredo urbano,18,CANCELLO,000,cancello generico,no
+L218350,L,2,Arredo urbano,18,CANCELLO,350,cancello carraio sottoposto a chiusura oraria,si
+L218351,L,2,Arredo urbano,18,CANCELLO,351,cancello carraio non sottoposto a chiusura oraria,si
+L218352,L,2,Arredo urbano,18,CANCELLO,352,cancello pedonale sottoposto a chiusura oraria,si
+L218353,L,2,Arredo urbano,18,CANCELLO,353,cancello pedonale non sottoposto a chiusura oraria,si
+L218354,L,2,Arredo urbano,18,CANCELLO,354,sbarra mobile,si
+L218355,L,2,Arredo urbano,18,CANCELLO,355,tornello,si
+L219000,L,2,Arredo urbano,19,PANCHINA,000,panchina generica - linea,no
+L219004,L,2,Arredo urbano,19,PANCHINA,004,panchina in pietra - linea,si
+L219010,L,2,Arredo urbano,19,PANCHINA,010,panchina in cemento - linea,si
+L219012,L,2,Arredo urbano,19,PANCHINA,012,panchina in legno - linea,si
+L219019,L,2,Arredo urbano,19,PANCHINA,019,panchina in PVC/plastica - linea,si
+L219024,L,2,Arredo urbano,19,PANCHINA,024,panchina in ferro - linea,si
+L219028,L,2,Arredo urbano,19,PANCHINA,028,panchina in plastica riciclata - linea,si
+L219400,L,2,Arredo urbano,19,PANCHINA,400,panchina in legno a 16 listelli - linea,si
+L219401,L,2,Arredo urbano,19,PANCHINA,401,panchina in legno a 4 listelloni - linea,si
+L219402,L,2,Arredo urbano,19,PANCHINA,402,panchina con fioriera - linea,si
+L219403,L,2,Arredo urbano,19,PANCHINA,403,"panchina tipo ""muretto"" - linea",si
+L219404,L,2,Arredo urbano,19,PANCHINA,404,panchina in legno a 16 listelli commemorativa - linea,si
+L219405,L,2,Arredo urbano,19,PANCHINA,405,panchina in legno a 4 listelloni commemorativa - linea,si
+P219000,P,2,Arredo urbano,19,PANCHINA,000,panchina generica - punto,no
+P219004,P,2,Arredo urbano,19,PANCHINA,004,panchina in pietra - punto,si
+P219010,P,2,Arredo urbano,19,PANCHINA,010,panchina in cemento - punto,si
+P219012,P,2,Arredo urbano,19,PANCHINA,012,panchina in legno - punto,si
+P219019,P,2,Arredo urbano,19,PANCHINA,019,panchina in PVC/plastica - punto,si
+P219024,P,2,Arredo urbano,19,PANCHINA,024,panchina in ferro - punto,si
+P219028,P,2,Arredo urbano,19,PANCHINA,028,panchina in plastica riciclata - punto,si
+P219400,P,2,Arredo urbano,19,PANCHINA,400,panchina in legno a 16 listelli - punto,si
+P219401,P,2,Arredo urbano,19,PANCHINA,401,panchina in legno a 4 listelloni - punto,si
+P219402,P,2,Arredo urbano,19,PANCHINA,402,panchina con fioriera - punto,si
+P219404,P,2,Arredo urbano,19,PANCHINA,404,panchina in legno a 16 listelli commemorativa - punto,si
+P219405,P,2,Arredo urbano,19,PANCHINA,405,panchina in legno a 4 listelloni commemorativa - punto,si
+L220000,L,2,Arredo urbano,20,CANALINA DI SCOLO ACQUE,000,canalina di scolo generica,no
+L220010,L,2,Arredo urbano,20,CANALINA DI SCOLO ACQUE,010,canalina di scolo in cemento,si
+L220019,L,2,Arredo urbano,20,CANALINA DI SCOLO ACQUE,019,canalina di scolo in PVC,si
+L220455,L,2,Arredo urbano,20,CANALINA DI SCOLO ACQUE,455,canalina di scolo con griglia,si
+L220456,L,2,Arredo urbano,20,CANALINA DI SCOLO ACQUE,456,canalina di scolo senza griglia,si
+L220461,L,2,Arredo urbano,20,CANALINA DI SCOLO ACQUE,461,gronda di edificio,si
+P221000,P,2,Arredo urbano,21,POZZETTO,000,pozzetto generico,no
+P221019,P,2,Arredo urbano,21,POZZETTO,019,pozzetto in PVC,si
+P221023,P,2,Arredo urbano,21,POZZETTO,023,pozzetto in lamiera,si
+P221024,P,2,Arredo urbano,21,POZZETTO,024,pozzetto in ferro,si
+P221452,P,2,Arredo urbano,21,POZZETTO,452,pozzetto con chiusino in cemento,si
+P221453,P,2,Arredo urbano,21,POZZETTO,453,pozzetto con chiusino in ghisa,si
+P221454,P,2,Arredo urbano,21,POZZETTO,454,pozzetto con caditoia a bocca di lupo,si
+P221462,P,2,Arredo urbano,21,POZZETTO,462,pozzetto con caditoia in cemento,si
+P221463,P,2,Arredo urbano,21,POZZETTO,463,pozzetto con caditoia in ghisa,si
+P222000,P,2,Arredo urbano,22,FONTANELLA,000,fontanella generica,no
+P222004,P,2,Arredo urbano,22,FONTANELLA,004,fontanella in pietra,si
+P222056,P,2,Arredo urbano,22,FONTANELLA,056,fontanella in acciaio,si
+P222459,P,2,Arredo urbano,22,FONTANELLA,459,fontanella tipo Milano,si
+P223457,P,2,Arredo urbano,23,IDRANTE,457,idrante interrato,si
+P223458,P,2,Arredo urbano,23,IDRANTE,458,idrante emergente,si
+P224000,P,2,Arredo urbano,24,CESTINO,000,cestino generico,no
+P224257,P,2,Arredo urbano,24,CESTINO,257,cestino grande,si
+P224258,P,2,Arredo urbano,24,CESTINO,258,cestino piccolo,si
+P224282,P,2,Arredo urbano,24,CESTINO,282,cestino raccolta differenziata,si
+P224283,P,2,Arredo urbano,24,CESTINO,283,cassonetto,si
+P230700,P,2,Arredo urbano,30,ACCESSO,700,accesso principale,si
+P230701,P,2,Arredo urbano,30,ACCESSO,701,accesso principale con civico,no
+P230702,P,2,Arredo urbano,30,ACCESSO,702,accesso secondario,si
+P230703,P,2,Arredo urbano,30,ACCESSO,703,accesso secondario con civico,no
+P232457,P,2,Arredo urbano,32,ELEMENTO DEL SISTEMA DI IRRIGAZIONE,457,allaccio irrigazione interrato,no
+P232458,P,2,Arredo urbano,32,ELEMENTO DEL SISTEMA DI IRRIGAZIONE,458,allaccio irrigazione emergente,no
+P232464,P,2,Arredo urbano,32,ELEMENTO DEL SISTEMA DI IRRIGAZIONE,464,centralina irrigazione,si
+P232465,P,2,Arredo urbano,32,ELEMENTO DEL SISTEMA DI IRRIGAZIONE,465,valvola irrigazione,no
+P232466,P,2,Arredo urbano,32,ELEMENTO DEL SISTEMA DI IRRIGAZIONE,466,irrigatore,si
+P232467,P,2,Arredo urbano,32,ELEMENTO DEL SISTEMA DI IRRIGAZIONE,467,adduttore,si
+S325000,S,3,Fruizione e gestione,25,AREA DI GESTIONE,000,area fittizia,no
+S325500,S,3,Fruizione e gestione,25,AREA DI GESTIONE,500,limite area di gestione,no
+S325999,S,3,Fruizione e gestione,25,AREA DI GESTIONE,999,area in attesa di censimento,no
+L325500,L,3,Fruizione e gestione,25,AREA DI GESTIONE,500,grafo tratta stradale in gestione,no
+P325500,P,3,Fruizione e gestione,25,AREA DI GESTIONE,500,chilometrica stradale in gestione,si
+S326000,S,3,Fruizione e gestione,26,AREA AD ASSEGNAZIONE TEMPORANEA,000,area ad assegnazione temporanea generica,no
+S326550,S,3,Fruizione e gestione,26,AREA AD ASSEGNAZIONE TEMPORANEA,550,area cantiere,si
+S326551,S,3,Fruizione e gestione,26,AREA AD ASSEGNAZIONE TEMPORANEA,551,area sponsor,si
+S326800,S,3,Fruizione e gestione,26,AREA AD ASSEGNAZIONE TEMPORANEA,800,area temporaneamente inaccessibile,si
+S326801,S,3,Fruizione e gestione,26,AREA AD ASSEGNAZIONE TEMPORANEA,801,area in concessione,no
+S327000,S,3,Fruizione e gestione,27,AREA FUNZIONALE,000,area funzionale generica,no
+S327450,S,3,Fruizione e gestione,27,AREA FUNZIONALE,450,area impianto di irrigazione,si
+S327552,S,3,Fruizione e gestione,27,AREA FUNZIONALE,552,area gioco,si
+S327553,S,3,Fruizione e gestione,27,AREA FUNZIONALE,553,area sport,si
+S327554,S,3,Fruizione e gestione,27,AREA FUNZIONALE,554,area cani,si
+S327555,S,3,Fruizione e gestione,27,AREA FUNZIONALE,555,area orti comunali,si
+S327556,S,3,Fruizione e gestione,27,AREA FUNZIONALE,556,area colonia felina,si
+S327557,S,3,Fruizione e gestione,27,AREA FUNZIONALE,557,area orti didattici,si
+S327562,S,3,Fruizione e gestione,27,AREA FUNZIONALE,562,area oasi insetti pronubi,si
+S327900,S,3,Fruizione e gestione,27,AREA FUNZIONALE,900,area sgombero neve,si
+P399600,P,3,Fruizione e gestione,99,INFORMAZIONI GEODETICHE,600,vertice di stazione,si
+P399601,P,3,Fruizione e gestione,99,INFORMAZIONI GEODETICHE,601,vertice d'inquadramento,si
+S440558,S,4,Fattori ambientali,40,AREA SOGGETTA A MALATTIA,558,area di quarantena,no
+S440559,S,4,Fattori ambientali,40,AREA SOGGETTA A MALATTIA,559,focolaio anoplophora,no
+S440560,S,4,Fattori ambientali,40,AREA SOGGETTA A MALATTIA,560,focolaio cancro colorato,no
+S441561,S,4,Fattori ambientali,41,INFRASTRUTTURE,561,intersezione con cavi elettrici filo-tramviari,si
+P443299,P,4,Fattori ambientali,43,ANALISI SPECIALISTICHE,299,punto di analisi del terreno,no
+S450901,S,4,Fattori ambientali,50,EVENTO ACCIDENTALE,901,sinistro in itinere,no
+S450902,S,4,Fattori ambientali,50,EVENTO ACCIDENTALE,902,sinistro,no
+S450903,S,4,Fattori ambientali,50,EVENTO ACCIDENTALE,903,sinistro con richiesta di risarcimento,no
+S450904,S,4,Fattori ambientali,50,EVENTO ACCIDENTALE,904,sinistro ai danni del patrimonio comunale,no

@@ -358,7 +358,7 @@ storage S3 + PWA operatore separata + Docker.
 
 ### Soluzione B — Monolite modulare Laravel full-stack ★ CONSIGLIATA
 
-Laravel 12 + PostgreSQL 16/PostGIS 3.4 + Redis + Inertia.js/Vue 3 per il backoffice + **PWA operatore
+Laravel (major corrente, 13 alla data di avvio) + PostgreSQL 16/PostGIS 3.4 + Redis + Inertia.js/Vue 3 per il backoffice + **PWA operatore
 Vue 3 dedicata** (stessa repo, bundle separato, offline-first) + MapLibre GL JS + vector tiles da
 PostGIS + storage S3-compatible + Docker Compose.
 
@@ -430,7 +430,7 @@ un frontend separato o un'app nativa non si riparta da zero.
 
 Scelte chiave:
 
-- **Backend**: Laravel 12 (PHP 8.4) con Octane (FrankenPHP) per throughput; moduli applicativi come
+- **Backend**: Laravel 13 (PHP 8.4) con Octane (FrankenPHP) per throughput; moduli applicativi come
   bounded context in `app/Modules/*` (Censimento, Alberi, VTA, Lavori, Irrigazione, Qualità, Portali…).
 - **DB**: PostgreSQL 16 + PostGIS 3.4; SRID interno 4326, colonne generate per aree/lunghezze calcolate
   su proiezione metrica (EPSG:7791/32632); estensioni: `postgis`, `postgis_topology` (validazioni),

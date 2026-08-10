@@ -16,7 +16,7 @@ requisiti, architettura approvata, roadmap e decisioni.
 
 | Componente | Tecnologia |
 |---|---|
-| Backend + backoffice | Laravel 12 (PHP 8.4), Inertia.js |
+| Backend + backoffice | Laravel 13 (PHP 8.4), Inertia.js |
 | Database | PostgreSQL 16 + PostGIS 3.4 |
 | Cache e code | Redis 7 |
 | App di campo | PWA Vue 3 offline-first (IndexedDB/Dexie + service worker) |
