@@ -1,13 +1,63 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
-import { Head } from '@inertiajs/vue3';
+import { computed, onMounted, reactive, ref } from 'vue';
+import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+
+const page = usePage();
+const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('catalog.manage'));
 
 const mainTypes = ref([]);
 const total = ref(0);
 const search = ref('');
 const open = ref({});
+
+// Editor campi personalizzati (Catalog Manager)
+const editing = ref(null); // tipo oggetto in modifica
+const fields = ref([]);
+const fieldError = ref('');
+const fieldForm = reactive({
+    key: '', label: '', field_type: 'text', required: false, options: '', unit: '',
+});
+
+const FIELD_TYPES = {
+    text: 'Testo', textarea: 'Testo lungo', integer: 'Numero intero', number: 'Numero',
+    boolean: 'Sì/No', date: 'Data', select: 'Selezione', multiselect: 'Selezione multipla', url: 'URL',
+};
+
+async function openFields(type) {
+    editing.value = type;
+    fieldError.value = '';
+    const { data } = await axios.get('/api/v1/custom-fields', { params: { object_type_id: type.id } });
+    fields.value = data.data;
+}
+
+async function addField() {
+    fieldError.value = '';
+    try {
+        await axios.post('/api/v1/custom-fields', {
+            object_type_id: editing.value.id,
+            key: fieldForm.key,
+            label: fieldForm.label,
+            field_type: fieldForm.field_type,
+            required: fieldForm.required,
+            unit: fieldForm.unit || null,
+            options: ['select', 'multiselect'].includes(fieldForm.field_type)
+                ? fieldForm.options.split(',').map((o) => o.trim()).filter(Boolean)
+                : [],
+        });
+        Object.assign(fieldForm, { key: '', label: '', field_type: 'text', required: false, options: '', unit: '' });
+        await openFields(editing.value);
+    } catch (err) {
+        fieldError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0] ?? 'Errore';
+    }
+}
+
+async function removeField(field) {
+    if (! window.confirm(`Eliminare il campo "${field.label}"?`)) return;
+    await axios.delete(`/api/v1/custom-fields/${field.id}`);
+    await openFields(editing.value);
+}
 
 const GEO_LABEL = { P: 'Punto', L: 'Linea', S: 'Superficie' };
 const TP_COLORS = { 1: '#16a34a', 2: '#475569', 3: '#d97706', 4: '#dc2626' };
@@ -92,12 +142,82 @@ const countTypes = (m) => m.sub_types.reduce((acc, s) => acc + s.object_types.le
                                     <code class="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">{{ t.code }}</code>
                                     <span class="flex-1 truncate" :title="t.name">{{ t.name }}</span>
                                     <span class="text-xs text-gray-400">{{ GEO_LABEL[t.allowed_geometry] }}</span>
+                                    <button
+                                        v-if="canManage"
+                                        class="text-xs text-green-700 hover:underline"
+                                        title="Campi personalizzati"
+                                        @click="openFields(t)"
+                                    >campi</button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Drawer campi personalizzati -->
+            <Teleport to="body">
+                <div v-if="editing" class="fixed inset-0 z-50 flex justify-end bg-black/30" @click.self="editing = null">
+                    <div class="h-full w-full max-w-md overflow-y-auto bg-white p-5 shadow-2xl">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <code class="text-xs text-gray-400">{{ editing.code }}</code>
+                                <h2 class="font-semibold">{{ editing.name }}</h2>
+                                <p class="text-xs text-gray-500">Campi personalizzati della scheda</p>
+                            </div>
+                            <button class="text-gray-400 hover:text-gray-600" @click="editing = null">✕</button>
+                        </div>
+
+                        <ul class="mt-4 space-y-2">
+                            <li
+                                v-for="f in fields"
+                                :key="f.id"
+                                class="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                            >
+                                <span>
+                                    <span class="font-medium">{{ f.label }}</span>
+                                    <span v-if="f.required" class="text-red-500">*</span>
+                                    <span class="ml-1 text-xs text-gray-400">
+                                        {{ FIELD_TYPES[f.field_type] }}{{ f.unit ? ` (${f.unit})` : '' }}
+                                        — <code>{{ f.key }}</code>
+                                    </span>
+                                </span>
+                                <button class="text-xs text-red-500 hover:underline" @click="removeField(f)">elimina</button>
+                            </li>
+                            <li v-if="! fields.length" class="py-3 text-center text-sm text-gray-400">
+                                Nessun campo personalizzato: la scheda usa solo i dati di base.
+                            </li>
+                        </ul>
+
+                        <form class="mt-5 space-y-2 rounded-xl bg-green-50/50 p-3" @submit.prevent="addField">
+                            <h3 class="text-sm font-semibold">Aggiungi campo</h3>
+                            <div class="flex gap-2">
+                                <input v-model="fieldForm.label" required placeholder="Etichetta *" class="flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                                <input v-model="fieldForm.key" required placeholder="chiave_tecnica *" pattern="[a-z][a-z0-9_]*" class="w-36 rounded-lg border border-gray-300 px-2.5 py-1.5 font-mono text-xs">
+                            </div>
+                            <div class="flex gap-2">
+                                <select v-model="fieldForm.field_type" class="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
+                                    <option v-for="(label, value) in FIELD_TYPES" :key="value" :value="value">{{ label }}</option>
+                                </select>
+                                <input v-model="fieldForm.unit" placeholder="Unità" class="w-20 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                            </div>
+                            <input
+                                v-if="['select', 'multiselect'].includes(fieldForm.field_type)"
+                                v-model="fieldForm.options"
+                                placeholder="Valori separati da virgola (es. buono, medio, scarso)"
+                                class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                            >
+                            <label class="flex items-center gap-2 text-sm text-gray-600">
+                                <input v-model="fieldForm.required" type="checkbox" class="rounded border-gray-300"> Obbligatorio
+                            </label>
+                            <p v-if="fieldError" class="text-sm text-red-600">{{ fieldError }}</p>
+                            <button type="submit" class="w-full rounded-lg bg-green-700 py-1.5 text-sm font-medium text-white hover:bg-green-800">
+                                Aggiungi campo
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </Teleport>
         </div>
     </AppLayout>
 </template>

@@ -1,10 +1,12 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
+import SearchPalette from '@/Components/SearchPalette.vue';
 
 const page = usePage();
 const user = computed(() => page.props.auth?.user);
 const permissions = computed(() => user.value?.permissions ?? []);
+const palette = ref(null);
 
 const can = (permission) => permissions.value.includes(permission);
 
@@ -12,6 +14,7 @@ const nav = computed(() =>
     [
         { label: 'Mappa', href: '/mappa', icon: '🗺️', show: can('assets.view') },
         { label: 'Censimento', href: '/censimento', icon: '🌳', show: can('assets.view') },
+        { label: 'Territorio', href: '/territorio', icon: '🏘️', show: can('clients.view') },
         { label: 'Catalogo', href: '/catalogo', icon: '📚', show: can('catalog.view') },
     ].filter((item) => item.show)
 );
@@ -30,6 +33,16 @@ const logout = () => router.post('/logout');
                     <div class="text-sm font-semibold leading-tight">WebGIS Censimento</div>
                     <div class="text-xs text-gray-500">{{ user?.organization?.name }}</div>
                 </div>
+            </div>
+
+            <div class="px-3 pt-3">
+                <button
+                    class="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400 transition hover:border-green-600 hover:text-gray-600"
+                    @click="palette?.toggle(true)"
+                >
+                    <span>🔎 Cerca…</span>
+                    <kbd class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">Ctrl K</kbd>
+                </button>
             </div>
 
             <nav class="flex-1 space-y-1 p-3">
@@ -64,5 +77,7 @@ const logout = () => router.post('/logout');
         <main class="flex-1 overflow-y-auto">
             <slot />
         </main>
+
+        <SearchPalette ref="palette" />
     </div>
 </template>

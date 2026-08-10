@@ -27,8 +27,13 @@ const colorExpr = [
 
 const selected = ref(null);
 const areas = ref([]);
+const localities = ref([]);
 const pointTypes = ref([]);
 const creating = reactive({ active: false, typeId: '', areaId: '', saving: false, message: '' });
+const drawing = reactive({
+    active: false, vertices: [], name: '', code: '', localityId: '', saving: false, message: '',
+});
+const canCreateAreas = computed(() => (page.props.auth?.user?.permissions ?? []).includes('areas.create'));
 const assetLayers = ['assets-fill', 'assets-line', 'assets-point'];
 
 const tilesUrl = () => `${window.location.origin}/api/v1/tiles/assets/{z}/{x}/{y}?v=${Date.now()}`;
@@ -45,7 +50,67 @@ function refreshTiles() {
     map.getSource('assets').setTiles([tilesUrl()]);
 }
 
+function updateDrawPreview() {
+    const pts = drawing.vertices;
+    const features = [];
+    if (pts.length >= 1) {
+        features.push({ type: 'Feature', geometry: { type: 'MultiPoint', coordinates: pts }, properties: {} });
+    }
+    if (pts.length >= 2) {
+        features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [...pts, pts[0]] }, properties: {} });
+    }
+    if (pts.length >= 3) {
+        features.push({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [[...pts, pts[0]]] }, properties: {} });
+    }
+    map.getSource('draw')?.setData({ type: 'FeatureCollection', features });
+}
+
+function resetDrawing() {
+    Object.assign(drawing, { vertices: [], name: '', code: '', message: '' });
+    updateDrawPreview();
+}
+
+async function saveDrawnArea() {
+    if (drawing.vertices.length < 3 || !drawing.localityId || !drawing.name) {
+        drawing.message = 'Servono almeno 3 vertici, una località e un nome.';
+        return;
+    }
+    drawing.saving = true;
+    drawing.message = '';
+    try {
+        const ring = [...drawing.vertices, drawing.vertices[0]];
+        const { data } = await axios.post('/api/v1/areas', {
+            locality_id: drawing.localityId,
+            name: drawing.name,
+            code: drawing.code || null,
+            geometry: { type: 'Polygon', coordinates: [ring] },
+        });
+        areas.value.push(data.data);
+        refreshAreasSource();
+        drawing.message = `Area salvata ✓ (${Number(data.data.computed_area_sqm).toLocaleString('it-IT')} m²)`;
+        Object.assign(drawing, { vertices: [], name: '', code: '' });
+        updateDrawPreview();
+    } catch (err) {
+        drawing.message = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Errore nel salvataggio';
+    } finally {
+        drawing.saving = false;
+    }
+}
+
+function refreshAreasSource() {
+    const features = areas.value
+        .filter((a) => a.geom_geojson)
+        .map((a) => ({ type: 'Feature', geometry: a.geom_geojson, properties: { id: a.id, name: a.name } }));
+    map.getSource('aree')?.setData({ type: 'FeatureCollection', features });
+}
+
 async function onMapClick(e) {
+    if (drawing.active) {
+        drawing.vertices.push([e.lngLat.lng, e.lngLat.lat]);
+        updateDrawPreview();
+        return;
+    }
     if (!creating.active || !creating.typeId || !creating.areaId) return;
 
     creating.saving = true;
@@ -67,7 +132,7 @@ async function onMapClick(e) {
 }
 
 function onFeatureClick(e) {
-    if (creating.active) return;
+    if (creating.active || drawing.active) return;
     const f = e.features?.[0];
     if (!f) return;
     selected.value = { ...f.properties };
@@ -109,6 +174,22 @@ onMounted(async () => {
             id: 'aree-line', type: 'line', source: 'aree',
             paint: { 'line-color': '#15803d', 'line-width': 1.5, 'line-dasharray': [3, 2] },
         });
+        map.addSource('draw', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({
+            id: 'draw-fill', type: 'fill', source: 'draw',
+            filter: ['==', ['geometry-type'], 'Polygon'],
+            paint: { 'fill-color': '#2563eb', 'fill-opacity': 0.15 },
+        });
+        map.addLayer({
+            id: 'draw-line', type: 'line', source: 'draw',
+            filter: ['==', ['geometry-type'], 'LineString'],
+            paint: { 'line-color': '#2563eb', 'line-width': 2, 'line-dasharray': [2, 1] },
+        });
+        map.addLayer({
+            id: 'draw-pts', type: 'circle', source: 'draw',
+            filter: ['==', ['geometry-type'], 'Point'],
+            paint: { 'circle-color': '#2563eb', 'circle-radius': 4, 'circle-stroke-width': 1.5, 'circle-stroke-color': '#fff' },
+        });
         map.addLayer({
             id: 'assets-fill', type: 'fill', source: 'assets', 'source-layer': 'assets',
             filter: ['==', ['geometry-type'], 'Polygon'],
@@ -138,10 +219,12 @@ onMounted(async () => {
         map.on('click', onMapClick);
     });
 
-    const [areasRes, catalogRes] = await Promise.all([
+    const [areasRes, catalogRes, localitiesRes] = await Promise.all([
         axios.get('/api/v1/areas', { params: { per_page: 100 } }),
         axios.get('/api/v1/catalog'),
+        axios.get('/api/v1/localities', { params: { per_page: 200 } }),
     ]);
+    localities.value = localitiesRes.data.data;
 
     areas.value = areasRes.data.data;
     const features = areas.value
@@ -193,6 +276,36 @@ onBeforeUnmount(() => map?.remove());
                     <span class="inline-block h-3 w-3 rounded-full" :style="{ background: tp.color }" />
                     {{ tp.label }}
                 </label>
+
+                <template v-if="canCreateAreas">
+                    <hr class="my-3 border-gray-200">
+                    <label class="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                        <input v-model="drawing.active" type="checkbox" class="rounded border-gray-300" @change="resetDrawing">
+                        📐 Disegna area
+                    </label>
+                    <div v-if="drawing.active" class="mt-2 space-y-2">
+                        <p class="text-xs text-gray-500">
+                            Clicca sulla mappa per aggiungere i vertici ({{ drawing.vertices.length }}).
+                        </p>
+                        <select v-model="drawing.localityId" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs">
+                            <option value="" disabled>Località…</option>
+                            <option v-for="l in localities" :key="l.id" :value="l.id">{{ l.name }}</option>
+                        </select>
+                        <input v-model="drawing.name" placeholder="Nome area *" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs">
+                        <input v-model="drawing.code" placeholder="Codice (opzionale)" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs">
+                        <div class="flex gap-2">
+                            <button
+                                class="flex-1 rounded-lg bg-green-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                                :disabled="drawing.saving || drawing.vertices.length < 3"
+                                @click="saveDrawnArea"
+                            >{{ drawing.saving ? 'Salvataggio…' : 'Salva area' }}</button>
+                            <button class="rounded-lg border border-gray-300 px-2 py-1.5 text-xs" @click="resetDrawing">Ricomincia</button>
+                        </div>
+                        <p v-if="drawing.message" class="text-xs font-medium" :class="drawing.message.includes('✓') ? 'text-green-700' : 'text-red-600'">
+                            {{ drawing.message }}
+                        </p>
+                    </div>
+                </template>
 
                 <template v-if="canCreate">
                     <hr class="my-3 border-gray-200">

@@ -39,6 +39,11 @@ class CatalogObjectType extends Model
         return $this->hasMany(CustomField::class, 'object_type_id');
     }
 
+    public function assets()
+    {
+        return $this->hasMany(Asset::class, 'object_type_id');
+    }
+
     /** Tipi Eloquent/PostGIS ammessi per la geometria di questo tipo oggetto. */
     public function allowedGeometryTypes(): array
     {

@@ -72,6 +72,8 @@ class AssetController extends Controller implements HasMiddleware
         $type = CatalogObjectType::findOrFail($data['object_type_id']);
         Area::findOrFail($data['area_id']);
         $this->assertGeometryMatchesType($data['geometry']['type'], $type);
+        $data['attributes'] = app(\App\Services\Catalog\AttributeValidator::class)
+            ->validate($type, $data['attributes'] ?? []);
 
         $asset = new Asset([
             ...collect($data)->except('geometry')->all(),
@@ -135,6 +137,11 @@ class AssetController extends Controller implements HasMiddleware
 
             if (array_key_exists('area_id', $data)) {
                 Area::findOrFail($data['area_id']);
+            }
+
+            if (array_key_exists('attributes', $data)) {
+                $data['attributes'] = app(\App\Services\Catalog\AttributeValidator::class)
+                    ->validate($type, $data['attributes'] ?? []);
             }
 
             $asset->fill($data);

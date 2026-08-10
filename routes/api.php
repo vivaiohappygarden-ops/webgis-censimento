@@ -3,8 +3,15 @@
 use App\Http\Controllers\Api\V1\AreaController;
 use App\Http\Controllers\Api\V1\AssetController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\CatalogAdminController;
 use App\Http\Controllers\Api\V1\CatalogController;
+use App\Http\Controllers\Api\V1\ClientController;
+use App\Http\Controllers\Api\V1\CustomFieldController;
+use App\Http\Controllers\Api\V1\ImportController;
+use App\Http\Controllers\Api\V1\LocalityController;
 use App\Http\Controllers\Api\V1\PhotoController;
+use App\Http\Controllers\Api\V1\SearchController;
+use App\Http\Controllers\Api\V1\SiteController;
 use App\Http\Controllers\Api\V1\TileController;
 use Illuminate\Support\Facades\Route;
 
@@ -16,6 +23,21 @@ Route::prefix('v1')->group(function () {
         Route::post('auth/logout', [AuthController::class, 'logout']);
 
         Route::get('catalog', [CatalogController::class, 'index'])->middleware('can:catalog.view');
+        Route::post('catalog/object-types', [CatalogAdminController::class, 'storeObjectType']);
+        Route::patch('catalog/object-types/{id}', [CatalogAdminController::class, 'updateObjectType'])->whereUuid('id');
+        Route::delete('catalog/object-types/{id}', [CatalogAdminController::class, 'destroyObjectType'])->whereUuid('id');
+        Route::apiResource('custom-fields', CustomFieldController::class)
+            ->only(['index', 'store', 'update', 'destroy'])->whereUuid('custom_field');
+
+        Route::get('search', [SearchController::class, 'index']);
+
+        Route::apiResource('clients', ClientController::class)->whereUuid('client');
+        Route::apiResource('sites', SiteController::class)
+            ->only(['index', 'store', 'update', 'destroy'])->whereUuid('site');
+        Route::apiResource('localities', LocalityController::class)
+            ->only(['index', 'store', 'update', 'destroy'])->whereUuid('locality');
+
+        Route::post('imports/geojson', [ImportController::class, 'geojson']);
 
         Route::apiResource('areas', AreaController::class)->whereUuid('area');
         Route::apiResource('assets', AssetController::class)->whereUuid('asset');

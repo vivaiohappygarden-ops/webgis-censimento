@@ -38,6 +38,14 @@ class AssetApiTest extends TestCase
 
     public function test_point_asset_can_be_created(): void
     {
+        \App\Models\CustomField::create([
+            'tenant_id' => $this->organization->id,
+            'object_type_id' => $this->pointType->id,
+            'key' => 'specie',
+            'label' => 'Specie',
+            'field_type' => 'text',
+        ]);
+
         $response = $this->postJson('/api/v1/assets', [
             'area_id' => $this->area->id,
             'object_type_id' => $this->pointType->id,
