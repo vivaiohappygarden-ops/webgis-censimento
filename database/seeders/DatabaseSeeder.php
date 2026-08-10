@@ -2,24 +2,118 @@
 
 namespace Database\Seeders;
 
+use App\Models\Area;
+use App\Models\Asset;
+use App\Models\CatalogObjectType;
+use App\Models\Client;
+use App\Models\Locality;
+use App\Models\Organization;
+use App\Models\Site;
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Services\Catalog\CatalogInstaller;
+use App\Services\Tenancy\TenantProvisioner;
+use App\Support\Geometry;
 use Illuminate\Database\Seeder;
+use Spatie\Permission\PermissionRegistrar;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
+        $organization = Organization::query()->firstOrCreate(
+            ['slug' => 'demo'],
+            ['name' => 'Happy Garden Demo', 'metric_srid' => 7791],
+        );
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        app(TenantProvisioner::class)->provisionRoles($organization);
+
+        $admin = User::query()->withoutGlobalScopes()->firstOrCreate(
+            ['tenant_id' => $organization->id, 'email' => 'admin@demo.local'],
+            [
+                'name' => 'Amministratore Demo',
+                'password' => 'password',
+                'user_type' => 'internal',
+            ],
+        );
+
+        app(PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
+        $admin->assignRole('amministratore');
+
+        $counts = app(CatalogInstaller::class)->install($organization);
+        $this->command?->info(sprintf(
+            'Catalogo MD v2.1 installato: %d macro-categorie, %d tipi secondari, %d tipi oggetto.',
+            $counts['main_types'], $counts['sub_types'], $counts['object_types'],
+        ));
+
+        // Territorio dimostrativo: un parco a Milano
+        $client = Client::query()->firstOrCreate(
+            ['tenant_id' => $organization->id, 'code' => 'DEMO'],
+            ['name' => 'Comune Demo', 'client_type' => 'public'],
+        );
+        $site = Site::query()->firstOrCreate(
+            ['tenant_id' => $organization->id, 'client_id' => $client->id, 'code' => 'SEDE1'],
+            ['name' => 'Milano', 'istat_code' => '015146', 'municipality' => 'Milano', 'province' => 'MI'],
+        );
+        $locality = Locality::query()->firstOrCreate(
+            ['tenant_id' => $organization->id, 'site_id' => $site->id, 'code' => 'Z01'],
+            ['name' => 'Parco Demo'],
+        );
+
+        $parkPolygon = [
+            'type' => 'Polygon',
+            'coordinates' => [[
+                [9.1890, 45.4640], [9.1930, 45.4640], [9.1930, 45.4665], [9.1890, 45.4665], [9.1890, 45.4640],
+            ]],
+        ];
+
+        $area = Area::query()->firstOrCreate(
+            ['tenant_id' => $organization->id, 'code' => 'AREA-001'],
+            [
+                'locality_id' => $locality->id,
+                'name' => 'Parco Demo - settore nord',
+                'manager' => 'Happy Garden Demo',
+                'geom' => Geometry::toEwkb($parkPolygon, forceMultiPolygon: true),
+                'created_by' => $admin->id,
+                'updated_by' => $admin->id,
+            ],
+        );
+
+        if (! Asset::query()->withoutGlobalScopes()->where('tenant_id', $organization->id)->exists()) {
+            $treeType = CatalogObjectType::query()->withoutGlobalScopes()
+                ->where('tenant_id', $organization->id)->where('code', 'P103108')->firstOrFail();
+            $lawnType = CatalogObjectType::query()->withoutGlobalScopes()
+                ->where('tenant_id', $organization->id)->where('code', 'S101016')->firstOrFail();
+
+            Asset::create([
+                'tenant_id' => $organization->id,
+                'area_id' => $area->id,
+                'object_type_id' => $treeType->id,
+                'census_code' => 'ALB-0001',
+                'status' => 'active',
+                'geom' => Geometry::toEwkb(['type' => 'Point', 'coordinates' => [9.1905, 45.4652]]),
+                'survey_method' => 'manual_map',
+                'created_by' => $admin->id,
+                'updated_by' => $admin->id,
+            ]);
+
+            Asset::create([
+                'tenant_id' => $organization->id,
+                'area_id' => $area->id,
+                'object_type_id' => $lawnType->id,
+                'census_code' => 'PRT-0001',
+                'status' => 'active',
+                'geom' => Geometry::toEwkb([
+                    'type' => 'Polygon',
+                    'coordinates' => [[
+                        [9.1895, 45.4645], [9.1915, 45.4645], [9.1915, 45.4658], [9.1895, 45.4658], [9.1895, 45.4645],
+                    ]],
+                ]),
+                'survey_method' => 'manual_map',
+                'created_by' => $admin->id,
+                'updated_by' => $admin->id,
+            ]);
+        }
+
+        $this->command?->info('Tenant demo pronto: login admin@demo.local / password (slug organizzazione: demo).');
     }
 }
