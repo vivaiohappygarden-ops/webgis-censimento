@@ -66,6 +66,38 @@ class AreaApiTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('geometry.type');
     }
 
+    public function test_parent_area_of_another_tenant_is_rejected(): void
+    {
+        [$otherOrg] = $this->createTenantUser();
+        $foreignArea = $this->createArea($otherOrg);
+
+        $this->postJson('/api/v1/areas', [
+            'locality_id' => $this->locality->id,
+            'name' => 'Sottoarea abusiva',
+            'parent_id' => $foreignArea->id,
+            'geometry' => $this->squarePolygon(),
+        ])->assertNotFound();
+    }
+
+    public function test_empty_geometry_is_rejected(): void
+    {
+        $this->postJson('/api/v1/areas', [
+            'locality_id' => $this->locality->id,
+            'name' => 'Area vuota',
+            'geometry' => ['type' => 'Polygon', 'coordinates' => []],
+        ])->assertUnprocessable();
+    }
+
+    public function test_valid_to_before_valid_from_is_rejected(): void
+    {
+        $this->postJson('/api/v1/areas', [
+            'locality_id' => $this->locality->id,
+            'name' => 'Area con date errate',
+            'valid_to' => now()->subYear()->toDateString(),
+            'geometry' => $this->squarePolygon(),
+        ])->assertUnprocessable()->assertJsonValidationErrors('valid_to');
+    }
+
     public function test_invalid_polygon_is_rejected(): void
     {
         // Poligono a farfalla (auto-intersecante)

@@ -11,16 +11,23 @@ use App\Models\Locality;
 use App\Models\Organization;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Tenancy\TenantProvisioner;
 use App\Support\Geometry;
 use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\PermissionRegistrar;
 
 trait InteractsWithTenant
 {
     /** @return array{0: Organization, 1: User} */
-    protected function createTenantUser(array $userAttributes = []): array
+    protected function createTenantUser(array $userAttributes = [], string $role = 'amministratore'): array
     {
         $organization = Organization::factory()->create();
+        app(TenantProvisioner::class)->provisionRoles($organization);
+
         $user = User::factory()->create(['tenant_id' => $organization->id, ...$userAttributes]);
+
+        app(PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
+        $user->assignRole($role);
 
         return [$organization, $user];
     }

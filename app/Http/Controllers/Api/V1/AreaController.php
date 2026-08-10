@@ -9,15 +9,31 @@ use App\Models\Area;
 use App\Models\Locality;
 use App\Support\Audit;
 use App\Support\Geometry;
+use App\Support\ListQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-class AreaController extends Controller
+class AreaController extends Controller implements HasMiddleware
 {
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('can:areas.view', only: ['index', 'show']),
+            new Middleware('can:areas.create', only: ['store']),
+            new Middleware('can:areas.update', only: ['update']),
+            new Middleware('can:areas.delete', only: ['destroy']),
+        ];
+    }
+
     public function index(Request $request): JsonResponse
     {
+        ListQuery::validateUuidFilters($request, ['locality_id']);
+
         $query = Area::query()
             ->with('locality:id,name,code')
             ->selectRaw('areas.*, ST_AsGeoJSON(geom)::json AS geom_geojson')
@@ -37,11 +53,11 @@ class AreaController extends Controller
             $query->where(fn ($w) => $w->where('name', 'ilike', $q)->orWhere('code', 'ilike', $q));
         }
         if ($request->filled('bbox')) {
-            $query->whereRaw('geom && ST_MakeEnvelope(?, ?, ?, ?, 4326)', $this->parseBbox($request));
+            $query->whereRaw('geom && ST_MakeEnvelope(?, ?, ?, ?, 4326)', ListQuery::bbox($request));
         }
 
         return response()->json(
-            $query->orderBy('name')->paginate(min((int) $request->input('per_page', 25), 100))
+            $query->orderBy('name')->paginate(ListQuery::perPage($request))
         );
     }
 
@@ -50,12 +66,19 @@ class AreaController extends Controller
         $data = $request->validated();
         Locality::findOrFail($data['locality_id']);
 
-        $area = Area::create([
+        if (! empty($data['parent_id'])) {
+            // findOrFail tenant-scoped: un parent di un altro tenant risulta inesistente
+            Area::findOrFail($data['parent_id']);
+        }
+
+        $area = new Area([
             ...collect($data)->except('geometry')->all(),
             'geom' => Geometry::toEwkb($data['geometry'], forceMultiPolygon: true),
             'created_by' => $request->user()->id,
             'updated_by' => $request->user()->id,
         ]);
+        $this->assertValidityDates($area);
+        $area->save();
 
         Audit::log('area.created', $area, ['name' => $area->name]);
 
@@ -86,9 +109,16 @@ class AreaController extends Controller
         if (array_key_exists('locality_id', $data)) {
             Locality::findOrFail($data['locality_id']);
         }
+        if (! empty($data['parent_id'])) {
+            if ($data['parent_id'] === $area->id) {
+                throw ValidationException::withMessages(['parent_id' => "Un'area non può essere sottoarea di sé stessa."]);
+            }
+            Area::findOrFail($data['parent_id']);
+        }
 
         $area->fill($data);
         $area->updated_by = $request->user()->id;
+        $this->assertValidityDates($area);
         $area->save();
 
         Audit::log('area.updated', $area);
@@ -98,25 +128,31 @@ class AreaController extends Controller
 
     public function destroy(string $id): Response
     {
-        $area = Area::withCount('assets')->findOrFail($id);
+        DB::transaction(function () use ($id) {
+            $area = Area::query()->lockForUpdate()->findOrFail($id);
 
-        if ($area->assets_count > 0) {
-            throw ValidationException::withMessages([
-                'area' => "L'area contiene {$area->assets_count} elementi censiti: spostali o dismettili prima di eliminarla.",
-            ]);
-        }
+            $assetCount = $area->assets()->count();
+            if ($assetCount > 0) {
+                throw ValidationException::withMessages([
+                    'area' => "L'area contiene {$assetCount} elementi censiti: spostali o eliminali prima di eliminarla.",
+                ]);
+            }
 
-        $area->delete();
-        Audit::log('area.deleted', $area);
+            $area->delete();
+            Audit::log('area.deleted', $area);
+        });
 
         return response()->noContent();
     }
 
-    private function parseBbox(Request $request): array
+    private function assertValidityDates(Area $area): void
     {
-        $parts = array_map('floatval', explode(',', (string) $request->input('bbox')));
-        abort_if(count($parts) !== 4, 422, 'bbox deve essere minLon,minLat,maxLon,maxLat');
+        $from = $area->valid_from ?? now()->startOfDay();
 
-        return $parts;
+        if ($area->valid_to && $area->valid_to->lt($from)) {
+            throw ValidationException::withMessages([
+                'valid_to' => 'La data di fine validità non può precedere quella di inizio ('.$from->toDateString().').',
+            ]);
+        }
     }
 }

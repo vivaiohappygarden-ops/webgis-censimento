@@ -14,7 +14,7 @@ Route::prefix('v1')->group(function () {
         Route::get('auth/me', [AuthController::class, 'me']);
         Route::post('auth/logout', [AuthController::class, 'logout']);
 
-        Route::get('catalog', [CatalogController::class, 'index']);
+        Route::get('catalog', [CatalogController::class, 'index'])->middleware('can:catalog.view');
 
         Route::apiResource('areas', AreaController::class)->whereUuid('area');
         Route::apiResource('assets', AssetController::class)->whereUuid('asset');

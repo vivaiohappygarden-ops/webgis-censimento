@@ -15,6 +15,12 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    /**
+     * Hash bcrypt fittizio: viene verificato quando l'email non esiste, così il
+     * tempo di risposta non rivela quali email sono registrate (user enumeration).
+     */
+    private const DUMMY_HASH = '$2y$12$TRcWRkv0zs6.HxSrsZI1W.DoFuuZFjvkR1FYNTOEWd3yzTyKLOpSG';
+
     public function login(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -28,7 +34,8 @@ class AuthController extends Controller
             ->withoutGlobalScopes()
             ->whereNull('deleted_at')
             ->where('email', $data['email'])
-            ->where('is_active', true);
+            ->where('is_active', true)
+            ->whereIn('tenant_id', Organization::where('is_active', true)->pluck('id'));
 
         if (! empty($data['organization'])) {
             $query->whereIn(
@@ -42,6 +49,8 @@ class AuthController extends Controller
         );
 
         if ($candidates->isEmpty()) {
+            Hash::check($data['password'], self::DUMMY_HASH);
+
             throw ValidationException::withMessages(['email' => 'Credenziali non valide.']);
         }
 

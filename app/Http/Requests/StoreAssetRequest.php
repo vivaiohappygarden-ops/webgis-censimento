@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Support\Geometry;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreAssetRequest extends FormRequest
 {
@@ -17,7 +18,11 @@ class StoreAssetRequest extends FormRequest
         return [
             'area_id' => ['required', 'uuid'],
             'object_type_id' => ['required', 'uuid'],
-            'census_code' => ['nullable', 'string', 'max:80'],
+            'census_code' => ['nullable', 'string', 'max:80',
+                Rule::unique('assets', 'census_code')->where(
+                    fn ($q) => $q->where('tenant_id', $this->user()->tenant_id)->whereNull('deleted_at')
+                ),
+            ],
             'status' => ['nullable', 'string', 'max:50'],
             'survey_method' => ['nullable', 'in:gps,gps_rtk,digitized,cad_import,shapefile_import,manual_map,estimated'],
             'gps_accuracy_m' => ['nullable', 'numeric', 'min:0'],

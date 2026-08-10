@@ -3,18 +3,28 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Support\ListQuery;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\DB;
 
-class TileController extends Controller
+class TileController extends Controller implements HasMiddleware
 {
+    public static function middleware(): array
+    {
+        return [new Middleware('can:assets.view')];
+    }
+
     /** Vector tile MVT degli asset del tenant (layer "assets"). */
     public function assets(Request $request, int $z, int $x, int $y): Response
     {
         abort_unless($z >= 0 && $z <= 22, 404);
         $max = 2 ** $z;
         abort_unless($x >= 0 && $x < $max && $y >= 0 && $y < $max, 404);
+
+        ListQuery::validateUuidFilters($request, ['area_id', 'object_type_id']);
 
         $tenantId = $request->user()->tenant_id;
 
@@ -45,7 +55,8 @@ class TileController extends Controller
               CROSS JOIN bounds
               WHERE a.tenant_id = ?
                 AND a.deleted_at IS NULL
-                AND a.geom && ST_Transform(ST_Expand(bounds.b, 4096), 4326)
+                AND a.geom && ST_Transform(
+                      ST_Expand(bounds.b, (ST_XMax(bounds.b) - ST_XMin(bounds.b)) * 256.0 / 4096.0), 4326)
                 {$filters}
             )
             SELECT ST_AsMVT(mvtgeom.*, 'assets', 4096, 'geom') AS tile FROM mvtgeom

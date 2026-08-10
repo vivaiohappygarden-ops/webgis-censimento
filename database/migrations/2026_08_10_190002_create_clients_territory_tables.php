@@ -119,20 +119,25 @@ return new class extends Migration
               updated_at           timestamptz NOT NULL DEFAULT now(),
               deleted_at           timestamptz,
               CONSTRAINT ck_areas_not_self_parent CHECK (parent_id IS DISTINCT FROM id),
-              CONSTRAINT ck_areas_valid_dates CHECK (valid_to IS NULL OR valid_to >= valid_from)
+              CONSTRAINT ck_areas_valid_dates CHECK (valid_to IS NULL OR valid_to >= valid_from),
+              CONSTRAINT ck_areas_geom_not_empty CHECK (NOT ST_IsEmpty(geom))
             );
             CREATE UNIQUE INDEX uq_areas_tenant_code ON areas (tenant_id, code) WHERE deleted_at IS NULL AND code IS NOT NULL;
             CREATE INDEX ix_areas_tenant_locality ON areas (tenant_id, locality_id) WHERE deleted_at IS NULL;
             CREATE INDEX ix_areas_parent ON areas (parent_id) WHERE deleted_at IS NULL;
             CREATE INDEX gist_areas_geom ON areas USING gist (geom);
 
-            -- Anti-ciclo sulla gerarchia delle aree (oltre il self-reference)
+            -- Anti-ciclo sulla gerarchia delle aree (oltre il self-reference).
+            -- L'advisory lock per tenant serializza le modifiche concorrenti alla
+            -- gerarchia: senza, due transazioni potrebbero creare un ciclo che il
+            -- walk in READ COMMITTED non vede.
             CREATE OR REPLACE FUNCTION fn_trg_areas_no_cycle() RETURNS trigger
             LANGUAGE plpgsql AS $$
             DECLARE
               current_parent uuid;
               depth integer := 0;
             BEGIN
+              PERFORM pg_advisory_xact_lock(hashtextextended('areas_hierarchy:' || NEW.tenant_id::text, 0));
               current_parent := NEW.parent_id;
               WHILE current_parent IS NOT NULL AND depth < 100 LOOP
                 IF current_parent = NEW.id THEN

@@ -10,15 +10,31 @@ use App\Models\Asset;
 use App\Models\CatalogObjectType;
 use App\Support\Audit;
 use App\Support\Geometry;
+use App\Support\ListQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-class AssetController extends Controller
+class AssetController extends Controller implements HasMiddleware
 {
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('can:assets.view', only: ['index', 'show']),
+            new Middleware('can:assets.create', only: ['store']),
+            new Middleware('can:assets.update', only: ['update']),
+            new Middleware('can:assets.delete', only: ['destroy']),
+        ];
+    }
+
     public function index(Request $request): JsonResponse
     {
+        ListQuery::validateUuidFilters($request, ['area_id', 'object_type_id']);
+
         $query = Asset::query()
             ->with('objectType:id,code,name,allowed_geometry')
             ->selectRaw('assets.*, ST_AsGeoJSON(geom)::json AS geom_geojson')
@@ -41,13 +57,11 @@ class AssetController extends Controller
             $query->where(fn ($w) => $w->where('census_code', 'ilike', $q)->orWhere('notes', 'ilike', $q));
         }
         if ($request->filled('bbox')) {
-            $parts = array_map('floatval', explode(',', (string) $request->input('bbox')));
-            abort_if(count($parts) !== 4, 422, 'bbox deve essere minLon,minLat,maxLon,maxLat');
-            $query->whereRaw('geom && ST_MakeEnvelope(?, ?, ?, ?, 4326)', $parts);
+            $query->whereRaw('geom && ST_MakeEnvelope(?, ?, ?, ?, 4326)', ListQuery::bbox($request));
         }
 
         return response()->json(
-            $query->orderByDesc('created_at')->paginate(min((int) $request->input('per_page', 50), 200))
+            $query->orderByDesc('created_at')->paginate(ListQuery::perPage($request, 50, 200))
         );
     }
 
@@ -57,14 +71,16 @@ class AssetController extends Controller
 
         $type = CatalogObjectType::findOrFail($data['object_type_id']);
         Area::findOrFail($data['area_id']);
-        $this->assertGeometryMatchesType($data['geometry'], $type);
+        $this->assertGeometryMatchesType($data['geometry']['type'], $type);
 
-        $asset = Asset::create([
+        $asset = new Asset([
             ...collect($data)->except('geometry')->all(),
             'geom' => Geometry::toEwkb($data['geometry']),
             'created_by' => $request->user()->id,
             'updated_by' => $request->user()->id,
         ]);
+        $this->assertValidityDates($asset);
+        $asset->save();
 
         Audit::log('asset.created', $asset, ['type' => $type->code]);
 
@@ -89,35 +105,46 @@ class AssetController extends Controller
 
     public function update(UpdateAssetRequest $request, string $id): JsonResponse
     {
-        $asset = Asset::findOrFail($id);
         $data = $request->validated();
 
-        // Optimistic locking opzionale: il client dichiara la versione che sta modificando
-        if (isset($data['version']) && (int) $data['version'] !== $asset->version) {
-            abort(409, "Conflitto di versione: la scheda è stata modificata da altri (versione attuale {$asset->version}).");
-        }
-        unset($data['version']);
+        DB::transaction(function () use ($request, $id, $data) {
+            // Lock pessimistico sulla riga: rende atomico il confronto di versione
+            // (senza, due update concorrenti con la stessa versione passerebbero entrambi)
+            $asset = Asset::query()->lockForUpdate()->findOrFail($id);
 
-        $type = isset($data['object_type_id'])
-            ? CatalogObjectType::findOrFail($data['object_type_id'])
-            : $asset->objectType;
+            if (isset($data['version']) && (int) $data['version'] !== $asset->version) {
+                abort(409, "Conflitto di versione: la scheda è stata modificata da altri (versione attuale {$asset->version}).");
+            }
+            unset($data['version']);
 
-        if (array_key_exists('geometry', $data)) {
-            $this->assertGeometryMatchesType($data['geometry'], $type);
-            $data['geom'] = Geometry::toEwkb($data['geometry']);
-            unset($data['geometry']);
-        }
-        if (array_key_exists('area_id', $data)) {
-            Area::findOrFail($data['area_id']);
-        }
+            $type = isset($data['object_type_id'])
+                ? CatalogObjectType::findOrFail($data['object_type_id'])
+                : $asset->objectType;
 
-        $asset->fill($data);
-        $asset->updated_by = $request->user()->id;
-        $asset->save();
+            if (array_key_exists('geometry', $data)) {
+                $this->assertGeometryMatchesType($data['geometry']['type'], $type);
+                $data['geom'] = Geometry::toEwkb($data['geometry']);
+                unset($data['geometry']);
+            } elseif (isset($data['object_type_id'])) {
+                // Cambio di tipo senza nuova geometria: la geometria esistente
+                // deve essere compatibile con il nuovo tipo (422, non errore SQL)
+                $current = DB::selectOne('SELECT GeometryType(geom) AS t FROM assets WHERE id = ?', [$asset->id])->t;
+                $this->assertGeometryMatchesType($current, $type);
+            }
 
-        Audit::log('asset.updated', $asset);
+            if (array_key_exists('area_id', $data)) {
+                Area::findOrFail($data['area_id']);
+            }
 
-        return $this->show($asset->id);
+            $asset->fill($data);
+            $asset->updated_by = $request->user()->id;
+            $this->assertValidityDates($asset);
+            $asset->save();
+
+            Audit::log('asset.updated', $asset);
+        });
+
+        return $this->show($id);
     }
 
     public function destroy(string $id): Response
@@ -130,12 +157,25 @@ class AssetController extends Controller
         return response()->noContent();
     }
 
-    private function assertGeometryMatchesType(array $geometry, CatalogObjectType $type): void
+    private function assertGeometryMatchesType(string $geometryType, CatalogObjectType $type): void
     {
-        if (! in_array($geometry['type'], $type->allowedGeometryTypes(), true)) {
+        $allowed = array_map('strtoupper', $type->allowedGeometryTypes());
+
+        if (! in_array(strtoupper($geometryType), $allowed, true)) {
             throw ValidationException::withMessages([
                 'geometry' => "Il tipo oggetto {$type->code} richiede una geometria ".
-                    implode('/', $type->allowedGeometryTypes()).", ricevuta {$geometry['type']}.",
+                    implode('/', $type->allowedGeometryTypes()).", ricevuta {$geometryType}.",
+            ]);
+        }
+    }
+
+    private function assertValidityDates(Asset $asset): void
+    {
+        $from = $asset->valid_from ?? now()->startOfDay();
+
+        if ($asset->valid_to && $asset->valid_to->lt($from)) {
+            throw ValidationException::withMessages([
+                'valid_to' => 'La data di fine validità non può precedere quella di inizio ('.$from->toDateString().').',
             ]);
         }
     }

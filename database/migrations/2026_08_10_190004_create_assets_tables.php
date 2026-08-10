@@ -167,11 +167,22 @@ return new class extends Migration
               BEFORE INSERT OR UPDATE OF geom, object_type_id ON assets
               FOR EACH ROW EXECUTE FUNCTION fn_trg_assets_geom_type();
 
-            -- Versioning: incrementa version e fotografa lo stato precedente
+            -- Versioning: incrementa version e fotografa lo stato precedente.
+            -- Il confronto esclude version/updated_at e le colonne GENERATED:
+            -- nel BEFORE trigger le colonne generate di NEW non sono ancora
+            -- calcolate (NULL), quindi un confronto record-level segnerebbe
+            -- sempre come modificati gli asset areali/lineari anche su no-op.
+            CREATE OR REPLACE FUNCTION fn_assets_changed(old_row assets, new_row assets) RETURNS boolean
+            LANGUAGE sql STABLE AS $$
+              SELECT (to_jsonb(new_row) - '{version,updated_at,computed_area_sqm,computed_length_m,computed_perimeter_m}'::text[])
+                     IS DISTINCT FROM
+                     (to_jsonb(old_row) - '{version,updated_at,computed_area_sqm,computed_length_m,computed_perimeter_m}'::text[])
+            $$;
+
             CREATE OR REPLACE FUNCTION fn_trg_assets_version_bump() RETURNS trigger
             LANGUAGE plpgsql AS $$
             BEGIN
-              IF NEW IS DISTINCT FROM OLD THEN
+              IF fn_assets_changed(OLD, NEW) THEN
                 NEW.version := OLD.version + 1;
                 NEW.updated_at := now();
               END IF;
@@ -185,7 +196,7 @@ return new class extends Migration
             CREATE OR REPLACE FUNCTION fn_trg_assets_version_snapshot() RETURNS trigger
             LANGUAGE plpgsql AS $$
             BEGIN
-              IF NEW IS DISTINCT FROM OLD THEN
+              IF NEW.version IS DISTINCT FROM OLD.version THEN
                 INSERT INTO asset_versions (tenant_id, asset_id, version, snapshot, geom, changed_by, change_source)
                 VALUES (
                   OLD.tenant_id,
@@ -217,6 +228,7 @@ return new class extends Migration
             DROP FUNCTION IF EXISTS fn_trg_assets_geom_type();
             DROP FUNCTION IF EXISTS fn_trg_assets_version_bump();
             DROP FUNCTION IF EXISTS fn_trg_assets_version_snapshot();
+            DROP FUNCTION IF EXISTS fn_assets_changed(assets, assets);
         SQL);
     }
 };

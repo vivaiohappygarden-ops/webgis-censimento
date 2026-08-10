@@ -26,8 +26,34 @@ class CatalogInstaller
     /** Codici che alla creazione dell'asset generano anche la scheda albero. */
     public const TREE_CODES = ['P103108'];
 
-    /** @return array{main_types: int, sub_types: int, object_types: int} */
+    /**
+     * Idempotente: se il tenant ha già un catalogo installato non fa nulla;
+     * l'installazione è transazionale (mai un catalogo a metà).
+     *
+     * @return array{main_types: int, sub_types: int, object_types: int, skipped?: bool}
+     */
     public function install(Organization $organization, ?string $csvPath = null): array
+    {
+        $existing = CatalogObjectType::withoutGlobalScopes()
+            ->where('tenant_id', $organization->id)
+            ->count();
+
+        if ($existing > 0) {
+            return [
+                'main_types' => CatalogMainType::withoutGlobalScopes()->where('tenant_id', $organization->id)->count(),
+                'sub_types' => CatalogSubType::withoutGlobalScopes()->where('tenant_id', $organization->id)->count(),
+                'object_types' => $existing,
+                'skipped' => true,
+            ];
+        }
+
+        return \Illuminate\Support\Facades\DB::transaction(
+            fn () => $this->doInstall($organization, $csvPath)
+        );
+    }
+
+    /** @return array{main_types: int, sub_types: int, object_types: int} */
+    private function doInstall(Organization $organization, ?string $csvPath = null): array
     {
         $csvPath ??= database_path('seeders/data/catalogo_md_v21.csv');
 
@@ -48,7 +74,13 @@ class CatalogInstaller
         $objectRows = [];
         $now = now();
 
+        $line = 1;
         while (($row = fgetcsv($handle)) !== false) {
+            $line++;
+            if (count($row) < 9) {
+                fclose($handle);
+                throw new RuntimeException("Riga {$line} del seed catalogo malformata: attesi 9 campi, trovati ".count($row));
+            }
             [$code, $geo, $tpCode, $tpName, $tsCode, $tsName, , $description] = $row;
 
             if (! isset($mainTypes[$tpCode])) {

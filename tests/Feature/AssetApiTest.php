@@ -129,6 +129,63 @@ class AssetApiTest extends TestCase
         $this->assertSame('BBOX-0', $response->json('data.0.census_code'));
     }
 
+    public function test_duplicate_census_code_is_rejected_as_validation_error(): void
+    {
+        $payload = [
+            'area_id' => $this->area->id,
+            'object_type_id' => $this->pointType->id,
+            'census_code' => 'DUP-001',
+            'geometry' => $this->pointGeometry(),
+        ];
+
+        $this->postJson('/api/v1/assets', $payload)->assertCreated();
+        $this->postJson('/api/v1/assets', [...$payload, 'geometry' => $this->pointGeometry(9.1910, 45.4655)])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('census_code');
+    }
+
+    public function test_changing_type_with_incompatible_existing_geometry_is_rejected(): void
+    {
+        $id = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $this->pointType->id,
+            'geometry' => $this->pointGeometry(),
+        ])->json('data.id');
+
+        // Da albero (punto) a prato (superficie) senza fornire una nuova geometria
+        $this->patchJson("/api/v1/assets/{$id}", ['object_type_id' => $this->surfaceType->id])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('geometry');
+    }
+
+    public function test_no_op_update_does_not_bump_version(): void
+    {
+        $id = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $this->surfaceType->id,
+            'geometry' => $this->squarePolygon(),
+            'notes' => 'stessa nota',
+        ])->json('data.id');
+
+        // Update senza modifiche reali su un asset AREALE (colonne generate valorizzate):
+        // il trigger non deve incrementare la versione né creare snapshot spuri
+        $this->patchJson("/api/v1/assets/{$id}", ['notes' => 'stessa nota'])
+            ->assertOk()
+            ->assertJsonPath('data.version', 1);
+
+        $this->assertDatabaseMissing('asset_versions', ['asset_id' => $id]);
+    }
+
+    public function test_out_of_range_coordinates_are_rejected(): void
+    {
+        $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $this->pointType->id,
+            // Metri Web Mercator passati per errore come lon/lat
+            'geometry' => ['type' => 'Point', 'coordinates' => [1020000, 5690000]],
+        ])->assertUnprocessable()->assertJsonValidationErrors('geometry');
+    }
+
     public function test_soft_deleted_asset_disappears_from_list(): void
     {
         $id = $this->postJson('/api/v1/assets', [
