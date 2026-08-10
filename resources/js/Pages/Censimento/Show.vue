@@ -4,6 +4,8 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import * as maplibregl from 'maplibre-gl';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import AssetEditPanel from '@/Components/AssetEditPanel.vue';
+import TreeVtaPanel from '@/Components/TreeVtaPanel.vue';
 
 const props = defineProps({ assetId: { type: String, required: true } });
 
@@ -11,6 +13,12 @@ const page = usePage();
 const canUpdate = computed(() => (page.props.auth?.user?.permissions ?? []).includes('assets.update'));
 
 const asset = ref(null);
+const editing = ref(false);
+
+async function onSaved() {
+    editing.value = false;
+    await load();
+}
 const uploading = ref(false);
 const uploadError = ref('');
 const mapEl = ref(null);
@@ -130,13 +138,29 @@ onBeforeUnmount(() => map?.remove());
                                 </h1>
                                 <p class="text-sm text-gray-500">{{ asset.object_type?.name }}</p>
                             </div>
-                            <span
-                                class="rounded-full px-3 py-1 text-xs font-medium"
-                                :class="asset.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'"
-                            >
-                                {{ asset.status }}
-                            </span>
+                            <div class="flex items-center gap-2">
+                                <button
+                                    v-if="canUpdate && ! editing"
+                                    class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                                    @click="editing = true"
+                                >✏️ Modifica</button>
+                                <span
+                                    class="rounded-full px-3 py-1 text-xs font-medium"
+                                    :class="asset.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'"
+                                >
+                                    {{ asset.status }}
+                                </span>
+                            </div>
                         </div>
+
+                        <AssetEditPanel
+                            v-if="editing"
+                            :key="asset.version"
+                            :asset="asset"
+                            class="mt-4"
+                            @saved="onSaved"
+                            @close="editing = false"
+                        />
 
                         <dl class="mt-4 grid grid-cols-1 gap-x-8 gap-y-2 text-sm md:grid-cols-2">
                             <div class="flex justify-between border-b border-gray-50 py-1.5">
@@ -193,6 +217,15 @@ onBeforeUnmount(() => map?.remove());
                             </div>
                         </template>
                     </div>
+
+                    <!-- Scheda albero + VTA -->
+                    <TreeVtaPanel
+                        v-if="asset.tree"
+                        :key="`tree-${asset.version}`"
+                        :asset="asset"
+                        :can-update="canUpdate"
+                        @saved="load"
+                    />
 
                     <!-- Foto -->
                     <div class="mt-6 rounded-xl border border-gray-200 bg-white p-6">

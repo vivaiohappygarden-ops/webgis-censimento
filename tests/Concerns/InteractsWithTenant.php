@@ -69,14 +69,17 @@ trait InteractsWithTenant
             ['name' => 'PIANTA'],
         );
 
+        $code ??= $geo.'103'.fake()->unique()->numberBetween(100, 999);
+
         return CatalogObjectType::create([
             'tenant_id' => $organization->id,
             'sub_type_id' => $sub->id,
-            'code' => $code ?? $geo.'103'.fake()->unique()->numberBetween(100, 999),
+            'code' => $code,
             'name' => 'Tipo oggetto di test',
             'allowed_geometry' => $geo,
             'cam_layer' => $geo.'1',
             'is_cam' => true,
+            'requires_tree_record' => $code === 'P103108',
         ]);
     }
 

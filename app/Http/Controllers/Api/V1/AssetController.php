@@ -84,6 +84,13 @@ class AssetController extends Controller implements HasMiddleware
         $this->assertValidityDates($asset);
         $asset->save();
 
+        if ($type->requires_tree_record) {
+            \App\Models\Tree::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id]);
+        }
+        if ($type->is_planting_site) {
+            \App\Models\PlantingSite::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id]);
+        }
+
         Audit::log('asset.created', $asset, ['type' => $type->code]);
 
         return response()->json(['data' => $this->show($asset->id)->getData()->data], 201);
@@ -97,6 +104,7 @@ class AssetController extends Controller implements HasMiddleware
                 'area:id,name,code',
                 'tags' => fn ($q) => $q->whereIn('status', ['active', 'unassigned']),
                 'photos' => fn ($q) => $q->orderByDesc('created_at'),
+                'tree',
             ])
             ->withCount(['photos', 'documents', 'versions'])
             ->selectRaw('assets.*, ST_AsGeoJSON(geom)::json AS geom_geojson')
@@ -144,10 +152,17 @@ class AssetController extends Controller implements HasMiddleware
                     ->validate($type, $data['attributes'] ?? []);
             }
 
+            $treeData = $data['tree'] ?? null;
+            unset($data['tree']);
+
             $asset->fill($data);
             $asset->updated_by = $request->user()->id;
             $this->assertValidityDates($asset);
             $asset->save();
+
+            if ($treeData !== null && $asset->tree) {
+                $asset->tree->update($treeData);
+            }
 
             Audit::log('asset.updated', $asset);
         });

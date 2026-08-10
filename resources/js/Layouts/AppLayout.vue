@@ -14,6 +14,7 @@ const nav = computed(() =>
     [
         { label: 'Mappa', href: '/mappa', icon: '🗺️', show: can('assets.view') },
         { label: 'Censimento', href: '/censimento', icon: '🌳', show: can('assets.view') },
+        { label: 'VTA', href: '/vta', icon: '🩺', show: can('assets.view') },
         { label: 'Territorio', href: '/territorio', icon: '🏘️', show: can('clients.view') },
         { label: 'Catalogo', href: '/catalogo', icon: '📚', show: can('catalog.view') },
     ].filter((item) => item.show)

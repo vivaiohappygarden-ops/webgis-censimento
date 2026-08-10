@@ -143,9 +143,24 @@ class GeoJsonImporter
 
         $imported = 0;
         if (! $dryRun && $rows !== []) {
-            DB::transaction(function () use ($rows, &$imported) {
+            $treeTypeIds = $typesByCode->filter(fn ($t) => $t->requires_tree_record)->pluck('id')->flip();
+
+            DB::transaction(function () use ($rows, $treeTypeIds, $tenantId, &$imported) {
                 foreach (array_chunk($rows, 200) as $chunk) {
                     Asset::insert($chunk);
+
+                    $treeRows = collect($chunk)
+                        ->filter(fn ($row) => $treeTypeIds->has($row['object_type_id']))
+                        ->map(fn ($row) => [
+                            'asset_id' => $row['id'],
+                            'tenant_id' => $tenantId,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ])->values()->all();
+                    if ($treeRows !== []) {
+                        \App\Models\Tree::insert($treeRows);
+                    }
+
                     $imported += count($chunk);
                 }
             });

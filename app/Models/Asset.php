@@ -64,6 +64,16 @@ class Asset extends Model
         return $this->hasMany(AssetVersion::class);
     }
 
+    public function tree()
+    {
+        return $this->hasOne(Tree::class, 'asset_id');
+    }
+
+    public function plantingSite()
+    {
+        return $this->hasOne(PlantingSite::class, 'asset_id');
+    }
+
     /** Aggiunge la geometria come GeoJSON alla select (colonna geom_geojson). */
     public function scopeWithGeoJson(Builder $query): Builder
     {

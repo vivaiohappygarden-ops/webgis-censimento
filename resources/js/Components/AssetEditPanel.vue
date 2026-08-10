@@ -1,0 +1,151 @@
+<script setup>
+import { onMounted, reactive, ref } from 'vue';
+import axios from 'axios';
+
+const props = defineProps({ asset: { type: Object, required: true } });
+const emit = defineEmits(['saved', 'close']);
+
+const fields = ref([]);
+const saving = ref(false);
+const error = ref('');
+const form = reactive({
+    census_code: props.asset.census_code ?? '',
+    status: props.asset.status ?? 'active',
+    notes: props.asset.notes ?? '',
+    attributes: { ...(props.asset.attributes ?? {}) },
+});
+
+onMounted(async () => {
+    const { data } = await axios.get('/api/v1/custom-fields', {
+        params: { object_type_id: props.asset.object_type.id },
+    });
+    fields.value = data.data;
+    for (const f of fields.value) {
+        if (!(f.key in form.attributes)) {
+            form.attributes[f.key] = f.field_type === 'multiselect' ? [] : null;
+        }
+    }
+});
+
+async function save() {
+    saving.value = true;
+    error.value = '';
+    try {
+        const attributes = Object.fromEntries(
+            Object.entries(form.attributes).filter(([, v]) => v !== null && v !== '' && !(Array.isArray(v) && !v.length))
+        );
+        await axios.patch(`/api/v1/assets/${props.asset.id}`, {
+            census_code: form.census_code || null,
+            status: form.status,
+            notes: form.notes || null,
+            attributes,
+            version: props.asset.version,
+        });
+        emit('saved');
+    } catch (err) {
+        if (err.response?.status === 409) {
+            error.value = 'Conflitto: la scheda è stata modificata da qualcun altro. Ricarica la pagina.';
+        } else {
+            error.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+                ?? err.response?.data?.message ?? 'Errore nel salvataggio';
+        }
+    } finally {
+        saving.value = false;
+    }
+}
+</script>
+
+<template>
+    <div class="rounded-xl border border-green-200 bg-green-50/40 p-5">
+        <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold">Modifica scheda</h2>
+            <button class="text-gray-400 hover:text-gray-600" @click="emit('close')">✕</button>
+        </div>
+
+        <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+            <label class="block text-xs">
+                <span class="text-gray-500">Codice censimento</span>
+                <input v-model="form.census_code" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+            </label>
+            <label class="block text-xs">
+                <span class="text-gray-500">Stato</span>
+                <select v-model="form.status" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
+                    <option value="active">Attivo</option>
+                    <option value="dead">Morto</option>
+                    <option value="stump">Ceppaia</option>
+                    <option value="removed">Abbattuto/Rimosso</option>
+                    <option value="dismissed">Dismesso</option>
+                </select>
+            </label>
+        </div>
+
+        <div v-if="fields.length" class="mt-3">
+            <h3 class="text-xs font-semibold uppercase text-gray-400">Attributi del tipo</h3>
+            <div class="mt-2 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <label v-for="f in fields" :key="f.id" class="block text-xs">
+                    <span class="text-gray-500">{{ f.label }}<span v-if="f.required" class="text-red-500">*</span>
+                        <span v-if="f.unit" class="text-gray-400">({{ f.unit }})</span></span>
+                    <select
+                        v-if="f.field_type === 'select'"
+                        v-model="form.attributes[f.key]"
+                        class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                    >
+                        <option :value="null">—</option>
+                        <option v-for="o in f.options" :key="o" :value="o">{{ o }}</option>
+                    </select>
+                    <select
+                        v-else-if="f.field_type === 'multiselect'"
+                        v-model="form.attributes[f.key]"
+                        multiple
+                        class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                    >
+                        <option v-for="o in f.options" :key="o" :value="o">{{ o }}</option>
+                    </select>
+                    <input
+                        v-else-if="f.field_type === 'boolean'"
+                        v-model="form.attributes[f.key]"
+                        type="checkbox"
+                        class="mt-2 rounded border-gray-300"
+                    >
+                    <input
+                        v-else-if="['integer', 'number'].includes(f.field_type)"
+                        v-model.number="form.attributes[f.key]"
+                        type="number"
+                        :step="f.field_type === 'integer' ? 1 : 'any'"
+                        class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                    >
+                    <input
+                        v-else-if="f.field_type === 'date'"
+                        v-model="form.attributes[f.key]"
+                        type="date"
+                        class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                    >
+                    <textarea
+                        v-else-if="f.field_type === 'textarea'"
+                        v-model="form.attributes[f.key]"
+                        rows="2"
+                        class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                    />
+                    <input
+                        v-else
+                        v-model="form.attributes[f.key]"
+                        class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                    >
+                </label>
+            </div>
+        </div>
+
+        <label class="mt-3 block text-xs">
+            <span class="text-gray-500">Note</span>
+            <textarea v-model="form.notes" rows="2" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" />
+        </label>
+
+        <p v-if="error" class="mt-2 text-sm text-red-600">{{ error }}</p>
+
+        <button
+            class="mt-3 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
+            :disabled="saving"
+            @click="save"
+        >{{ saving ? 'Salvataggio…' : 'Salva modifiche' }}</button>
+    </div>
+</template>

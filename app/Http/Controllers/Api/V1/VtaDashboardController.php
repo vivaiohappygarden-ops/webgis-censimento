@@ -1,0 +1,66 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Http\Controllers\Controller;
+use App\Models\Tree;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\DB;
+
+/** Scadenzario VTA: ultima valutazione per albero, scadute e in scadenza. */
+class VtaDashboardController extends Controller implements HasMiddleware
+{
+    public static function middleware(): array
+    {
+        return [new Middleware('can:assets.view')];
+    }
+
+    public function index(Request $request): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+
+        // Ultima valutazione per ogni albero (DISTINCT ON)
+        $latest = collect(DB::select(<<<'SQL'
+            SELECT latest.tree_id, latest.assessed_on, latest.failure_class,
+                   latest.outcome, latest.next_check_due, a.census_code
+            FROM (
+              SELECT DISTINCT ON (ta.tree_id)
+                     ta.tree_id, ta.assessed_on, ta.failure_class, ta.outcome, ta.next_check_due
+              FROM tree_assessments ta
+              WHERE ta.tenant_id = ? AND ta.deleted_at IS NULL
+              ORDER BY ta.tree_id, ta.assessed_on DESC, ta.created_at DESC
+            ) latest
+            JOIN assets a ON a.id = latest.tree_id AND a.deleted_at IS NULL
+            SQL, [$tenantId]));
+
+        $today = now()->toDateString();
+        $soon = now()->addDays(30)->toDateString();
+
+        $overdue = $latest->filter(fn ($r) => $r->next_check_due !== null && $r->next_check_due < $today)
+            ->sortBy('next_check_due')->values();
+        $upcoming = $latest->filter(fn ($r) => $r->next_check_due !== null && $r->next_check_due >= $today && $r->next_check_due <= $soon)
+            ->sortBy('next_check_due')->values();
+
+        $byClass = $latest->groupBy(fn ($r) => $r->failure_class ?? 'n.d.')
+            ->map->count()
+            ->sortKeys();
+
+        $treesTotal = Tree::query()->whereNull('removed_on')->count();
+
+        return response()->json([
+            'data' => [
+                'trees_total' => $treesTotal,
+                'assessed' => $latest->count(),
+                'never_assessed' => max(0, $treesTotal - $latest->count()),
+                'overdue_count' => $overdue->count(),
+                'upcoming_count' => $upcoming->count(),
+                'by_class' => $byClass,
+                'overdue' => $overdue->take(100)->values(),
+                'upcoming' => $upcoming->take(100)->values(),
+            ],
+        ]);
+    }
+}

@@ -23,6 +23,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/censimento/{asset}', fn (string $asset) => Inertia::render('Censimento/Show', ['assetId' => $asset]))
         ->whereUuid('asset')->middleware('can:assets.view')->name('censimento.show');
 
+    Route::get('/vta', fn () => Inertia::render('Vta'))
+        ->middleware('can:assets.view')->name('vta');
+
     Route::get('/territorio', fn () => Inertia::render('Territorio'))
         ->middleware('can:clients.view')->name('territorio');
 

@@ -38,6 +38,12 @@ Route::prefix('v1')->group(function () {
             ->only(['index', 'store', 'update', 'destroy'])->whereUuid('locality');
 
         Route::post('imports/geojson', [ImportController::class, 'geojson']);
+        Route::get('exports/cam', [\App\Http\Controllers\Api\V1\ExportController::class, 'cam']);
+
+        Route::get('assets/{asset}/assessments', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'index'])->whereUuid('asset');
+        Route::post('assets/{asset}/assessments', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'store'])->whereUuid('asset');
+        Route::delete('assessments/{id}', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'destroy'])->whereUuid('id');
+        Route::get('vta/dashboard', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'index']);
 
         Route::apiResource('areas', AreaController::class)->whereUuid('area');
         Route::apiResource('assets', AssetController::class)->whereUuid('asset');

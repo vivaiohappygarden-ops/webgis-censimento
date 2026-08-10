@@ -32,6 +32,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install GDAL (export shapefile CAM)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
