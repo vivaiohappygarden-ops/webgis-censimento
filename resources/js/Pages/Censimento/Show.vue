@@ -46,7 +46,10 @@ function initMap() {
                     tileSize: 256,
                 },
             },
-            layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
+            layers: [
+                { id: 'sfondo', type: 'background', paint: { 'background-color': '#e8ede9' } },
+                { id: 'osm', type: 'raster', source: 'osm' },
+            ],
         },
     });
 

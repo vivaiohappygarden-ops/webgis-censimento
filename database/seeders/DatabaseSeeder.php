@@ -84,7 +84,7 @@ class DatabaseSeeder extends Seeder
             $lawnType = CatalogObjectType::query()->withoutGlobalScopes()
                 ->where('tenant_id', $organization->id)->where('code', 'S101016')->firstOrFail();
 
-            Asset::create([
+            $treeAsset = Asset::create([
                 'tenant_id' => $organization->id,
                 'area_id' => $area->id,
                 'object_type_id' => $treeType->id,
@@ -94,6 +94,18 @@ class DatabaseSeeder extends Seeder
                 'survey_method' => 'manual_map',
                 'created_by' => $admin->id,
                 'updated_by' => $admin->id,
+            ]);
+
+            \App\Models\Tree::create([
+                'asset_id' => $treeAsset->id,
+                'tenant_id' => $organization->id,
+                'genus' => 'Tilia',
+                'species' => 'Tilia cordata',
+                'common_name' => 'Tiglio selvatico',
+                'height_m' => 14.5,
+                'dbh_cm' => 38,
+                'crown_diameter_m' => 9,
+                'vegetative_state' => 'buono',
             ]);
 
             Asset::create([

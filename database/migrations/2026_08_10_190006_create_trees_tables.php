@@ -103,6 +103,15 @@ return new class extends Migration
               updated_at       timestamptz NOT NULL DEFAULT now()
             );
             CREATE INDEX ix_planting_sites_tenant_status ON planting_sites (tenant_id, status);
+
+            -- Backfill: gli asset già censiti con tipi che richiedono la scheda
+            -- albero (es. P103108) ricevono il record trees mancante.
+            INSERT INTO trees (asset_id, tenant_id)
+            SELECT a.id, a.tenant_id
+            FROM assets a
+            JOIN catalog_object_types t ON t.id = a.object_type_id
+            WHERE t.requires_tree_record
+              AND NOT EXISTS (SELECT 1 FROM trees tr WHERE tr.asset_id = a.id);
         SQL);
     }
 
