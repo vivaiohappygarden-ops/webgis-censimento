@@ -18,6 +18,15 @@ class Photo extends Model
         'hash_sha256', 'taken_at', 'exif', 'geom', 'taken_by',
     ];
 
+    protected $hidden = ['geom', 's3_key', 'thumb_s3_key'];
+
+    protected $appends = ['url'];
+
+    public function getUrlAttribute(): string
+    {
+        return route('v1.photos.file', $this->id);
+    }
+
     protected function casts(): array
     {
         return [

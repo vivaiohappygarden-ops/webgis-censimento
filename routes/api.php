@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AreaController;
 use App\Http\Controllers\Api\V1\AssetController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CatalogController;
+use App\Http\Controllers\Api\V1\PhotoController;
 use App\Http\Controllers\Api\V1\TileController;
 use Illuminate\Support\Facades\Route;
 
@@ -18,6 +19,11 @@ Route::prefix('v1')->group(function () {
 
         Route::apiResource('areas', AreaController::class)->whereUuid('area');
         Route::apiResource('assets', AssetController::class)->whereUuid('asset');
+
+        Route::post('assets/{asset}/photos', [PhotoController::class, 'store'])->whereUuid('asset');
+        Route::get('photos/{id}/file', [PhotoController::class, 'file'])
+            ->whereUuid('id')->name('v1.photos.file');
+        Route::delete('photos/{id}', [PhotoController::class, 'destroy'])->whereUuid('id');
 
         Route::get('tiles/assets/{z}/{x}/{y}', [TileController::class, 'assets'])
             ->whereNumber(['z', 'x', 'y']);

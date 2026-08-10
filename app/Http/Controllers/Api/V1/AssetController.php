@@ -94,6 +94,7 @@ class AssetController extends Controller implements HasMiddleware
                 'objectType:id,code,name,allowed_geometry',
                 'area:id,name,code',
                 'tags' => fn ($q) => $q->whereIn('status', ['active', 'unassigned']),
+                'photos' => fn ($q) => $q->orderByDesc('created_at'),
             ])
             ->withCount(['photos', 'documents', 'versions'])
             ->selectRaw('assets.*, ST_AsGeoJSON(geom)::json AS geom_geojson')

@@ -14,6 +14,12 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->throttleApi();
+        $middleware->statefulApi();
+        $middleware->redirectUsersTo('/mappa');
+        $middleware->web(append: [
+            \App\Http\Middleware\SetPermissionsTeam::class,
+            \App\Http\Middleware\HandleInertiaRequests::class,
+        ]);
         $middleware->api(append: [
             \App\Http\Middleware\SetPermissionsTeam::class,
         ]);

@@ -11,7 +11,14 @@ class TenantScope implements Scope
 {
     public function apply(Builder $builder, Model $model): void
     {
-        $tenantId = Auth::user()?->tenant_id;
+        // hasUser() non innesca la risoluzione dell'utente: chiamare Auth::user()
+        // qui causerebbe ricorsione infinita quando la guard sta recuperando
+        // l'utente stesso dal database (lo scope è attivo anche sul modello User).
+        if (! Auth::hasUser()) {
+            return;
+        }
+
+        $tenantId = Auth::user()->tenant_id;
 
         if ($tenantId !== null) {
             $builder->where($model->qualifyColumn('tenant_id'), $tenantId);
