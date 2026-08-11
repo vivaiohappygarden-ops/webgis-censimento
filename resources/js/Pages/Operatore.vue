@@ -14,7 +14,7 @@ const db = openFieldDb(user.tenant_id, user.id);
 const sync = new SyncManager(db);
 
 const tab = ref('rilievo');
-const state = reactive({ pending: 0, attention: 0, photos: 0, syncing: false, online: navigator.onLine });
+const state = reactive({ pending: 0, attention: 0, photos: 0, photosFailed: 0, syncing: false, online: navigator.onLine });
 const bootstrapped = ref(false);
 const areas = ref([]);
 const pointTypes = ref([]);
@@ -196,23 +196,70 @@ async function startCamera() {
     }
 }
 
+// Fix GPS veloce e silenzioso: se non arriva in 3,5 secondi la foto parte senza.
+// Il limite esterno copre anche il caso del permesso mai risposto, in cui
+// getCurrentPosition non richiama nessuna delle due callback.
+function quickPosition() {
+    const attempt = new Promise((resolve) => {
+        if (! navigator.geolocation) return resolve(null);
+        try {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => resolve({
+                    lat: pos.coords.latitude,
+                    lon: pos.coords.longitude,
+                    accuracy: Math.round(pos.coords.accuracy * 10) / 10,
+                }),
+                () => resolve(null),
+                { enableHighAccuracy: true, timeout: 3000, maximumAge: 60000 },
+            );
+        } catch {
+            resolve(null);
+        }
+    });
+    const fallback = new Promise((resolve) => setTimeout(() => resolve(null), 3500));
+    return Promise.race([attempt, fallback]);
+}
+
 async function takePhoto(event) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (! file || ! selected.value) return;
+    const assetId = selected.value.asset.id;
     busy.value = true;
     try {
-        const blob = await compressImage(file);
-        await sync.enqueuePhoto({ assetId: selected.value.asset.id, blob });
-        selected.value = { ...selected.value, photos: await localPhotosFor(selected.value.asset.id) };
+        const takenAt = new Date().toISOString();
+        const [blob, position] = await Promise.all([compressImage(file), quickPosition()]);
+        await sync.enqueuePhoto({ assetId, blob, takenAt, position });
+        selected.value = { ...selected.value, photos: await localPhotosFor(assetId) };
         setMessage(state.online
             ? 'Foto registrata: invio in corso.'
             : 'Foto registrata sul dispositivo: verrà inviata quando torna la rete.');
-        if (state.online) await runSync();
+        if (state.online) {
+            await runSync();
+            if (selected.value?.asset.id === assetId) {
+                selected.value = { ...selected.value, photos: await localPhotosFor(assetId) };
+            }
+        }
     } catch {
         setMessage('Registrazione della foto non riuscita: riprova.', false);
     } finally {
         busy.value = false;
+    }
+}
+
+async function retryPhoto(photoId) {
+    await sync.retryPhoto(photoId);
+    if (state.online) await runSync();
+    if (selected.value) {
+        selected.value = { ...selected.value, photos: await localPhotosFor(selected.value.asset.id) };
+    }
+}
+
+async function discardPhoto(photoId) {
+    if (! window.confirm('Scartare definitivamente questa foto? Non verrà inviata.')) return;
+    await sync.discardPhoto(photoId);
+    if (selected.value) {
+        selected.value = { ...selected.value, photos: await localPhotosFor(selected.value.asset.id) };
     }
 }
 
@@ -569,9 +616,10 @@ const TAG_TYPES = { qr: 'QR', barcode: 'Barcode', nfc: 'NFC', rfid: 'RFID', arbo
 
 const badge = computed(() => {
     const toSend = state.pending + (state.photos ?? 0);
+    const toReview = state.attention + (state.photosFailed ?? 0);
     if (! state.online) return { text: `Offline — ${toSend} da inviare`, cls: 'bg-gray-700 text-white' };
     if (state.syncing) return { text: 'Sincronizzazione…', cls: 'bg-blue-700 text-white' };
-    if (state.attention > 0) return { text: `${state.attention} da rivedere`, cls: 'bg-red-700 text-white' };
+    if (toReview > 0) return { text: `${toReview} da rivedere`, cls: 'bg-red-700 text-white' };
     if (toSend > 0) return { text: `${toSend} da inviare`, cls: 'bg-amber-600 text-white' };
     return { text: 'Sincronizzato', cls: 'bg-green-700 text-white' };
 });
@@ -601,6 +649,7 @@ onBeforeUnmount(() => {
     if (geoWatchId !== null) navigator.geolocation?.clearWatch(geoWatchId);
     map?.remove();
     stopCamera();
+    revokePhotoUrls();
     unsubscribe();
 });
 </script>
@@ -961,12 +1010,18 @@ onBeforeUnmount(() => {
                         </label>
                     </div>
                     <div v-if="selected.photos.length" class="mt-3 grid grid-cols-3 gap-2" data-test="photo-grid">
-                        <div v-for="p in selected.photos" :key="p.photo_id" class="relative aspect-square overflow-hidden rounded-lg bg-gray-100">
-                            <img :src="p.url" class="h-full w-full object-cover" loading="lazy">
-                            <span
-                                class="absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-[10px] text-white"
-                                :class="p.status === 'failed' ? 'bg-red-700' : 'bg-black/60'"
-                            >{{ p.status === 'failed' ? 'rifiutata' : 'da inviare' }}</span>
+                        <div v-for="p in selected.photos" :key="p.photo_id">
+                            <div class="relative aspect-square overflow-hidden rounded-lg bg-gray-100">
+                                <img :src="p.url" class="h-full w-full object-cover" loading="lazy">
+                                <span
+                                    class="absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-[10px] text-white"
+                                    :class="p.status === 'failed' ? 'bg-red-700' : 'bg-black/60'"
+                                >{{ p.status === 'failed' ? 'rifiutata' : 'da inviare' }}</span>
+                            </div>
+                            <div v-if="p.status === 'failed'" class="mt-1 flex gap-1">
+                                <button class="flex-1 rounded border border-green-700 py-0.5 text-[10px] font-medium text-green-700" @click="retryPhoto(p.photo_id)">Riprova</button>
+                                <button class="flex-1 rounded border border-red-300 py-0.5 text-[10px] font-medium text-red-700" @click="discardPhoto(p.photo_id)">Scarta</button>
+                            </div>
                         </div>
                     </div>
                     <p v-else class="mt-2 text-xs text-gray-400">

@@ -21,7 +21,8 @@ export class SyncManager {
         const pending = await this.db.sync_queue.where('status').anyOf('PENDING', 'INFLIGHT').count();
         const attention = await this.db.sync_queue.where('status').anyOf('CONFLICT', 'NEEDS_ATTENTION').count();
         const photos = await this.db.photo_uploads.where('status').anyOf('queued', 'uploading').count();
-        const state = { pending, attention, photos, syncing: this.syncing, online: navigator.onLine };
+        const photosFailed = await this.db.photo_uploads.where('status').equals('failed').count();
+        const state = { pending, attention, photos, photosFailed, syncing: this.syncing, online: navigator.onLine };
         this.listeners.forEach((fn) => fn(state));
         return state;
     }
@@ -236,8 +237,10 @@ export class SyncManager {
         return this.notify();
     }
 
-    /** Mette in coda una foto compressa scattata in campo. */
-    async enqueuePhoto({ assetId, blob, category = 'census' }) {
+    /** Mette in coda una foto compressa scattata in campo.
+     *  La ricodifica canvas elimina gli EXIF: data di scatto e posizione
+     *  GPS si salvano qui e viaggiano come campi espliciti (§7.1). */
+    async enqueuePhoto({ assetId, blob, category = 'census', takenAt = null, position = null }) {
         const photoId = uuidv7();
         await this.db.transaction('rw', [this.db.photo_blobs, this.db.photo_uploads], async () => {
             await this.db.photo_blobs.put({ photo_id: photoId, blob });
@@ -247,12 +250,33 @@ export class SyncManager {
                 category,
                 status: 'queued',
                 attempts: 0,
+                taken_at: takenAt ?? new Date().toISOString(),
+                lat: position?.lat ?? null,
+                lon: position?.lon ?? null,
+                gps_accuracy_m: position?.accuracy ?? null,
                 created_at: new Date().toISOString(),
             });
         });
         await this.log('info', 'Foto in coda di invio.');
         await this.notify();
         return photoId;
+    }
+
+    /** Rimette in coda una foto rifiutata. */
+    async retryPhoto(photoId) {
+        await this.db.photo_uploads.update(photoId, { status: 'queued', last_error: null });
+        await this.log('info', 'Foto rimessa in coda di invio.');
+        await this.notify();
+    }
+
+    /** Scarto esplicito di una foto rifiutata: elimina anche il file locale. */
+    async discardPhoto(photoId) {
+        await this.db.transaction('rw', [this.db.photo_blobs, this.db.photo_uploads], async () => {
+            await this.db.photo_blobs.delete(photoId);
+            await this.db.photo_uploads.delete(photoId);
+        });
+        await this.log('warn', 'Foto scartata dall\'operatore.');
+        await this.notify();
     }
 
     /** Invia le foto in coda, una alla volta (replay-safe via client_id). */
@@ -262,6 +286,12 @@ export class SyncManager {
 
         const queued = await this.db.photo_uploads.where('status').equals('queued').toArray();
         for (const upload of queued) {
+            // L'elemento deve arrivare al server prima delle sue foto: se ha ancora
+            // comandi in coda (es. censimento respinto o oltre il limite di batch)
+            // la foto aspetta il prossimo giro invece di morire su un 404 transitorio
+            const pendingCommands = await this.db.sync_queue.where('entity_id').equals(upload.asset_id).count();
+            if (pendingCommands > 0) continue;
+
             const blobRow = await this.db.photo_blobs.get(upload.photo_id);
             if (! blobRow) {
                 await this.db.photo_uploads.delete(upload.photo_id);
@@ -274,6 +304,12 @@ export class SyncManager {
                 form.append('photo', blobRow.blob, `${upload.photo_id}.jpg`);
                 form.append('category', upload.category ?? 'census');
                 form.append('client_id', upload.photo_id);
+                if (upload.taken_at) form.append('taken_at', upload.taken_at);
+                if (upload.lat != null && upload.lon != null) {
+                    form.append('lat', upload.lat);
+                    form.append('lon', upload.lon);
+                    if (upload.gps_accuracy_m != null) form.append('gps_accuracy_m', upload.gps_accuracy_m);
+                }
                 await axios.post(`/api/v1/assets/${upload.asset_id}/photos`, form);
 
                 await this.db.transaction('rw', [this.db.photo_blobs, this.db.photo_uploads], async () => {

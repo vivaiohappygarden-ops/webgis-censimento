@@ -34,11 +34,21 @@ class PhotoController extends Controller implements HasMiddleware
             'category' => ['nullable', 'in:census,reference,before,during,after,organ,defect,issue,other'],
             // UUID generato dal device (PWA offline): rende l'upload replay-safe
             'client_id' => ['nullable', 'uuid'],
+            // La compressione sul device elimina gli EXIF: data di scatto e
+            // posizione arrivano come campi espliciti
+            'taken_at' => ['nullable', 'date'],
+            'lat' => ['nullable', 'numeric', 'between:-90,90'],
+            'lon' => ['nullable', 'numeric', 'between:-180,180'],
         ]);
 
         if (! empty($data['client_id'])) {
             $existing = Photo::query()->find($data['client_id']);
             if ($existing) {
+                if ($existing->asset_id !== $asset->id) {
+                    // Stesso id su un elemento diverso: errore del client, non replay
+                    abort(422, 'Identificativo foto già usato per un altro elemento.');
+                }
+
                 // Retry dopo timeout: la foto è già arrivata, si risponde con quella
                 return response()->json(['data' => $existing, 'duplicate' => true], 200);
             }
@@ -56,8 +66,12 @@ class PhotoController extends Controller implements HasMiddleware
             'mime_type' => $file->getMimeType() ?: 'image/jpeg',
             'size_bytes' => $file->getSize(),
             'hash_sha256' => hash_file('sha256', $file->getRealPath()),
-            'taken_at' => now(),
-            'geom' => $this->geomFromExif($file->getRealPath()),
+            // Normalizzata a UTC: il cast datetime salva il valore senza convertire il fuso
+            'taken_at' => isset($data['taken_at']) ? \Illuminate\Support\Carbon::parse($data['taken_at'])->utc() : now(),
+            'geom' => $this->geomFromExif($file->getRealPath())
+                ?? (isset($data['lat'], $data['lon'])
+                    ? Geometry::toEwkb(['type' => 'Point', 'coordinates' => [(float) $data['lon'], (float) $data['lat']]])
+                    : null),
             'taken_by' => $request->user()->id,
         ]);
         if (! empty($data['client_id'])) {
@@ -71,10 +85,13 @@ class PhotoController extends Controller implements HasMiddleware
             // appena scritto si elimina e si risponde con la foto già registrata
             Storage::disk()->delete($path);
 
-            return response()->json([
-                'data' => Photo::query()->findOrFail($data['client_id']),
-                'duplicate' => true,
-            ], 200);
+            $winner = Photo::query()->where('asset_id', $asset->id)->find($data['client_id'] ?? '');
+            if (! $winner) {
+                // Collisione con un id estraneo (altro tenant o altro elemento)
+                abort(422, 'Identificativo foto non utilizzabile.');
+            }
+
+            return response()->json(['data' => $winner, 'duplicate' => true], 200);
         }
 
         Audit::log('photo.uploaded', $photo, ['asset_id' => $asset->id]);

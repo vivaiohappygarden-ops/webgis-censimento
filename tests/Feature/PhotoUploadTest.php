@@ -84,6 +84,48 @@ class PhotoUploadTest extends TestCase
         $this->getJson("/api/v1/assets/{$assetId}")->assertJsonCount(1, 'data.photos');
     }
 
+    public function test_client_id_bound_to_asset_and_capture_metadata(): void
+    {
+        Storage::fake('local');
+
+        [$organization, $user] = $this->createTenantUser();
+        $area = $this->createArea($organization);
+        $type = $this->makeObjectType($organization, 'P');
+        $this->actingAsTenantUser($user);
+
+        $makeAsset = fn (string $code) => $this->postJson('/api/v1/assets', [
+            'area_id' => $area->id,
+            'object_type_id' => $type->id,
+            'census_code' => $code,
+            'geometry' => $this->pointGeometry(),
+        ])->json('data.id');
+        $first = $makeAsset('PH-1');
+        $second = $makeAsset('PH-2');
+
+        $clientId = (string) Str::uuid();
+
+        // Data di scatto e posizione GPS esplicite (la compressione elimina gli EXIF)
+        $this->post("/api/v1/assets/{$first}/photos", [
+            'photo' => UploadedFile::fake()->image('campo.jpg'),
+            'client_id' => $clientId,
+            'taken_at' => '2026-08-11T07:15:00+02:00',
+            'lat' => 45.4652,
+            'lon' => 9.1905,
+        ], ['Accept' => 'application/json'])->assertCreated();
+
+        $photo = Photo::withoutGlobalScopes()->findOrFail($clientId);
+        $this->assertSame('2026-08-11 05:15:00', $photo->taken_at->utc()->toDateTimeString());
+        $this->assertNotNull($photo->getRawOriginal('geom'));
+
+        // Stesso client_id su un altro elemento: rifiutato, non replay
+        $this->post("/api/v1/assets/{$second}/photos", [
+            'photo' => UploadedFile::fake()->image('altro.jpg'),
+            'client_id' => $clientId,
+        ], ['Accept' => 'application/json'])->assertUnprocessable();
+
+        $this->assertSame(1, Photo::withoutGlobalScopes()->count());
+    }
+
     public function test_read_only_role_cannot_upload_photos(): void
     {
         Storage::fake('local');
