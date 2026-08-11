@@ -17,6 +17,7 @@ const nav = computed(() =>
         { label: 'VTA', href: '/vta', show: can('assets.view') },
         { label: 'Territorio', href: '/territorio', show: can('clients.view') },
         { label: 'Catalogo', href: '/catalogo', show: can('catalog.view') },
+        { label: 'Campo (operatore)', href: '/operatore', show: can('assets.create') },
     ].filter((item) => item.show)
 );
 

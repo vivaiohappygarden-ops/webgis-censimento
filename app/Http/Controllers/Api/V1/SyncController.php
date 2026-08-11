@@ -1,0 +1,234 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Http\Controllers\Controller;
+use App\Models\Area;
+use App\Models\Asset;
+use App\Models\CatalogMainType;
+use App\Models\CatalogObjectType;
+use App\Models\CatalogSubType;
+use App\Models\CustomField;
+use App\Models\SyncOperation;
+use App\Services\Sync\CommandApplier;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * API di sincronizzazione della PWA operatore (OFFLINE-SYNC §5):
+ * bootstrap del working set, pull delta a cursore, push batch idempotente.
+ */
+class SyncController extends Controller implements HasMiddleware
+{
+    public const MIN_CLIENT_SCHEMA = 1;
+
+    private const MAX_COMMANDS_PER_BATCH = 200;
+
+    private const MAX_CHANGES_PER_PULL = 500;
+
+    public static function middleware(): array
+    {
+        return [new Middleware('can:assets.view')];
+    }
+
+    /** Download iniziale del working set, delimitato per aree. */
+    public function bootstrap(Request $request): JsonResponse
+    {
+        $request->validate([
+            'areas' => ['sometimes', 'array'],
+            'areas.*' => ['uuid'],
+        ]);
+
+        $tenantId = $request->user()->tenant_id;
+        $areaIds = $request->input('areas', []);
+
+        // Il cursore fotografa il change log PRIMA di leggere i dati: eventuali
+        // modifiche concorrenti verranno riprese dal primo pull delta
+        $cursor = (int) (DB::table('change_log')->where('tenant_id', $tenantId)->max('id') ?? 0);
+
+        $areas = Area::query()
+            ->when($areaIds !== [], fn ($q) => $q->whereIn('id', $areaIds))
+            ->selectRaw('areas.*, ST_AsGeoJSON(geom)::json AS geom_geojson')
+            ->withCasts(['geom_geojson' => 'array'])
+            ->orderBy('name')
+            ->get();
+
+        $assets = $this->assetRows($areaIds);
+
+        return response()->json([
+            'cursor' => $cursor,
+            'server_time' => now()->toIso8601String(),
+            'min_client_schema' => self::MIN_CLIENT_SCHEMA,
+            'catalog_version' => $this->catalogVersion($tenantId),
+            'areas' => $areas,
+            'assets' => $assets,
+            'catalog' => [
+                'main_types' => CatalogMainType::query()->orderBy('code')->get(),
+                'sub_types' => CatalogSubType::query()->orderBy('code')->get(),
+                'object_types' => CatalogObjectType::query()->orderBy('code')->get(),
+            ],
+            'custom_fields' => CustomField::query()->get(),
+        ]);
+    }
+
+    /** Pull delta: record cambiati dal cursore in poi (sequenza server, non timestamp). */
+    public function changes(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'cursor' => ['required', 'integer', 'min:0'],
+            'areas' => ['sometimes', 'array'],
+            'areas.*' => ['uuid'],
+        ]);
+
+        $tenantId = $request->user()->tenant_id;
+        $areaIds = $request->input('areas', []);
+
+        // Una riga per entità: l'ultima modifica vince (lo stato si legge ora dalle tabelle)
+        $logRows = DB::select(<<<'SQL'
+            SELECT table_name, row_id, MAX(id) AS last_id
+            FROM change_log
+            WHERE tenant_id = ? AND id > ?
+            GROUP BY table_name, row_id
+            ORDER BY last_id
+            LIMIT ?
+            SQL, [$tenantId, $data['cursor'], self::MAX_CHANGES_PER_PULL + 1]);
+
+        $hasMore = count($logRows) > self::MAX_CHANGES_PER_PULL;
+        $logRows = array_slice($logRows, 0, self::MAX_CHANGES_PER_PULL);
+        $newCursor = $logRows === [] ? (int) $data['cursor'] : (int) end($logRows)->last_id;
+
+        $byTable = collect($logRows)->groupBy('table_name')->map(fn ($g) => $g->pluck('row_id')->all());
+
+        $changes = [];
+
+        $changedAreaIds = $byTable->get('areas', []);
+        if ($changedAreaIds !== []) {
+            $changedAreas = Area::query()->withTrashed()
+                ->whereIn('id', $changedAreaIds)
+                ->selectRaw('areas.*, ST_AsGeoJSON(geom)::json AS geom_geojson')
+                ->withCasts(['geom_geojson' => 'array'])
+                ->get();
+            foreach ($changedAreas as $area) {
+                $changes[] = $area->deleted_at !== null
+                    ? ['op' => 'delete', 'table' => 'areas', 'id' => $area->id]
+                    : ['op' => 'upsert', 'table' => 'areas', 'row' => $area];
+            }
+        }
+
+        foreach ($this->assetRows($areaIds, $byTable->get('assets', []), withTrashed: true) as $asset) {
+            $changes[] = $asset->deleted_at !== null
+                ? ['op' => 'delete', 'table' => 'assets', 'id' => $asset->id]
+                : ['op' => 'upsert', 'table' => 'assets', 'row' => $asset];
+        }
+
+        return response()->json([
+            'cursor' => $newCursor,
+            'server_time' => now()->toIso8601String(),
+            'catalog_version' => $this->catalogVersion($tenantId),
+            'changes' => $changes,
+            'has_more' => $hasMore,
+        ]);
+    }
+
+    /** Push batch: applica i comandi in ordine, uno per transazione, replay-safe. */
+    public function batch(Request $request, CommandApplier $applier): JsonResponse
+    {
+        $data = $request->validate([
+            'batch_id' => ['required', 'uuid'],
+            'device_id' => ['required', 'string', 'max:100'],
+            'schema' => ['required', 'integer'],
+            'app_version' => ['nullable', 'string', 'max:30'],
+            'client_time' => ['nullable', 'date'],
+            'commands' => ['required', 'array', 'max:'.self::MAX_COMMANDS_PER_BATCH],
+            'commands.*.idempotency_key' => ['required', 'uuid'],
+            'commands.*.device_seq' => ['required', 'integer', 'min:0'],
+            'commands.*.type' => ['required', 'string', 'max:60'],
+            'commands.*.entity_id' => ['required', 'uuid'],
+            'commands.*.base_version' => ['sometimes', 'integer', 'min:1'],
+            'commands.*.payload' => ['sometimes', 'array'],
+            'commands.*.geom' => ['sometimes', 'nullable', 'array'],
+            'commands.*.client_ts' => ['sometimes', 'nullable', 'date'],
+        ]);
+
+        if ((int) $data['schema'] < self::MIN_CLIENT_SCHEMA) {
+            abort(426, 'Versione dello schema client troppo vecchia: aggiorna l\'applicazione.');
+        }
+
+        $user = $request->user();
+        $results = [];
+
+        foreach ($data['commands'] as $command) {
+            $existing = SyncOperation::query()
+                ->where('idempotency_key', $command['idempotency_key'])
+                ->first();
+
+            if ($existing !== null) {
+                // Replay: restituisce l'esito originale memorizzato, senza riapplicare
+                $results[] = [
+                    'idempotency_key' => $command['idempotency_key'],
+                    'status' => 'duplicate',
+                    'original' => $existing->result,
+                ];
+
+                continue;
+            }
+
+            $result = $applier->apply($command, $user);
+
+            SyncOperation::create([
+                'tenant_id' => $user->tenant_id,
+                'idempotency_key' => $command['idempotency_key'],
+                'batch_id' => $data['batch_id'],
+                'device_id' => $data['device_id'],
+                'user_id' => $user->id,
+                'command_type' => $command['type'],
+                'entity_id' => $result['entity_id'] ?? null,
+                'status' => $result['status'],
+                'result' => $result,
+            ]);
+
+            $results[] = $result;
+        }
+
+        return response()->json([
+            'batch_id' => $data['batch_id'],
+            'server_time' => now()->toIso8601String(),
+            'min_client_schema' => self::MIN_CLIENT_SCHEMA,
+            'results' => $results,
+        ]);
+    }
+
+    /** Righe asset complete di specializzazioni, nel formato del working set. */
+    private function assetRows(array $areaIds, ?array $ids = null, bool $withTrashed = false)
+    {
+        if ($ids !== null && $ids === []) {
+            return collect();
+        }
+
+        return Asset::query()
+            ->when($withTrashed, fn ($q) => $q->withTrashed())
+            ->when($ids !== null, fn ($q) => $q->whereIn('assets.id', $ids))
+            ->when($areaIds !== [], fn ($q) => $q->whereIn('area_id', $areaIds))
+            ->with(['tree', 'plantingSite'])
+            ->selectRaw('assets.*, ST_AsGeoJSON(geom)::json AS geom_geojson')
+            ->withCasts(['geom_geojson' => 'array'])
+            ->orderBy('created_at')
+            ->get();
+    }
+
+    /** Cambia quando cambia il blocco cataloghi: la PWA lo riscarica (§5.3). */
+    private function catalogVersion(string $tenantId): string
+    {
+        $row = DB::selectOne(<<<'SQL'
+            SELECT md5(CONCAT(
+              (SELECT COALESCE(MAX(updated_at)::text, '') || COUNT(*) FROM catalog_object_types WHERE tenant_id = ?),
+              (SELECT COALESCE(MAX(updated_at)::text, '') || COUNT(*) FROM custom_fields WHERE tenant_id = ?)
+            )) AS v
+            SQL, [$tenantId, $tenantId]);
+
+        return $row->v;
+    }
+}

@@ -37,6 +37,10 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('localities', LocalityController::class)
             ->only(['index', 'store', 'update', 'destroy'])->whereUuid('locality');
 
+        Route::get('sync/bootstrap', [\App\Http\Controllers\Api\V1\SyncController::class, 'bootstrap']);
+        Route::get('sync/changes', [\App\Http\Controllers\Api\V1\SyncController::class, 'changes']);
+        Route::post('sync/batch', [\App\Http\Controllers\Api\V1\SyncController::class, 'batch']);
+
         Route::post('imports/geojson', [ImportController::class, 'geojson']);
         Route::get('exports/cam', [\App\Http\Controllers\Api\V1\ExportController::class, 'cam']);
 

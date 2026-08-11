@@ -28,3 +28,12 @@ createInertiaApp({
         color: '#16a34a',
     },
 });
+
+// PWA operatore: il service worker rende /operatore apribile anche offline
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {
+            // Senza service worker l'app resta usabile online (P5: degrado, mai blocco)
+        });
+    });
+}

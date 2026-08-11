@@ -39,6 +39,16 @@ class DatabaseSeeder extends Seeder
         app(PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
         $admin->assignRole('amministratore');
 
+        $operator = User::query()->withoutGlobalScopes()->firstOrCreate(
+            ['tenant_id' => $organization->id, 'email' => 'operatore@demo.local'],
+            [
+                'name' => 'Operatore Demo',
+                'password' => 'password',
+                'user_type' => 'internal',
+            ],
+        );
+        $operator->assignRole('operatore');
+
         $counts = app(CatalogInstaller::class)->install($organization);
         $this->command?->info(sprintf(
             'Catalogo MD v2.1 installato: %d macro-categorie, %d tipi secondari, %d tipi oggetto.',

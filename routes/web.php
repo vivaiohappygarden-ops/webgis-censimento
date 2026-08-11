@@ -26,6 +26,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/vta', fn () => Inertia::render('Vta'))
         ->middleware('can:assets.view')->name('vta');
 
+    Route::get('/operatore', fn () => Inertia::render('Operatore'))
+        ->middleware('can:assets.create')->name('operatore');
+
     Route::get('/territorio', fn () => Inertia::render('Territorio'))
         ->middleware('can:clients.view')->name('territorio');
 
