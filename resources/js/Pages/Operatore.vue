@@ -179,13 +179,21 @@ function switchTab(key) {
     selected.value = null;
     tab.value = key;
     refreshLocal();
-    if (key === 'mappa') nextTick(initOrRefreshMap);
+    if (key === 'mappa') {
+        nextTick(initOrRefreshMap);
+    } else if (geoWatchId !== null) {
+        // Il GPS ad alta precisione consuma batteria: si spegne uscendo dalla mappa
+        navigator.geolocation.clearWatch(geoWatchId);
+        geoWatchId = null;
+        mapState.located = false;
+    }
 }
 
 // ---- Mappa offline: sorgenti GeoJSON costruite dalla replica locale ----
 const mapEl = ref(null);
 let map = null;
 let geoWatchId = null;
+let mapFitted = false;
 const mapState = reactive({ placing: false, located: false });
 
 const TP_COLORS = { 1: '#16a34a', 2: '#475569', 3: '#d97706', 4: '#dc2626' };
@@ -214,13 +222,32 @@ async function localFeatureCollections() {
     };
 }
 
+function fitToData(data) {
+    const bounds = new maplibregl.LngLatBounds();
+    const extend = (coords) => {
+        if (typeof coords[0] === 'number') bounds.extend(coords);
+        else coords.forEach(extend);
+    };
+    data.areas.features.forEach((f) => extend(f.geometry.coordinates));
+    data.assets.features.forEach((f) => extend(f.geometry.coordinates));
+    if (! bounds.isEmpty()) {
+        map.fitBounds(bounds, { padding: 40, maxZoom: 17 });
+        mapFitted = true;
+    }
+}
+
 async function initOrRefreshMap() {
     const data = await localFeatureCollections();
+    // L'operatore può aver già cambiato scheda durante la lettura dei dati:
+    // creare la mappa su un contenitore nascosto produrrebbe un canvas 0x0
+    if (tab.value !== 'mappa') return;
 
     if (map) {
         map.getSource('el')?.setData(data.assets);
         map.getSource('aree')?.setData(data.areas);
         map.resize();
+        // Mappa aperta prima dello scarico dati: si inquadra appena arrivano
+        if (! mapFitted) fitToData(data);
         return;
     }
     if (! mapEl.value) return;
@@ -242,8 +269,14 @@ async function initOrRefreshMap() {
         },
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }));
+    map.addControl(new maplibregl.AttributionControl({
+        compact: true,
+        customAttribution: '© OpenStreetMap contributors',
+    }));
 
-    map.on('load', () => {
+    // 'style.load' e NON 'load': quest'ultimo attende anche le tile di sfondo,
+    // che offline falliscono — gli overlay locali devono comparire comunque
+    map.once('style.load', () => {
         map.addSource('aree', { type: 'geojson', data: data.areas });
         map.addSource('el', { type: 'geojson', data: data.assets });
 
@@ -262,6 +295,14 @@ async function initOrRefreshMap() {
             id: 'el-fill', type: 'fill', source: 'el',
             filter: ['==', ['geometry-type'], 'Polygon'],
             paint: { 'fill-color': colorExpr, 'fill-opacity': 0.35 },
+        });
+        // Alone ambra sotto le geometrie non ancora inviate (i punti hanno il bordo)
+        map.addLayer({
+            id: 'el-dirty', type: 'line', source: 'el',
+            filter: ['all',
+                ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]],
+                ['==', ['get', 'dirty'], 1]],
+            paint: { 'line-color': '#f59e0b', 'line-width': 6, 'line-opacity': 0.7 },
         });
         map.addLayer({
             id: 'el-line', type: 'line', source: 'el',
@@ -300,7 +341,9 @@ async function initOrRefreshMap() {
                 setMessage('Posizione impostata dalla mappa: completa il rilievo.');
                 return;
             }
-            const hits = map.queryRenderedFeatures(e.point, { layers: ['el-point', 'el-fill', 'el-line'] });
+            // Tolleranza di tocco da dito: si cerca in un riquadro di 16 px
+            const bbox = [[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]];
+            const hits = map.queryRenderedFeatures(bbox, { layers: ['el-point', 'el-fill', 'el-line'] });
             if (hits.length) {
                 const asset = await db.assets.get(hits[0].properties.id);
                 if (asset) await openAsset(asset);
@@ -312,6 +355,8 @@ async function initOrRefreshMap() {
 function locateOnMap() {
     if (! navigator.geolocation || ! map) return;
     if (geoWatchId !== null) navigator.geolocation.clearWatch(geoWatchId);
+    // Un secondo tocco ricentra sulla posizione appena questa arriva
+    mapState.located = false;
     geoWatchId = navigator.geolocation.watchPosition((pos) => {
         const lngLat = [pos.coords.longitude, pos.coords.latitude];
         const point = { type: 'Point', coordinates: lngLat };
@@ -347,6 +392,8 @@ function setMessage(text, ok = true) {
 }
 
 async function refreshLocal() {
+    // La mappa aperta si aggiorna insieme ai dati (sync, nuovi rilievi, tombstone)
+    if (map && tab.value === 'mappa') await initOrRefreshMap();
     bootstrapped.value = Boolean(await db.meta.get('bootstrapped_at'));
     areas.value = await db.areas.orderBy('name').toArray();
     const types = await db.catalog_types.toArray();

@@ -32,18 +32,34 @@ self.addEventListener('fetch', (event) => {
     const url = new URL(request.url);
 
     // Tile cartografiche di sfondo: cache-first con tetto, così la mappa
-    // dell'app operatore mostra le zone già visitate anche senza rete
+    // dell'app operatore mostra le zone già visitate anche senza rete.
+    // La scrittura in cache non deve MAI far fallire la risposta (quota piena,
+    // risposte parziali): si serve la tile e si tenta la cache a parte.
     if (url.hostname === 'tile.openstreetmap.org') {
         event.respondWith((async () => {
             const cache = await caches.open(TILE_CACHE);
             const cached = await cache.match(request);
-            if (cached) return cached;
+            if (cached) {
+                // Rinfresca la posizione nell'ordine di inserimento (LRU
+                // approssimato): al tetto si eliminano le tile meno usate,
+                // non quelle della zona di lavoro corrente
+                try {
+                    await cache.put(request, cached.clone());
+                } catch {
+                    // best effort
+                }
+                return cached;
+            }
             const response = await fetch(request);
-            if (response.ok) {
-                await cache.put(request, response.clone());
-                const keys = await cache.keys();
-                if (keys.length > TILE_CACHE_MAX) {
-                    await Promise.all(keys.slice(0, keys.length - TILE_CACHE_MAX).map((k) => cache.delete(k)));
+            if (response.status === 200) {
+                try {
+                    await cache.put(request, response.clone());
+                    const keys = await cache.keys();
+                    if (keys.length > TILE_CACHE_MAX) {
+                        await Promise.all(keys.slice(0, keys.length - TILE_CACHE_MAX).map((k) => cache.delete(k)));
+                    }
+                } catch {
+                    // quota piena o risposta non memorizzabile: la tile arriva comunque
                 }
             }
             return response;
@@ -59,7 +75,13 @@ self.addEventListener('fetch', (event) => {
             const cached = await cache.match(request);
             if (cached) return cached;
             const response = await fetch(request);
-            if (response.ok) await cache.put(request, response.clone());
+            if (response.status === 200) {
+                try {
+                    await cache.put(request, response.clone());
+                } catch {
+                    // quota piena: la risposta arriva comunque
+                }
+            }
             return response;
         })());
         return;
