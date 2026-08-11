@@ -9,7 +9,9 @@
  */
 const SHELL_CACHE = 'wg-shell-v1';
 const ASSET_CACHE = 'wg-assets-v1';
-const KNOWN_CACHES = [SHELL_CACHE, ASSET_CACHE];
+const TILE_CACHE = 'wg-tiles-v1';
+const TILE_CACHE_MAX = 2000; // ~2000 tile ≈ 30-60 MB: le zone viste online restano offline
+const KNOWN_CACHES = [SHELL_CACHE, ASSET_CACHE, TILE_CACHE];
 
 self.addEventListener('install', () => {
     self.skipWaiting();
@@ -28,6 +30,27 @@ self.addEventListener('fetch', (event) => {
     if (request.method !== 'GET') return;
 
     const url = new URL(request.url);
+
+    // Tile cartografiche di sfondo: cache-first con tetto, così la mappa
+    // dell'app operatore mostra le zone già visitate anche senza rete
+    if (url.hostname === 'tile.openstreetmap.org') {
+        event.respondWith((async () => {
+            const cache = await caches.open(TILE_CACHE);
+            const cached = await cache.match(request);
+            if (cached) return cached;
+            const response = await fetch(request);
+            if (response.ok) {
+                await cache.put(request, response.clone());
+                const keys = await cache.keys();
+                if (keys.length > TILE_CACHE_MAX) {
+                    await Promise.all(keys.slice(0, keys.length - TILE_CACHE_MAX).map((k) => cache.delete(k)));
+                }
+            }
+            return response;
+        })());
+        return;
+    }
+
     if (url.origin !== self.location.origin) return;
 
     if (url.pathname.startsWith('/build/') || url.pathname === '/manifest.webmanifest' || url.pathname.startsWith('/icons/')) {

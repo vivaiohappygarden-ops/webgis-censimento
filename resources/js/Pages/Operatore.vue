@@ -1,6 +1,7 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
+import * as maplibregl from 'maplibre-gl';
 import { openFieldDb } from '@/field/db';
 import { SyncManager } from '@/field/sync';
 
@@ -178,6 +179,158 @@ function switchTab(key) {
     selected.value = null;
     tab.value = key;
     refreshLocal();
+    if (key === 'mappa') nextTick(initOrRefreshMap);
+}
+
+// ---- Mappa offline: sorgenti GeoJSON costruite dalla replica locale ----
+const mapEl = ref(null);
+let map = null;
+let geoWatchId = null;
+const mapState = reactive({ placing: false, located: false });
+
+const TP_COLORS = { 1: '#16a34a', 2: '#475569', 3: '#d97706', 4: '#dc2626' };
+
+async function localFeatureCollections() {
+    const assets = await db.assets.toArray();
+    const areas = await db.areas.toArray();
+    const assetFeatures = assets
+        .filter((a) => a.geom_geojson)
+        .map((a) => ({
+            type: 'Feature',
+            geometry: a.geom_geojson,
+            properties: {
+                id: a.id,
+                census_code: a.census_code,
+                tp: Number(typesById.value[a.object_type_id]?.code?.slice(1, 2) ?? 0),
+                dirty: a.dirty ? 1 : 0,
+            },
+        }));
+    const areaFeatures = areas
+        .filter((a) => a.geom_geojson)
+        .map((a) => ({ type: 'Feature', geometry: a.geom_geojson, properties: { name: a.name } }));
+    return {
+        assets: { type: 'FeatureCollection', features: assetFeatures },
+        areas: { type: 'FeatureCollection', features: areaFeatures },
+    };
+}
+
+async function initOrRefreshMap() {
+    const data = await localFeatureCollections();
+
+    if (map) {
+        map.getSource('el')?.setData(data.assets);
+        map.getSource('aree')?.setData(data.areas);
+        map.resize();
+        return;
+    }
+    if (! mapEl.value) return;
+
+    map = new maplibregl.Map({
+        container: mapEl.value,
+        zoom: 15,
+        center: [9.19, 45.465],
+        attributionControl: false,
+        style: {
+            version: 8,
+            sources: {
+                osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256 },
+            },
+            layers: [
+                { id: 'sfondo', type: 'background', paint: { 'background-color': '#e8ede9' } },
+                { id: 'osm', type: 'raster', source: 'osm' },
+            ],
+        },
+    });
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }));
+
+    map.on('load', () => {
+        map.addSource('aree', { type: 'geojson', data: data.areas });
+        map.addSource('el', { type: 'geojson', data: data.assets });
+
+        map.addLayer({
+            id: 'aree-fill', type: 'fill', source: 'aree',
+            paint: { 'fill-color': '#16a34a', 'fill-opacity': 0.08 },
+        });
+        map.addLayer({
+            id: 'aree-line', type: 'line', source: 'aree',
+            paint: { 'line-color': '#15803d', 'line-width': 1.5, 'line-dasharray': [3, 2] },
+        });
+
+        const colorExpr = ['match', ['get', 'tp'],
+            1, TP_COLORS[1], 2, TP_COLORS[2], 3, TP_COLORS[3], 4, TP_COLORS[4], '#2563eb'];
+        map.addLayer({
+            id: 'el-fill', type: 'fill', source: 'el',
+            filter: ['==', ['geometry-type'], 'Polygon'],
+            paint: { 'fill-color': colorExpr, 'fill-opacity': 0.35 },
+        });
+        map.addLayer({
+            id: 'el-line', type: 'line', source: 'el',
+            filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]],
+            paint: { 'line-color': colorExpr, 'line-width': 2 },
+        });
+        map.addLayer({
+            id: 'el-point', type: 'circle', source: 'el',
+            filter: ['==', ['geometry-type'], 'Point'],
+            paint: {
+                'circle-color': colorExpr,
+                'circle-radius': 7,
+                'circle-stroke-width': 2,
+                'circle-stroke-color': ['case', ['==', ['get', 'dirty'], 1], '#f59e0b', '#ffffff'],
+            },
+        });
+
+        // Inquadra le aree di lavoro scaricate
+        const bounds = new maplibregl.LngLatBounds();
+        const extend = (coords) => {
+            if (typeof coords[0] === 'number') bounds.extend(coords);
+            else coords.forEach(extend);
+        };
+        data.areas.features.forEach((f) => extend(f.geometry.coordinates));
+        data.assets.features.forEach((f) => extend(f.geometry.coordinates));
+        if (! bounds.isEmpty()) map.fitBounds(bounds, { padding: 40, maxZoom: 17 });
+
+        map.on('click', async (e) => {
+            if (mapState.placing) {
+                // Posizionamento del nuovo rilievo dal tocco sulla mappa
+                form.lat = e.lngLat.lat.toFixed(6);
+                form.lon = e.lngLat.lng.toFixed(6);
+                form.accuracy = null;
+                mapState.placing = false;
+                switchTab('rilievo');
+                setMessage('Posizione impostata dalla mappa: completa il rilievo.');
+                return;
+            }
+            const hits = map.queryRenderedFeatures(e.point, { layers: ['el-point', 'el-fill', 'el-line'] });
+            if (hits.length) {
+                const asset = await db.assets.get(hits[0].properties.id);
+                if (asset) await openAsset(asset);
+            }
+        });
+    });
+}
+
+function locateOnMap() {
+    if (! navigator.geolocation || ! map) return;
+    if (geoWatchId !== null) navigator.geolocation.clearWatch(geoWatchId);
+    geoWatchId = navigator.geolocation.watchPosition((pos) => {
+        const lngLat = [pos.coords.longitude, pos.coords.latitude];
+        const point = { type: 'Point', coordinates: lngLat };
+        if (map.getSource('gps')) {
+            map.getSource('gps').setData(point);
+        } else {
+            map.addSource('gps', { type: 'geojson', data: point });
+            map.addLayer({
+                id: 'gps', type: 'circle', source: 'gps',
+                paint: { 'circle-color': '#2563eb', 'circle-radius': 8, 'circle-stroke-width': 3, 'circle-stroke-color': '#ffffff' },
+            });
+        }
+        if (! mapState.located) {
+            map.easeTo({ center: lngLat, zoom: 17 });
+            mapState.located = true;
+        }
+    }, () => {
+        setMessage('Posizione GPS non disponibile.', false);
+    }, { enableHighAccuracy: true });
 }
 
 function stopCamera() {
@@ -354,6 +507,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
     window.removeEventListener('online', onOnline);
     window.removeEventListener('offline', onOffline);
+    if (geoWatchId !== null) navigator.geolocation?.clearWatch(geoWatchId);
+    map?.remove();
     stopCamera();
     unsubscribe();
 });
@@ -468,6 +623,25 @@ onBeforeUnmount(() => {
                         Nessun elemento sul dispositivo. Scarica i dati di lavoro.
                     </li>
                 </ul>
+            </section>
+
+            <!-- MAPPA (i dati vengono dalla replica locale: funziona offline) -->
+            <section v-show="tab === 'mappa'" class="-m-4 h-full">
+                <div class="relative" style="height: calc(100vh - 3.5rem - 3.5rem);">
+                    <div ref="mapEl" class="h-full w-full" data-test="field-map" />
+                    <div class="absolute left-3 top-3 flex flex-col gap-2">
+                        <button
+                            class="rounded-lg bg-white px-3 py-2 text-xs font-medium shadow"
+                            @click="locateOnMap"
+                        >La mia posizione</button>
+                        <button
+                            class="rounded-lg px-3 py-2 text-xs font-medium shadow"
+                            :class="mapState.placing ? 'bg-green-700 text-white' : 'bg-white'"
+                            data-test="map-place"
+                            @click="mapState.placing = ! mapState.placing"
+                        >{{ mapState.placing ? 'Tocca la mappa per il rilievo…' : 'Nuovo rilievo dalla mappa' }}</button>
+                    </div>
+                </div>
             </section>
 
             <!-- SCANSIONA -->
@@ -691,10 +865,11 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Barra di navigazione inferiore (uso a una mano in campo) -->
-        <nav class="fixed inset-x-0 bottom-0 z-30 grid h-14 grid-cols-4 border-t border-gray-200 bg-white">
+        <nav class="fixed inset-x-0 bottom-0 z-30 grid h-14 grid-cols-5 border-t border-gray-200 bg-white">
             <button
                 v-for="item in [
                     { key: 'rilievo', label: 'Rilievo' },
+                    { key: 'mappa', label: 'Mappa' },
                     { key: 'elementi', label: 'Elementi' },
                     { key: 'scansiona', label: 'Scansiona' },
                     { key: 'sync', label: 'Sync' },
