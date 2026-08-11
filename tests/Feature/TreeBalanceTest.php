@@ -111,4 +111,32 @@ class TreeBalanceTest extends TestCase
         $this->getJson('/api/v1/vta/bilancio')
             ->assertUnprocessable();
     }
+
+    public function test_removal_date_cannot_precede_planting_date(): void
+    {
+        $id = $this->createTree('ALB-X', '2020-05-01');
+
+        $this->patchJson("/api/v1/assets/{$id}", [
+            'tree' => ['removed_on' => '2019-01-01'],
+        ])->assertUnprocessable();
+    }
+
+    public function test_tree_change_bumps_version_and_stale_version_conflicts(): void
+    {
+        $id = $this->createTree('ALB-V', null);
+
+        $this->patchJson("/api/v1/assets/{$id}", [
+            'version' => 1,
+            'tree' => ['species' => 'Tilia cordata'],
+        ])->assertOk()->assertJsonPath('data.version', 2);
+
+        // Il tecnico con la scheda vecchia non sovrascrive più in silenzio
+        $this->patchJson("/api/v1/assets/{$id}", [
+            'version' => 1,
+            'tree' => ['species' => 'Acer campestre'],
+        ])->assertConflict();
+
+        $this->getJson("/api/v1/assets/{$id}")
+            ->assertJsonPath('data.tree.species', 'Tilia cordata');
+    }
 }

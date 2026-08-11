@@ -162,8 +162,13 @@ class AssetController extends Controller implements HasMiddleware
             $this->assertValidityDates($asset);
             $asset->save();
 
+            $specializationChanged = false;
+
             if ($treeData !== null && $asset->tree) {
-                $asset->tree->update($treeData);
+                $asset->tree->fill($treeData);
+                $this->assertTreeDates($asset->tree);
+                $specializationChanged = $asset->tree->isDirty();
+                $asset->tree->save();
             }
 
             if ($siteData !== null && $asset->plantingSite) {
@@ -171,7 +176,16 @@ class AssetController extends Controller implements HasMiddleware
                     // Deve essere un albero del tenant (404 se estraneo)
                     \App\Models\Tree::query()->findOrFail($siteData['previous_tree_id']);
                 }
-                $asset->plantingSite->update($siteData);
+                $asset->plantingSite->fill($siteData);
+                $specializationChanged = $specializationChanged || $asset->plantingSite->isDirty();
+                $asset->plantingSite->save();
+            }
+
+            // Anche le modifiche a scheda albero/posto libero incrementano la versione
+            // della scheda: senza questo, il lock ottimistico non vedrebbe i salvataggi
+            // concorrenti che toccano solo la specializzazione (la riga assets non cambia)
+            if ($specializationChanged && ! $asset->wasChanged()) {
+                DB::update('UPDATE assets SET version = version + 1 WHERE id = ?', [$asset->id]);
             }
 
             Audit::log('asset.updated', $asset);
@@ -198,6 +212,15 @@ class AssetController extends Controller implements HasMiddleware
             throw ValidationException::withMessages([
                 'geometry' => "Il tipo oggetto {$type->code} richiede una geometria ".
                     implode('/', $type->allowedGeometryTypes()).", ricevuta {$geometryType}.",
+            ]);
+        }
+    }
+
+    private function assertTreeDates(\App\Models\Tree $tree): void
+    {
+        if ($tree->removed_on && $tree->planted_on && $tree->removed_on->lt($tree->planted_on)) {
+            throw ValidationException::withMessages([
+                'tree.removed_on' => 'La data di rimozione non può precedere quella di impianto ('.$tree->planted_on->toDateString().').',
             ]);
         }
     }

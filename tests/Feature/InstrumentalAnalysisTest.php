@@ -92,13 +92,40 @@ class InstrumentalAnalysisTest extends TestCase
         ], ['Accept' => 'application/json'])->assertUnprocessable();
     }
 
-    public function test_analysis_can_be_deleted(): void
+    public function test_analysis_can_be_deleted_with_its_report(): void
     {
-        $id = $this->postJson("/api/v1/assessments/{$this->assessmentId}/instrumental-analyses", [
-            'instrument_type' => 'pull_test',
-        ])->json('data.id');
+        Storage::fake('local');
 
-        $this->deleteJson("/api/v1/instrumental-analyses/{$id}")->assertNoContent();
+        $created = $this->post("/api/v1/assessments/{$this->assessmentId}/instrumental-analyses", [
+            'instrument_type' => 'pull_test',
+            'report' => UploadedFile::fake()->create('referto.pdf', 50, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->json('data');
+
+        $document = Document::query()->withoutGlobalScopes()->findOrFail($created['document_id']);
+
+        $this->deleteJson("/api/v1/instrumental-analyses/{$created['id']}")->assertNoContent();
         $this->assertCount(0, $this->getJson("/api/v1/assessments/{$this->assessmentId}/instrumental-analyses")->json('data'));
+
+        // Il referto non resta orfano: file rimosso e documento non più scaricabile
+        Storage::disk('local')->assertMissing($document->s3_key);
+        $this->getJson("/api/v1/documents/{$document->id}/file")->assertNotFound();
+    }
+
+    public function test_analyses_and_reports_are_tenant_isolated(): void
+    {
+        Storage::fake('local');
+
+        $documentId = $this->post("/api/v1/assessments/{$this->assessmentId}/instrumental-analyses", [
+            'instrument_type' => 'resistograph',
+            'report' => UploadedFile::fake()->create('riservato.pdf', 50, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->json('data.document_id');
+
+        [, $otherUser] = $this->createTenantUser();
+        $this->actingAsTenantUser($otherUser);
+
+        $this->getJson("/api/v1/assessments/{$this->assessmentId}/instrumental-analyses")
+            ->assertNotFound();
+        $this->getJson("/api/v1/documents/{$documentId}/file")
+            ->assertNotFound();
     }
 }

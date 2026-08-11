@@ -19,10 +19,13 @@ const CLASS_COLORS = {
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '—');
 
 // Bilancio arboreo (L. 10/2013): dal 1 gennaio dell'anno corrente a oggi
+// (data locale, non UTC: a ridosso della mezzanotte i due fusi divergono)
+const pad = (n) => String(n).padStart(2, '0');
 const today = new Date();
+const todayLocal = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
 const balance = reactive({
     from: `${today.getFullYear()}-01-01`,
-    to: today.toISOString().slice(0, 10),
+    to: todayLocal,
     loading: false,
     error: '',
     result: null,
@@ -51,14 +54,20 @@ function qualifiche(t) {
     return q.join(', ');
 }
 
+const loadError = ref('');
+
 onMounted(async () => {
-    const [dashboard, protectedTrees] = await Promise.all([
-        axios.get('/api/v1/vta/dashboard'),
-        axios.get('/api/v1/vta/tutelati'),
-    ]);
-    data.value = dashboard.data.data;
-    tutelati.value = protectedTrees.data.data;
-    await loadBalance();
+    try {
+        const [dashboard, protectedTrees] = await Promise.all([
+            axios.get('/api/v1/vta/dashboard'),
+            axios.get('/api/v1/vta/tutelati'),
+        ]);
+        data.value = dashboard.data.data;
+        tutelati.value = protectedTrees.data.data;
+        await loadBalance();
+    } catch {
+        loadError.value = 'Errore nel caricamento del cruscotto. Ricarica la pagina.';
+    }
 });
 </script>
 
@@ -294,7 +303,9 @@ onMounted(async () => {
                 </div>
             </div>
 
-            <div v-else class="mt-10 text-center text-gray-400">Caricamento…</div>
+            <div v-else class="mt-10 text-center" :class="loadError ? 'text-red-600' : 'text-gray-400'">
+                {{ loadError || 'Caricamento…' }}
+            </div>
         </div>
     </AppLayout>
 </template>

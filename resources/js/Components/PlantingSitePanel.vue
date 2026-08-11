@@ -37,6 +37,7 @@ async function save() {
     error.value = '';
     try {
         await axios.patch(`/api/v1/assets/${props.asset.id}`, {
+            version: props.asset.version,
             planting_site: {
                 status: site.status,
                 planned_species: site.planned_species || null,

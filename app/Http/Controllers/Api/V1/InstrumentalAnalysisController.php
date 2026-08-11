@@ -109,7 +109,15 @@ class InstrumentalAnalysisController extends Controller implements HasMiddleware
     public function destroy(string $id): Response
     {
         $analysis = InstrumentalAnalysis::findOrFail($id);
-        $analysis->delete();
+
+        DB::transaction(function () use ($analysis) {
+            // Il referto segue l'analisi: senza questo resterebbe scaricabile un file orfano
+            if ($analysis->document_id && ($document = $analysis->document)) {
+                \Illuminate\Support\Facades\Storage::disk()->delete($document->s3_key);
+                $document->delete();
+            }
+            $analysis->delete();
+        });
 
         Audit::log('instrumental_analysis.deleted', $analysis);
 

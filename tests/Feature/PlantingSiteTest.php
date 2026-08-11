@@ -98,6 +98,34 @@ class PlantingSiteTest extends TestCase
         ])->assertUnprocessable();
     }
 
+    public function test_planting_site_change_bumps_version_and_stale_version_conflicts(): void
+    {
+        $type = $this->makeObjectType($this->organization, 'P', 'PL001', [
+            'is_cam' => false, 'is_planting_site' => true,
+        ]);
+
+        $assetId = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $type->id,
+            'geometry' => $this->pointGeometry(),
+        ])->json('data.id');
+
+        // La modifica del posto libero incrementa la versione della scheda
+        $this->patchJson("/api/v1/assets/{$assetId}", [
+            'version' => 1,
+            'planting_site' => ['status' => 'reserved'],
+        ])->assertOk()->assertJsonPath('data.version', 2);
+
+        // Un salvataggio con versione stantia viene rifiutato (409), non sovrascrive
+        $this->patchJson("/api/v1/assets/{$assetId}", [
+            'version' => 1,
+            'planting_site' => ['status' => 'unusable'],
+        ])->assertConflict();
+
+        $this->getJson("/api/v1/assets/{$assetId}")
+            ->assertJsonPath('data.planting_site.status', 'reserved');
+    }
+
     public function test_planting_site_payload_is_ignored_for_non_site_assets(): void
     {
         $type = $this->makeObjectType($this->organization, 'P');

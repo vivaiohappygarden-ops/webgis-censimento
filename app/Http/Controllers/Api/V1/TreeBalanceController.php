@@ -32,8 +32,10 @@ class TreeBalanceController extends Controller implements HasMiddleware
         ]);
 
         $tenantId = $request->user()->tenant_id;
-        $from = $data['from'];
-        $to = $data['to'];
+        // Il validatore 'date' accetta formati che PostgreSQL non digerisce:
+        // normalizziamo a YYYY-MM-DD prima del cast ?::date
+        $from = \Illuminate\Support\Carbon::parse($data['from'])->toDateString();
+        $to = \Illuminate\Support\Carbon::parse($data['to'])->toDateString();
 
         $totals = DB::selectOne(<<<'SQL'
             WITH t AS (
@@ -70,9 +72,11 @@ class TreeBalanceController extends Controller implements HasMiddleware
             GROUP BY species_label
             HAVING COUNT(*) FILTER (WHERE starts_on BETWEEN ?::date AND ?::date)
                  + COUNT(*) FILTER (WHERE removed_on BETWEEN ?::date AND ?::date) > 0
-            ORDER BY 2 + 3 DESC, species_label
+            ORDER BY COUNT(*) FILTER (WHERE starts_on BETWEEN ?::date AND ?::date)
+                   + COUNT(*) FILTER (WHERE removed_on BETWEEN ?::date AND ?::date) DESC,
+                     species_label
             LIMIT 50
-            SQL, [$tenantId, $from, $to, $from, $to, $from, $to, $from, $to]);
+            SQL, [$tenantId, $from, $to, $from, $to, $from, $to, $from, $to, $from, $to, $from, $to]);
 
         // Stato attuale dei posti liberi (non storicizzato per data)
         $sites = PlantingSite::query()

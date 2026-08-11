@@ -69,6 +69,9 @@ async function loadAnalyses(assessmentId) {
     try {
         const { data } = await axios.get(`/api/v1/assessments/${assessmentId}/instrumental-analyses`);
         st.items = data.data;
+        st.error = '';
+    } catch {
+        st.error = 'Errore nel caricamento delle analisi.';
     } finally {
         st.loading = false;
     }
@@ -123,6 +126,7 @@ async function saveTree() {
     treeError.value = '';
     try {
         await axios.patch(`/api/v1/assets/${props.asset.id}`, {
+            version: props.asset.version,
             tree: {
                 genus: tree.genus || null,
                 species: tree.species || null,
@@ -154,7 +158,8 @@ async function saveTree() {
         });
         emit('saved');
     } catch (err) {
-        treeError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0] ?? 'Errore nel salvataggio';
+        treeError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Errore nel salvataggio';
     } finally {
         savingTree.value = false;
     }
@@ -183,6 +188,13 @@ async function saveVta() {
 }
 
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '—');
+
+// Data odierna locale in formato ISO: un ricontrollo che scade oggi non è scaduto
+const pad = (n) => String(n).padStart(2, '0');
+const todayIso = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
 
 onMounted(loadAssessments);
 </script>
@@ -355,7 +367,7 @@ onMounted(loadAssessments);
                         <span class="text-gray-500">{{ fmt(a.assessed_on) }}</span>
                         <span v-if="a.outcome" class="text-gray-500">· {{ OUTCOMES[a.outcome] }}</span>
                         <span v-if="a.assessor" class="text-gray-400">· {{ a.assessor.name }}</span>
-                        <span v-if="a.next_check_due" class="ml-auto text-xs" :class="new Date(a.next_check_due) < new Date() ? 'font-semibold text-red-600' : 'text-gray-500'">
+                        <span v-if="a.next_check_due" class="ml-auto text-xs" :class="String(a.next_check_due).slice(0, 10) < todayIso() ? 'font-semibold text-red-600' : 'text-gray-500'">
                             ricontrollo {{ fmt(a.next_check_due) }}
                         </span>
                         <button
@@ -366,6 +378,7 @@ onMounted(loadAssessments);
                     </div>
 
                     <div v-if="analyses[a.id]?.open" class="mt-2 border-t border-gray-100 pt-2">
+                        <p v-if="analyses[a.id].error && ! analyses[a.id].showForm" class="text-xs text-red-600">{{ analyses[a.id].error }}</p>
                         <p v-if="analyses[a.id].loading" class="text-xs text-gray-400">Caricamento…</p>
                         <table v-else-if="analyses[a.id].items.length" class="w-full text-xs">
                             <thead>
