@@ -74,8 +74,9 @@ async function submitCheck() {
         });
         detail.value = data.data;
         checkModal.open = false;
-        // L'eventuale ordine correttivo compare nell'elenco; la vista qualità si aggiorna
+        // L'eventuale ordine correttivo compare in elenco, agenda e qualità
         await load();
+        await agendaRef.value?.reload();
         await qualityRef.value?.reload();
     } catch (err) {
         checkModal.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
@@ -243,6 +244,12 @@ async function detachAsset(rowId) {
 }
 
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '—');
+// Oggi in data locale (mai toISOString: a cavallo della mezzanotte sbaglia giorno)
+const todayLocalYmd = (() => {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+})();
 const fmtEuro = (v) => (v == null ? '—' : Number(v).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' }));
 const fmtDateTime = (iso) => (iso ? new Date(iso).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 const fmtQty = (v) => Number(v).toLocaleString('it-IT');
@@ -495,14 +502,16 @@ onMounted(async () => {
 
             <!-- Verbale di controllo qualità -->
             <Teleport to="body">
-                <div v-if="checkModal.open" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4" @click.self="checkModal.open = false">
+                <!-- Con la richiesta in volo la modale non si chiude: l'esito
+                     (anche un errore) deve restare visibile a chi la usa -->
+                <div v-if="checkModal.open" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4" @click.self="! checkModal.busy && (checkModal.open = false)">
                     <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" data-test="check-modal">
                         <div class="flex items-start justify-between">
                             <div>
                                 <div class="text-xs uppercase tracking-wide text-gray-400">{{ detail?.code }}</div>
                                 <h2 class="font-semibold">Verbale di controllo qualità</h2>
                             </div>
-                            <button class="text-gray-400 hover:text-gray-600" @click="checkModal.open = false">✕</button>
+                            <button class="text-gray-400 hover:text-gray-600 disabled:opacity-40" :disabled="checkModal.busy" @click="checkModal.open = false">✕</button>
                         </div>
 
                         <div class="mt-4 grid grid-cols-2 gap-2">
@@ -535,7 +544,7 @@ onMounted(async () => {
                                 </label>
                                 <label class="block text-xs">
                                     <span class="text-gray-500">Da risolvere entro</span>
-                                    <input v-model="checkModal.nc.due_on" type="date" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                                    <input v-model="checkModal.nc.due_on" type="date" :min="todayLocalYmd" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
                                 </label>
                             </div>
                             <label class="block text-xs">

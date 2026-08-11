@@ -44,6 +44,7 @@ class WorkCheckController extends Controller implements HasMiddleware
             'non_conformity.create_corrective_order' => ['sometimes', 'boolean'],
         ], [
             'non_conformity.required_if' => 'Un esito negativo richiede la registrazione della non conformità.',
+            'non_conformity.due_on.after_or_equal' => 'La scadenza di risoluzione non può essere nel passato.',
         ]);
 
         $user = $request->user();
@@ -61,6 +62,13 @@ class WorkCheckController extends Controller implements HasMiddleware
         }
         if (! empty($data['non_conformity']['asset_id'])) {
             \App\Models\Asset::query()->findOrFail($data['non_conformity']['asset_id']);
+            // L'elemento contestato deve essere tra quelli dell'ordine: un asset
+            // estraneo produrrebbe un ordine correttivo vuoto, in silenzio
+            if (! $workOrder->assets->pluck('asset_id')->contains($data['non_conformity']['asset_id'])) {
+                throw ValidationException::withMessages([
+                    'non_conformity.asset_id' => 'L\'elemento indicato non fa parte dell\'ordine controllato.',
+                ]);
+            }
         }
 
         DB::transaction(function () use ($data, $user, $workOrder) {
@@ -116,7 +124,9 @@ class WorkCheckController extends Controller implements HasMiddleware
                 'area_id' => $workOrder->area_id,
                 'work_type_id' => $workOrder->work_type_id,
                 'team_id' => $workOrder->team_id,
-                'price_list_id' => $workOrder->price_list_id,
+                // Un listino nel frattempo disattivato non si applica a ordini
+                // nuovi: stessa regola della validazione degli ordini
+                'price_list_id' => $workOrder->priceList?->is_active ? $workOrder->price_list_id : null,
                 'created_by' => $user->id,
                 'updated_by' => $user->id,
             ]);

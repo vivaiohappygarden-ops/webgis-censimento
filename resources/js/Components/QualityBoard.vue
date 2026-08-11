@@ -24,6 +24,7 @@ const NC_TRANSITIONS = {
 
 const filters = reactive({ status: '', severity: '' });
 const rows = ref([]);
+const truncatedCount = ref(0);
 const loading = ref(false);
 const loadError = ref(false);
 const busyId = ref('');
@@ -31,6 +32,7 @@ const errorById = reactive({});
 
 // La riga espansa mostra l'editor di causa, azione, scadenza, responsabile
 const expanded = ref('');
+const editorDirty = ref(false);
 const editor = reactive({ root_cause: '', corrective_action: '', due_on: '', responsible_id: '' });
 
 let seq = 0;
@@ -38,14 +40,32 @@ async function reload() {
     const mySeq = ++seq;
     loading.value = true;
     try {
-        const { data } = await axios.get('/api/v1/non-conformities', { params: {
-            per_page: 100,
-            ...(filters.status ? { status: filters.status } : {}),
-            ...(filters.severity ? { severity: filters.severity } : {}),
-        } });
-        if (mySeq !== seq) return;
-        rows.value = data.data;
+        // Tutte le pagine, con tetto di sicurezza dichiarato: mai troncare in silenzio
+        const out = [];
+        let page = 1;
+        let lastPage = 1;
+        let total = 0;
+        do {
+            const { data } = await axios.get('/api/v1/non-conformities', { params: {
+                per_page: 100,
+                page,
+                ...(filters.status ? { status: filters.status } : {}),
+                ...(filters.severity ? { severity: filters.severity } : {}),
+            } });
+            if (mySeq !== seq) return;
+            out.push(...data.data);
+            lastPage = data.last_page;
+            total = data.total;
+            page += 1;
+        } while (page <= lastPage && page <= 10);
+        rows.value = out;
+        truncatedCount.value = Math.max(0, total - out.length);
         loadError.value = false;
+        // La riga espansa può essere uscita dall'elenco (filtro o transizione)
+        if (expanded.value && ! out.some((nc) => nc.id === expanded.value)) {
+            expanded.value = '';
+            editorDirty.value = false;
+        }
     } catch {
         if (mySeq === seq) loadError.value = true;
     } finally {
@@ -54,12 +74,23 @@ async function reload() {
 }
 defineExpose({ reload });
 
+function applyFilters() {
+    if (editorDirty.value
+        && ! window.confirm('Cambiare filtro senza salvare le modifiche della scheda aperta? Andranno perse.')) {
+        return;
+    }
+    editorDirty.value = false;
+    reload();
+}
+
 function toggleExpand(nc) {
     if (expanded.value === nc.id) {
         expanded.value = '';
+        editorDirty.value = false;
         return;
     }
     expanded.value = nc.id;
+    editorDirty.value = false;
     Object.assign(editor, {
         root_cause: nc.root_cause ?? '',
         corrective_action: nc.corrective_action ?? '',
@@ -68,11 +99,24 @@ function toggleExpand(nc) {
     });
 }
 
+function editorPayload() {
+    return {
+        root_cause: editor.root_cause.trim() || null,
+        corrective_action: editor.corrective_action.trim() || null,
+        due_on: editor.due_on || null,
+        responsible_id: editor.responsible_id || null,
+    };
+}
+
 async function patch(nc, payload) {
+    // Una richiesta alla volta: due click su righe diverse non devono
+    // riabilitare i pulsanti della prima mentre è ancora in volo
+    if (busyId.value) return;
     busyId.value = nc.id;
     delete errorById[nc.id];
     try {
         await axios.patch(`/api/v1/non-conformities/${nc.id}`, payload);
+        editorDirty.value = false;
         await reload();
     } catch (err) {
         errorById[nc.id] = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
@@ -82,13 +126,15 @@ async function patch(nc, payload) {
     }
 }
 
+function doTransition(nc, to) {
+    // La scheda aperta con modifiche non salvate viaggia INSIEME alla
+    // transizione: chiudere una NC non deve mai perdere il testo digitato
+    const extra = expanded.value === nc.id && editorDirty.value ? editorPayload() : {};
+    patch(nc, { ...extra, status: to });
+}
+
 function saveEditor(nc) {
-    patch(nc, {
-        root_cause: editor.root_cause.trim() || null,
-        corrective_action: editor.corrective_action.trim() || null,
-        due_on: editor.due_on || null,
-        responsible_id: editor.responsible_id || null,
-    });
+    patch(nc, editorPayload());
 }
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('it-IT') : '—');
@@ -99,15 +145,19 @@ onMounted(reload);
 <template>
     <div>
         <div class="mb-3 flex flex-wrap gap-2">
-            <select v-model="filters.status" data-test="nc-filter-status" class="rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @change="reload">
+            <select v-model="filters.status" data-test="nc-filter-status" class="rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @change="applyFilters">
                 <option value="">Tutti gli stati</option>
                 <option v-for="(s, value) in NC_STATUS" :key="value" :value="value">{{ s.label }}</option>
             </select>
-            <select v-model="filters.severity" class="rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @change="reload">
+            <select v-model="filters.severity" class="rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @change="applyFilters">
                 <option value="">Tutte le gravità</option>
                 <option v-for="(label, value) in NC_SEVERITY" :key="value" :value="value">{{ label }}</option>
             </select>
         </div>
+
+        <p v-if="truncatedCount" class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            Mostrate {{ rows.length }} non conformità su {{ rows.length + truncatedCount }}: restringi i filtri per vederle tutte.
+        </p>
 
         <p v-if="loadError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
             Caricamento non riuscito.
@@ -155,7 +205,7 @@ onMounted(reload);
                                         class="rounded border border-green-700 px-2 py-0.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
                                         :disabled="busyId === nc.id"
                                         :data-test="`nc-to-${to}`"
-                                        @click="patch(nc, { status: to })"
+                                        @click="doTransition(nc, to)"
                                     >{{ NC_STATUS[to].label }}</button>
                                 </div>
                                 <p v-if="errorById[nc.id]" class="mt-1 text-xs text-red-600">{{ errorById[nc.id] }}</p>
@@ -166,19 +216,19 @@ onMounted(reload);
                                 <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
                                     <label class="block text-xs">
                                         <span class="text-gray-500">Causa</span>
-                                        <textarea v-model="editor.root_cause" rows="2" :disabled="! canManage || nc.status === 'closed'" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm disabled:bg-gray-100" />
+                                        <textarea v-model="editor.root_cause" rows="2" :disabled="! canManage || nc.status === 'closed'" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm disabled:bg-gray-100" @input="editorDirty = true" />
                                     </label>
                                     <label class="block text-xs">
                                         <span class="text-gray-500">Azione correttiva</span>
-                                        <textarea v-model="editor.corrective_action" rows="2" :disabled="! canManage || nc.status === 'closed'" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm disabled:bg-gray-100" />
+                                        <textarea v-model="editor.corrective_action" rows="2" :disabled="! canManage || nc.status === 'closed'" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm disabled:bg-gray-100" @input="editorDirty = true" />
                                     </label>
                                     <label class="block text-xs">
                                         <span class="text-gray-500">Scadenza</span>
-                                        <input v-model="editor.due_on" type="date" :disabled="! canManage || nc.status === 'closed'" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm disabled:bg-gray-100">
+                                        <input v-model="editor.due_on" type="date" :disabled="! canManage || nc.status === 'closed'" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm disabled:bg-gray-100" @input="editorDirty = true">
                                     </label>
                                     <label class="block text-xs">
                                         <span class="text-gray-500">Responsabile</span>
-                                        <select v-model="editor.responsible_id" :disabled="! canManage || nc.status === 'closed'" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm disabled:bg-gray-100">
+                                        <select v-model="editor.responsible_id" :disabled="! canManage || nc.status === 'closed'" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm disabled:bg-gray-100" @change="editorDirty = true">
                                             <option value="">—</option>
                                             <option v-for="p in personnel" :key="p.id" :value="p.id">{{ p.name }}</option>
                                         </select>

@@ -123,6 +123,33 @@ class WorkCheckTest extends TestCase
         $this->assertSame($assetId, $corrective->assets()->sole()->asset_id);
     }
 
+    public function test_nc_asset_must_belong_to_the_checked_order(): void
+    {
+        $type = $this->makeObjectType($this->organization, 'P');
+        $area = $this->createArea($this->organization);
+        $foreignAssetId = $this->postJson('/api/v1/assets', [
+            'area_id' => $area->id,
+            'object_type_id' => $type->id,
+            'census_code' => 'QC-EL-X',
+            'geometry' => $this->pointGeometry(),
+        ])->json('data.id');
+
+        $order = $this->makeOrder(); // senza elementi
+
+        // Un elemento estraneo produrrebbe un ordine correttivo vuoto: rifiutato
+        $this->postJson("/api/v1/work-orders/{$order->id}/checks", [
+            'outcome' => 'failed',
+            'non_conformity' => [
+                'severity' => 'minor',
+                'description' => 'Elemento estraneo.',
+                'asset_id' => $foreignAssetId,
+                'create_corrective_order' => true,
+            ],
+        ])->assertUnprocessable();
+
+        $this->assertSame(0, \App\Models\NonConformity::query()->count());
+    }
+
     public function test_checks_only_on_real_work_states(): void
     {
         $draft = $this->makeOrder('draft');
