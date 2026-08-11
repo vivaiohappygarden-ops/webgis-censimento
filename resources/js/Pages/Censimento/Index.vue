@@ -239,6 +239,9 @@ const measure = (row) => {
                                 <ul v-if="importer.report.errors.length" class="mt-2 max-h-32 space-y-0.5 overflow-y-auto text-xs text-red-700">
                                     <li v-for="(e, i) in importer.report.errors" :key="i">• {{ e.error }}</li>
                                 </ul>
+                                <ul v-if="importer.report.warnings?.length" class="mt-2 max-h-24 space-y-0.5 overflow-y-auto text-xs text-amber-700">
+                                    <li v-for="(w, i) in importer.report.warnings" :key="i">• {{ w }}</li>
+                                </ul>
                                 <p v-if="importer.report.dropped_properties?.length" class="mt-2 text-xs text-gray-500">
                                     Proprietà ignorate (non definite come campi del tipo): {{ importer.report.dropped_properties.join(', ') }}
                                 </p>

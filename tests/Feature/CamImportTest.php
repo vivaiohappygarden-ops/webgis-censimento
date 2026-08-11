@@ -154,6 +154,39 @@ class CamImportTest extends TestCase
         $this->assertEqualsWithDelta(45.4652, $coords[1], 0.00001);
     }
 
+    public function test_inverted_dates_are_rejected_in_dry_run_not_at_insert(): void
+    {
+        [, $destUser, $destArea] = $this->makeDestinationTenant();
+        $this->actingAsTenantUser($destUser);
+
+        $collection = [
+            'type' => 'FeatureCollection',
+            'features' => [[
+                'type' => 'Feature',
+                'geometry' => $this->pointGeometry(),
+                // DATA_INI assente -> varrebbe oggi; DATA_FINE nel passato
+                'properties' => ['CODICE' => 'P103108', 'OBJ_ID' => 'DT-1', 'DATA_FINE' => '01012024'],
+            ]],
+        ];
+
+        // Il dry-run segnala la riga come errore (niente 500 all'import vero)
+        $this->post('/api/v1/imports/cam', [
+            'file' => UploadedFile::fake()->createWithContent('P1.geojson', json_encode($collection)),
+            'area_id' => $destArea->id,
+            'dry_run' => '1',
+        ], ['Accept' => 'application/json'])->assertOk()
+            ->assertJsonPath('data.importable', 0)
+            ->assertJsonPath('data.errors_total', 1);
+
+        $this->post('/api/v1/imports/cam', [
+            'file' => UploadedFile::fake()->createWithContent('P1.geojson', json_encode($collection)),
+            'area_id' => $destArea->id,
+            'dry_run' => '0',
+        ], ['Accept' => 'application/json'])->assertOk()
+            ->assertJsonPath('data.imported', 0);
+        $this->assertSame(0, Asset::query()->count());
+    }
+
     public function test_unknown_codice_is_rejected_per_row(): void
     {
         [, $destUser, $destArea] = $this->makeDestinationTenant();

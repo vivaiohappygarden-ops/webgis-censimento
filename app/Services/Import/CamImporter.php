@@ -72,24 +72,54 @@ class CamImporter
                 throw ValidationException::withMessages(['file' => 'Archivio zip non leggibile.']);
             }
 
-            $shpName = null;
+            // Tetto sulla dimensione DECOMPRESSA: il limite dell'upload vale solo
+            // per lo zip compresso, e con DEFLATE una bomba da 50 MB può
+            // espandersi a decine di GB saturando memoria e disco
+            $totalUncompressed = 0;
             for ($i = 0; $i < $zip->numFiles; $i++) {
-                // Solo i componenti shapefile, senza percorsi (protezione zip-slip)
-                $name = basename($zip->getNameIndex($i));
-                $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+                $totalUncompressed += (int) ($zip->statIndex($i)['size'] ?? 0);
+            }
+            if ($totalUncompressed > 200 * 1024 * 1024) {
+                throw ValidationException::withMessages([
+                    'file' => 'Archivio troppo grande una volta estratto (oltre 200 MB).',
+                ]);
+            }
+
+            $shpNames = [];
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                // Solo i componenti shapefile, senza percorsi (protezione zip-slip);
+                // nomi normalizzati in minuscolo (gli archivi ESRI storici usano .SHP/.PRJ)
+                $name = strtolower(basename($zip->getNameIndex($i)));
+                $ext = pathinfo($name, PATHINFO_EXTENSION);
                 if (! in_array($ext, ['shp', 'shx', 'dbf', 'prj', 'cpg'], true)) {
                     continue;
                 }
-                file_put_contents("{$dir}/{$name}", $zip->getFromIndex($i));
+
+                $stream = $zip->getStream($zip->getNameIndex($i));
+                $out = fopen("{$dir}/{$name}", 'wb');
+                if ($stream === false || $out === false || stream_copy_to_stream($stream, $out) === false) {
+                    throw ValidationException::withMessages(['file' => 'Estrazione dello zip non riuscita.']);
+                }
+                fclose($out);
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+
                 if ($ext === 'shp') {
-                    $shpName = $name;
+                    $shpNames[] = $name;
                 }
             }
             $zip->close();
 
-            if ($shpName === null) {
+            if ($shpNames === []) {
                 throw ValidationException::withMessages(['file' => 'Nessun file .shp trovato nello zip.']);
             }
+            if (count($shpNames) > 1) {
+                throw ValidationException::withMessages([
+                    'file' => 'Lo zip contiene più shapefile ('.implode(', ', $shpNames).'): caricane uno alla volta.',
+                ]);
+            }
+            $shpName = $shpNames[0];
             if (! file_exists("{$dir}/".substr($shpName, 0, -4).'.prj')) {
                 throw ValidationException::withMessages([
                     'file' => 'Manca il file .prj (sistema di coordinate): impossibile riproiettare con certezza.',
@@ -102,7 +132,14 @@ class CamImporter
                 '-t_srs', 'EPSG:4326',
                 $jsonPath, "{$dir}/{$shpName}",
             ]);
-            $process->setTimeout(120)->run();
+
+            try {
+                $process->setTimeout(120)->run();
+            } catch (\Symfony\Component\Process\Exception\ExceptionInterface $e) {
+                throw ValidationException::withMessages([
+                    'file' => 'Conversione shapefile interrotta (file troppo complesso o strumento non disponibile).',
+                ]);
+            }
 
             if (! $process->isSuccessful() || ! file_exists($jsonPath)) {
                 throw ValidationException::withMessages([
@@ -141,6 +178,7 @@ class CamImporter
         $typesByCode = CatalogObjectType::query()->get()->keyBy('code');
 
         $errors = [];
+        $warnings = [];
         $assetRows = [];
         $treeRows = [];
         $censusInFile = [];
@@ -192,10 +230,25 @@ class CamImporter
 
             $treeData = null;
             if ($type->requires_tree_record) {
-                $treeData = $this->treeData($props, $index, $label, $errors);
+                $treeData = $this->treeData($props, $index, $label, $errors, $warnings);
                 if ($treeData === false) {
                     continue; // errore già registrato
                 }
+            }
+
+            $statoRaw = strtolower(trim((string) ($props['STATO'] ?? '')));
+            if ($statoRaw !== '' && ! isset(self::STATO_MAP[$statoRaw])) {
+                $warnings[] = "{$label}: STATO '{$props['STATO']}' non riconosciuto, impostato 'Pianta viva'.";
+            }
+
+            // Le date devono rispettare il vincolo del DB (fine >= inizio):
+            // scoprirlo all'insert romperebbe il contratto dry-run/import
+            $validFrom = $this->fromCamDate($props['DATA_INI'] ?? null) ?? now()->toDateString();
+            $validTo = $this->fromCamDate($props['DATA_FINE'] ?? null);
+            if ($validTo !== null && $validTo < $validFrom) {
+                $errors[] = ['index' => $index, 'error' => "{$label}: DATA_FINE ({$validTo}) precedente a DATA_INI ({$validFrom})."];
+
+                continue;
             }
 
             $assetId = (string) Str::uuid7();
@@ -208,9 +261,9 @@ class CamImporter
                 'status' => self::STATO_MAP[strtolower(trim((string) ($props['STATO'] ?? '')))] ?? 'active',
                 'geom' => $ewkb,
                 'survey_method' => 'shapefile_import',
-                'valid_from' => $this->fromCamDate($props['DATA_INI'] ?? null) ?? now()->toDateString(),
-                'valid_to' => $this->fromCamDate($props['DATA_FINE'] ?? null),
-                'attributes' => json_encode([]),
+                'valid_from' => $validFrom,
+                'valid_to' => $validTo,
+                'attributes' => '{}',
                 'notes' => ($n = trim((string) ($props['NOTE'] ?? ''))) !== '' ? $n : null,
                 'created_by' => Auth::id(),
                 'updated_by' => Auth::id(),
@@ -270,21 +323,23 @@ class CamImporter
             'skipped' => count($features) - count($assetRows),
             'errors' => array_slice($errors, 0, 50),
             'errors_total' => count($errors),
+            'warnings' => array_slice($warnings, 0, 50),
+            'warnings_total' => count($warnings),
             'dry_run' => $dryRun,
         ];
     }
 
     /** Campi vegetazione delle Master P1/L1/S1 -> scheda albero. */
-    private function treeData(array $props, int $index, string $label, array &$errors): array|false
+    private function treeData(array $props, int $index, string $label, array &$errors, array &$warnings): array|false
     {
         $candidate = [
             'plant_number' => ($v = trim((string) ($props['PT'] ?? ''))) !== '' ? $v : null,
             'genus' => ($v = trim((string) ($props['GENERE'] ?? ''))) !== '' ? $v : null,
             'species' => ($v = trim((string) ($props['SPECIE'] ?? ''))) !== '' ? $v : null,
             'cultivar' => ($v = trim((string) ($props['VARIETA'] ?? ''))) !== '' ? $v : null,
-            'height_m' => $this->numeric($props['H_M'] ?? null),
-            'dbh_cm' => $this->numeric($props['DIAM_TRONC'] ?? null),
-            'crown_diameter_m' => $this->numeric($props['DIAM_CHIOM'] ?? null),
+            'height_m' => $this->numeric($props['H_M'] ?? null, "{$label}: H_m", $warnings),
+            'dbh_cm' => $this->numeric($props['DIAM_TRONC'] ?? null, "{$label}: DIAM_TRONC", $warnings),
+            'crown_diameter_m' => $this->numeric($props['DIAM_CHIOM'] ?? null, "{$label}: DIAM_CHIOM", $warnings),
         ];
 
         $validator = Validator::make($candidate, [
@@ -306,14 +361,19 @@ class CamImporter
         return $candidate;
     }
 
-    private function numeric(mixed $value): ?float
+    private function numeric(mixed $value, string $context, array &$warnings): ?float
     {
         if ($value === null || $value === '') {
             return null;
         }
         $normalized = str_replace(',', '.', (string) $value);
+        if (! is_numeric($normalized)) {
+            $warnings[] = "{$context}: valore '{$value}' non numerico, ignorato.";
 
-        return is_numeric($normalized) ? (float) $normalized : null;
+            return null;
+        }
+
+        return (float) $normalized;
     }
 
     /** Data GGMMAAAA dei tracciati record MD -> data ISO. */
