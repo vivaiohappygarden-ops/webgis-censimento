@@ -214,6 +214,67 @@ class SyncApiTest extends TestCase
             ->assertJsonPath('results.0.code', 'NOT_FOUND');
     }
 
+    public function test_tag_associate_and_working_set_tags(): void
+    {
+        $entityId = (string) Str::uuid();
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([$this->createCommand($entityId)]))->assertOk();
+
+        // Associazione da scansione in campo
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([[
+            'idempotency_key' => (string) Str::uuid(),
+            'device_seq' => 2,
+            'type' => 'tag.associate',
+            'entity_id' => $entityId,
+            'payload' => ['uid' => 'QR-000123', 'tag_type' => 'qr'],
+        ]]))->assertOk()->assertJsonPath('results.0.status', 'applied');
+
+        $this->assertDatabaseHas('asset_tags', [
+            'asset_id' => $entityId, 'uid' => 'QR-000123', 'tag_type' => 'qr', 'status' => 'active',
+        ]);
+
+        // Ri-associazione allo stesso elemento (comando diverso): idempotente, nessun doppione
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([[
+            'idempotency_key' => (string) Str::uuid(),
+            'device_seq' => 3,
+            'type' => 'tag.associate',
+            'entity_id' => $entityId,
+            'payload' => ['uid' => 'QR-000123', 'tag_type' => 'qr'],
+        ]]))->assertOk()->assertJsonPath('results.0.status', 'applied');
+        $this->assertSame(1, \App\Models\AssetTag::query()->count());
+
+        // Stesso tag su un altro elemento: rifiutato con il codice dell'elemento occupante
+        $otherId = (string) Str::uuid();
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([
+            $this->createCommand($otherId, ['payload' => [
+                'area_id' => $this->area->id,
+                'object_type_id' => $this->treeType->id,
+                'census_code' => 'SYNC-0002',
+            ]]),
+        ]))->assertOk();
+        $conflictResult = $this->postJson('/api/v1/sync/batch', $this->batchPayload([[
+            'idempotency_key' => (string) Str::uuid(),
+            'device_seq' => 4,
+            'type' => 'tag.associate',
+            'entity_id' => $otherId,
+            'payload' => ['uid' => 'QR-000123', 'tag_type' => 'qr'],
+        ]]))->assertOk()->json('results.0');
+        $this->assertSame('rejected', $conflictResult['status']);
+        $this->assertSame('TAG_IN_USE', $conflictResult['code']);
+        $this->assertStringContainsString('SYNC-0001', $conflictResult['message']);
+
+        // I tag attivi viaggiano dentro la riga asset del working set
+        $assets = $this->getJson('/api/v1/sync/bootstrap')->assertOk()->json('assets');
+        $withTag = collect($assets)->firstWhere('id', $entityId);
+        $this->assertCount(1, $withTag['tags']);
+        $this->assertSame('QR-000123', $withTag['tags'][0]['uid']);
+
+        // E l'associazione produce una riga di delta per l'elemento
+        $changes = $this->getJson('/api/v1/sync/changes?cursor=0')->assertOk()->json('changes');
+        $this->assertTrue(collect($changes)->contains(
+            fn ($c) => $c['op'] === 'upsert' && ($c['row']['id'] ?? null) === $entityId && count($c['row']['tags']) === 1,
+        ));
+    }
+
     public function test_invalid_geom_properties_are_rejected_not_internal_error(): void
     {
         $this->postJson('/api/v1/sync/batch', $this->batchPayload([

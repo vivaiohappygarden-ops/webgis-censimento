@@ -57,20 +57,25 @@ export class SyncManager {
         const { data } = await axios.get('/api/v1/sync/bootstrap');
 
         await this.db.transaction('rw',
-            [this.db.meta, this.db.areas, this.db.assets, this.db.trees, this.db.catalog_types, this.db.custom_fields, this.db.sync_queue],
+            [this.db.meta, this.db.areas, this.db.assets, this.db.trees, this.db.asset_tags, this.db.catalog_types, this.db.custom_fields, this.db.sync_queue],
             async () => {
                 // Il lavoro locale non ancora sincronizzato non si tocca (P1):
                 // le righe ottimistiche sopravvivono al ri-scarico del working set
                 const dirtyRows = await this.db.assets.filter((a) => a.dirty === true).toArray();
+                const dirtyIds = new Set(dirtyRows.map((a) => a.id));
+                const localTags = await this.db.asset_tags
+                    .filter((t) => dirtyIds.has(t.asset_id)).toArray();
 
                 await Promise.all([
                     this.db.areas.clear(), this.db.assets.clear(), this.db.trees.clear(),
-                    this.db.catalog_types.clear(), this.db.custom_fields.clear(),
+                    this.db.asset_tags.clear(), this.db.catalog_types.clear(), this.db.custom_fields.clear(),
                 ]);
                 await this.db.areas.bulkPut(data.areas);
                 await this.db.assets.bulkPut(data.assets.map((a) => ({ ...a, dirty: false })));
                 await this.db.trees.bulkPut(data.assets.filter((a) => a.tree).map((a) => a.tree));
+                await this.db.asset_tags.bulkPut(data.assets.flatMap((a) => a.tags ?? []));
                 await this.db.assets.bulkPut(dirtyRows);
+                await this.db.asset_tags.bulkPut(localTags);
                 await this.db.catalog_types.bulkPut(data.catalog.object_types);
                 await this.db.custom_fields.bulkPut(data.custom_fields);
                 await this.db.meta.put({ key: 'cursor', value: data.cursor });
@@ -128,6 +133,72 @@ export class SyncManager {
         await this.log('info', `In coda: nuovo elemento ${censusCode || entityId.slice(0, 8)}.`);
         await this.notify();
         return entityId;
+    }
+
+    /** Misure dendrometriche in campo (con optimistic locking sulla versione locale). */
+    async enqueueMeasures({ assetId, baseVersion, measures }) {
+        const command = {
+            idempotency_key: crypto.randomUUID(),
+            device_seq: await this.nextDeviceSeq(),
+            type: 'asset.update_measures',
+            entity_id: assetId,
+            base_version: baseVersion,
+            payload: measures,
+            client_ts: new Date().toISOString(),
+            status: 'PENDING',
+            attempts: 0,
+            last_error: null,
+        };
+
+        await this.db.transaction('rw', [this.db.sync_queue, this.db.assets, this.db.trees], async () => {
+            await this.db.sync_queue.add(command);
+            const tree = (await this.db.trees.get(assetId)) ?? { asset_id: assetId };
+            await this.db.trees.put({ ...tree, ...measures });
+            const asset = await this.db.assets.get(assetId);
+            if (asset) await this.db.assets.put({ ...asset, dirty: true });
+        });
+
+        await this.log('info', 'In coda: misure aggiornate.');
+        await this.notify();
+    }
+
+    /** Associazione tag fisico (append-only: non confligge mai). */
+    async enqueueTagAssociate({ assetId, uid, tagType }) {
+        const command = {
+            idempotency_key: crypto.randomUUID(),
+            device_seq: await this.nextDeviceSeq(),
+            type: 'tag.associate',
+            entity_id: assetId,
+            payload: { uid, tag_type: tagType },
+            client_ts: new Date().toISOString(),
+            status: 'PENDING',
+            attempts: 0,
+            last_error: null,
+        };
+
+        await this.db.transaction('rw', [this.db.sync_queue, this.db.assets, this.db.asset_tags], async () => {
+            await this.db.sync_queue.add(command);
+            await this.db.asset_tags.put({
+                id: uuidv7(),
+                asset_id: assetId,
+                tag_type: tagType,
+                uid,
+                status: 'active',
+            });
+            const asset = await this.db.assets.get(assetId);
+            if (asset) await this.db.assets.put({ ...asset, dirty: true });
+        });
+
+        await this.log('info', `In coda: tag ${tagType.toUpperCase()} ${uid} associato.`);
+        await this.notify();
+    }
+
+    /** Ricerca locale di un tag per uid (tutti i tipi). */
+    async findByTag(uid) {
+        const tags = await this.db.asset_tags.where('uid').equals(uid).toArray();
+        if (! tags.length) return null;
+        const asset = await this.db.assets.get(tags[0].asset_id);
+        return asset ? { tag: tags[0], asset } : null;
     }
 
     /** Push della coda + pull delta. Ritorna lo stato finale. */
@@ -236,7 +307,7 @@ export class SyncManager {
                 params: { cursor, ...(askIds.length ? { ids: askIds } : {}) },
             });
 
-            await this.db.transaction('rw', [this.db.meta, this.db.areas, this.db.assets, this.db.trees], async () => {
+            await this.db.transaction('rw', [this.db.meta, this.db.areas, this.db.assets, this.db.trees, this.db.asset_tags], async () => {
                 for (const change of data.changes) {
                     if (change.table === 'areas') {
                         if (change.op === 'delete') await this.db.areas.delete(change.id);
@@ -252,9 +323,13 @@ export class SyncManager {
                         if (change.op === 'delete') {
                             await this.db.assets.delete(id);
                             await this.db.trees.delete(id);
+                            await this.db.asset_tags.where('asset_id').equals(id).delete();
                         } else {
                             await this.db.assets.put({ ...change.row, dirty: false });
                             if (change.row.tree) await this.db.trees.put(change.row.tree);
+                            // I tag della riga server sostituiscono in blocco quelli locali
+                            await this.db.asset_tags.where('asset_id').equals(id).delete();
+                            if (change.row.tags?.length) await this.db.asset_tags.bulkPut(change.row.tags);
                         }
                         deferred.delete(id);
                     }
@@ -285,6 +360,12 @@ export class SyncManager {
         if (cmd.type === 'asset.create') {
             await this.db.assets.delete(cmd.entity_id);
             await this.db.trees.delete(cmd.entity_id);
+            await this.db.asset_tags.where('asset_id').equals(cmd.entity_id).delete();
+        }
+        // Un'associazione tag scartata rimuove anche la riga ottimistica locale
+        if (cmd.type === 'tag.associate' && cmd.payload?.uid) {
+            await this.db.asset_tags
+                .where('[tag_type+uid]').equals([cmd.payload.tag_type, cmd.payload.uid]).delete();
         }
 
         await this.log('warn', `Operazione #${cmd.device_seq} (${cmd.type}) scartata dall'operatore.`);

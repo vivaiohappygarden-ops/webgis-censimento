@@ -269,7 +269,7 @@ class SyncController extends Controller implements HasMiddleware
             ->when($withTrashed, fn ($q) => $q->withTrashed())
             ->when($ids !== null, fn ($q) => $q->whereIn('assets.id', $ids))
             ->when($areaIds !== [], fn ($q) => $q->whereIn('area_id', $areaIds))
-            ->with(['tree', 'plantingSite'])
+            ->with(['tree', 'plantingSite', 'tags' => fn ($q) => $q->where('status', 'active')])
             ->selectRaw('assets.*, ST_AsGeoJSON(geom)::json AS geom_geojson')
             ->withCasts(['geom_geojson' => 'array'])
             ->orderBy('created_at')

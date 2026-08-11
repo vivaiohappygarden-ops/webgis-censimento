@@ -20,5 +20,10 @@ export function openFieldDb(tenantId, userId) {
         sync_log: '++seq, ts, level',
     });
 
+    // v2: tag fisici per la scansione barcode/QR/NFC in campo
+    db.version(2).stores({
+        asset_tags: '&id, asset_id, uid, [tag_type+uid]',
+    });
+
     return db;
 }

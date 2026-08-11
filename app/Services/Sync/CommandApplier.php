@@ -23,7 +23,7 @@ class CommandApplier
 {
     public const TYPES = [
         'asset.create', 'asset.update_attrs', 'asset.update_measures',
-        'asset.update_geom', 'asset.change_status',
+        'asset.update_geom', 'asset.change_status', 'tag.associate',
     ];
 
     /** Campi dendrometrici ammessi da asset.update_measures. */
@@ -54,6 +54,7 @@ class CommandApplier
                 'asset.update_measures' => $this->applyMeasures($command, $user),
                 'asset.update_geom' => $this->applyGeom($command, $user),
                 'asset.change_status' => $this->applyUpdate($command, $user, ['status']),
+                'tag.associate' => $this->applyTagAssociate($command, $user),
             });
         } catch (ValidationException $e) {
             return $this->rejected($command, 'VALIDATION_FAILED', collect($e->errors())->flatten()->first());
@@ -300,6 +301,67 @@ class CommandApplier
         }
 
         return [$asset, null];
+    }
+
+    /**
+     * Associazione di un tag fisico (barcode/QR/NFC) a un elemento censito.
+     * Comando append-only (evento): non porta base_version e non confligge mai.
+     */
+    private function applyTagAssociate(array $command, User $user): array
+    {
+        $payload = Validator::make($command['payload'] ?? [], [
+            'uid' => ['required', 'string', 'max:100'],
+            'tag_type' => ['required', 'in:nfc,qr,barcode,rfid,arbotag'],
+        ])->validate();
+
+        $asset = Asset::query()->find($command['entity_id']);
+        if (! $asset) {
+            return $this->rejected($command, 'NOT_FOUND', 'Elemento inesistente o non accessibile.');
+        }
+
+        $existing = \App\Models\AssetTag::query()
+            ->where('tag_type', $payload['tag_type'])
+            ->where('uid', $payload['uid'])
+            ->whereIn('status', ['active', 'unassigned'])
+            ->lockForUpdate()
+            ->first();
+
+        if ($existing && $existing->asset_id === $asset->id) {
+            // Stessa associazione già presente: naturalmente idempotente
+            return $this->applied($command, $asset->version);
+        }
+
+        if ($existing && $existing->asset_id !== null) {
+            $other = Asset::query()->withTrashed()->find($existing->asset_id);
+
+            return $this->rejected($command, 'TAG_IN_USE',
+                'Tag già associato all\'elemento '.($other?->census_code ?? $existing->asset_id).'.');
+        }
+
+        if ($existing) {
+            // Tag a magazzino (unassigned): si aggancia all'elemento
+            $existing->update([
+                'asset_id' => $asset->id,
+                'status' => 'active',
+                'attached_by' => $user->id,
+                'attached_at' => now(),
+            ]);
+            $tag = $existing;
+        } else {
+            $tag = \App\Models\AssetTag::create([
+                'tenant_id' => $user->tenant_id,
+                'asset_id' => $asset->id,
+                'tag_type' => $payload['tag_type'],
+                'uid' => $payload['uid'],
+                'status' => 'active',
+                'attached_by' => $user->id,
+                'attached_at' => now(),
+            ]);
+        }
+
+        Audit::log('tag.associated', $tag, ['source' => 'sync', 'asset_id' => $asset->id]);
+
+        return $this->applied($command, $asset->version);
     }
 
     /** Le proprietà del rilievo vanno validate come il resto: un valore fuori
