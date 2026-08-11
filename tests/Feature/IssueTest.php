@@ -105,6 +105,35 @@ class IssueTest extends TestCase
         $this->postJson("/api/v1/issues/{$issueId}/work-order")->assertUnprocessable();
     }
 
+    public function test_reopening_clears_take_charge_and_notes(): void
+    {
+        $id = $this->postJson('/api/v1/issues', ['description' => 'Da riaprire.'])->json('data.id');
+        $this->patchJson("/api/v1/issues/{$id}", [
+            'status' => 'in_charge',
+            'resolution_notes' => 'Bozza di risoluzione.',
+        ])->assertOk();
+
+        $this->patchJson("/api/v1/issues/{$id}", ['status' => 'open'])->assertOk();
+
+        $issue = Issue::query()->findOrFail($id);
+        $this->assertNull($issue->taken_charge_at);
+        $this->assertNull($issue->resolution_notes);
+
+        // Dopo la riapertura la chiusura richiede note NUOVE
+        $this->patchJson("/api/v1/issues/{$id}", ['status' => 'in_charge'])->assertOk();
+        $this->patchJson("/api/v1/issues/{$id}", ['status' => 'resolved'])->assertUnprocessable();
+    }
+
+    public function test_malformed_filters_are_rejected_cleanly(): void
+    {
+        // Un parametro non stringa deve dare un errore pulito, non un errore interno
+        $this->getJson('/api/v1/issues?q[]=x')->assertUnprocessable();
+
+        // La gravità di default compare già nella risposta di creazione
+        $this->postJson('/api/v1/issues', ['description' => 'Default.'])
+            ->assertCreated()->assertJsonPath('data.severity', 'medium');
+    }
+
     public function test_operator_can_report_but_not_manage(): void
     {
         $issueId = $this->postJson('/api/v1/issues', ['description' => 'Da gestire.'])->json('data.id');

@@ -38,6 +38,7 @@ class IssueController extends Controller implements HasMiddleware
         $request->validate([
             'status' => ['nullable', Rule::in(Issue::STATUSES)],
             'severity' => ['nullable', Rule::in(['low', 'medium', 'high', 'critical'])],
+            'q' => ['nullable', 'string', 'max:200'],
         ]);
 
         $query = Issue::query()
@@ -107,6 +108,9 @@ class IssueController extends Controller implements HasMiddleware
                 'tenant_id' => $user->tenant_id,
                 'code' => $this->nextCode($user->tenant_id),
                 'status' => 'open',
+                // Esplicita, non lasciata al DEFAULT del DB: la risposta 201
+                // deve già contenere la gravità effettiva
+                'severity' => $data['severity'] ?? 'medium',
                 'reporter_type' => $data['reporter_type'] ?? 'internal',
                 'reporter_user_id' => $user->id,
                 'channel' => 'backoffice',
@@ -145,6 +149,12 @@ class IssueController extends Controller implements HasMiddleware
                 }
                 if ($data['status'] === 'in_charge') {
                     $issue->taken_charge_at = now();
+                }
+                // La riapertura annulla la presa in carico e le note: una
+                // segnalazione tornata aperta riparte pulita
+                if ($data['status'] === 'open') {
+                    $issue->taken_charge_at = null;
+                    $issue->resolution_notes = null;
                 }
                 if ($data['status'] === 'resolved') {
                     // La chiusura deve spiegare COME si è risolto

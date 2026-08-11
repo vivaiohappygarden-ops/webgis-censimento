@@ -51,6 +51,12 @@ async function load() {
         rows.value = data.data;
         Object.assign(meta, { total: data.total, current_page: data.current_page, last_page: data.last_page });
         loadError.value = false;
+        // Dopo un'azione l'ultima pagina può essersi accorciata: mai restare
+        // su una pagina oltre la fine con l'elenco vuoto
+        if (meta.last_page >= 1 && filters.page > meta.last_page) {
+            filters.page = meta.last_page;
+            return load();
+        }
     } catch {
         if (mySeq === seq) loadError.value = true;
     } finally {
@@ -68,6 +74,7 @@ async function loadAreas() {
 }
 
 let searchDebounce = null;
+let assetSeq = 0;
 function searchAssets() {
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(async () => {
@@ -75,16 +82,36 @@ function searchAssets() {
             assetSearch.results = [];
             return;
         }
-        const { data } = await axios.get('/api/v1/assets', { params: { q: assetSearch.q, per_page: 8 } });
-        assetSearch.results = data.data;
+        // Stesso schema anti-corsa di load(): vale solo l'ultima richiesta,
+        // e mai risultati sopra un elemento già scelto
+        const mySeq = ++assetSeq;
+        try {
+            const { data } = await axios.get('/api/v1/assets', { params: { q: assetSearch.q, per_page: 8 } });
+            if (mySeq !== assetSeq || creator.form.asset_id) return;
+            assetSearch.results = data.data;
+        } catch {
+            if (mySeq === assetSeq) assetSearch.results = [];
+        }
     }, 250);
 }
 
 function pickAsset(asset) {
+    clearTimeout(searchDebounce);
+    assetSeq += 1;
     creator.form.asset_id = asset.id;
     assetSearch.selectedLabel = asset.census_code || asset.id.slice(0, 8);
     assetSearch.q = '';
     assetSearch.results = [];
+}
+
+// L'elenco non deve fare una richiesta per ogni tasto digitato
+let listDebounce = null;
+function searchList() {
+    clearTimeout(listDebounce);
+    listDebounce = setTimeout(() => {
+        filters.page = 1;
+        load();
+    }, 250);
 }
 
 function openCreator() {
@@ -184,7 +211,7 @@ onMounted(async () => {
                     v-model="filters.q"
                     placeholder="Cerca per codice, testo o segnalante…"
                     class="w-72 rounded-lg border border-gray-300 px-2.5 py-2 text-sm"
-                    @input="filters.page = 1; load()"
+                    @input="searchList"
                 >
             </div>
 
@@ -300,7 +327,7 @@ onMounted(async () => {
                                         <span class="font-medium">{{ assetSearch.selectedLabel }}</span>
                                         <button class="text-xs text-red-600 hover:underline" @click="creator.form.asset_id = ''; assetSearch.selectedLabel = ''">togli</button>
                                     </div>
-                                    <ul v-if="assetSearch.results.length" class="mt-1 divide-y divide-gray-50 rounded-lg border border-gray-200 bg-white shadow">
+                                    <ul v-if="! creator.form.asset_id && assetSearch.results.length" class="mt-1 divide-y divide-gray-50 rounded-lg border border-gray-200 bg-white shadow">
                                         <li
                                             v-for="a in assetSearch.results"
                                             :key="a.id"
@@ -326,14 +353,16 @@ onMounted(async () => {
 
             <!-- Dettaglio -->
             <Teleport to="body">
-                <div v-if="detail" class="fixed inset-0 z-50 flex justify-end bg-black/30" @click.self="detail = null">
+                <!-- Con un'azione in corso il drawer resta aperto: l'esito
+                     (anche un errore) deve restare visibile -->
+                <div v-if="detail" class="fixed inset-0 z-50 flex justify-end bg-black/30" @click.self="! detailBusy && (detail = null)">
                     <div class="h-full w-full max-w-xl overflow-y-auto bg-white p-6 shadow-2xl" data-test="issue-detail">
                         <div class="flex items-start justify-between">
                             <div>
                                 <div class="text-xs uppercase tracking-wide text-gray-400">{{ detail.code }}</div>
                                 <h2 class="text-lg font-semibold">Segnalazione</h2>
                             </div>
-                            <button class="text-gray-400 hover:text-gray-600" @click="detail = null">✕</button>
+                            <button class="text-gray-400 hover:text-gray-600 disabled:opacity-40" :disabled="detailBusy" @click="detail = null">✕</button>
                         </div>
 
                         <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -378,26 +407,26 @@ onMounted(async () => {
                                 @click="act(null, `/api/v1/issues/${detail.id}/work-order`)"
                             >Genera l'ordine di lavoro</button>
 
-                            <div class="rounded-xl border border-gray-200 p-3">
+                            <!-- La risoluzione arriva solo DOPO la presa in carico:
+                                 proporre azioni che il flusso rifiuterebbe confonde -->
+                            <div v-if="detail.status === 'in_charge'" class="rounded-xl border border-gray-200 p-3">
                                 <label class="block text-xs">
                                     <span class="text-gray-500">Come è stata risolta</span>
                                     <textarea v-model="resolveNotes" rows="2" data-test="issue-resolve-notes" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Rimosso il ramo e messa in sicurezza l'area" />
                                 </label>
-                                <div class="mt-2 grid grid-cols-2 gap-2">
-                                    <button
-                                        class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
-                                        :disabled="detailBusy"
-                                        data-test="issue-dismiss"
-                                        @click="dismissIssue"
-                                    >Archivia senza intervento</button>
-                                    <button
-                                        class="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                                        :disabled="detailBusy || ! resolveNotes.trim()"
-                                        data-test="issue-resolve"
-                                        @click="resolveIssue"
-                                    >Segna come risolta</button>
-                                </div>
+                                <button
+                                    class="mt-2 w-full rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                                    :disabled="detailBusy || ! resolveNotes.trim()"
+                                    data-test="issue-resolve"
+                                    @click="resolveIssue"
+                                >Segna come risolta</button>
                             </div>
+                            <button
+                                class="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
+                                :disabled="detailBusy"
+                                data-test="issue-dismiss"
+                                @click="dismissIssue"
+                            >Archivia senza intervento</button>
                         </div>
                     </div>
                 </div>
