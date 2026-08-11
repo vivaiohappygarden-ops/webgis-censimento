@@ -20,7 +20,8 @@ export class SyncManager {
     async notify() {
         const pending = await this.db.sync_queue.where('status').anyOf('PENDING', 'INFLIGHT').count();
         const attention = await this.db.sync_queue.where('status').anyOf('CONFLICT', 'NEEDS_ATTENTION').count();
-        const state = { pending, attention, syncing: this.syncing, online: navigator.onLine };
+        const photos = await this.db.photo_uploads.where('status').anyOf('queued', 'uploading').count();
+        const state = { pending, attention, photos, syncing: this.syncing, online: navigator.onLine };
         this.listeners.forEach((fn) => fn(state));
         return state;
     }
@@ -215,7 +216,7 @@ export class SyncManager {
         return asset ? { tag, asset } : null;
     }
 
-    /** Push della coda + pull delta. Ritorna lo stato finale. */
+    /** Push della coda + foto + pull delta. Ritorna lo stato finale. */
     async syncNow() {
         if (this.syncing) return this.notify();
         this.syncing = true;
@@ -223,6 +224,7 @@ export class SyncManager {
 
         try {
             await this.pushQueue();
+            await this.uploadPhotos();
             await this.pullChanges();
             await this.log('info', 'Sincronizzazione completata.');
         } catch (err) {
@@ -232,6 +234,73 @@ export class SyncManager {
         }
 
         return this.notify();
+    }
+
+    /** Mette in coda una foto compressa scattata in campo. */
+    async enqueuePhoto({ assetId, blob, category = 'census' }) {
+        const photoId = uuidv7();
+        await this.db.transaction('rw', [this.db.photo_blobs, this.db.photo_uploads], async () => {
+            await this.db.photo_blobs.put({ photo_id: photoId, blob });
+            await this.db.photo_uploads.put({
+                photo_id: photoId,
+                asset_id: assetId,
+                category,
+                status: 'queued',
+                attempts: 0,
+                created_at: new Date().toISOString(),
+            });
+        });
+        await this.log('info', 'Foto in coda di invio.');
+        await this.notify();
+        return photoId;
+    }
+
+    /** Invia le foto in coda, una alla volta (replay-safe via client_id). */
+    async uploadPhotos() {
+        // Recupero di eventuali upload rimasti "in corso" dopo una chiusura
+        await this.db.photo_uploads.where('status').equals('uploading').modify({ status: 'queued' });
+
+        const queued = await this.db.photo_uploads.where('status').equals('queued').toArray();
+        for (const upload of queued) {
+            const blobRow = await this.db.photo_blobs.get(upload.photo_id);
+            if (! blobRow) {
+                await this.db.photo_uploads.delete(upload.photo_id);
+                continue;
+            }
+
+            await this.db.photo_uploads.update(upload.photo_id, { status: 'uploading' });
+            try {
+                const form = new FormData();
+                form.append('photo', blobRow.blob, `${upload.photo_id}.jpg`);
+                form.append('category', upload.category ?? 'census');
+                form.append('client_id', upload.photo_id);
+                await axios.post(`/api/v1/assets/${upload.asset_id}/photos`, form);
+
+                await this.db.transaction('rw', [this.db.photo_blobs, this.db.photo_uploads], async () => {
+                    await this.db.photo_blobs.delete(upload.photo_id);
+                    await this.db.photo_uploads.delete(upload.photo_id);
+                });
+                await this.log('info', 'Foto inviata.');
+            } catch (err) {
+                const status = err.response?.status;
+                if (status === 404 || status === 422) {
+                    // Non ritentabile (elemento eliminato, file rifiutato): presa in carico esplicita
+                    await this.db.photo_uploads.update(upload.photo_id, {
+                        status: 'failed',
+                        last_error: err.response?.data?.message ?? `errore ${status}`,
+                    });
+                    await this.log('warn', `Foto rifiutata dal server (${status}).`);
+                } else {
+                    // Rete o server: torna in coda per il prossimo giro
+                    await this.db.photo_uploads.update(upload.photo_id, {
+                        status: 'queued',
+                        attempts: (upload.attempts ?? 0) + 1,
+                    });
+                    throw err;
+                }
+            }
+        }
+        await this.notify();
     }
 
     async pushQueue() {

@@ -25,5 +25,12 @@ export function openFieldDb(tenantId, userId) {
         asset_tags: '&id, asset_id, uid, [tag_type+uid]',
     });
 
+    // v3: foto scattate offline — i Blob pesanti stanno in una tabella separata
+    // così le scansioni della coda non caricano i binari (OFFLINE-SYNC §3.1)
+    db.version(3).stores({
+        photo_blobs: '&photo_id',
+        photo_uploads: '&photo_id, asset_id, status, [status+created_at]',
+    });
+
     return db;
 }

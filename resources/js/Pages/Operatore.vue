@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'v
 import { Head, usePage } from '@inertiajs/vue3';
 import * as maplibregl from 'maplibre-gl';
 import { openFieldDb } from '@/field/db';
+import { compressImage } from '@/field/photo';
 import { SyncManager } from '@/field/sync';
 
 const page = usePage();
@@ -13,7 +14,7 @@ const db = openFieldDb(user.tenant_id, user.id);
 const sync = new SyncManager(db);
 
 const tab = ref('rilievo');
-const state = reactive({ pending: 0, attention: 0, syncing: false, online: navigator.onLine });
+const state = reactive({ pending: 0, attention: 0, photos: 0, syncing: false, online: navigator.onLine });
 const bootstrapped = ref(false);
 const areas = ref([]);
 const pointTypes = ref([]);
@@ -42,10 +43,31 @@ const scan = reactive({
 let cameraStream = null;
 const videoEl = ref(null);
 
+let photoUrls = [];
+function revokePhotoUrls() {
+    photoUrls.forEach((u) => URL.revokeObjectURL(u));
+    photoUrls = [];
+}
+
+async function localPhotosFor(assetId) {
+    revokePhotoUrls();
+    const uploads = await db.photo_uploads.where('asset_id').equals(assetId).toArray();
+    const out = [];
+    for (const u of uploads) {
+        const blobRow = await db.photo_blobs.get(u.photo_id);
+        if (! blobRow) continue;
+        const url = URL.createObjectURL(blobRow.blob);
+        photoUrls.push(url);
+        out.push({ photo_id: u.photo_id, url, status: u.status, error: u.last_error });
+    }
+    return out;
+}
+
 async function openAsset(asset) {
     const tree = await db.trees.get(asset.id);
     const tags = await db.asset_tags.where('asset_id').equals(asset.id).toArray();
-    selected.value = { asset, tree: tree ?? null, tags };
+    const photos = await localPhotosFor(asset.id);
+    selected.value = { asset, tree: tree ?? null, tags, photos };
     Object.assign(measureForm, {
         species: tree?.species ?? '',
         height_m: tree?.height_m != null ? Number(tree.height_m) : null,
@@ -174,8 +196,29 @@ async function startCamera() {
     }
 }
 
+async function takePhoto(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (! file || ! selected.value) return;
+    busy.value = true;
+    try {
+        const blob = await compressImage(file);
+        await sync.enqueuePhoto({ assetId: selected.value.asset.id, blob });
+        selected.value = { ...selected.value, photos: await localPhotosFor(selected.value.asset.id) };
+        setMessage(state.online
+            ? 'Foto registrata: invio in corso.'
+            : 'Foto registrata sul dispositivo: verrà inviata quando torna la rete.');
+        if (state.online) await runSync();
+    } catch {
+        setMessage('Registrazione della foto non riuscita: riprova.', false);
+    } finally {
+        busy.value = false;
+    }
+}
+
 function switchTab(key) {
     stopCamera();
+    revokePhotoUrls();
     selected.value = null;
     tab.value = key;
     refreshLocal();
@@ -525,10 +568,11 @@ const QUEUE_LABELS = {
 const TAG_TYPES = { qr: 'QR', barcode: 'Barcode', nfc: 'NFC', rfid: 'RFID', arbotag: 'Arbotag' };
 
 const badge = computed(() => {
-    if (! state.online) return { text: `Offline — ${state.pending} da inviare`, cls: 'bg-gray-700 text-white' };
+    const toSend = state.pending + (state.photos ?? 0);
+    if (! state.online) return { text: `Offline — ${toSend} da inviare`, cls: 'bg-gray-700 text-white' };
     if (state.syncing) return { text: 'Sincronizzazione…', cls: 'bg-blue-700 text-white' };
     if (state.attention > 0) return { text: `${state.attention} da rivedere`, cls: 'bg-red-700 text-white' };
-    if (state.pending > 0) return { text: `${state.pending} da inviare`, cls: 'bg-amber-600 text-white' };
+    if (toSend > 0) return { text: `${toSend} da inviare`, cls: 'bg-amber-600 text-white' };
     return { text: 'Sincronizzato', cls: 'bg-green-700 text-white' };
 });
 
@@ -762,6 +806,10 @@ onBeforeUnmount(() => {
                             <span class="font-medium" data-test="queue-count">{{ state.pending }}</span>
                         </div>
                         <div class="mt-2 flex items-center justify-between text-sm">
+                            <span class="text-gray-500">Foto da inviare</span>
+                            <span class="font-medium" data-test="photo-count">{{ state.photos }}</span>
+                        </div>
+                        <div class="mt-2 flex items-center justify-between text-sm">
                             <span class="text-gray-500">Da rivedere (conflitti/rifiuti)</span>
                             <span class="font-medium" :class="state.attention ? 'text-red-700' : ''">{{ state.attention }}</span>
                         </div>
@@ -901,6 +949,29 @@ onBeforeUnmount(() => {
                         data-test="tag-associate"
                         @click="associateTag(selected.asset.id, tagForm.uid, tagForm.tagType)"
                     >Associa tag</button>
+                </div>
+
+                <!-- Foto di campo -->
+                <div class="rounded-xl border border-gray-200 bg-white p-4">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-semibold">Foto in coda ({{ selected.photos.length }})</h2>
+                        <label v-if="canAssociate" class="cursor-pointer rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white">
+                            {{ busy ? 'Elaborazione…' : 'Scatta o scegli foto' }}
+                            <input type="file" accept="image/*" capture="environment" class="hidden" :disabled="busy" data-test="photo-input" @change="takePhoto">
+                        </label>
+                    </div>
+                    <div v-if="selected.photos.length" class="mt-3 grid grid-cols-3 gap-2" data-test="photo-grid">
+                        <div v-for="p in selected.photos" :key="p.photo_id" class="relative aspect-square overflow-hidden rounded-lg bg-gray-100">
+                            <img :src="p.url" class="h-full w-full object-cover" loading="lazy">
+                            <span
+                                class="absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-[10px] text-white"
+                                :class="p.status === 'failed' ? 'bg-red-700' : 'bg-black/60'"
+                            >{{ p.status === 'failed' ? 'rifiutata' : 'da inviare' }}</span>
+                        </div>
+                    </div>
+                    <p v-else class="mt-2 text-xs text-gray-400">
+                        Le foto scattate qui restano sul dispositivo finché non c'è rete, poi partono da sole.
+                    </p>
                 </div>
 
                 <!-- Note -->

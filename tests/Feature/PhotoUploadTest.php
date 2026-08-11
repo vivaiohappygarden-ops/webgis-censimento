@@ -6,6 +6,7 @@ use App\Models\Photo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\Concerns\InteractsWithTenant;
 use Tests\TestCase;
 
@@ -47,6 +48,40 @@ class PhotoUploadTest extends TestCase
         $this->getJson("/api/v1/assets/{$assetId}")
             ->assertOk()
             ->assertJsonCount(1, 'data.photos');
+    }
+
+    public function test_offline_upload_with_client_id_is_replay_safe(): void
+    {
+        Storage::fake('local');
+
+        [$organization, $user] = $this->createTenantUser();
+        $area = $this->createArea($organization);
+        $type = $this->makeObjectType($organization, 'P');
+        $this->actingAsTenantUser($user);
+
+        $assetId = $this->postJson('/api/v1/assets', [
+            'area_id' => $area->id,
+            'object_type_id' => $type->id,
+            'geometry' => $this->pointGeometry(),
+        ])->json('data.id');
+
+        $clientId = (string) Str::uuid();
+        $upload = fn () => $this->post("/api/v1/assets/{$assetId}/photos", [
+            'photo' => UploadedFile::fake()->image('campo.jpg', 800, 600),
+            'category' => 'census',
+            'client_id' => $clientId,
+        ], ['Accept' => 'application/json']);
+
+        // Primo invio: la foto nasce con l'UUID del dispositivo
+        $upload()->assertCreated()->assertJsonPath('data.id', $clientId);
+
+        // Retry dopo timeout: nessun doppione, si risponde con la foto esistente
+        $upload()->assertOk()
+            ->assertJsonPath('data.id', $clientId)
+            ->assertJsonPath('duplicate', true);
+
+        $this->assertSame(1, Photo::withoutGlobalScopes()->count());
+        $this->getJson("/api/v1/assets/{$assetId}")->assertJsonCount(1, 'data.photos');
     }
 
     public function test_read_only_role_cannot_upload_photos(): void
