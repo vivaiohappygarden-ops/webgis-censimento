@@ -8,6 +8,8 @@ set -euo pipefail
 APP_DIR=/var/www/webgis
 cd "${APP_DIR}"
 
+git config --global --add safe.directory "${APP_DIR}" 2>/dev/null || true
+
 echo "==> Codice"
 git pull --ff-only
 
@@ -18,11 +20,12 @@ npm run build --silent
 
 echo "==> Manutenzione breve"
 php artisan down --retry=15 || true
+# Qualunque cosa accada, il sito non resta in manutenzione
+trap 'php artisan up || true' EXIT
 php artisan migrate --force
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
-php artisan up
 
 echo "==> Permessi e servizi"
 chown -R www-data:www-data "${APP_DIR}"

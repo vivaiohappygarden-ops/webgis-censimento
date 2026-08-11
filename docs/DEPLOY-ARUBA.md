@@ -87,9 +87,10 @@ compila l'interfaccia, crea il database con una password sicura generata sul
 momento, attiva il backup notturno. Se qualcosa lo interrompe, si può
 rilanciare senza danni: riprende da dove era.
 
-> Nota: se il repository è privato, serve prima una chiave di accesso
-> (deploy key) su GitHub — in quel caso chiedere assistenza a Claude in una
-> sessione di lavoro e la prepariamo insieme.
+> Nota: se il repository GitHub è privato, il comando `curl` qui sopra non
+> funziona (risponde "404 Not Found"). In quel caso: aprire una sessione di
+> lavoro con Claude, che prepara la chiave di accesso (deploy key) e i
+> comandi alternativi — è un passaggio di 5 minuti da fare una volta sola.
 
 ---
 
