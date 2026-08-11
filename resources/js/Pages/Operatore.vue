@@ -54,17 +54,19 @@ async function openAsset(asset) {
     Object.assign(tagForm, { uid: '', tagType: 'qr' });
 }
 
+// Campo numerico svuotato = valore assente (mai zero implicito)
+const numOrNull = (v) => (v === '' || v == null || Number.isNaN(v) ? null : Number(v));
+
 async function saveMeasures() {
     busy.value = true;
     try {
         await sync.enqueueMeasures({
             assetId: selected.value.asset.id,
-            baseVersion: selected.value.asset.version,
             measures: {
                 species: measureForm.species || null,
-                height_m: measureForm.height_m ?? null,
-                dbh_cm: measureForm.dbh_cm ?? null,
-                crown_diameter_m: measureForm.crown_diameter_m ?? null,
+                height_m: numOrNull(measureForm.height_m),
+                dbh_cm: numOrNull(measureForm.dbh_cm),
+                crown_diameter_m: numOrNull(measureForm.crown_diameter_m),
             },
         });
         setMessage(state.online
@@ -72,8 +74,10 @@ async function saveMeasures() {
             : 'Misure registrate sul dispositivo: verranno inviate quando torna la rete.');
         if (state.online) await runSync();
         await refreshLocal();
+        // La scheda resta com'è: ricaricare il modulo cancellerebbe ciò che
+        // l'operatore sta già scrivendo per la correzione successiva
         const updated = await db.assets.get(selected.value.asset.id);
-        if (updated) await openAsset(updated);
+        if (updated) selected.value = { ...selected.value, asset: updated };
     } catch {
         setMessage('Salvataggio locale non riuscito: riprova.', false);
     } finally {
@@ -87,8 +91,12 @@ async function associateTag(assetId, uid, tagType) {
         setMessage('Inserisci o scansiona il codice del tag.', false);
         return;
     }
-    const already = await sync.findByTag(cleanUid);
-    if (already && already.asset.id !== assetId) {
+    const already = await sync.findByTag(cleanUid, tagType);
+    if (already && already.asset.id === assetId) {
+        setMessage('Questo tag è già associato a questo elemento.', false);
+        return;
+    }
+    if (already) {
         setMessage(`Tag già associato a ${already.asset.census_code || 'un altro elemento'}.`, false);
         return;
     }
@@ -102,6 +110,8 @@ async function associateTag(assetId, uid, tagType) {
             const updated = await db.assets.get(assetId);
             if (updated) await openAsset(updated);
         }
+    } catch {
+        setMessage('Associazione non riuscita sul dispositivo: riprova.', false);
     } finally {
         busy.value = false;
     }
@@ -123,12 +133,15 @@ async function doScan() {
 }
 
 async function startCamera() {
+    if (scan.cameraActive) return;
     scan.cameraError = '';
+    let stream = null;
     try {
-        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        cameraStream = stream;
         scan.cameraActive = true;
         await new Promise((r) => setTimeout(r, 50));
-        videoEl.value.srcObject = cameraStream;
+        videoEl.value.srcObject = stream;
         await videoEl.value.play();
 
         const detector = new window.BarcodeDetector({
@@ -140,6 +153,7 @@ async function startCamera() {
                 const codes = await detector.detect(videoEl.value);
                 if (codes.length) {
                     scan.uid = codes[0].rawValue;
+                    scan.tagType = codes[0].format === 'qr_code' ? 'qr' : 'barcode';
                     stopCamera();
                     await doScan();
                     return;
@@ -151,9 +165,19 @@ async function startCamera() {
         };
         requestAnimationFrame(tick);
     } catch {
+        // Lo stream eventualmente già acceso va spento anche in caso di errore
+        stream?.getTracks().forEach((t) => t.stop());
+        cameraStream = null;
         scan.cameraError = 'Fotocamera non disponibile: inserisci il codice manualmente.';
         scan.cameraActive = false;
     }
+}
+
+function switchTab(key) {
+    stopCamera();
+    selected.value = null;
+    tab.value = key;
+    refreshLocal();
 }
 
 function stopCamera() {
@@ -485,6 +509,7 @@ onBeforeUnmount(() => {
                             </option>
                         </select>
                         <button
+                            v-if="canAssociate"
                             class="mt-2 w-full rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                             :disabled="! scan.targetId || busy"
                             data-test="scan-associate"
@@ -590,6 +615,13 @@ onBeforeUnmount(() => {
             </header>
 
             <div class="flex-1 space-y-3 overflow-y-auto p-4">
+                <p
+                    v-if="message.text"
+                    class="rounded-lg px-3 py-2 text-sm"
+                    :class="message.ok ? 'bg-green-100 text-green-900' : 'bg-red-100 text-red-900'"
+                    data-test="detail-message"
+                >{{ message.text }}</p>
+
                 <!-- Misure albero -->
                 <div v-if="selected.tree" class="rounded-xl border border-gray-200 bg-white p-4">
                     <h2 class="text-sm font-semibold">Misure albero</h2>
@@ -666,7 +698,7 @@ onBeforeUnmount(() => {
                 class="py-3.5 text-sm font-medium"
                 :class="tab === item.key ? 'border-t-2 border-green-700 text-green-800' : 'text-gray-500'"
                 :data-test="`tab-${item.key}`"
-                @click="tab = item.key; selected = null; refreshLocal()"
+                @click="switchTab(item.key)"
             >{{ item.label }}</button>
         </nav>
     </div>

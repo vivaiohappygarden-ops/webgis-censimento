@@ -58,6 +58,23 @@ class CommandApplier
             });
         } catch (ValidationException $e) {
             return $this->rejected($command, 'VALIDATION_FAILED', collect($e->errors())->flatten()->first());
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            // Race tra due device sull'associazione dello stesso tag: la transazione
+            // è già annullata, si rilegge l'occupante e si risponde con l'esito
+            // di business corretto invece di un errore interno
+            if ($type === 'tag.associate') {
+                $occupant = \App\Models\AssetTag::query()
+                    ->where('tag_type', $command['payload']['tag_type'] ?? '')
+                    ->where('uid', $command['payload']['uid'] ?? '')
+                    ->whereIn('status', ['active', 'unassigned'])
+                    ->first();
+                $other = $occupant?->asset_id ? Asset::query()->withTrashed()->find($occupant->asset_id) : null;
+
+                return $this->rejected($command, 'TAG_IN_USE',
+                    'Tag già associato all\'elemento '.($other?->census_code ?? 'di un altro operatore').'.');
+            }
+
+            throw $e;
         }
     }
 

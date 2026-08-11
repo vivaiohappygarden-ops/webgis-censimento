@@ -112,9 +112,11 @@ export class SyncManager {
         };
 
         const type = await this.db.catalog_types.get(objectTypeId);
-        await this.db.transaction('rw', [this.db.sync_queue, this.db.assets], async () => {
+        await this.db.transaction('rw', [this.db.sync_queue, this.db.assets, this.db.trees], async () => {
             await this.db.sync_queue.add(command);
-            // Apply ottimistico: l'operatore vede subito il suo lavoro (dirty finché non sincronizzato)
+            // Apply ottimistico: l'operatore vede subito il suo lavoro (dirty finché non
+            // sincronizzato). version 1 = la versione che la riga avrà sul server alla
+            // creazione, così i comandi successivi portano una base_version corretta
             await this.db.assets.put({
                 id: entityId,
                 area_id: areaId,
@@ -122,12 +124,17 @@ export class SyncManager {
                 census_code: censusCode || null,
                 notes: notes || null,
                 status: 'active',
-                version: 0,
+                version: 1,
                 geom_geojson: geometry,
                 object_type: type ? { code: type.code, name: type.name } : null,
                 updated_at: new Date().toISOString(),
                 dirty: true,
             });
+            // Un albero censito offline deve essere misurabile subito: la riga
+            // della scheda albero nasce insieme all'elemento, come sul server
+            if (type?.requires_tree_record) {
+                await this.db.trees.put({ asset_id: entityId });
+            }
         });
 
         await this.log('info', `In coda: nuovo elemento ${censusCode || entityId.slice(0, 8)}.`);
@@ -136,26 +143,29 @@ export class SyncManager {
     }
 
     /** Misure dendrometriche in campo (con optimistic locking sulla versione locale). */
-    async enqueueMeasures({ assetId, baseVersion, measures }) {
-        const command = {
-            idempotency_key: crypto.randomUUID(),
-            device_seq: await this.nextDeviceSeq(),
-            type: 'asset.update_measures',
-            entity_id: assetId,
-            base_version: baseVersion,
-            payload: measures,
-            client_ts: new Date().toISOString(),
-            status: 'PENDING',
-            attempts: 0,
-            last_error: null,
-        };
+    async enqueueMeasures({ assetId, measures }) {
+        await this.db.transaction('rw', [this.db.sync_queue, this.db.assets, this.db.trees, this.db.meta], async () => {
+            const asset = await this.db.assets.get(assetId);
+            if (! asset) throw new Error('Elemento non presente sul dispositivo.');
 
-        await this.db.transaction('rw', [this.db.sync_queue, this.db.assets, this.db.trees], async () => {
-            await this.db.sync_queue.add(command);
+            await this.db.sync_queue.add({
+                idempotency_key: crypto.randomUUID(),
+                device_seq: await this.nextDeviceSeq(),
+                type: 'asset.update_measures',
+                entity_id: assetId,
+                base_version: asset.version,
+                payload: measures,
+                client_ts: new Date().toISOString(),
+                status: 'PENDING',
+                attempts: 0,
+                last_error: null,
+            });
+
             const tree = (await this.db.trees.get(assetId)) ?? { asset_id: assetId };
             await this.db.trees.put({ ...tree, ...measures });
-            const asset = await this.db.assets.get(assetId);
-            if (asset) await this.db.assets.put({ ...asset, dirty: true });
+            // La versione locale avanza come farà quella del server: due salvataggi
+            // in sequenza dallo stesso device NON sono un conflitto
+            await this.db.assets.put({ ...asset, version: asset.version + 1, dirty: true });
         });
 
         await this.log('info', 'In coda: misure aggiornate.');
@@ -178,6 +188,9 @@ export class SyncManager {
 
         await this.db.transaction('rw', [this.db.sync_queue, this.db.assets, this.db.asset_tags], async () => {
             await this.db.sync_queue.add(command);
+            // Mai due righe locali per lo stesso tag: la riga ottimistica
+            // sostituisce eventuali copie precedenti con lo stesso tipo+codice
+            await this.db.asset_tags.where('[tag_type+uid]').equals([tagType, uid]).delete();
             await this.db.asset_tags.put({
                 id: uuidv7(),
                 asset_id: assetId,
@@ -193,12 +206,13 @@ export class SyncManager {
         await this.notify();
     }
 
-    /** Ricerca locale di un tag per uid (tutti i tipi). */
-    async findByTag(uid) {
+    /** Ricerca locale di un tag per uid; con tagType preferisce la corrispondenza esatta. */
+    async findByTag(uid, tagType = null) {
         const tags = await this.db.asset_tags.where('uid').equals(uid).toArray();
         if (! tags.length) return null;
-        const asset = await this.db.assets.get(tags[0].asset_id);
-        return asset ? { tag: tags[0], asset } : null;
+        const tag = (tagType && tags.find((t) => t.tag_type === tagType)) ?? tags[0];
+        const asset = await this.db.assets.get(tag.asset_id);
+        return asset ? { tag, asset } : null;
     }
 
     /** Push della coda + pull delta. Ritorna lo stato finale. */
@@ -261,6 +275,24 @@ export class SyncManager {
             const outcome = result.status === 'duplicate' ? (result.original?.status ?? 'applied') : result.status;
             if (outcome === 'applied') {
                 await this.db.sync_queue.delete(result.idempotency_key);
+                // Ultimo comando applicato per l'entità: si riallinea la versione
+                // e si toglie il flag "da inviare" anche quando il server non ha
+                // scritto nulla (esiti idempotenti senza riga di change log)
+                const entityId = result.entity_id ?? result.original?.entity_id;
+                const version = result.version ?? result.original?.version;
+                if (entityId) {
+                    const remaining = await this.db.sync_queue.where('entity_id').equals(entityId).count();
+                    if (remaining === 0) {
+                        const asset = await this.db.assets.get(entityId);
+                        if (asset) {
+                            await this.db.assets.put({
+                                ...asset,
+                                dirty: false,
+                                version: typeof version === 'number' ? Math.max(version, asset.version) : asset.version,
+                            });
+                        }
+                    }
+                }
             } else if (outcome === 'error') {
                 // Errore interno lato server: la chiave non è stata consumata, si ritenta
                 await this.db.sync_queue.update(result.idempotency_key, {
@@ -362,10 +394,13 @@ export class SyncManager {
             await this.db.trees.delete(cmd.entity_id);
             await this.db.asset_tags.where('asset_id').equals(cmd.entity_id).delete();
         }
-        // Un'associazione tag scartata rimuove anche la riga ottimistica locale
+        // Un'associazione tag scartata rimuove SOLO la riga ottimistica di questo
+        // elemento: quella dell'eventuale elemento occupante è verità del server
         if (cmd.type === 'tag.associate' && cmd.payload?.uid) {
             await this.db.asset_tags
-                .where('[tag_type+uid]').equals([cmd.payload.tag_type, cmd.payload.uid]).delete();
+                .where('[tag_type+uid]').equals([cmd.payload.tag_type, cmd.payload.uid])
+                .filter((t) => t.asset_id === cmd.entity_id)
+                .delete();
         }
 
         await this.log('warn', `Operazione #${cmd.device_seq} (${cmd.type}) scartata dall'operatore.`);
