@@ -187,6 +187,21 @@ class WorkOrderController extends Controller implements HasMiddleware
             \App\Models\WorkType::query()->findOrFail($data['work_type_id']);
         }
 
+        $duplicateMessage = ValidationException::withMessages([
+            'asset_id' => 'Elemento già presente nell\'ordine di lavoro con questa lavorazione.',
+        ]);
+
+        // Pre-controllo per il percorso normale (non avvelena la transazione
+        // dei test); il catch sotto copre la vera race tra richieste simultanee
+        $exists = WorkOrderAsset::query()
+            ->where('work_order_id', $workOrder->id)
+            ->where('asset_id', $asset->id)
+            ->where('work_type_id', $data['work_type_id'] ?? null)
+            ->exists();
+        if ($exists) {
+            throw $duplicateMessage;
+        }
+
         try {
             WorkOrderAsset::create([
                 'tenant_id' => $workOrder->tenant_id,
@@ -198,11 +213,7 @@ class WorkOrderController extends Controller implements HasMiddleware
                 'notes' => $data['notes'] ?? null,
             ]);
         } catch (\Illuminate\Database\UniqueConstraintViolationException) {
-            // Il vincolo del DB è l'arbitro: anche due richieste simultanee
-            // ricevono lo stesso 422, mai un errore interno
-            throw ValidationException::withMessages([
-                'asset_id' => 'Elemento già presente nell\'ordine di lavoro con questa lavorazione.',
-            ]);
+            throw $duplicateMessage;
         }
 
         return $this->show($id);
