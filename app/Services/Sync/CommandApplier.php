@@ -459,6 +459,9 @@ class CommandApplier
         }
 
         $order->status = $target;
+        if ($target === 'completed') {
+            $order->completed_at = now();
+        }
         $order->version += 1;
         $order->updated_by = $user->id;
         $order->save();

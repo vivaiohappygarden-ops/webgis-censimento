@@ -67,6 +67,8 @@ Route::prefix('v1')->group(function () {
                 ->orderBy('name')->get(['id', 'name']),
         ]))->middleware('can:works.manage');
 
+        Route::get('reports/lavori', [\App\Http\Controllers\Api\V1\WorkReportController::class, 'lavori']);
+
         Route::apiResource('price-lists', \App\Http\Controllers\Api\V1\PriceListController::class)
             ->whereUuid('price_list');
         Route::put('price-lists/{id}/items', [\App\Http\Controllers\Api\V1\PriceListController::class, 'syncItems'])->whereUuid('id');

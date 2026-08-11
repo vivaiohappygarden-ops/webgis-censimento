@@ -4,6 +4,7 @@ import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import WorkAgenda from '@/Components/WorkAgenda.vue';
+import WorkReport from '@/Components/WorkReport.vue';
 
 const page = usePage();
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('works.manage'));
@@ -34,6 +35,7 @@ const filters = reactive({ status: '', q: '', page: 1 });
 const loading = ref(false);
 const view = ref('elenco');
 const agendaRef = ref(null);
+const reportRef = ref(null);
 
 const teams = ref([]);
 const personnel = ref([]);
@@ -137,8 +139,9 @@ async function doTransition(status) {
         });
         detail.value = data.data;
         await load();
-        // L'agenda, se aperta, deve riflettere subito il nuovo stato
+        // Agenda e rendiconto, se aperti, devono riflettere subito il nuovo stato
         await agendaRef.value?.reload();
+        await reportRef.value?.reload();
     } catch (err) {
         detailError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
             ?? err.response?.data?.message ?? 'Errore nel cambio di stato';
@@ -232,7 +235,8 @@ onMounted(async () => {
                     <h1 class="text-xl font-semibold">Ordini di lavoro</h1>
                     <!-- Il conteggio segue i filtri dell'elenco: in agenda sarebbe fuorviante -->
                     <p v-if="view === 'elenco'" class="text-sm text-gray-500">{{ meta.total }} {{ meta.total === 1 ? 'ordine' : 'ordini' }} · flusso: bozza, pianificato, assegnato, in corso, completato</p>
-                    <p v-else class="text-sm text-gray-500">Programmazione settimanale per squadra</p>
+                    <p v-else-if="view === 'agenda'" class="text-sm text-gray-500">Programmazione settimanale per squadra</p>
+                    <p v-else class="text-sm text-gray-500">Lavori completati per cliente e periodo, con importi da listino</p>
                 </div>
                 <button
                     v-if="canManage"
@@ -256,6 +260,12 @@ onMounted(async () => {
                     data-test="view-agenda"
                     @click="view = 'agenda'"
                 >Agenda</button>
+                <button
+                    class="border-l border-gray-300 px-4 py-1.5 font-medium"
+                    :class="view === 'rendiconto' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    data-test="view-rendiconto"
+                    @click="view = 'rendiconto'"
+                >Rendiconto</button>
             </div>
 
             <WorkAgenda
@@ -264,6 +274,13 @@ onMounted(async () => {
                 :teams="teams"
                 :personnel="personnel"
                 :can-manage="canManage"
+                @open="openDetail"
+            />
+
+            <WorkReport
+                v-if="view === 'rendiconto'"
+                ref="reportRef"
+                :clients="clients"
                 @open="openDetail"
             />
 

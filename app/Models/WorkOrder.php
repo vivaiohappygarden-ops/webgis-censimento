@@ -62,6 +62,7 @@ class WorkOrder extends Model
             'planned_start' => 'date',
             'planned_end' => 'date',
             'due_at' => 'datetime',
+            'completed_at' => 'datetime',
             'ppe' => 'array',
             'version' => 'integer',
         ];
