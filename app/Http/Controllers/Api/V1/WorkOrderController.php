@@ -91,7 +91,7 @@ class WorkOrderController extends Controller implements HasMiddleware
         $workOrder = DB::transaction(function () use ($data, $user) {
             return WorkOrder::create([
                 ...$data,
-                'code' => $this->nextCode($user->tenant_id),
+                'code' => WorkOrder::nextCode($user->tenant_id),
                 'status' => 'draft',
                 'created_by' => $user->id,
                 'updated_by' => $user->id,
@@ -114,6 +114,8 @@ class WorkOrderController extends Controller implements HasMiddleware
                     ->with('objectType:id,code,name'),
                 'assets.workType:id,code,name,unit',
                 'logs' => fn ($q) => $q->with('operator:id,name')->orderByDesc('started_at'),
+                'checks' => fn ($q) => $q->with('checker:id,name')->orderByDesc('checked_at'),
+                'nonConformities' => fn ($q) => $q->with('responsible:id,name')->orderByDesc('created_at'),
             ])
             ->findOrFail($id);
 
@@ -286,20 +288,6 @@ class WorkOrderController extends Controller implements HasMiddleware
         Audit::log('work_order.deleted', $workOrder, ['code' => $workOrder->code]);
 
         return response()->noContent();
-    }
-
-    /** Numerazione per tenant: ODL-ANNO-progressivo, serializzata con advisory lock. */
-    private function nextCode(string $tenantId): string
-    {
-        DB::statement('SELECT pg_advisory_xact_lock(hashtextextended(?, 42))', ["wo:{$tenantId}"]);
-        $year = now()->year;
-        $next = (int) DB::selectOne(
-            "SELECT COALESCE(MAX((substring(code FROM '\\d+$'))::int), 0) + 1 AS n
-             FROM work_orders WHERE tenant_id = ? AND code LIKE ?",
-            [$tenantId, "ODL-{$year}-%"],
-        )->n;
-
-        return sprintf('ODL-%d-%04d', $year, $next);
     }
 
     private function validated(Request $request, bool $required = true): array

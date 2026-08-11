@@ -5,6 +5,7 @@ import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import WorkAgenda from '@/Components/WorkAgenda.vue';
 import WorkReport from '@/Components/WorkReport.vue';
+import QualityBoard from '@/Components/QualityBoard.vue';
 
 const page = usePage();
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('works.manage'));
@@ -36,6 +37,53 @@ const loading = ref(false);
 const view = ref('elenco');
 const agendaRef = ref(null);
 const reportRef = ref(null);
+const qualityRef = ref(null);
+
+const NC_STATUS_LABELS = { open: 'Aperta', action: 'In azione', verified: 'Verificata', closed: 'Chiusa' };
+const NC_SEVERITY_LABELS = { minor: 'Lieve', major: 'Grave', critical: 'Critica' };
+
+// Verbale di controllo qualità (dal dettaglio ordine)
+const checkModal = reactive({
+    open: false, busy: false, error: '', outcome: 'passed', notes: '',
+    nc: { severity: 'minor', description: '', due_on: '', responsible_id: '', create_corrective_order: true },
+});
+
+function openCheckModal() {
+    Object.assign(checkModal, { open: true, busy: false, error: '', outcome: 'passed', notes: '' });
+    checkModal.nc = { severity: 'minor', description: '', due_on: '', responsible_id: '', create_corrective_order: true };
+}
+
+async function submitCheck() {
+    if (checkModal.outcome === 'failed' && ! checkModal.nc.description.trim()) {
+        checkModal.error = 'Descrivi la non conformità riscontrata.';
+        return;
+    }
+    checkModal.busy = true;
+    checkModal.error = '';
+    try {
+        const { data } = await axios.post(`/api/v1/work-orders/${detail.value.id}/checks`, {
+            outcome: checkModal.outcome,
+            notes: checkModal.notes.trim() || null,
+            ...(checkModal.outcome === 'failed' ? { non_conformity: {
+                severity: checkModal.nc.severity,
+                description: checkModal.nc.description.trim(),
+                due_on: checkModal.nc.due_on || null,
+                responsible_id: checkModal.nc.responsible_id || null,
+                create_corrective_order: checkModal.nc.create_corrective_order,
+            } } : {}),
+        });
+        detail.value = data.data;
+        checkModal.open = false;
+        // L'eventuale ordine correttivo compare nell'elenco; la vista qualità si aggiorna
+        await load();
+        await qualityRef.value?.reload();
+    } catch (err) {
+        checkModal.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Registrazione non riuscita';
+    } finally {
+        checkModal.busy = false;
+    }
+}
 
 const teams = ref([]);
 const personnel = ref([]);
@@ -236,7 +284,8 @@ onMounted(async () => {
                     <!-- Il conteggio segue i filtri dell'elenco: in agenda sarebbe fuorviante -->
                     <p v-if="view === 'elenco'" class="text-sm text-gray-500">{{ meta.total }} {{ meta.total === 1 ? 'ordine' : 'ordini' }} · flusso: bozza, pianificato, assegnato, in corso, completato</p>
                     <p v-else-if="view === 'agenda'" class="text-sm text-gray-500">Programmazione settimanale per squadra</p>
-                    <p v-else class="text-sm text-gray-500">Lavori completati per cliente e periodo, con importi da listino</p>
+                    <p v-else-if="view === 'rendiconto'" class="text-sm text-gray-500">Lavori completati per cliente e periodo, con importi da listino</p>
+                    <p v-else class="text-sm text-gray-500">Controlli qualità e non conformità con flusso correttivo</p>
                 </div>
                 <button
                     v-if="canManage"
@@ -266,6 +315,12 @@ onMounted(async () => {
                     data-test="view-rendiconto"
                     @click="view = 'rendiconto'"
                 >Rendiconto</button>
+                <button
+                    class="border-l border-gray-300 px-4 py-1.5 font-medium"
+                    :class="view === 'qualita' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    data-test="view-qualita"
+                    @click="view = 'qualita'"
+                >Qualità</button>
             </div>
 
             <WorkAgenda
@@ -282,6 +337,14 @@ onMounted(async () => {
                 ref="reportRef"
                 :clients="clients"
                 @open="openDetail"
+            />
+
+            <QualityBoard
+                v-if="view === 'qualita'"
+                ref="qualityRef"
+                :personnel="personnel"
+                :can-manage="canManage"
+                @open-order="openDetail"
             />
 
             <div v-if="view === 'elenco'" class="mb-3 flex flex-wrap gap-2">
@@ -430,6 +493,80 @@ onMounted(async () => {
                 </div>
             </Teleport>
 
+            <!-- Verbale di controllo qualità -->
+            <Teleport to="body">
+                <div v-if="checkModal.open" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4" @click.self="checkModal.open = false">
+                    <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" data-test="check-modal">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <div class="text-xs uppercase tracking-wide text-gray-400">{{ detail?.code }}</div>
+                                <h2 class="font-semibold">Verbale di controllo qualità</h2>
+                            </div>
+                            <button class="text-gray-400 hover:text-gray-600" @click="checkModal.open = false">✕</button>
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-2 gap-2">
+                            <button
+                                class="rounded-lg border px-3 py-2.5 text-sm font-medium"
+                                :class="checkModal.outcome === 'passed' ? 'border-green-700 bg-green-700 text-white' : 'border-gray-300 text-gray-600'"
+                                data-test="check-passed"
+                                @click="checkModal.outcome = 'passed'"
+                            >Esito positivo</button>
+                            <button
+                                class="rounded-lg border px-3 py-2.5 text-sm font-medium"
+                                :class="checkModal.outcome === 'failed' ? 'border-red-700 bg-red-700 text-white' : 'border-gray-300 text-gray-600'"
+                                data-test="check-failed"
+                                @click="checkModal.outcome = 'failed'"
+                            >Esito negativo</button>
+                        </div>
+
+                        <label class="mt-3 block text-xs">
+                            <span class="text-gray-500">Note del controllo</span>
+                            <textarea v-model="checkModal.notes" rows="2" data-test="check-notes" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" />
+                        </label>
+
+                        <div v-if="checkModal.outcome === 'failed'" class="mt-3 space-y-3 rounded-lg bg-red-50/60 p-3">
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="block text-xs">
+                                    <span class="text-gray-500">Gravità *</span>
+                                    <select v-model="checkModal.nc.severity" data-test="check-severity" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
+                                        <option v-for="(label, value) in NC_SEVERITY_LABELS" :key="value" :value="value">{{ label }}</option>
+                                    </select>
+                                </label>
+                                <label class="block text-xs">
+                                    <span class="text-gray-500">Da risolvere entro</span>
+                                    <input v-model="checkModal.nc.due_on" type="date" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                                </label>
+                            </div>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Non conformità riscontrata *</span>
+                                <textarea v-model="checkModal.nc.description" rows="2" data-test="check-nc-description" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Fascia non sfalciata lungo il lato nord" />
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Responsabile della risoluzione</span>
+                                <select v-model="checkModal.nc.responsible_id" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
+                                    <option value="">—</option>
+                                    <option v-for="p in personnel" :key="p.id" :value="p.id">{{ p.name }}</option>
+                                </select>
+                            </label>
+                            <label class="flex items-center gap-2 text-sm">
+                                <input v-model="checkModal.nc.create_corrective_order" type="checkbox" data-test="check-corrective" class="rounded border-gray-300">
+                                <span>Genera l'ordine correttivo (in bozza, stessa squadra ed elementi)</span>
+                            </label>
+                        </div>
+
+                        <p v-if="checkModal.error" class="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="check-error">{{ checkModal.error }}</p>
+
+                        <button
+                            class="mt-4 w-full rounded-lg bg-green-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                            :disabled="checkModal.busy"
+                            data-test="check-save"
+                            @click="submitCheck"
+                        >{{ checkModal.busy ? 'Registrazione…' : 'Registra il verbale' }}</button>
+                    </div>
+                </div>
+            </Teleport>
+
             <!-- Dettaglio -->
             <Teleport to="body">
                 <div v-if="detail" class="fixed inset-0 z-50 flex justify-end bg-black/30" @click.self="detail = null">
@@ -560,6 +697,46 @@ onMounted(async () => {
                                 Il listino non ha una voce per la lavorazione di questo ordine.
                             </p>
                         </div>
+
+                        <!-- Controlli qualità e non conformità dell'ordine -->
+                        <div class="mt-5 flex items-center justify-between">
+                            <h3 class="text-sm font-semibold">Controlli qualità ({{ (detail.checks ?? []).length }})</h3>
+                            <button
+                                v-if="canManage && ['in_progress', 'suspended', 'completed'].includes(detail.status)"
+                                class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                                data-test="wo-new-check"
+                                @click="openCheckModal"
+                            >Registra controllo</button>
+                        </div>
+                        <ul v-if="(detail.checks ?? []).length" class="mt-2 divide-y divide-gray-50 rounded-lg border border-gray-100" data-test="wo-checks">
+                            <li v-for="check in detail.checks" :key="check.id" class="px-3 py-2 text-sm">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span
+                                        class="rounded-full px-2 py-0.5 text-xs font-medium"
+                                        :class="check.outcome === 'passed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'"
+                                    >{{ check.outcome === 'passed' ? 'Positivo' : 'Negativo' }}</span>
+                                    <span class="text-xs text-gray-500">{{ check.checker?.name ?? '—' }} · {{ fmtDateTime(check.checked_at) }}</span>
+                                </div>
+                                <p v-if="check.notes" class="mt-1 text-xs text-gray-600">{{ check.notes }}</p>
+                            </li>
+                        </ul>
+                        <p v-else class="mt-2 text-sm text-gray-400">Nessun controllo registrato.</p>
+
+                        <ul v-if="(detail.non_conformities ?? []).length" class="mt-3 space-y-1.5" data-test="wo-ncs">
+                            <li
+                                v-for="nc in detail.non_conformities"
+                                :key="nc.id"
+                                class="rounded-lg border border-red-100 bg-red-50/50 px-3 py-2 text-sm"
+                            >
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="font-medium">{{ nc.code }}</span>
+                                    <span class="text-xs text-gray-600">
+                                        {{ NC_SEVERITY_LABELS[nc.severity] }} · {{ NC_STATUS_LABELS[nc.status] ?? nc.status }}
+                                    </span>
+                                </div>
+                                <p class="mt-0.5 text-xs text-gray-700">{{ nc.description }}</p>
+                            </li>
+                        </ul>
 
                         <div v-if="canManage" class="mt-3">
                             <input

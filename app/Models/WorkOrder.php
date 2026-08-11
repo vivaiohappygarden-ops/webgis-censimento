@@ -108,8 +108,34 @@ class WorkOrder extends Model
         return $this->hasMany(WorkLog::class);
     }
 
+    public function checks()
+    {
+        return $this->hasMany(WorkCheck::class);
+    }
+
+    public function nonConformities()
+    {
+        return $this->hasMany(NonConformity::class);
+    }
+
     public function canTransitionTo(string $status): bool
     {
         return in_array($status, self::TRANSITIONS[$this->status] ?? [], true);
+    }
+
+    /** Numerazione per tenant: ODL-ANNO-progressivo, serializzata con advisory lock. */
+    public static function nextCode(string $tenantId): string
+    {
+        \Illuminate\Support\Facades\DB::statement(
+            'SELECT pg_advisory_xact_lock(hashtextextended(?, 42))', ["wo:{$tenantId}"],
+        );
+        $year = now()->year;
+        $next = (int) \Illuminate\Support\Facades\DB::selectOne(
+            "SELECT COALESCE(MAX((substring(code FROM '\\d+$'))::int), 0) + 1 AS n
+             FROM work_orders WHERE tenant_id = ? AND code LIKE ?",
+            [$tenantId, "ODL-{$year}-%"],
+        )->n;
+
+        return sprintf('ODL-%d-%04d', $year, $next);
     }
 }
