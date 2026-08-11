@@ -197,6 +197,7 @@ async function refreshLocal() {
     bootstrapped.value = Boolean(await db.meta.get('bootstrapped_at'));
     areas.value = await db.areas.orderBy('name').toArray();
     const types = await db.catalog_types.toArray();
+    typesById.value = Object.fromEntries(types.map((t) => [t.id, t]));
     pointTypes.value = types
         .filter((t) => t.allowed_geometry === 'P')
         .sort((a, b) => a.code.localeCompare(b.code));
@@ -307,7 +308,11 @@ async function retryCommand(cmd) {
     if (state.online) await runSync();
 }
 
-const typeLabel = (asset) => asset.object_type?.name ?? asset.object_type?.code ?? '—';
+// Le righe del server portano solo object_type_id: il nome si risolve dal catalogo locale
+const typesById = ref({});
+const typeLabel = (asset) => asset.object_type?.name
+    ?? typesById.value[asset.object_type_id]?.name
+    ?? asset.object_type?.code ?? '—';
 const fmtTime = (iso) => (iso ? new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '');
 
 const QUEUE_LABELS = {
