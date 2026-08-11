@@ -77,6 +77,10 @@ Route::prefix('v1')->group(function () {
             ->whereUuid('work_order');
         Route::post('work-orders/{id}/transition', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'transition'])->whereUuid('id');
         Route::post('work-orders/{id}/checks', [\App\Http\Controllers\Api\V1\WorkCheckController::class, 'store'])->whereUuid('id');
+        Route::get('issues', [\App\Http\Controllers\Api\V1\IssueController::class, 'index']);
+        Route::post('issues', [\App\Http\Controllers\Api\V1\IssueController::class, 'store']);
+        Route::patch('issues/{id}', [\App\Http\Controllers\Api\V1\IssueController::class, 'update'])->whereUuid('id');
+        Route::post('issues/{id}/work-order', [\App\Http\Controllers\Api\V1\IssueController::class, 'createWorkOrder'])->whereUuid('id');
         Route::get('non-conformities', [\App\Http\Controllers\Api\V1\NonConformityController::class, 'index']);
         Route::patch('non-conformities/{id}', [\App\Http\Controllers\Api\V1\NonConformityController::class, 'update'])->whereUuid('id');
         Route::post('work-orders/{id}/assets', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'attachAsset'])->whereUuid('id');

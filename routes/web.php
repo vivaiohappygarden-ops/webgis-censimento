@@ -35,6 +35,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/listini', fn () => Inertia::render('Listini'))
         ->middleware('can:works.view')->name('listini');
 
+    Route::get('/segnalazioni', fn () => Inertia::render('Segnalazioni'))
+        ->middleware('can:works.view')->name('segnalazioni');
+
     Route::get('/territorio', fn () => Inertia::render('Territorio'))
         ->middleware('can:clients.view')->name('territorio');
 
