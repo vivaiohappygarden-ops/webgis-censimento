@@ -12,8 +12,8 @@ const meta = reactive({ total: 0, current_page: 1, last_page: 1 });
 const loading = ref(false);
 const filters = reactive({ q: '', status: '', page: 1 });
 
-// Import GeoJSON
-const importer = reactive({ open: false, areaId: '', file: null, report: null, busy: false, error: '' });
+// Import GeoJSON / CAM
+const importer = reactive({ open: false, format: 'geojson', areaId: '', file: null, report: null, busy: false, error: '' });
 const importAreas = ref([]);
 
 async function openImporter() {
@@ -28,7 +28,7 @@ async function openImporter() {
 
 async function runImport(dryRun) {
     if (! importer.file || ! importer.areaId) {
-        importer.error = 'Scegli un file GeoJSON e un\'area di destinazione.';
+        importer.error = 'Scegli un file e un\'area di destinazione.';
         return;
     }
     importer.busy = true;
@@ -38,7 +38,8 @@ async function runImport(dryRun) {
         form.append('file', importer.file);
         form.append('area_id', importer.areaId);
         form.append('dry_run', dryRun ? '1' : '0');
-        const { data } = await axios.post('/api/v1/imports/geojson', form);
+        const endpoint = importer.format === 'cam' ? '/api/v1/imports/cam' : '/api/v1/imports/geojson';
+        const { data } = await axios.post(endpoint, form);
         importer.report = data.data;
         if (! dryRun) {
             await load();
@@ -191,18 +192,34 @@ const measure = (row) => {
                 <div v-if="importer.open" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" @click.self="importer.open = false">
                     <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
                         <div class="flex items-start justify-between">
-                            <h2 class="font-semibold">Importa censimento da GeoJSON</h2>
+                            <h2 class="font-semibold">Importa censimento</h2>
                             <button class="text-gray-400 hover:text-gray-600" @click="importer.open = false">✕</button>
                         </div>
                         <p class="mt-1 text-xs text-gray-500">
-                            FeatureCollection con proprietà <code>codice</code> (codice catalogo, es. P103108) per ogni feature.
+                            {{ importer.format === 'cam'
+                                ? 'Shapefile zippato o GeoJSON nel formato ministeriale (Modello Dati v2.1): campi CODICE, OBJ_ID, GENERE, SPECIE, H_m…'
+                                : 'FeatureCollection con proprietà codice (codice catalogo, es. P103108) per ogni feature.' }}
                             Prima l'analisi, poi l'import: nulla viene importato silenziosamente.
                         </p>
 
                         <div class="mt-4 space-y-3">
+                            <div class="grid grid-cols-2 gap-2">
+                                <label
+                                    v-for="opt in [
+                                        { value: 'geojson', label: 'GeoJSON generico' },
+                                        { value: 'cam', label: 'Formato CAM (shapefile/GeoJSON)' },
+                                    ]"
+                                    :key="opt.value"
+                                    class="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+                                    :class="importer.format === opt.value ? 'border-green-700 bg-green-50 font-medium' : 'border-gray-300'"
+                                >
+                                    <input v-model="importer.format" type="radio" :value="opt.value" class="hidden" @change="importer.report = null">
+                                    {{ opt.label }}
+                                </label>
+                            </div>
                             <input
                                 type="file"
-                                accept=".json,.geojson,application/json,application/geo+json"
+                                :accept="importer.format === 'cam' ? '.zip,.json,.geojson' : '.json,.geojson,application/json,application/geo+json'"
                                 class="w-full text-sm"
                                 @change="(e) => { importer.file = e.target.files?.[0] ?? null; importer.report = null; }"
                             >
@@ -222,7 +239,7 @@ const measure = (row) => {
                                 <ul v-if="importer.report.errors.length" class="mt-2 max-h-32 space-y-0.5 overflow-y-auto text-xs text-red-700">
                                     <li v-for="(e, i) in importer.report.errors" :key="i">• {{ e.error }}</li>
                                 </ul>
-                                <p v-if="importer.report.dropped_properties.length" class="mt-2 text-xs text-gray-500">
+                                <p v-if="importer.report.dropped_properties?.length" class="mt-2 text-xs text-gray-500">
                                     Proprietà ignorate (non definite come campi del tipo): {{ importer.report.dropped_properties.join(', ') }}
                                 </p>
                                 <p v-if="! importer.report.dry_run" class="mt-2 font-medium text-green-700">Import completato</p>

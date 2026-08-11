@@ -51,4 +51,29 @@ class ImportController extends Controller implements HasMiddleware
 
         return response()->json(['data' => $report]);
     }
+
+    /** Import nel formato Modello Dati v2.1: shapefile zip (RDN2008) o GeoJSON CAM. */
+    public function cam(Request $request, \App\Services\Import\CamImporter $importer): JsonResponse
+    {
+        $data = $request->validate([
+            'file' => ['required', 'file', 'max:51200'],
+            'area_id' => ['required', 'uuid'],
+            'dry_run' => ['sometimes', 'boolean'],
+        ]);
+
+        $area = Area::findOrFail($data['area_id']);
+        $geojson = $importer->toGeoJson($data['file']);
+        $dryRun = (bool) ($data['dry_run'] ?? true);
+
+        $report = $importer->run($geojson, $area, $dryRun);
+
+        if (! $dryRun) {
+            Audit::log('import.cam', $area, [
+                'imported' => $report['imported'],
+                'errors' => $report['errors_total'],
+            ]);
+        }
+
+        return response()->json(['data' => $report]);
+    }
 }
