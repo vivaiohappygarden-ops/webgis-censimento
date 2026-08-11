@@ -68,6 +68,9 @@ export class SyncManager {
                 const localTags = await this.db.asset_tags
                     .filter((t) => dirtyIds.has(t.asset_id)).toArray();
                 const dirtyOrders = await this.db.work_orders.filter((w) => w.dirty === true).toArray();
+                const startedAtById = new Map((await this.db.work_orders.toArray())
+                    .filter((w) => w.field_started_at)
+                    .map((w) => [w.id, w.field_started_at]));
 
                 await Promise.all([
                     this.db.areas.clear(), this.db.assets.clear(), this.db.trees.clear(),
@@ -80,7 +83,11 @@ export class SyncManager {
                 await this.db.asset_tags.bulkPut(data.assets.flatMap((a) => a.tags ?? []));
                 await this.db.assets.bulkPut(dirtyRows);
                 await this.db.asset_tags.bulkPut(localTags);
-                await this.db.work_orders.bulkPut((data.work_orders ?? []).map((w) => ({ ...w, dirty: false })));
+                await this.db.work_orders.bulkPut((data.work_orders ?? []).map((w) => ({
+                    ...w,
+                    dirty: false,
+                    ...(startedAtById.has(w.id) ? { field_started_at: startedAtById.get(w.id) } : {}),
+                })));
                 await this.db.work_orders.bulkPut(dirtyOrders);
                 await this.db.catalog_types.bulkPut(data.catalog.object_types);
                 await this.db.custom_fields.bulkPut(data.custom_fields);
@@ -523,8 +530,18 @@ export class SyncManager {
                             deferred.add(id);
                             continue;
                         }
-                        if (change.op === 'delete') await this.db.work_orders.delete(id);
-                        else await this.db.work_orders.put({ ...change.row, dirty: false });
+                        if (change.op === 'delete') {
+                            await this.db.work_orders.delete(id);
+                        } else {
+                            // L'ora di avvio annotata sul device (solo locale) deve
+                            // sopravvivere alla riga fresca del server: serve al consuntivo
+                            const existing = await this.db.work_orders.get(id);
+                            await this.db.work_orders.put({
+                                ...change.row,
+                                dirty: false,
+                                ...(existing?.field_started_at ? { field_started_at: existing.field_started_at } : {}),
+                            });
+                        }
                         deferred.delete(id);
                     } else if (change.table === 'assets') {
                         const id = change.op === 'delete' ? change.id : change.row.id;
