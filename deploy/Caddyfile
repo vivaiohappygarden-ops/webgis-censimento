@@ -1,0 +1,30 @@
+# Caddy: HTTPS automatico (Let's Encrypt) e reverse proxy verso PHP-FPM.
+# Sostituire il dominio e poi: cp Caddyfile /etc/caddy/Caddyfile && systemctl reload caddy
+
+SOSTITUIRE.esempio.it {
+	root * /var/www/webgis/public
+	encode zstd gzip
+
+	php_fastcgi unix//run/php/php8.4-fpm.sock
+
+	file_server
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy strict-origin-when-cross-origin
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	# Gli asset compilati hanno il nome con hash: cache lunga
+	@static path /build/*
+	header @static Cache-Control "public, max-age=31536000, immutable"
+
+	log {
+		output file /var/log/caddy/webgis-access.log {
+			roll_size 50MiB
+			roll_keep 10
+		}
+	}
+}
