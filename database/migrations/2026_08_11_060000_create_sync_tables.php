@@ -34,6 +34,10 @@ return new class extends Migration
               tenant_id  uuid NOT NULL,
               table_name text NOT NULL,
               row_id     uuid NOT NULL,
+              -- Id transazione: il pull serve solo righe di transazioni già concluse
+              -- (txid < xmin dello snapshot corrente), così una transazione lunga
+              -- con id bassi non viene scavalcata dal cursore e persa per sempre
+              txid       xid8 NOT NULL DEFAULT pg_current_xact_id(),
               created_at timestamptz NOT NULL DEFAULT now()
             );
             CREATE INDEX ix_change_log_tenant ON change_log (tenant_id, id);

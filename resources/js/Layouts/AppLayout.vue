@@ -23,7 +23,16 @@ const nav = computed(() =>
 
 const isActive = (href) => page.url === href || page.url.startsWith(`${href}/`);
 
-const logout = () => router.post('/logout');
+const logout = async () => {
+    // Dispositivo condiviso: la shell offline in cache contiene i dati di sessione
+    // dell'utente e va eliminata all'uscita (la coda locale resta, separata per utente)
+    try {
+        await window.caches?.delete('wg-shell-v1');
+    } catch {
+        // la cache può non essere disponibile (es. contesto non sicuro): si prosegue
+    }
+    router.post('/logout');
+};
 </script>
 
 <template>

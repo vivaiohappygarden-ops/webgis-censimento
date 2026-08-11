@@ -47,7 +47,9 @@ self.addEventListener('fetch', (event) => {
             const cache = await caches.open(SHELL_CACHE);
             try {
                 const response = await fetch(request);
-                if (response.ok) await cache.put('/operatore', response.clone());
+                // Mai mettere in cache una risposta rediretta (es. sessione scaduta
+                // verso /login): la shell offline deve restare la pagina operatore
+                if (response.ok && ! response.redirected) await cache.put('/operatore', response.clone());
                 return response;
             } catch {
                 const cached = await cache.match('/operatore');

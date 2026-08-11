@@ -214,6 +214,39 @@ class SyncApiTest extends TestCase
             ->assertJsonPath('results.0.code', 'NOT_FOUND');
     }
 
+    public function test_invalid_geom_properties_are_rejected_not_internal_error(): void
+    {
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([
+            $this->createCommand(overrides: [
+                'geom' => [
+                    'type' => 'Point',
+                    'coordinates' => [9.19, 45.46],
+                    'properties' => ['survey_method' => 'piccione_viaggiatore'],
+                ],
+            ]),
+        ]))->assertOk()
+            ->assertJsonPath('results.0.status', 'rejected')
+            ->assertJsonPath('results.0.code', 'VALIDATION_FAILED');
+    }
+
+    public function test_changes_can_fetch_specific_ids_outside_cursor(): void
+    {
+        $entityId = (string) Str::uuid();
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([$this->createCommand($entityId)]))->assertOk();
+
+        // Cursore già oltre la creazione: senza ids il delta è vuoto
+        $cursor = $this->getJson('/api/v1/sync/changes?cursor=0')->json('cursor');
+        $this->getJson("/api/v1/sync/changes?cursor={$cursor}")
+            ->assertOk()->assertJsonCount(0, 'changes');
+
+        // Con ids espliciti la riga viene servita comunque (recupero record dirty saltati)
+        $data = $this->getJson("/api/v1/sync/changes?cursor={$cursor}&ids[]={$entityId}")
+            ->assertOk()->json();
+        $this->assertCount(1, $data['changes']);
+        $this->assertSame($entityId, $data['changes'][0]['row']['id']);
+        $this->assertSame($cursor, $data['cursor']);
+    }
+
     public function test_envelope_validation(): void
     {
         // Schema client troppo vecchio: 426, la coda non viene toccata

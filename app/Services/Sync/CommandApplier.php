@@ -92,7 +92,7 @@ class CommandApplier
                 "Il tipo {$type->code} richiede una geometria ".implode('/', $type->allowedGeometryTypes()).'.');
         }
 
-        $properties = $geom['properties'] ?? [];
+        $properties = $this->validatedGeomProperties($geom);
         unset($geom['properties']);
 
         // Il codice censimento deve restare unico nel tenant (stessa regola del backoffice)
@@ -240,7 +240,7 @@ class CommandApplier
                 'La geometria non è compatibile con il tipo oggetto.');
         }
 
-        $properties = $geom['properties'] ?? [];
+        $properties = $this->validatedGeomProperties($geom);
         unset($geom['properties']);
 
         $asset->geom = Geometry::toEwkb($geom);
@@ -300,6 +300,17 @@ class CommandApplier
         }
 
         return [$asset, null];
+    }
+
+    /** Le proprietà del rilievo vanno validate come il resto: un valore fuori
+     *  lista finirebbe sul CHECK del DB come errore interno, bloccando la coda. */
+    private function validatedGeomProperties(array $geom): array
+    {
+        return Validator::make($geom['properties'] ?? [], [
+            'survey_method' => ['sometimes', 'nullable',
+                'in:gps,gps_rtk,digitized,cad_import,shapefile_import,manual_map,estimated'],
+            'gps_accuracy_m' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100000'],
+        ])->validate();
     }
 
     private function applied(array $command, int $version): array

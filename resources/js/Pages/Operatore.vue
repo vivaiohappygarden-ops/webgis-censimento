@@ -81,10 +81,17 @@ function locate() {
     );
 }
 
+// Accetta anche la virgola decimale italiana; il campo vuoto NON vale zero
+function parseCoordinate(value) {
+    const text = String(value).trim().replace(',', '.');
+    if (text === '') return NaN;
+    return Number(text);
+}
+
 async function saveCensus() {
     setMessage('');
-    const lat = Number(form.lat);
-    const lon = Number(form.lon);
+    const lat = parseCoordinate(form.lat);
+    const lon = parseCoordinate(form.lon);
     if (! form.areaId || ! form.typeId) {
         setMessage('Seleziona area e tipo oggetto.', false);
         return;
@@ -103,6 +110,7 @@ async function saveCensus() {
             notes: form.notes.trim(),
             geometry: { type: 'Point', coordinates: [lon, lat] },
             gpsAccuracy: form.accuracy,
+            surveyMethod: form.accuracy != null ? 'gps' : 'manual_map',
         });
         Object.assign(form, { censusCode: '', notes: '', lat: '', lon: '', accuracy: null });
         await refreshLocal();
@@ -110,6 +118,8 @@ async function saveCensus() {
             ? 'Elemento registrato: verrà sincronizzato ora.'
             : 'Elemento registrato sul dispositivo: verrà inviato quando torna la rete.');
         if (state.online) await runSync();
+    } catch {
+        setMessage('Salvataggio locale non riuscito: riprova.', false);
     } finally {
         busy.value = false;
     }
@@ -118,6 +128,23 @@ async function saveCensus() {
 async function runSync() {
     await sync.syncNow();
     await refreshLocal();
+}
+
+async function discardCommand(cmd) {
+    const ok = window.confirm(
+        `Scartare definitivamente l'operazione #${cmd.device_seq} (${cmd.type})? `
+        + 'La modifica locale andrà persa e varrà la versione del server.',
+    );
+    if (! ok) return;
+    await sync.discard(cmd.idempotency_key);
+    await refreshLocal();
+    setMessage('Operazione scartata: al prossimo aggiornamento varrà la versione del server.');
+}
+
+async function retryCommand(cmd) {
+    await sync.retry(cmd.idempotency_key);
+    await refreshLocal();
+    if (state.online) await runSync();
 }
 
 const typeLabel = (asset) => asset.object_type?.name ?? asset.object_type?.code ?? '—';
@@ -219,11 +246,11 @@ onBeforeUnmount(() => {
                     <div class="grid grid-cols-2 gap-3">
                         <label class="block text-xs">
                             <span class="text-gray-500">Latitudine *</span>
-                            <input v-model="form.lat" inputmode="decimal" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="45.4652">
+                            <input v-model="form.lat" inputmode="decimal" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="45.4652" @input="form.accuracy = null">
                         </label>
                         <label class="block text-xs">
                             <span class="text-gray-500">Longitudine *</span>
-                            <input v-model="form.lon" inputmode="decimal" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="9.1905">
+                            <input v-model="form.lon" inputmode="decimal" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="9.1905" @input="form.accuracy = null">
                         </label>
                     </div>
                     <div class="flex items-center gap-3">
@@ -317,6 +344,17 @@ onBeforeUnmount(() => {
                                     </span>
                                 </div>
                                 <p v-if="c.last_error" class="mt-0.5 text-xs text-red-600">{{ c.last_error }}</p>
+                                <div v-if="c.status === 'CONFLICT' || c.status === 'NEEDS_ATTENTION'" class="mt-1.5 flex gap-2">
+                                    <button
+                                        v-if="c.status === 'NEEDS_ATTENTION'"
+                                        class="rounded border border-green-700 px-2.5 py-1 text-xs font-medium text-green-700"
+                                        @click="retryCommand(c)"
+                                    >Riprova</button>
+                                    <button
+                                        class="rounded border border-red-300 px-2.5 py-1 text-xs font-medium text-red-700"
+                                        @click="discardCommand(c)"
+                                    >Scarta (vale il server)</button>
+                                </div>
                             </li>
                         </ul>
                     </div>

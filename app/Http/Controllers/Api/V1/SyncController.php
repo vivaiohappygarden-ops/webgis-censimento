@@ -45,9 +45,14 @@ class SyncController extends Controller implements HasMiddleware
         $tenantId = $request->user()->tenant_id;
         $areaIds = $request->input('areas', []);
 
-        // Il cursore fotografa il change log PRIMA di leggere i dati: eventuali
-        // modifiche concorrenti verranno riprese dal primo pull delta
-        $cursor = (int) (DB::table('change_log')->where('tenant_id', $tenantId)->max('id') ?? 0);
+        // Il cursore fotografa solo le transazioni già concluse: quelle in corso
+        // verranno riprese dal primo pull delta (al più con upsert ripetuti, mai persi)
+        $cursor = (int) (DB::selectOne(
+            'SELECT COALESCE(MAX(id), 0) AS c FROM change_log
+             WHERE tenant_id = ?
+               AND (txid < pg_snapshot_xmin(pg_current_snapshot()) OR txid = pg_current_xact_id())',
+            [$tenantId],
+        )->c);
 
         $areas = Area::query()
             ->when($areaIds !== [], fn ($q) => $q->whereIn('id', $areaIds))
@@ -81,16 +86,23 @@ class SyncController extends Controller implements HasMiddleware
             'cursor' => ['required', 'integer', 'min:0'],
             'areas' => ['sometimes', 'array'],
             'areas.*' => ['uuid'],
+            // Righe puntuali richieste dal client (es. rimaste indietro perché
+            // localmente dirty durante un pull precedente): fuori cursore
+            'ids' => ['sometimes', 'array', 'max:200'],
+            'ids.*' => ['uuid'],
         ]);
 
         $tenantId = $request->user()->tenant_id;
         $areaIds = $request->input('areas', []);
 
-        // Una riga per entità: l'ultima modifica vince (lo stato si legge ora dalle tabelle)
+        // Una riga per entità (l'ultima modifica vince); si servono solo transazioni
+        // già concluse (o la propria): una transazione lunga di un altro processo
+        // con id bassi non viene mai scavalcata dal cursore
         $logRows = DB::select(<<<'SQL'
             SELECT table_name, row_id, MAX(id) AS last_id
             FROM change_log
             WHERE tenant_id = ? AND id > ?
+              AND (txid < pg_snapshot_xmin(pg_current_snapshot()) OR txid = pg_current_xact_id())
             GROUP BY table_name, row_id
             ORDER BY last_id
             LIMIT ?
@@ -118,7 +130,12 @@ class SyncController extends Controller implements HasMiddleware
             }
         }
 
-        foreach ($this->assetRows($areaIds, $byTable->get('assets', []), withTrashed: true) as $asset) {
+        // Gli id espliciti si aggiungono al delta (stesso formato, fuori cursore)
+        $assetIds = collect($byTable->get('assets', []))
+            ->merge($request->input('ids', []))
+            ->unique()->values()->all();
+
+        foreach ($this->assetRows($areaIds, $assetIds, withTrashed: true) as $asset) {
             $changes[] = $asset->deleted_at !== null
                 ? ['op' => 'delete', 'table' => 'assets', 'id' => $asset->id]
                 : ['op' => 'upsert', 'table' => 'assets', 'row' => $asset];
@@ -161,36 +178,7 @@ class SyncController extends Controller implements HasMiddleware
         $results = [];
 
         foreach ($data['commands'] as $command) {
-            $existing = SyncOperation::query()
-                ->where('idempotency_key', $command['idempotency_key'])
-                ->first();
-
-            if ($existing !== null) {
-                // Replay: restituisce l'esito originale memorizzato, senza riapplicare
-                $results[] = [
-                    'idempotency_key' => $command['idempotency_key'],
-                    'status' => 'duplicate',
-                    'original' => $existing->result,
-                ];
-
-                continue;
-            }
-
-            $result = $applier->apply($command, $user);
-
-            SyncOperation::create([
-                'tenant_id' => $user->tenant_id,
-                'idempotency_key' => $command['idempotency_key'],
-                'batch_id' => $data['batch_id'],
-                'device_id' => $data['device_id'],
-                'user_id' => $user->id,
-                'command_type' => $command['type'],
-                'entity_id' => $result['entity_id'] ?? null,
-                'status' => $result['status'],
-                'result' => $result,
-            ]);
-
-            $results[] = $result;
+            $results[] = $this->processCommand($command, $data, $user, $applier);
         }
 
         return response()->json([
@@ -199,6 +187,75 @@ class SyncController extends Controller implements HasMiddleware
             'min_client_schema' => self::MIN_CLIENT_SCHEMA,
             'results' => $results,
         ]);
+    }
+
+    /**
+     * Applica un comando in modo replay-safe: la chiave di idempotenza viene
+     * reclamata (INSERT ... ON CONFLICT DO NOTHING) e l'esito registrato NELLA
+     * STESSA transazione dell'applicazione. Due retry concorrenti producono un
+     * solo apply; un crash a metà non consuma mai la chiave (Appendice A).
+     */
+    private function processCommand(array $command, array $envelope, $user, CommandApplier $applier): array
+    {
+        $key = $command['idempotency_key'];
+
+        // Replay già registrato: risposta veloce senza transazione
+        $existing = SyncOperation::query()->where('idempotency_key', $key)->first();
+        if ($existing !== null) {
+            return ['idempotency_key' => $key, 'status' => 'duplicate', 'original' => $existing->result];
+        }
+
+        try {
+            return DB::transaction(function () use ($command, $envelope, $user, $applier, $key) {
+                $claimed = DB::affectingStatement(
+                    'INSERT INTO sync_operations
+                       (id, tenant_id, idempotency_key, batch_id, device_id, user_id, command_type, entity_id, status, result)
+                     VALUES (gen_random_uuid(), ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+                     ON CONFLICT (tenant_id, idempotency_key) DO NOTHING',
+                    [
+                        $user->tenant_id, $key, $envelope['batch_id'], $envelope['device_id'],
+                        $user->id, $command['type'], 'rejected', '{}',
+                    ],
+                );
+
+                if ($claimed === 0) {
+                    // Corsa persa contro un retry concorrente: l'attesa sul vincolo
+                    // UNIQUE è finita quando l'altro worker ha committato il suo esito
+                    $original = SyncOperation::query()->where('idempotency_key', $key)->first();
+
+                    return [
+                        'idempotency_key' => $key,
+                        'status' => 'duplicate',
+                        'original' => $original?->result ?? ['status' => 'error', 'code' => 'IN_PROGRESS'],
+                    ];
+                }
+
+                $result = $applier->apply($command, $user);
+
+                DB::table('sync_operations')
+                    ->where('tenant_id', $user->tenant_id)
+                    ->where('idempotency_key', $key)
+                    ->update([
+                        'entity_id' => $result['entity_id'] ?? null,
+                        'status' => $result['status'],
+                        'result' => json_encode($result),
+                    ]);
+
+                return $result;
+            });
+        } catch (\Throwable $e) {
+            // Errore interno: la transazione (chiave compresa) è annullata, quindi
+            // il comando è ritentabile; mai un 500 di envelope per un solo comando
+            report($e);
+
+            return [
+                'idempotency_key' => $key,
+                'status' => 'error',
+                'code' => 'INTERNAL',
+                'entity_id' => $command['entity_id'] ?? null,
+                'message' => 'Errore interno nell\'applicazione del comando: verrà ritentato.',
+            ];
+        }
     }
 
     /** Righe asset complete di specializzazioni, nel formato del working set. */

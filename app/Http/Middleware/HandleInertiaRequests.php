@@ -19,6 +19,7 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $user ? [
                     'id' => $user->id,
+                    'tenant_id' => $user->tenant_id,
                     'name' => $user->name,
                     'email' => $user->email,
                     'organization' => Organization::find($user->tenant_id)?->only(['name', 'slug']),
