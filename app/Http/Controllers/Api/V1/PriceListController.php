@@ -39,7 +39,10 @@ class PriceListController extends Controller implements HasMiddleware
     public function show(string $id): JsonResponse
     {
         $priceList = PriceList::query()
-            ->with(['items' => fn ($q) => $q->with('workType:id,code,name,unit')->orderBy('created_at')])
+            // Le voci di uno stesso salvataggio condividono il created_at:
+            // servono spareggi stabili o l'ordine cambierebbe a ogni apertura
+            ->with(['items' => fn ($q) => $q->with('workType:id,code,name,unit')
+                ->orderBy('created_at')->orderByRaw('item_code NULLS FIRST')->orderBy('id')])
             ->findOrFail($id);
 
         return response()->json(['data' => $priceList]);
@@ -53,7 +56,12 @@ class PriceListController extends Controller implements HasMiddleware
             throw ValidationException::withMessages(['code' => "Codice listino già in uso: {$data['code']}."]);
         }
 
-        $priceList = PriceList::create([...$data, 'tenant_id' => $request->user()->tenant_id]);
+        try {
+            $priceList = PriceList::create([...$data, 'tenant_id' => $request->user()->tenant_id]);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            // Corsa tra due creazioni simultanee: stesso esito di business del pre-check
+            throw ValidationException::withMessages(['code' => "Codice listino già in uso: {$data['code']}."]);
+        }
 
         Audit::log('price_list.created', $priceList, ['code' => $priceList->code]);
 
@@ -70,7 +78,11 @@ class PriceListController extends Controller implements HasMiddleware
             throw ValidationException::withMessages(['code' => "Codice listino già in uso: {$data['code']}."]);
         }
 
-        $priceList->update($data);
+        try {
+            $priceList->update($data);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            throw ValidationException::withMessages(['code' => 'Codice listino già in uso.']);
+        }
 
         Audit::log('price_list.updated', $priceList);
 
@@ -101,6 +113,18 @@ class PriceListController extends Controller implements HasMiddleware
     {
         $priceList = PriceList::query()->findOrFail($id);
 
+        // Stessa logica del divieto di eliminazione: un ordine chiuso deve
+        // mostrare per sempre l'importo con cui è stato chiuso. Riscrivere i
+        // prezzi di un listino usato da ordini chiusi riscriverebbe la storia
+        if (WorkOrder::query()
+            ->where('price_list_id', $priceList->id)
+            ->whereIn('status', ['completed', 'cancelled'])
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'items' => 'Listino usato da ordini chiusi: i prezzi storici non si riscrivono. Disattivalo e crea un nuovo listino con i prezzi aggiornati.',
+            ]);
+        }
+
         $data = $request->validate([
             'items' => ['present', 'array', 'max:500'],
             'items.*.work_type_id' => ['required', 'uuid'],
@@ -126,22 +150,32 @@ class PriceListController extends Controller implements HasMiddleware
             throw ValidationException::withMessages(['items' => 'Lavorazione inesistente per questa organizzazione.']);
         }
 
-        DB::transaction(function () use ($priceList, $data, $request) {
-            PriceListItem::query()->where('price_list_id', $priceList->id)->forceDelete();
-            foreach ($data['items'] as $item) {
-                PriceListItem::create([
-                    'tenant_id' => $request->user()->tenant_id,
-                    'price_list_id' => $priceList->id,
-                    'work_type_id' => $item['work_type_id'],
-                    'item_code' => $item['item_code'] ?? null,
-                    'description' => $item['description'] ?? null,
-                    'unit' => $item['unit'],
-                    'unit_price' => $item['unit_price'],
-                    'overhead_pct' => $item['overhead_pct'] ?? null,
-                    'safety_cost' => $item['safety_cost'] ?? null,
-                ]);
-            }
-        });
+        try {
+            DB::transaction(function () use ($priceList, $data, $request) {
+                // Soft delete, non cancellazione fisica: i prezzi precedenti
+                // restano in tabella come traccia (l'indice UNIQUE è parziale
+                // su deleted_at IS NULL, quindi la ricreazione non confligge)
+                PriceListItem::query()->where('price_list_id', $priceList->id)->delete();
+                foreach ($data['items'] as $item) {
+                    PriceListItem::create([
+                        'tenant_id' => $request->user()->tenant_id,
+                        'price_list_id' => $priceList->id,
+                        'work_type_id' => $item['work_type_id'],
+                        'item_code' => $item['item_code'] ?? null,
+                        'description' => $item['description'] ?? null,
+                        'unit' => $item['unit'],
+                        'unit_price' => $item['unit_price'],
+                        'overhead_pct' => $item['overhead_pct'] ?? null,
+                        'safety_cost' => $item['safety_cost'] ?? null,
+                    ]);
+                }
+            });
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            // Due salvataggi simultanei sulle stesse voci: uno dei due perde
+            throw ValidationException::withMessages([
+                'items' => 'Salvataggio simultaneo da un altro utente: ricarica il listino e riprova.',
+            ]);
+        }
 
         Audit::log('price_list.items_updated', $priceList, ['count' => count($data['items'])]);
 

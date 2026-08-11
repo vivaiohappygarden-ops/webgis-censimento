@@ -206,10 +206,12 @@ async function setPriceList(priceListId) {
         });
         detail.value = data.data;
     } catch (err) {
-        detailError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+        const message = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
             ?? err.response?.data?.message ?? 'Errore nel cambio di listino';
-        // Su conflitto di versione si ricarica l'ordine: il prossimo tentativo vale
+        // Su conflitto di versione si ricarica l'ordine (il prossimo tentativo
+        // vale), ma il messaggio va rimesso DOPO: openDetail lo azzererebbe
         if (err.response?.status === 409) await openDetail(detail.value.id);
+        detailError.value = message;
     } finally {
         detailBusy.value = false;
     }
@@ -523,14 +525,17 @@ onMounted(async () => {
                                 <span class="text-gray-500">Quantità eseguita ({{ unit || 'senza unità' }})</span>
                                 <span class="font-medium">{{ fmtQty(qty) }}</span>
                             </div>
-                            <div v-if="detail.consuntivo.valued" class="mt-2 flex justify-between border-t border-gray-200 pt-2">
+                            <div v-if="detail.consuntivo.valued && ! detail.consuntivo.valued.ambiguous" class="mt-2 flex justify-between gap-3 border-t border-gray-200 pt-2">
                                 <span class="text-gray-500">
                                     Valore da listino
                                     ({{ fmtQty(detail.consuntivo.valued.quantity ?? 0) }} {{ detail.consuntivo.valued.unit }}
-                                    × {{ fmtEuro(detail.consuntivo.valued.unit_price) }})
+                                    × {{ fmtEuro(detail.consuntivo.valued.unit_price) }}<template v-if="detail.consuntivo.valued.overhead_pct"> + spese generali {{ fmtQty(detail.consuntivo.valued.overhead_pct) }}%</template><template v-if="detail.consuntivo.valued.safety_cost"> + sicurezza {{ fmtEuro(detail.consuntivo.valued.safety_cost) }}</template>)
                                 </span>
                                 <span class="font-semibold" data-test="wo-valore">{{ fmtEuro(detail.consuntivo.valued.amount) }}</span>
                             </div>
+                            <p v-else-if="detail.consuntivo.valued?.ambiguous" class="mt-2 border-t border-gray-200 pt-2 text-xs text-amber-700" data-test="wo-valore-ambiguo">
+                                {{ detail.consuntivo.valued.reason }}
+                            </p>
                             <p v-else-if="! detail.price_list_id" class="mt-2 border-t border-gray-200 pt-2 text-xs text-gray-400">
                                 Nessun listino applicato: il valore economico non viene calcolato.
                             </p>

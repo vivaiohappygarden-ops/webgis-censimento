@@ -140,20 +140,42 @@ class WorkOrderController extends Controller implements HasMiddleware
 
         $valued = null;
         if ($workOrder->price_list_id !== null && $workOrder->work_type_id !== null) {
-            $item = \App\Models\PriceListItem::query()
+            $items = \App\Models\PriceListItem::query()
                 ->where('price_list_id', $workOrder->price_list_id)
                 ->where('work_type_id', $workOrder->work_type_id)
-                ->orderByRaw('item_code NULLS FIRST')
-                ->first();
-            if ($item !== null) {
+                ->get();
+            if ($items->count() > 1) {
+                // Più fasce di prezzo (codici articolo diversi): scegliere in
+                // silenzio darebbe un importo che può essere semplicemente sbagliato
+                $valued = [
+                    'ambiguous' => true,
+                    'reason' => 'Il listino ha più voci per questa lavorazione: l\'importo non è univoco.',
+                ];
+            } elseif ($items->count() === 1) {
+                $item = $items->first();
                 // Si valorizza solo la quantità espressa nella stessa unità
                 // della voce di listino: mai moltiplicare mele per prezzo delle pere
                 $quantity = $quantities[$item->unit] ?? null;
+                $baseAmount = $quantity !== null ? round($quantity * (float) $item->unit_price, 2) : null;
+                $amount = $baseAmount;
+                if ($amount !== null) {
+                    // Spese generali e costi della sicurezza della voce, se presenti,
+                    // entrano nell'importo: campi accettati = campi conteggiati
+                    if ($item->overhead_pct !== null) {
+                        $amount = round($amount * (1 + (float) $item->overhead_pct / 100), 2);
+                    }
+                    if ($item->safety_cost !== null) {
+                        $amount = round($amount + (float) $item->safety_cost, 2);
+                    }
+                }
                 $valued = [
                     'unit' => $item->unit,
                     'unit_price' => (float) $item->unit_price,
                     'quantity' => $quantity,
-                    'amount' => $quantity !== null ? round($quantity * (float) $item->unit_price, 2) : null,
+                    'base_amount' => $baseAmount,
+                    'overhead_pct' => $item->overhead_pct !== null ? (float) $item->overhead_pct : null,
+                    'safety_cost' => $item->safety_cost !== null ? (float) $item->safety_cost : null,
+                    'amount' => $amount,
                 ];
             }
         }
@@ -367,7 +389,6 @@ class WorkOrderController extends Controller implements HasMiddleware
             'area_id' => \App\Models\Area::class,
             'work_type_id' => \App\Models\WorkType::class,
             'team_id' => \App\Models\Team::class,
-            'price_list_id' => \App\Models\PriceList::class,
         ] as $key => $model) {
             if (! empty($data[$key])) {
                 $model::query()->findOrFail($data[$key]);
@@ -375,6 +396,16 @@ class WorkOrderController extends Controller implements HasMiddleware
         }
         if (! empty($data['assigned_to'])) {
             \App\Models\User::query()->findOrFail($data['assigned_to']);
+        }
+        if (! empty($data['price_list_id'])) {
+            $priceList = \App\Models\PriceList::query()->findOrFail($data['price_list_id']);
+            // Gli ordini esistenti continuano a valorizzare col loro listino,
+            // ma un listino disattivato non si applica a ordini nuovi o in corso
+            if (! $priceList->is_active) {
+                throw ValidationException::withMessages([
+                    'price_list_id' => 'Listino disattivato: riattivalo oppure scegline uno attivo.',
+                ]);
+            }
         }
 
         return $data;

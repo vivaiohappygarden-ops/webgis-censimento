@@ -20,6 +20,23 @@ const items = ref([]);
 const detailBusy = ref(false);
 const detailError = ref('');
 const detailSaved = ref(false);
+const editorDirty = ref(false);
+const pageError = ref('');
+
+// Qualsiasi modifica ai campi: il banner "salvate" non deve più mentire
+// e la chiusura del pannello chiede conferma
+function markDirty() {
+    editorDirty.value = true;
+    detailSaved.value = false;
+}
+
+function closeDetail() {
+    if (editorDirty.value && canManage.value
+        && ! window.confirm('Chiudere senza salvare le voci modificate? Le modifiche andranno perse.')) {
+        return;
+    }
+    detail.value = null;
+}
 
 async function load() {
     loading.value = true;
@@ -58,30 +75,37 @@ async function createList() {
 async function openDetail(id) {
     detailError.value = '';
     detailSaved.value = false;
-    const { data } = await axios.get(`/api/v1/price-lists/${id}`);
-    detail.value = data.data;
-    items.value = data.data.items.map((i) => ({
-        work_type_id: i.work_type_id,
-        item_code: i.item_code ?? '',
-        description: i.description ?? '',
-        unit: i.unit,
-        unit_price: Number(i.unit_price),
-    }));
+    pageError.value = '';
+    try {
+        const { data } = await axios.get(`/api/v1/price-lists/${id}`);
+        detail.value = data.data;
+        items.value = data.data.items.map((i) => ({
+            work_type_id: i.work_type_id,
+            item_code: i.item_code ?? '',
+            description: i.description ?? '',
+            unit: i.unit,
+            unit_price: Number(i.unit_price),
+        }));
+        editorDirty.value = false;
+    } catch {
+        pageError.value = 'Apertura del listino non riuscita: potrebbe essere stato eliminato. Ricarica la pagina.';
+        await load();
+    }
 }
 
 function addItem() {
-    detailSaved.value = false;
+    markDirty();
     items.value.push({ work_type_id: '', item_code: '', description: '', unit: '', unit_price: null });
 }
 
 function removeItem(index) {
-    detailSaved.value = false;
+    markDirty();
     items.value.splice(index, 1);
 }
 
 // L'unità di misura si propone dalla lavorazione scelta (resta modificabile)
 function onWorkTypeChange(item) {
-    detailSaved.value = false;
+    markDirty();
     if (! item.unit) {
         item.unit = workTypes.value.find((w) => w.id === item.work_type_id)?.unit ?? '';
     }
@@ -102,6 +126,7 @@ async function saveItems() {
         const { data } = await axios.put(`/api/v1/price-lists/${detail.value.id}/items`, { items: payload });
         detail.value = data.data;
         detailSaved.value = true;
+        editorDirty.value = false;
         await load();
     } catch (err) {
         detailError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
@@ -124,8 +149,23 @@ async function deleteList() {
     }
 }
 
-const workTypeName = (id) => workTypes.value.find((w) => w.id === id)?.name ?? '—';
-const fmtPrice = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 4 }));
+// Il percorso suggerito quando un listino non si può eliminare o correggere
+async function toggleActive() {
+    detailError.value = '';
+    detailBusy.value = true;
+    try {
+        const { data } = await axios.patch(`/api/v1/price-lists/${detail.value.id}`, {
+            is_active: ! detail.value.is_active,
+        });
+        detail.value = data.data;
+        await load();
+    } catch (err) {
+        detailError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Aggiornamento non riuscito';
+    } finally {
+        detailBusy.value = false;
+    }
+}
 
 onMounted(load);
 </script>
@@ -147,6 +187,8 @@ onMounted(load);
                     @click="creator.open = true"
                 >Nuovo listino</button>
             </div>
+
+            <p v-if="pageError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ pageError }}</p>
 
             <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
                 <table class="w-full text-sm">
@@ -225,15 +267,18 @@ onMounted(load);
 
             <!-- Dettaglio: editor delle voci -->
             <Teleport to="body">
-                <div v-if="detail" class="fixed inset-0 z-50 flex justify-end bg-black/30" @click.self="detail = null">
-                    <div class="h-full w-full max-w-2xl overflow-y-auto bg-white p-6 shadow-2xl" data-test="pl-detail">
+                <div v-if="detail" class="fixed inset-0 z-50 flex justify-end bg-black/30" @click.self="closeDetail">
+                    <div class="h-full w-full max-w-3xl overflow-y-auto bg-white p-6 shadow-2xl" data-test="pl-detail">
                         <div class="flex items-start justify-between">
                             <div>
-                                <div class="text-xs uppercase tracking-wide text-gray-400">{{ detail.code }} <template v-if="detail.year">· {{ detail.year }}</template></div>
+                                <div class="text-xs uppercase tracking-wide text-gray-400">
+                                    {{ detail.code }} <template v-if="detail.year">· {{ detail.year }}</template>
+                                    <span v-if="! detail.is_active" class="ml-1 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-600">Disattivato</span>
+                                </div>
                                 <h2 class="text-lg font-semibold">{{ detail.name }}</h2>
                                 <p v-if="detail.source" class="text-xs text-gray-500">Fonte: {{ detail.source }}</p>
                             </div>
-                            <button class="text-gray-400 hover:text-gray-600" @click="detail = null">✕</button>
+                            <button class="text-gray-400 hover:text-gray-600" @click="closeDetail">✕</button>
                         </div>
 
                         <p v-if="detailError" class="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="pl-error">{{ detailError }}</p>
@@ -244,10 +289,11 @@ onMounted(load);
                             <thead>
                                 <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
                                     <th class="py-2 pr-2 font-medium">Lavorazione</th>
-                                    <th class="w-24 py-2 pr-2 font-medium">Unità</th>
-                                    <th class="w-32 py-2 pr-2 font-medium">Prezzo unitario</th>
+                                    <th class="w-24 py-2 pr-2 font-medium">Codice art.</th>
+                                    <th class="w-20 py-2 pr-2 font-medium">Unità</th>
+                                    <th class="w-28 py-2 pr-2 font-medium">Prezzo unit.</th>
                                     <th class="py-2 pr-2 font-medium">Descrizione</th>
-                                    <th v-if="canManage" class="w-10 py-2" />
+                                    <th v-if="canManage" class="w-8 py-2" />
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-50">
@@ -264,20 +310,23 @@ onMounted(load);
                                         </select>
                                     </td>
                                     <td class="py-1.5 pr-2">
-                                        <input v-model="item.unit" maxlength="20" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-50" :disabled="! canManage" placeholder="mq">
+                                        <input v-model="item.item_code" maxlength="50" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-50" :disabled="! canManage" placeholder="—" title="Distingue più fasce di prezzo per la stessa lavorazione" @input="markDirty">
                                     </td>
                                     <td class="py-1.5 pr-2">
-                                        <input v-model.number="item.unit_price" type="number" step="0.01" min="0" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-right text-sm disabled:bg-gray-50" :disabled="! canManage" data-test="pl-price">
+                                        <input v-model="item.unit" maxlength="20" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-50" :disabled="! canManage" placeholder="mq" @input="markDirty">
                                     </td>
                                     <td class="py-1.5 pr-2">
-                                        <input v-model="item.description" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-50" :disabled="! canManage">
+                                        <input v-model.number="item.unit_price" type="number" step="0.01" min="0" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-right text-sm disabled:bg-gray-50" :disabled="! canManage" data-test="pl-price" @input="markDirty">
+                                    </td>
+                                    <td class="py-1.5 pr-2">
+                                        <input v-model="item.description" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-50" :disabled="! canManage" @input="markDirty">
                                     </td>
                                     <td v-if="canManage" class="py-1.5 text-right">
                                         <button class="text-xs font-medium text-red-600 hover:underline" @click="removeItem(index)">✕</button>
                                     </td>
                                 </tr>
                                 <tr v-if="! items.length">
-                                    <td :colspan="canManage ? 5 : 4" class="py-4 text-center text-sm text-gray-400">Nessuna voce: aggiungi i prezzi delle lavorazioni.</td>
+                                    <td :colspan="canManage ? 6 : 5" class="py-4 text-center text-sm text-gray-400">Nessuna voce: aggiungi i prezzi delle lavorazioni.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -292,7 +341,13 @@ onMounted(load);
                             >{{ detailBusy ? 'Salvataggio…' : 'Salva le voci' }}</button>
                         </div>
 
-                        <div v-if="canManage" class="mt-8 border-t border-gray-100 pt-4">
+                        <div v-if="canManage" class="mt-8 flex items-center gap-6 border-t border-gray-100 pt-4">
+                            <button
+                                class="text-sm font-medium text-gray-700 hover:underline disabled:opacity-50"
+                                :disabled="detailBusy"
+                                data-test="pl-toggle-active"
+                                @click="toggleActive"
+                            >{{ detail.is_active ? 'Disattiva listino' : 'Riattiva listino' }}</button>
                             <button class="text-sm font-medium text-red-600 hover:underline" data-test="pl-delete" @click="deleteList">
                                 Elimina listino
                             </button>

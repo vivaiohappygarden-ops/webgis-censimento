@@ -108,6 +108,100 @@ class PriceListTest extends TestCase
         $this->postJson('/api/v1/price-lists', ['code' => 'LIS-B', 'name' => 'Vietato'])->assertForbidden();
     }
 
+    public function test_multiple_price_bands_make_valuation_explicitly_ambiguous(): void
+    {
+        $listId = $this->postJson('/api/v1/price-lists', ['code' => 'LIS-F', 'name' => 'Fasce'])
+            ->json('data.id');
+        $this->putJson("/api/v1/price-lists/{$listId}/items", [
+            'items' => [
+                ['work_type_id' => $this->workType->id, 'item_code' => 'A', 'unit' => 'mq', 'unit_price' => 10],
+                ['work_type_id' => $this->workType->id, 'item_code' => 'B', 'unit' => 'mq', 'unit_price' => 100],
+            ],
+        ])->assertOk();
+
+        $woId = $this->postJson('/api/v1/work-orders', [
+            'title' => 'Fasce multiple',
+            'work_type_id' => $this->workType->id,
+            'price_list_id' => $listId,
+        ])->assertCreated()->json('data.id');
+        \App\Models\WorkLog::create([
+            'tenant_id' => $this->organization->id, 'work_order_id' => $woId,
+            'operator_id' => $this->user->id, 'started_at' => now(),
+            'quantity' => 100, 'unit' => 'mq',
+        ]);
+
+        // Mai scegliere una fascia in silenzio: l'ambiguità è dichiarata
+        $valued = $this->getJson("/api/v1/work-orders/{$woId}")->json('data.consuntivo.valued');
+        $this->assertTrue($valued['ambiguous']);
+        $this->assertArrayNotHasKey('amount', $valued);
+    }
+
+    public function test_overhead_and_safety_cost_enter_the_valued_amount(): void
+    {
+        $listId = $this->postJson('/api/v1/price-lists', ['code' => 'LIS-O', 'name' => 'Oneri'])
+            ->json('data.id');
+        $this->putJson("/api/v1/price-lists/{$listId}/items", [
+            'items' => [[
+                'work_type_id' => $this->workType->id, 'unit' => 'mq',
+                'unit_price' => 1, 'overhead_pct' => 10, 'safety_cost' => 20,
+            ]],
+        ])->assertOk();
+
+        $woId = $this->postJson('/api/v1/work-orders', [
+            'title' => 'Con oneri',
+            'work_type_id' => $this->workType->id,
+            'price_list_id' => $listId,
+        ])->assertCreated()->json('data.id');
+        \App\Models\WorkLog::create([
+            'tenant_id' => $this->organization->id, 'work_order_id' => $woId,
+            'operator_id' => $this->user->id, 'started_at' => now(),
+            'quantity' => 100, 'unit' => 'mq',
+        ]);
+
+        $valued = $this->getJson("/api/v1/work-orders/{$woId}")->json('data.consuntivo.valued');
+        $this->assertEquals(100.0, $valued['base_amount']);
+        // 100 x 1 € + 10% spese generali + 20 € sicurezza
+        $this->assertEquals(130.0, $valued['amount']);
+    }
+
+    public function test_items_of_a_list_used_by_closed_orders_cannot_be_rewritten(): void
+    {
+        $listId = $this->postJson('/api/v1/price-lists', ['code' => 'LIS-S', 'name' => 'Storico'])
+            ->json('data.id');
+        $this->putJson("/api/v1/price-lists/{$listId}/items", [
+            'items' => [['work_type_id' => $this->workType->id, 'unit' => 'mq', 'unit_price' => 0.5]],
+        ])->assertOk();
+
+        $order = WorkOrder::create([
+            'tenant_id' => $this->organization->id,
+            'code' => 'ODL-2026-9002', 'title' => 'Da chiudere', 'status' => 'draft',
+            'price_list_id' => $listId,
+        ]);
+
+        // Con l'ordine ancora vivo i prezzi si possono correggere
+        $this->putJson("/api/v1/price-lists/{$listId}/items", [
+            'items' => [['work_type_id' => $this->workType->id, 'unit' => 'mq', 'unit_price' => 0.6]],
+        ])->assertOk();
+
+        // Con un ordine chiuso la storia economica è congelata
+        $order->update(['status' => 'cancelled']);
+        $this->putJson("/api/v1/price-lists/{$listId}/items", [
+            'items' => [['work_type_id' => $this->workType->id, 'unit' => 'mq', 'unit_price' => 9]],
+        ])->assertUnprocessable();
+    }
+
+    public function test_deactivated_list_cannot_be_applied_to_orders(): void
+    {
+        $listId = $this->postJson('/api/v1/price-lists', ['code' => 'LIS-D', 'name' => 'Spento'])
+            ->json('data.id');
+        $this->patchJson("/api/v1/price-lists/{$listId}", ['is_active' => false])->assertOk();
+
+        $this->postJson('/api/v1/work-orders', [
+            'title' => 'Con listino spento',
+            'price_list_id' => $listId,
+        ])->assertUnprocessable();
+    }
+
     public function test_work_order_consuntivo_is_valued_from_price_list(): void
     {
         $listId = $this->postJson('/api/v1/price-lists', ['code' => 'LIS-V', 'name' => 'Valori'])
