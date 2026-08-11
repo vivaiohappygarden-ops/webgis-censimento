@@ -7,6 +7,8 @@ use App\Models\CatalogObjectType;
 use App\Models\PlantingSite;
 use App\Models\Tree;
 use App\Models\User;
+use App\Models\WorkLog;
+use App\Models\WorkOrder;
 use App\Services\Catalog\AttributeValidator;
 use App\Support\Audit;
 use App\Support\Geometry;
@@ -24,6 +26,18 @@ class CommandApplier
     public const TYPES = [
         'asset.create', 'asset.update_attrs', 'asset.update_measures',
         'asset.update_geom', 'asset.change_status', 'tag.associate',
+        'work_order.transition', 'work_log.add',
+    ];
+
+    /**
+     * Passaggi di stato concessi dal campo a chi ha solo works.view:
+     * l'operatore avvia, sospende, riprende e completa; il resto del
+     * flusso (pianificazione, annullamento) resta al backoffice.
+     */
+    private const OPERATOR_TRANSITIONS = [
+        'assigned' => ['in_progress'],
+        'in_progress' => ['suspended', 'completed'],
+        'suspended' => ['in_progress'],
     ];
 
     /** Campi dendrometrici ammessi da asset.update_measures. */
@@ -42,7 +56,12 @@ class CommandApplier
             return $this->rejected($command, 'UNKNOWN_TYPE', "Tipo di comando sconosciuto: {$type}.");
         }
 
-        $permission = $type === 'asset.create' ? 'assets.create' : 'assets.update';
+        $permission = match ($type) {
+            'asset.create' => 'assets.create',
+            // La regola fine (proprio ordine/squadra) è dentro l'applier
+            'work_order.transition', 'work_log.add' => 'works.view',
+            default => 'assets.update',
+        };
         if (! $user->can($permission)) {
             return $this->rejected($command, 'FORBIDDEN', "Permesso mancante: {$permission}.");
         }
@@ -55,6 +74,8 @@ class CommandApplier
                 'asset.update_geom' => $this->applyGeom($command, $user),
                 'asset.change_status' => $this->applyUpdate($command, $user, ['status']),
                 'tag.associate' => $this->applyTagAssociate($command, $user),
+                'work_order.transition' => $this->applyWorkOrderTransition($command, $user),
+                'work_log.add' => $this->applyWorkLogAdd($command, $user),
             });
         } catch (ValidationException $e) {
             return $this->rejected($command, 'VALIDATION_FAILED', collect($e->errors())->flatten()->first());
@@ -379,6 +400,144 @@ class CommandApplier
         Audit::log('tag.associated', $tag, ['source' => 'sync', 'asset_id' => $asset->id]);
 
         return $this->applied($command, $asset->version);
+    }
+
+    /**
+     * Cambio di stato di un ordine di lavoro dal campo: stessa macchina a
+     * stati del backoffice, con la rosa ristretta per il solo works.view.
+     */
+    private function applyWorkOrderTransition(array $command, User $user): array
+    {
+        $payload = Validator::make($command['payload'] ?? [], [
+            'status' => ['required', 'in:'.implode(',', WorkOrder::STATUSES)],
+        ])->validate();
+
+        if (! isset($command['base_version'])) {
+            return $this->rejected($command, 'VALIDATION_FAILED', 'base_version obbligatoria per questo comando.');
+        }
+
+        $order = WorkOrder::query()->lockForUpdate()->find($command['entity_id']);
+        if (! $order) {
+            return $this->rejected($command, 'NOT_FOUND', 'Ordine di lavoro inesistente o non accessibile.');
+        }
+        if (! $this->canActOnWorkOrder($user, $order)) {
+            return $this->rejected($command, 'FORBIDDEN', 'Ordine non assegnato a te o a una tua squadra.');
+        }
+
+        if ($order->version !== (int) $command['base_version']) {
+            return [
+                'idempotency_key' => $command['idempotency_key'],
+                'status' => 'conflict',
+                'code' => 'VERSION_MISMATCH',
+                'entity_id' => $command['entity_id'],
+                'yours' => [
+                    'base_version' => (int) $command['base_version'],
+                    'payload' => $command['payload'] ?? [],
+                ],
+                'theirs' => [
+                    'version' => $order->version,
+                    'updated_by' => $order->updated_by,
+                    'updated_at' => $order->updated_at?->toIso8601String(),
+                    'fields' => ['status' => $order->status],
+                ],
+            ];
+        }
+
+        $target = $payload['status'];
+        if (! $order->canTransitionTo($target)) {
+            return $this->rejected($command, 'VALIDATION_FAILED',
+                "Passaggio non ammesso: da '{$order->status}' a '{$target}'.");
+        }
+        if (! $user->can('works.manage')
+            && ! in_array($target, self::OPERATOR_TRANSITIONS[$order->status] ?? [], true)) {
+            return $this->rejected($command, 'FORBIDDEN', 'Questo passaggio di stato non è consentito dal campo.');
+        }
+        if (in_array($target, ['assigned', 'in_progress'], true)
+            && $order->team_id === null && $order->assigned_to === null) {
+            return $this->rejected($command, 'VALIDATION_FAILED',
+                'Assegnare una squadra o un responsabile prima di questo passaggio.');
+        }
+
+        $order->status = $target;
+        $order->version += 1;
+        $order->updated_by = $user->id;
+        $order->save();
+
+        Audit::log('work_order.transition', $order, ['to' => $target, 'source' => 'sync']);
+
+        return $this->applied($command, $order->version);
+    }
+
+    /**
+     * Consuntivo di campo: evento append-only con id (UUID v7) scelto dal
+     * device. Nessuna base_version: un consuntivo non confligge mai.
+     */
+    private function applyWorkLogAdd(array $command, User $user): array
+    {
+        $payload = Validator::make($command['payload'] ?? [], [
+            'work_order_id' => ['required', 'uuid'],
+            'asset_id' => ['nullable', 'uuid'],
+            'started_at' => ['required', 'date'],
+            'ended_at' => ['nullable', 'date', 'after_or_equal:started_at'],
+            'man_hours' => ['nullable', 'numeric', 'min:0', 'max:10000'],
+            'quantity' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
+            'unit' => ['nullable', 'string', 'max:20'],
+            'notes' => ['nullable', 'string'],
+        ])->validate();
+
+        $order = WorkOrder::query()->find($payload['work_order_id']);
+        if (! $order) {
+            return $this->rejected($command, 'NOT_FOUND', 'Ordine di lavoro inesistente o non accessibile.');
+        }
+        if (! $this->canActOnWorkOrder($user, $order)) {
+            return $this->rejected($command, 'FORBIDDEN', 'Ordine non assegnato a te o a una tua squadra.');
+        }
+        if ($order->status === 'cancelled') {
+            return $this->rejected($command, 'VALIDATION_FAILED', 'Ordine annullato: consuntivo non registrabile.');
+        }
+
+        if (WorkLog::withoutGlobalScopes()->withTrashed()->whereKey($command['entity_id'])->exists()) {
+            return $this->rejected($command, 'ID_COLLISION', 'Esiste già un consuntivo con questo identificativo.');
+        }
+        if (! empty($payload['asset_id']) && ! Asset::query()->withTrashed()->whereKey($payload['asset_id'])->exists()) {
+            return $this->rejected($command, 'VALIDATION_FAILED', 'Elemento inesistente per questa organizzazione.');
+        }
+
+        $log = WorkLog::create([
+            'id' => $command['entity_id'],
+            'tenant_id' => $user->tenant_id,
+            'work_order_id' => $order->id,
+            'asset_id' => $payload['asset_id'] ?? null,
+            'team_id' => $order->team_id,
+            'operator_id' => $user->id,
+            'started_at' => \Illuminate\Support\Carbon::parse($payload['started_at'])->utc(),
+            'ended_at' => isset($payload['ended_at']) ? \Illuminate\Support\Carbon::parse($payload['ended_at'])->utc() : null,
+            'man_hours' => $payload['man_hours'] ?? null,
+            'quantity' => $payload['quantity'] ?? null,
+            'unit' => $payload['unit'] ?? null,
+            'notes' => $payload['notes'] ?? null,
+        ]);
+
+        Audit::log('work_log.created', $log, ['source' => 'sync', 'work_order_id' => $order->id]);
+
+        return $this->applied($command, 1);
+    }
+
+    /** Chi gestisce i lavori agisce su tutto; l'operatore solo sul suo. */
+    private function canActOnWorkOrder(User $user, WorkOrder $order): bool
+    {
+        if ($user->can('works.manage')) {
+            return true;
+        }
+        if ($order->assigned_to === $user->id) {
+            return true;
+        }
+
+        return $order->team_id !== null && DB::table('team_members')
+            ->where('team_id', $order->team_id)
+            ->where('user_id', $user->id)
+            ->whereNull('left_on')
+            ->exists();
     }
 
     /** Le proprietà del rilievo vanno validate come il resto: un valore fuori

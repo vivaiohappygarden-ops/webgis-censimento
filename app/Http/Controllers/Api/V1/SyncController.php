@@ -10,6 +10,8 @@ use App\Models\CatalogObjectType;
 use App\Models\CatalogSubType;
 use App\Models\CustomField;
 use App\Models\SyncOperation;
+use App\Models\User;
+use App\Models\WorkOrder;
 use App\Services\Sync\CommandApplier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,7 +44,8 @@ class SyncController extends Controller implements HasMiddleware
             'areas.*' => ['uuid'],
         ]);
 
-        $tenantId = $request->user()->tenant_id;
+        $user = $request->user();
+        $tenantId = $user->tenant_id;
         $areaIds = $request->input('areas', []);
 
         // Il cursore fotografa solo le transazioni già concluse: quelle in corso
@@ -70,6 +73,7 @@ class SyncController extends Controller implements HasMiddleware
             'catalog_version' => $this->catalogVersion($tenantId),
             'areas' => $areas,
             'assets' => $assets,
+            'work_orders' => $user->can('works.view') ? $this->workOrderRows($user) : [],
             'catalog' => [
                 'main_types' => CatalogMainType::query()->orderBy('code')->get(),
                 'sub_types' => CatalogSubType::query()->orderBy('code')->get(),
@@ -92,7 +96,8 @@ class SyncController extends Controller implements HasMiddleware
             'ids.*' => ['uuid'],
         ]);
 
-        $tenantId = $request->user()->tenant_id;
+        $user = $request->user();
+        $tenantId = $user->tenant_id;
         $areaIds = $request->input('areas', []);
 
         // Una riga per entità (l'ultima modifica vince); si servono solo transazioni
@@ -139,6 +144,25 @@ class SyncController extends Controller implements HasMiddleware
             $changes[] = $asset->deleted_at !== null
                 ? ['op' => 'delete', 'table' => 'assets', 'id' => $asset->id]
                 : ['op' => 'upsert', 'table' => 'assets', 'row' => $asset];
+        }
+
+        // Ordini di lavoro: ciò che non è più visibile dal campo (completato,
+        // annullato, riassegnato ad altri, eliminato) esce dal device come delete.
+        // Gli id espliciti richiesti dal client possono essere anche ordini:
+        // si riconoscono qui (scope tenant) e si servono con la stessa logica
+        $requestedOrderIds = WorkOrder::query()->withTrashed()
+            ->whereIn('id', $request->input('ids', []))
+            ->pluck('id');
+        $workOrderIds = collect($byTable->get('work_orders', []))
+            ->merge($requestedOrderIds)
+            ->unique()->values()->all();
+        if ($workOrderIds !== [] && $user->can('works.view')) {
+            $visible = $this->workOrderRows($user, $workOrderIds)->keyBy('id');
+            foreach ($workOrderIds as $workOrderId) {
+                $changes[] = isset($visible[$workOrderId])
+                    ? ['op' => 'upsert', 'table' => 'work_orders', 'row' => $visible[$workOrderId]]
+                    : ['op' => 'delete', 'table' => 'work_orders', 'id' => $workOrderId];
+            }
         }
 
         return response()->json([
@@ -272,6 +296,31 @@ class SyncController extends Controller implements HasMiddleware
             ->with(['tree', 'plantingSite', 'tags' => fn ($q) => $q->where('status', 'active')])
             ->selectRaw('assets.*, ST_AsGeoJSON(geom)::json AS geom_geojson')
             ->withCasts(['geom_geojson' => 'array'])
+            ->orderBy('created_at')
+            ->get();
+    }
+
+    /** Ordini di lavoro visibili dal campo, con lavorazione, area ed elementi. */
+    private function workOrderRows(User $user, ?array $ids = null)
+    {
+        if ($ids !== null && $ids === []) {
+            return collect();
+        }
+
+        return WorkOrder::query()
+            ->when($ids !== null, fn ($q) => $q->whereIn('work_orders.id', $ids))
+            ->visibleInField($user)
+            ->with([
+                'workType:id,code,name,unit',
+                'area:id,name,code',
+                'team:id,name',
+                'assets' => fn ($q) => $q
+                    ->select('id', 'work_order_id', 'asset_id', 'work_type_id', 'planned_quantity', 'unit', 'status', 'notes')
+                    ->with([
+                        'asset:id,census_code,object_type_id,status',
+                        'workType:id,code,name,unit',
+                    ]),
+            ])
             ->orderBy('created_at')
             ->get();
     }

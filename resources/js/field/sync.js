@@ -59,7 +59,7 @@ export class SyncManager {
         const { data } = await axios.get('/api/v1/sync/bootstrap');
 
         await this.db.transaction('rw',
-            [this.db.meta, this.db.areas, this.db.assets, this.db.trees, this.db.asset_tags, this.db.catalog_types, this.db.custom_fields, this.db.sync_queue],
+            [this.db.meta, this.db.areas, this.db.assets, this.db.trees, this.db.asset_tags, this.db.catalog_types, this.db.custom_fields, this.db.sync_queue, this.db.work_orders],
             async () => {
                 // Il lavoro locale non ancora sincronizzato non si tocca (P1):
                 // le righe ottimistiche sopravvivono al ri-scarico del working set
@@ -67,10 +67,12 @@ export class SyncManager {
                 const dirtyIds = new Set(dirtyRows.map((a) => a.id));
                 const localTags = await this.db.asset_tags
                     .filter((t) => dirtyIds.has(t.asset_id)).toArray();
+                const dirtyOrders = await this.db.work_orders.filter((w) => w.dirty === true).toArray();
 
                 await Promise.all([
                     this.db.areas.clear(), this.db.assets.clear(), this.db.trees.clear(),
                     this.db.asset_tags.clear(), this.db.catalog_types.clear(), this.db.custom_fields.clear(),
+                    this.db.work_orders.clear(),
                 ]);
                 await this.db.areas.bulkPut(data.areas);
                 await this.db.assets.bulkPut(data.assets.map((a) => ({ ...a, dirty: false })));
@@ -78,6 +80,8 @@ export class SyncManager {
                 await this.db.asset_tags.bulkPut(data.assets.flatMap((a) => a.tags ?? []));
                 await this.db.assets.bulkPut(dirtyRows);
                 await this.db.asset_tags.bulkPut(localTags);
+                await this.db.work_orders.bulkPut((data.work_orders ?? []).map((w) => ({ ...w, dirty: false })));
+                await this.db.work_orders.bulkPut(dirtyOrders);
                 await this.db.catalog_types.bulkPut(data.catalog.object_types);
                 await this.db.custom_fields.bulkPut(data.custom_fields);
                 await this.db.meta.put({ key: 'cursor', value: data.cursor });
@@ -85,7 +89,7 @@ export class SyncManager {
                 await this.db.meta.put({ key: 'bootstrapped_at', value: data.server_time });
             });
 
-        await this.log('info', `Dati scaricati: ${data.areas.length} aree, ${data.assets.length} elementi, ${data.catalog.object_types.length} tipi.`);
+        await this.log('info', `Dati scaricati: ${data.areas.length} aree, ${data.assets.length} elementi, ${(data.work_orders ?? []).length} lavori.`);
         return this.notify();
     }
 
@@ -206,6 +210,63 @@ export class SyncManager {
 
         await this.log('info', `In coda: tag ${tagType.toUpperCase()} ${uid} associato.`);
         await this.notify();
+    }
+
+    /** Cambio di stato di un ordine di lavoro dal campo (offline-first). */
+    async enqueueWoTransition({ workOrderId, status }) {
+        await this.db.transaction('rw', [this.db.sync_queue, this.db.work_orders, this.db.meta], async () => {
+            const order = await this.db.work_orders.get(workOrderId);
+            if (! order) throw new Error('Ordine non presente sul dispositivo.');
+
+            await this.db.sync_queue.add({
+                idempotency_key: crypto.randomUUID(),
+                device_seq: await this.nextDeviceSeq(),
+                type: 'work_order.transition',
+                entity_id: workOrderId,
+                base_version: order.version,
+                payload: { status },
+                client_ts: new Date().toISOString(),
+                status: 'PENDING',
+                attempts: 0,
+                last_error: null,
+            });
+
+            // Stato e versione locali avanzano come sul server: i passaggi
+            // successivi dallo stesso device non sono mai un conflitto
+            await this.db.work_orders.put({ ...order, status, version: order.version + 1, dirty: true });
+        });
+
+        await this.log('info', `In coda: ordine in stato "${status}".`);
+        await this.notify();
+    }
+
+    /** Consuntivo di campo (ore, quantità, note): evento append-only. */
+    async enqueueWorkLog({ workOrderId, assetId = null, startedAt, endedAt = null, manHours = null, quantity = null, unit = null, notes = null }) {
+        const logId = uuidv7();
+        await this.db.sync_queue.add({
+            idempotency_key: crypto.randomUUID(),
+            device_seq: await this.nextDeviceSeq(),
+            type: 'work_log.add',
+            entity_id: logId,
+            payload: {
+                work_order_id: workOrderId,
+                asset_id: assetId,
+                started_at: startedAt,
+                ended_at: endedAt,
+                man_hours: manHours,
+                quantity,
+                unit,
+                notes,
+            },
+            client_ts: new Date().toISOString(),
+            status: 'PENDING',
+            attempts: 0,
+            last_error: null,
+        });
+
+        await this.log('info', 'In coda: consuntivo del lavoro.');
+        await this.notify();
+        return logId;
     }
 
     /** Ricerca locale di un tag per uid; con tagType preferisce la corrispondenza esatta. */
@@ -376,6 +437,8 @@ export class SyncManager {
             throw err;
         }
 
+        const byKey = new Map(pending.map((c) => [c.idempotency_key, c]));
+
         for (const result of response.data.results) {
             const outcome = result.status === 'duplicate' ? (result.original?.status ?? 'applied') : result.status;
             if (outcome === 'applied') {
@@ -388,12 +451,15 @@ export class SyncManager {
                 if (entityId) {
                     const remaining = await this.db.sync_queue.where('entity_id').equals(entityId).count();
                     if (remaining === 0) {
-                        const asset = await this.db.assets.get(entityId);
-                        if (asset) {
-                            await this.db.assets.put({
-                                ...asset,
+                        const table = byKey.get(result.idempotency_key)?.type === 'work_order.transition'
+                            ? this.db.work_orders
+                            : this.db.assets;
+                        const row = await table.get(entityId);
+                        if (row) {
+                            await table.put({
+                                ...row,
                                 dirty: false,
-                                version: typeof version === 'number' ? Math.max(version, asset.version) : asset.version,
+                                version: typeof version === 'number' ? Math.max(version, row.version) : row.version,
                             });
                         }
                     }
@@ -444,11 +510,22 @@ export class SyncManager {
                 params: { cursor, ...(askIds.length ? { ids: askIds } : {}) },
             });
 
-            await this.db.transaction('rw', [this.db.meta, this.db.areas, this.db.assets, this.db.trees, this.db.asset_tags], async () => {
+            await this.db.transaction('rw', [this.db.meta, this.db.areas, this.db.assets, this.db.trees, this.db.asset_tags, this.db.work_orders], async () => {
                 for (const change of data.changes) {
                     if (change.table === 'areas') {
                         if (change.op === 'delete') await this.db.areas.delete(change.id);
                         else await this.db.areas.put(change.row);
+                    } else if (change.table === 'work_orders') {
+                        const id = change.op === 'delete' ? change.id : change.row.id;
+                        // Come per gli elementi: un ordine con comandi locali in coda
+                        // non si sovrascrive, lo si riprende per id al giro successivo
+                        if (dirtyIds.has(id)) {
+                            deferred.add(id);
+                            continue;
+                        }
+                        if (change.op === 'delete') await this.db.work_orders.delete(id);
+                        else await this.db.work_orders.put({ ...change.row, dirty: false });
+                        deferred.delete(id);
                     } else if (change.table === 'assets') {
                         const id = change.op === 'delete' ? change.id : change.row.id;
                         // Mai sovrascrivere un record con modifiche locali pendenti (§3.3):
@@ -488,9 +565,10 @@ export class SyncManager {
         await this.db.conflicts.delete(idempotencyKey);
 
         // La verità del server per questa entità va ripresa al prossimo pull
+        // (un consuntivo scartato no: non è replicato localmente)
         const deferredRow = await this.db.meta.get('deferred_ids');
         const deferred = new Set(deferredRow?.value ?? []);
-        if (cmd.entity_id) deferred.add(cmd.entity_id);
+        if (cmd.entity_id && cmd.type !== 'work_log.add') deferred.add(cmd.entity_id);
         await this.db.meta.put({ key: 'deferred_ids', value: [...deferred] });
 
         // Una creazione mai arrivata al server non deve restare come riga fantasma

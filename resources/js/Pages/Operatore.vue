@@ -9,6 +9,7 @@ import { SyncManager } from '@/field/sync';
 const page = usePage();
 const user = page.props.auth.user;
 const canAssociate = computed(() => (user.permissions ?? []).includes('assets.update'));
+const canWorks = computed(() => (user.permissions ?? []).includes('works.view'));
 
 const db = openFieldDb(user.tenant_id, user.id);
 const sync = new SyncManager(db);
@@ -31,6 +32,11 @@ const form = reactive({
 
 // Scheda elemento aperta (da elenco o da scansione)
 const selected = ref(null);
+
+// I miei lavori: ordini assegnati all'operatore, replicati sul dispositivo
+const localOrders = ref([]);
+const selectedOrder = ref(null);
+const consuntivo = reactive({ open: false, manHours: null, quantity: null, unit: '', notes: '' });
 const measureForm = reactive({ species: '', height_m: null, dbh_cm: null, crown_diameter_m: null });
 const tagForm = reactive({ uid: '', tagType: 'qr' });
 
@@ -267,6 +273,8 @@ function switchTab(key) {
     stopCamera();
     revokePhotoUrls();
     selected.value = null;
+    selectedOrder.value = null;
+    consuntivo.open = false;
     tab.value = key;
     refreshLocal();
     if (key === 'mappa') {
@@ -492,6 +500,7 @@ async function refreshLocal() {
         .filter((t) => t.allowed_geometry === 'P')
         .sort((a, b) => a.code.localeCompare(b.code));
     localAssets.value = (await db.assets.orderBy('updated_at').reverse().limit(200).toArray());
+    localOrders.value = await db.work_orders.toArray();
     queueRows.value = await db.sync_queue.orderBy('device_seq').toArray();
     logRows.value = (await db.sync_log.orderBy('seq').reverse().limit(30).toArray());
     await sync.notify();
@@ -579,6 +588,102 @@ async function saveCensus() {
 async function runSync() {
     await sync.syncNow();
     await refreshLocal();
+}
+
+// ---- I miei lavori: avvio, sospensione e consuntivo dal campo ----
+
+const WO_STATUS = {
+    planned: { label: 'Pianificato', cls: 'bg-gray-200 text-gray-700' },
+    assigned: { label: 'Assegnato', cls: 'bg-blue-100 text-blue-800' },
+    in_progress: { label: 'In corso', cls: 'bg-green-100 text-green-800' },
+    suspended: { label: 'Sospeso', cls: 'bg-amber-100 text-amber-800' },
+    completed: { label: 'Completato', cls: 'bg-gray-200 text-gray-600' },
+    cancelled: { label: 'Annullato', cls: 'bg-gray-200 text-gray-600' },
+};
+const WO_PRIORITY = { low: 'Bassa', normal: 'Normale', high: 'Alta', urgent: 'Urgente' };
+
+// Azioni consentite dal campo (rispecchia le regole del server)
+const WO_ACTIONS = {
+    assigned: [{ to: 'in_progress', label: 'Avvia il lavoro' }],
+    in_progress: [{ to: 'suspended', label: 'Sospendi' }],
+    suspended: [{ to: 'in_progress', label: 'Riprendi' }],
+};
+
+const ORDER_SORT = { in_progress: 0, suspended: 1, assigned: 2, planned: 3, completed: 4, cancelled: 5 };
+const sortedOrders = computed(() => [...localOrders.value]
+    .sort((a, b) => (ORDER_SORT[a.status] ?? 9) - (ORDER_SORT[b.status] ?? 9) || String(a.code).localeCompare(String(b.code))));
+
+const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('it-IT') : '');
+
+function openOrder(order) {
+    consuntivo.open = false;
+    selectedOrder.value = order;
+}
+
+async function reloadOrder(orderId) {
+    await refreshLocal();
+    const updated = await db.work_orders.get(orderId);
+    selectedOrder.value = updated ?? null;
+    return updated;
+}
+
+async function orderTransition(order, to) {
+    busy.value = true;
+    try {
+        await sync.enqueueWoTransition({ workOrderId: order.id, status: to });
+        // L'ora di avvio serve al consuntivo: si fissa al primo passaggio
+        // "in corso" e non si tocca alla ripresa dopo una sospensione
+        if (to === 'in_progress' && ! order.field_started_at) {
+            await db.work_orders.update(order.id, { field_started_at: new Date().toISOString() });
+        }
+        setMessage(state.online
+            ? 'Stato aggiornato: sincronizzazione in corso.'
+            : 'Stato aggiornato sul dispositivo: verrà inviato quando torna la rete.');
+        if (state.online) await runSync();
+        await reloadOrder(order.id);
+    } catch {
+        setMessage('Aggiornamento locale non riuscito: riprova.', false);
+    } finally {
+        busy.value = false;
+    }
+}
+
+function openConsuntivo(order) {
+    Object.assign(consuntivo, {
+        open: true,
+        manHours: null,
+        quantity: null,
+        unit: order.work_type?.unit ?? '',
+        notes: '',
+    });
+}
+
+async function completeWithConsuntivo(order) {
+    busy.value = true;
+    try {
+        // Prima il consuntivo, poi la chiusura: la coda è FIFO e il server
+        // riceve il lavoro svolto mentre l'ordine è ancora "in corso"
+        await sync.enqueueWorkLog({
+            workOrderId: order.id,
+            startedAt: order.field_started_at ?? new Date().toISOString(),
+            endedAt: new Date().toISOString(),
+            manHours: numOrNull(consuntivo.manHours),
+            quantity: numOrNull(consuntivo.quantity),
+            unit: consuntivo.unit.trim() || null,
+            notes: consuntivo.notes.trim() || null,
+        });
+        await sync.enqueueWoTransition({ workOrderId: order.id, status: 'completed' });
+        consuntivo.open = false;
+        setMessage(state.online
+            ? 'Lavoro completato con consuntivo: sincronizzazione in corso.'
+            : 'Lavoro completato sul dispositivo: verrà inviato quando torna la rete.');
+        if (state.online) await runSync();
+        await reloadOrder(order.id);
+    } catch {
+        setMessage('Registrazione del consuntivo non riuscita: riprova.', false);
+    } finally {
+        busy.value = false;
+    }
 }
 
 async function discardCommand(cmd) {
@@ -838,6 +943,46 @@ onBeforeUnmount(() => {
                 </div>
             </section>
 
+            <!-- LAVORI -->
+            <section v-if="tab === 'lavori'">
+                <h1 class="text-base font-semibold">I miei lavori ({{ localOrders.length }})</h1>
+                <ul class="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white" data-test="wo-list">
+                    <li
+                        v-for="o in sortedOrders"
+                        :key="o.id"
+                        class="cursor-pointer px-4 py-2.5 text-sm hover:bg-gray-50"
+                        data-test="wo-item"
+                        @click="openOrder(o)"
+                    >
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="font-medium">{{ o.code }}</span>
+                            <span class="flex items-center gap-1.5">
+                                <span
+                                    v-if="o.dirty"
+                                    class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                                >da inviare</span>
+                                <span
+                                    class="rounded-full px-2 py-0.5 text-xs font-medium"
+                                    :class="WO_STATUS[o.status]?.cls"
+                                >{{ WO_STATUS[o.status]?.label ?? o.status }}</span>
+                            </span>
+                        </div>
+                        <div class="mt-0.5 truncate text-xs text-gray-600">{{ o.title }}</div>
+                        <div class="mt-0.5 text-xs text-gray-500">
+                            {{ o.work_type?.name ?? 'Lavorazione non indicata' }}
+                            · {{ (o.assets ?? []).length }} {{ (o.assets ?? []).length === 1 ? 'elemento' : 'elementi' }}
+                            <template v-if="o.planned_start"> · dal {{ fmtDate(o.planned_start) }}</template>
+                            <template v-if="o.priority === 'high' || o.priority === 'urgent'">
+                                · Priorità {{ WO_PRIORITY[o.priority].toLowerCase() }}
+                            </template>
+                        </div>
+                    </li>
+                    <li v-if="! localOrders.length" class="px-4 py-5 text-sm text-gray-400">
+                        Nessun lavoro assegnato sul dispositivo. Scarica i dati di lavoro dalla sezione Sync.
+                    </li>
+                </ul>
+            </section>
+
             <!-- SINCRONIZZAZIONE -->
             <section v-if="tab === 'sync'">
                 <h1 class="text-base font-semibold">Sincronizzazione</h1>
@@ -1037,18 +1182,157 @@ onBeforeUnmount(() => {
             </div>
         </div>
 
+        <!-- Scheda ordine di lavoro (stesso schema della scheda elemento) -->
+        <div v-if="selectedOrder" class="fixed inset-x-0 bottom-14 top-0 z-20 flex flex-col bg-gray-100" data-test="wo-detail">
+            <header class="border-b border-gray-200 bg-white px-4 py-3">
+                <button class="text-sm font-medium text-green-700" @click="selectedOrder = null; consuntivo.open = false">← Indietro</button>
+                <div class="mt-1 flex items-center justify-between">
+                    <div>
+                        <div class="text-base font-semibold">{{ selectedOrder.code }}</div>
+                        <div class="text-xs text-gray-500">{{ selectedOrder.title }}</div>
+                    </div>
+                    <span
+                        class="rounded-full px-2 py-0.5 text-xs font-medium"
+                        :class="WO_STATUS[selectedOrder.status]?.cls"
+                        data-test="wo-detail-status"
+                    >{{ WO_STATUS[selectedOrder.status]?.label ?? selectedOrder.status }}</span>
+                </div>
+            </header>
+
+            <div class="flex-1 space-y-3 overflow-y-auto p-4">
+                <p
+                    v-if="message.text"
+                    class="rounded-lg px-3 py-2 text-sm"
+                    :class="message.ok ? 'bg-green-100 text-green-900' : 'bg-red-100 text-red-900'"
+                    data-test="wo-message"
+                >{{ message.text }}</p>
+
+                <div class="rounded-xl border border-gray-200 bg-white p-4 text-sm">
+                    <dl class="space-y-1.5">
+                        <div class="flex justify-between gap-3">
+                            <dt class="text-gray-500">Lavorazione</dt>
+                            <dd class="text-right font-medium">{{ selectedOrder.work_type?.name ?? '—' }}</dd>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <dt class="text-gray-500">Area</dt>
+                            <dd class="text-right font-medium">{{ selectedOrder.area?.name ?? '—' }}</dd>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <dt class="text-gray-500">Squadra</dt>
+                            <dd class="text-right font-medium">{{ selectedOrder.team?.name ?? '—' }}</dd>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <dt class="text-gray-500">Priorità</dt>
+                            <dd class="text-right font-medium">{{ WO_PRIORITY[selectedOrder.priority] ?? '—' }}</dd>
+                        </div>
+                        <div v-if="selectedOrder.planned_start" class="flex justify-between gap-3">
+                            <dt class="text-gray-500">Periodo previsto</dt>
+                            <dd class="text-right font-medium">
+                                {{ fmtDate(selectedOrder.planned_start) }}<template v-if="selectedOrder.planned_end"> → {{ fmtDate(selectedOrder.planned_end) }}</template>
+                            </dd>
+                        </div>
+                    </dl>
+                    <p v-if="selectedOrder.description" class="mt-3 whitespace-pre-line border-t border-gray-100 pt-3 text-sm text-gray-700">
+                        {{ selectedOrder.description }}
+                    </p>
+                    <p v-if="selectedOrder.risks" class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        Rischi segnalati: {{ selectedOrder.risks }}
+                    </p>
+                </div>
+
+                <div class="rounded-xl border border-gray-200 bg-white p-4">
+                    <h2 class="text-sm font-semibold">Elementi da lavorare ({{ (selectedOrder.assets ?? []).length }})</h2>
+                    <ul v-if="(selectedOrder.assets ?? []).length" class="mt-2 divide-y divide-gray-50">
+                        <li v-for="row in selectedOrder.assets" :key="row.id" class="flex items-center justify-between py-1.5 text-sm">
+                            <span class="font-medium">{{ row.asset?.census_code || (row.asset_id ?? '').slice(0, 8) }}</span>
+                            <span class="text-xs text-gray-500">
+                                {{ row.work_type?.name ?? '' }}
+                                <template v-if="row.planned_quantity"> · {{ Number(row.planned_quantity) }} {{ row.unit ?? '' }}</template>
+                            </span>
+                        </li>
+                    </ul>
+                    <p v-else class="mt-2 text-sm text-gray-400">Nessun elemento specifico: l'ordine copre l'area indicata.</p>
+                </div>
+
+                <!-- Azioni di campo -->
+                <div v-if="! consuntivo.open" class="space-y-2">
+                    <button
+                        v-for="action in WO_ACTIONS[selectedOrder.status] ?? []"
+                        :key="action.to"
+                        class="w-full rounded-lg bg-green-700 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                        :disabled="busy"
+                        :data-test="`wo-action-${action.to}`"
+                        @click="orderTransition(selectedOrder, action.to)"
+                    >{{ action.label }}</button>
+                    <button
+                        v-if="selectedOrder.status === 'in_progress'"
+                        class="w-full rounded-lg border border-green-700 px-4 py-3 text-sm font-semibold text-green-700 disabled:opacity-50"
+                        :disabled="busy"
+                        data-test="wo-open-consuntivo"
+                        @click="openConsuntivo(selectedOrder)"
+                    >Completa con consuntivo</button>
+                    <p v-if="selectedOrder.status === 'planned'" class="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                        Lavoro pianificato: potrà essere avviato quando il responsabile lo assegna.
+                    </p>
+                    <p v-if="selectedOrder.status === 'completed'" class="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                        Lavoro completato: uscirà dall'elenco alla prossima sincronizzazione.
+                    </p>
+                </div>
+
+                <!-- Consuntivo di chiusura -->
+                <div v-else class="rounded-xl border border-gray-200 bg-white p-4" data-test="wo-consuntivo">
+                    <h2 class="text-sm font-semibold">Consuntivo del lavoro</h2>
+                    <div class="mt-2 grid grid-cols-2 gap-3">
+                        <label class="block text-xs">
+                            <span class="text-gray-500">Ore uomo</span>
+                            <input v-model.number="consuntivo.manHours" type="number" step="0.5" min="0" data-test="wo-man-hours" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                        </label>
+                        <label class="block text-xs">
+                            <span class="text-gray-500">Quantità eseguita</span>
+                            <input v-model.number="consuntivo.quantity" type="number" step="0.01" min="0" data-test="wo-quantity" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                        </label>
+                        <label class="block text-xs">
+                            <span class="text-gray-500">Unità di misura</span>
+                            <input v-model="consuntivo.unit" data-test="wo-unit" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. mq, cad">
+                        </label>
+                    </div>
+                    <label class="mt-3 block text-xs">
+                        <span class="text-gray-500">Note di lavoro</span>
+                        <textarea v-model="consuntivo.notes" rows="2" data-test="wo-notes" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" />
+                    </label>
+                    <div class="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                            class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700"
+                            :disabled="busy"
+                            @click="consuntivo.open = false"
+                        >Annulla</button>
+                        <button
+                            class="rounded-lg bg-green-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                            :disabled="busy"
+                            data-test="wo-consuntivo-save"
+                            @click="completeWithConsuntivo(selectedOrder)"
+                        >Completa il lavoro</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Barra di navigazione inferiore (uso a una mano in campo) -->
-        <nav class="fixed inset-x-0 bottom-0 z-30 grid h-14 grid-cols-5 border-t border-gray-200 bg-white">
+        <nav
+            class="fixed inset-x-0 bottom-0 z-30 grid h-14 border-t border-gray-200 bg-white"
+            :class="canWorks ? 'grid-cols-6' : 'grid-cols-5'"
+        >
             <button
                 v-for="item in [
                     { key: 'rilievo', label: 'Rilievo' },
                     { key: 'mappa', label: 'Mappa' },
+                    ...(canWorks ? [{ key: 'lavori', label: 'Lavori' }] : []),
                     { key: 'elementi', label: 'Elementi' },
                     { key: 'scansiona', label: 'Scansiona' },
                     { key: 'sync', label: 'Sync' },
                 ]"
                 :key="item.key"
-                class="py-3.5 text-sm font-medium"
+                class="py-3.5 text-xs font-medium sm:text-sm"
                 :class="tab === item.key ? 'border-t-2 border-green-700 text-green-800' : 'text-gray-500'"
                 :data-test="`tab-${item.key}`"
                 @click="switchTab(item.key)"

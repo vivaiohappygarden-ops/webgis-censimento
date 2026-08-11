@@ -32,5 +32,10 @@ export function openFieldDb(tenantId, userId) {
         photo_uploads: '&photo_id, asset_id, status, [status+created_at]',
     });
 
+    // v4: ordini di lavoro assegnati all'operatore ("I miei lavori")
+    db.version(4).stores({
+        work_orders: '&id, status, code',
+    });
+
     return db;
 }

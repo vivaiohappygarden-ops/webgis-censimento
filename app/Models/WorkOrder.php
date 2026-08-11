@@ -24,6 +24,30 @@ class WorkOrder extends Model
         'cancelled' => [],
     ];
 
+    /** Stati che compongono il working set di campo della PWA operatore. */
+    public const FIELD_STATUSES = ['planned', 'assigned', 'in_progress', 'suspended'];
+
+    /**
+     * Ordini visibili dal campo: chi gestisce i lavori li vede tutti, un
+     * operatore solo quelli assegnati a lui o a una sua squadra attiva.
+     */
+    public function scopeVisibleInField($query, User $user)
+    {
+        $query->whereIn('status', self::FIELD_STATUSES);
+
+        if (! $user->can('works.manage')) {
+            $query->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->id)
+                    ->orWhereIn('team_id', \Illuminate\Support\Facades\DB::table('team_members')
+                        ->select('team_id')
+                        ->where('user_id', $user->id)
+                        ->whereNull('left_on'));
+            });
+        }
+
+        return $query;
+    }
+
     protected $fillable = [
         'tenant_id', 'code', 'client_id', 'contract_id', 'site_id', 'area_id',
         'work_type_id', 'title', 'description', 'status', 'priority', 'origin',
