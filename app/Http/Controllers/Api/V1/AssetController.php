@@ -105,6 +105,7 @@ class AssetController extends Controller implements HasMiddleware
                 'tags' => fn ($q) => $q->whereIn('status', ['active', 'unassigned']),
                 'photos' => fn ($q) => $q->orderByDesc('created_at'),
                 'tree',
+                'plantingSite',
             ])
             ->withCount(['photos', 'documents', 'versions'])
             ->selectRaw('assets.*, ST_AsGeoJSON(geom)::json AS geom_geojson')
@@ -153,7 +154,8 @@ class AssetController extends Controller implements HasMiddleware
             }
 
             $treeData = $data['tree'] ?? null;
-            unset($data['tree']);
+            $siteData = $data['planting_site'] ?? null;
+            unset($data['tree'], $data['planting_site']);
 
             $asset->fill($data);
             $asset->updated_by = $request->user()->id;
@@ -162,6 +164,14 @@ class AssetController extends Controller implements HasMiddleware
 
             if ($treeData !== null && $asset->tree) {
                 $asset->tree->update($treeData);
+            }
+
+            if ($siteData !== null && $asset->plantingSite) {
+                if (! empty($siteData['previous_tree_id'])) {
+                    // Deve essere un albero del tenant (404 se estraneo)
+                    \App\Models\Tree::query()->findOrFail($siteData['previous_tree_id']);
+                }
+                $asset->plantingSite->update($siteData);
             }
 
             Audit::log('asset.updated', $asset);

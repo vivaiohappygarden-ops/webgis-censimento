@@ -59,12 +59,24 @@ class UpdateAssetRequest extends FormRequest
             'tree.protection_ref' => ['sometimes', 'nullable', 'string', 'max:100'],
             'tree.is_dedicated' => ['sometimes', 'boolean'],
             'tree.dedicated_to' => ['sometimes', 'array'],
+            'tree.dedicated_to.name' => ['sometimes', 'nullable', 'string', 'max:254'],
+            'tree.dedicated_to.occasion' => ['sometimes', 'nullable', 'string', 'max:254'],
+            'tree.dedicated_to.date' => ['sometimes', 'nullable', 'date'],
             'tree.has_stake' => ['sometimes', 'boolean'],
             'tree.has_bracing' => ['sometimes', 'boolean'],
             'tree.bracing_notes' => ['sometimes', 'nullable', 'string'],
             'tree.planted_on' => ['sometimes', 'nullable', 'date'],
             'tree.removed_on' => ['sometimes', 'nullable', 'date'],
             'tree.removal_reason' => ['sometimes', 'nullable', 'string', 'max:254'],
+
+            // Posto libero (applicato solo se l'asset ha il record planting_sites)
+            'planting_site' => ['sometimes', 'array'],
+            'planting_site.status' => ['sometimes', 'in:free,reserved,planted,unusable'],
+            'planting_site.planned_species' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'planting_site.origin' => ['sometimes', 'nullable', 'in:felling,new_design,transplant,other'],
+            'planting_site.previous_tree_id' => ['sometimes', 'nullable', 'uuid'],
+            'planting_site.target_season' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'planting_site.notes' => ['sometimes', 'nullable', 'string'],
         ];
     }
 }

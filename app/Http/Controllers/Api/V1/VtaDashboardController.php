@@ -63,4 +63,29 @@ class VtaDashboardController extends Controller implements HasMiddleware
             ],
         ]);
     }
+
+    /** Alberi monumentali, soggetti a tutela o dedicati (L. 10/2013). */
+    public function tutelati(): JsonResponse
+    {
+        $trees = Tree::query()
+            ->join('assets', 'assets.id', '=', 'trees.asset_id')
+            ->whereNull('assets.deleted_at')
+            ->where(fn ($w) => $w
+                ->where('trees.is_monumental', true)
+                ->orWhere('trees.is_protected', true)
+                ->orWhere('trees.is_dedicated', true))
+            ->select([
+                'trees.asset_id', 'trees.genus', 'trees.species', 'trees.common_name',
+                'trees.is_monumental', 'trees.monumental_ref',
+                'trees.is_protected', 'trees.protection_ref',
+                'trees.is_dedicated', 'trees.dedicated_to',
+                'trees.removed_on',
+                'assets.census_code',
+            ])
+            ->orderBy('assets.census_code')
+            ->limit(500)
+            ->get();
+
+        return response()->json(['data' => $trees]);
+    }
 }

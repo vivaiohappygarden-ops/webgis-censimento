@@ -37,6 +37,8 @@ class CatalogAdminController extends Controller implements HasMiddleware
             'icon' => ['nullable', 'string', 'max:20'],
             'style' => ['sometimes', 'array'],
             'sort_order' => ['sometimes', 'integer', 'min:0'],
+            'requires_tree_record' => ['sometimes', 'boolean'],
+            'is_planting_site' => ['sometimes', 'boolean'],
         ]);
 
         CatalogSubType::findOrFail($data['sub_type_id']);
@@ -58,11 +60,15 @@ class CatalogAdminController extends Controller implements HasMiddleware
             'style' => ['sometimes', 'array'],
             'sort_order' => ['sometimes', 'integer', 'min:0'],
             'allowed_geometry' => ['sometimes', 'in:P,L,S'],
+            'requires_tree_record' => ['sometimes', 'boolean'],
+            'is_planting_site' => ['sometimes', 'boolean'],
         ]);
 
-        // Il set CAM è lo standard ministeriale: codice, nome e geometria restano fissi
+        // Il set CAM è lo standard ministeriale: codice, nome, geometria e
+        // comportamento (scheda albero, posto libero) restano fissi
         if ($type->is_cam) {
-            unset($data['name'], $data['allowed_geometry']);
+            unset($data['name'], $data['allowed_geometry'],
+                $data['requires_tree_record'], $data['is_planting_site']);
         } elseif (isset($data['allowed_geometry'])
             && $data['allowed_geometry'] !== $type->allowed_geometry
             && $type->assets()->exists()) {

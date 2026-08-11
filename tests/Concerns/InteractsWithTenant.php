@@ -58,7 +58,7 @@ trait InteractsWithTenant
         ]);
     }
 
-    protected function makeObjectType(Organization $organization, string $geo = 'P', ?string $code = null): CatalogObjectType
+    protected function makeObjectType(Organization $organization, string $geo = 'P', ?string $code = null, array $attributes = []): CatalogObjectType
     {
         $main = CatalogMainType::withoutGlobalScopes()->firstOrCreate(
             ['tenant_id' => $organization->id, 'code' => '1'],
@@ -80,6 +80,7 @@ trait InteractsWithTenant
             'cam_layer' => $geo.'1',
             'is_cam' => true,
             'requires_tree_record' => $code === 'P103108',
+            ...$attributes,
         ]);
     }
 

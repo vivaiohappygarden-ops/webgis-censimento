@@ -28,4 +28,9 @@ class InstrumentalAnalysis extends Model
     {
         return $this->belongsTo(TreeAssessment::class, 'assessment_id');
     }
+
+    public function document()
+    {
+        return $this->belongsTo(Document::class, 'document_id');
+    }
 }

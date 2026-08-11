@@ -124,6 +124,40 @@ class DatabaseSeeder extends Seeder
                 'created_by' => $admin->id,
                 'updated_by' => $admin->id,
             ]);
+
+            // Tipo personalizzato "Posto libero" (non CAM) + un posto libero demo
+            $pianta = \App\Models\CatalogSubType::query()->withoutGlobalScopes()
+                ->where('tenant_id', $organization->id)->where('code', '03')->firstOrFail();
+            $siteType = CatalogObjectType::query()->withoutGlobalScopes()->firstOrCreate(
+                ['tenant_id' => $organization->id, 'code' => 'PL001'],
+                [
+                    'sub_type_id' => $pianta->id,
+                    'name' => 'Posto libero (sede di impianto)',
+                    'allowed_geometry' => 'P',
+                    'is_cam' => false,
+                    'is_planting_site' => true,
+                ],
+            );
+
+            $siteAsset = Asset::create([
+                'tenant_id' => $organization->id,
+                'area_id' => $area->id,
+                'object_type_id' => $siteType->id,
+                'census_code' => 'PSL-0001',
+                'status' => 'active',
+                'geom' => Geometry::toEwkb(['type' => 'Point', 'coordinates' => [9.1912, 45.4648]]),
+                'survey_method' => 'manual_map',
+                'created_by' => $admin->id,
+                'updated_by' => $admin->id,
+            ]);
+            \App\Models\PlantingSite::create([
+                'asset_id' => $siteAsset->id,
+                'tenant_id' => $organization->id,
+                'status' => 'free',
+                'origin' => 'felling',
+                'planned_species' => 'Tilia cordata',
+                'target_season' => '2026-2027',
+            ]);
         }
 
         $this->command?->info('Tenant demo pronto: login admin@demo.local / password (slug organizzazione: demo).');

@@ -5,6 +5,7 @@ import * as maplibregl from 'maplibre-gl';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AssetEditPanel from '@/Components/AssetEditPanel.vue';
+import PlantingSitePanel from '@/Components/PlantingSitePanel.vue';
 import TreeVtaPanel from '@/Components/TreeVtaPanel.vue';
 
 const props = defineProps({ assetId: { type: String, required: true } });
@@ -225,6 +226,15 @@ onBeforeUnmount(() => map?.remove());
                     <TreeVtaPanel
                         v-if="asset.tree"
                         :key="`tree-${asset.version}`"
+                        :asset="asset"
+                        :can-update="canUpdate"
+                        @saved="load"
+                    />
+
+                    <!-- Posto libero -->
+                    <PlantingSitePanel
+                        v-if="asset.planting_site"
+                        :key="`site-${asset.version}`"
                         :asset="asset"
                         :can-update="canUpdate"
                         @saved="load"

@@ -1,10 +1,11 @@
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 const data = ref(null);
+const tutelati = ref([]);
 
 const CLASS_COLORS = {
     'A': 'bg-green-100 text-green-800',
@@ -17,9 +18,47 @@ const CLASS_COLORS = {
 
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '—');
 
+// Bilancio arboreo (L. 10/2013): dal 1 gennaio dell'anno corrente a oggi
+const today = new Date();
+const balance = reactive({
+    from: `${today.getFullYear()}-01-01`,
+    to: today.toISOString().slice(0, 10),
+    loading: false,
+    error: '',
+    result: null,
+});
+
+async function loadBalance() {
+    balance.loading = true;
+    balance.error = '';
+    try {
+        const { data: res } = await axios.get('/api/v1/vta/bilancio', {
+            params: { from: balance.from, to: balance.to },
+        });
+        balance.result = res.data;
+    } catch (err) {
+        balance.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0] ?? 'Errore nel calcolo';
+    } finally {
+        balance.loading = false;
+    }
+}
+
+function qualifiche(t) {
+    const q = [];
+    if (t.is_monumental) q.push('Monumentale');
+    if (t.is_protected) q.push('Tutelato');
+    if (t.is_dedicated) q.push('Dedicato');
+    return q.join(', ');
+}
+
 onMounted(async () => {
-    const res = await axios.get('/api/v1/vta/dashboard');
-    data.value = res.data.data;
+    const [dashboard, protectedTrees] = await Promise.all([
+        axios.get('/api/v1/vta/dashboard'),
+        axios.get('/api/v1/vta/tutelati'),
+    ]);
+    data.value = dashboard.data.data;
+    tutelati.value = protectedTrees.data.data;
+    await loadBalance();
 });
 </script>
 
@@ -126,6 +165,132 @@ onMounted(async () => {
                         </tbody>
                     </table>
                     <p v-else class="px-4 py-5 text-sm text-gray-400">Nessuna scadenza nei prossimi 30 giorni.</p>
+                </div>
+
+                <!-- Bilancio arboreo -->
+                <div class="rounded-xl border border-gray-200 bg-white">
+                    <div class="flex flex-wrap items-end justify-between gap-3 border-b border-gray-100 px-4 py-3">
+                        <div>
+                            <h2 class="text-sm font-semibold">Bilancio arboreo (L. 10/2013)</h2>
+                            <p class="text-xs text-gray-500">Consistenza del patrimonio arboreo tra due date, con nuovi impianti e abbattimenti</p>
+                        </div>
+                        <div class="flex items-end gap-2">
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Dal</span>
+                                <input v-model="balance.from" type="date" class="mt-1 block rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Al</span>
+                                <input v-model="balance.to" type="date" class="mt-1 block rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                            </label>
+                            <button
+                                class="rounded-lg bg-green-700 px-3 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                                :disabled="balance.loading"
+                                @click="loadBalance"
+                            >{{ balance.loading ? 'Calcolo…' : 'Calcola' }}</button>
+                        </div>
+                    </div>
+                    <p v-if="balance.error" class="px-4 py-3 text-sm text-red-600">{{ balance.error }}</p>
+
+                    <div v-if="balance.result" class="grid grid-cols-1 gap-0 lg:grid-cols-2">
+                        <table class="w-full text-sm">
+                            <tbody class="divide-y divide-gray-50">
+                                <tr>
+                                    <td class="px-4 py-2 text-gray-500">Consistenza iniziale ({{ fmt(balance.result.from) }})</td>
+                                    <td class="px-4 py-2 text-right font-semibold">{{ balance.result.initial_count }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 text-gray-500">Nuovi impianti nel periodo</td>
+                                    <td class="px-4 py-2 text-right font-semibold text-green-700">+{{ balance.result.planted_count }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 text-gray-500">Abbattimenti/rimozioni nel periodo</td>
+                                    <td class="px-4 py-2 text-right font-semibold text-red-600">−{{ balance.result.felled_count }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 text-gray-500">Consistenza finale ({{ fmt(balance.result.to) }})</td>
+                                    <td class="px-4 py-2 text-right font-semibold">{{ balance.result.final_count }}</td>
+                                </tr>
+                                <tr class="bg-gray-50/60">
+                                    <td class="px-4 py-2 font-medium">Variazione del periodo</td>
+                                    <td class="px-4 py-2 text-right font-semibold" :class="balance.result.variation >= 0 ? 'text-green-700' : 'text-red-600'">
+                                        {{ balance.result.variation >= 0 ? '+' : '' }}{{ balance.result.variation }}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 text-gray-500">Posti liberi attuali (liberi / riservati / piantumati / non utilizzabili)</td>
+                                    <td class="px-4 py-2 text-right">
+                                        {{ balance.result.planting_sites.free }} /
+                                        {{ balance.result.planting_sites.reserved }} /
+                                        {{ balance.result.planting_sites.planted }} /
+                                        {{ balance.result.planting_sites.unusable }}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 text-gray-500">Sostituzioni completate su posti da abbattimento</td>
+                                    <td class="px-4 py-2 text-right">{{ balance.result.planting_sites.replacements_from_felling }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="border-t border-gray-100 lg:border-l lg:border-t-0">
+                            <h3 class="px-4 pb-1 pt-3 text-xs font-semibold uppercase text-gray-400">Dettaglio per specie (nel periodo)</h3>
+                            <table v-if="balance.result.by_species.length" class="w-full text-sm">
+                                <thead>
+                                    <tr class="text-left text-xs text-gray-400">
+                                        <th class="px-4 py-1 font-medium">Specie</th>
+                                        <th class="px-4 py-1 text-right font-medium">Piantati</th>
+                                        <th class="px-4 py-1 text-right font-medium">Abbattuti</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-50">
+                                    <tr v-for="s in balance.result.by_species" :key="s.species_label">
+                                        <td class="px-4 py-1.5">{{ s.species_label }}</td>
+                                        <td class="px-4 py-1.5 text-right text-green-700">{{ s.planted }}</td>
+                                        <td class="px-4 py-1.5 text-right text-red-600">{{ s.felled }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <p v-else class="px-4 pb-4 pt-1 text-sm text-gray-400">Nessun impianto o abbattimento nel periodo selezionato.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alberi tutelati e dedicati -->
+                <div class="rounded-xl border border-gray-200 bg-white">
+                    <h2 class="border-b border-gray-100 px-4 py-3 text-sm font-semibold">
+                        Alberi monumentali, tutelati e dedicati ({{ tutelati.length }})
+                    </h2>
+                    <table v-if="tutelati.length" class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-xs text-gray-400">
+                                <th class="px-4 py-2 font-medium">Codice</th>
+                                <th class="px-4 py-2 font-medium">Specie</th>
+                                <th class="px-4 py-2 font-medium">Qualifica</th>
+                                <th class="px-4 py-2 font-medium">Riferimenti</th>
+                                <th class="px-4 py-2 font-medium">Dedica</th>
+                                <th class="px-4 py-2 text-right font-medium"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-50">
+                            <tr v-for="t in tutelati" :key="t.asset_id" :class="t.removed_on ? 'text-gray-400' : ''">
+                                <td class="px-4 py-2 font-medium">{{ t.census_code || '—' }}{{ t.removed_on ? ' (rimosso)' : '' }}</td>
+                                <td class="px-4 py-2">{{ t.species || t.genus || t.common_name || '—' }}</td>
+                                <td class="px-4 py-2">{{ qualifiche(t) }}</td>
+                                <td class="px-4 py-2 text-gray-500">{{ [t.monumental_ref, t.protection_ref].filter(Boolean).join(' · ') || '—' }}</td>
+                                <td class="px-4 py-2 text-gray-500">
+                                    <template v-if="t.is_dedicated && t.dedicated_to?.name">
+                                        {{ t.dedicated_to.name }}<template v-if="t.dedicated_to.occasion"> ({{ t.dedicated_to.occasion }})</template><template v-if="t.dedicated_to.date"> · {{ fmt(t.dedicated_to.date) }}</template>
+                                    </template>
+                                    <template v-else>—</template>
+                                </td>
+                                <td class="px-4 py-2 text-right">
+                                    <Link :href="`/censimento/${t.asset_id}`" class="font-medium text-green-700 hover:underline">Apri</Link>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p v-else class="px-4 py-5 text-sm text-gray-400">Nessun albero monumentale, tutelato o dedicato registrato.</p>
                 </div>
             </div>
 

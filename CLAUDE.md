@@ -31,6 +31,8 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 
 ## Flusso di lavoro
 
+- Direttiva committente 11/08/2026: **proseguire sempre** con il blocco successivo della roadmap
+  senza chiedere conferma a ogni passaggio; chiedere solo per decisioni irreversibili o acquisti.
 - Branch di sviluppo: `claude/aruba-hosting-specifics-atsiy4`; mai push altrove.
 - Test: `php artisan test` (DB `webgis_test`); la suite deve restare verde prima del push.
 - Verifica ogni blocco anche nel browser reale (Playwright/Chromium) oltre che con i test.

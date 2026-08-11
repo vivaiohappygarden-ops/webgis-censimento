@@ -43,7 +43,12 @@ Route::prefix('v1')->group(function () {
         Route::get('assets/{asset}/assessments', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'index'])->whereUuid('asset');
         Route::post('assets/{asset}/assessments', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'store'])->whereUuid('asset');
         Route::delete('assessments/{id}', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'destroy'])->whereUuid('id');
+        Route::get('assessments/{assessment}/instrumental-analyses', [\App\Http\Controllers\Api\V1\InstrumentalAnalysisController::class, 'index'])->whereUuid('assessment');
+        Route::post('assessments/{assessment}/instrumental-analyses', [\App\Http\Controllers\Api\V1\InstrumentalAnalysisController::class, 'store'])->whereUuid('assessment');
+        Route::delete('instrumental-analyses/{id}', [\App\Http\Controllers\Api\V1\InstrumentalAnalysisController::class, 'destroy'])->whereUuid('id');
         Route::get('vta/dashboard', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'index']);
+        Route::get('vta/tutelati', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'tutelati']);
+        Route::get('vta/bilancio', [\App\Http\Controllers\Api\V1\TreeBalanceController::class, 'index']);
 
         Route::apiResource('areas', AreaController::class)->whereUuid('area');
         Route::apiResource('assets', AssetController::class)->whereUuid('asset');
@@ -52,6 +57,9 @@ Route::prefix('v1')->group(function () {
         Route::get('photos/{id}/file', [PhotoController::class, 'file'])
             ->whereUuid('id')->name('v1.photos.file');
         Route::delete('photos/{id}', [PhotoController::class, 'destroy'])->whereUuid('id');
+
+        Route::get('documents/{id}/file', [\App\Http\Controllers\Api\V1\DocumentController::class, 'file'])
+            ->whereUuid('id')->name('v1.documents.file');
 
         Route::get('tiles/assets/{z}/{x}/{y}', [TileController::class, 'assets'])
             ->whereNumber(['z', 'x', 'y']);

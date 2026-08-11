@@ -17,6 +17,15 @@ class Document extends Model
         's3_key', 'mime_type', 'size_bytes', 'hash_sha256', 'acl', 'uploaded_by',
     ];
 
+    protected $hidden = ['s3_key'];
+
+    protected $appends = ['url'];
+
+    public function getUrlAttribute(): string
+    {
+        return route('v1.documents.file', $this->id);
+    }
+
     protected function casts(): array
     {
         return [
