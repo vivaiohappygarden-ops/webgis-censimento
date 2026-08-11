@@ -213,6 +213,56 @@ class WorkOrderSyncTest extends TestCase
             ->assertJsonPath('results.0.code', 'VALIDATION_FAILED');
     }
 
+    public function test_worklog_hours_beyond_column_range_are_rejected_not_internal(): void
+    {
+        $order = $this->makeOrder();
+
+        // 10000 supererebbe numeric(6,2): deve essere un rifiuto pulito,
+        // non un errore interno "ritentabile" che blocca la coda per sempre
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([[
+            'idempotency_key' => (string) Str::uuid(),
+            'device_seq' => 1,
+            'type' => 'work_log.add',
+            'entity_id' => (string) Str::uuid(),
+            'payload' => [
+                'work_order_id' => $order->id,
+                'started_at' => now()->toIso8601String(),
+                'man_hours' => 10000,
+            ],
+        ]]))->assertOk()
+            ->assertJsonPath('results.0.status', 'rejected')
+            ->assertJsonPath('results.0.code', 'VALIDATION_FAILED');
+
+        $this->assertSame(0, WorkLog::query()->count());
+    }
+
+    public function test_joining_and_leaving_a_team_moves_its_orders_in_the_delta(): void
+    {
+        $order = $this->makeOrder();
+        $cursor = $this->getJson('/api/v1/sync/bootstrap')->assertOk()->json('cursor');
+
+        // L'uscita dalla squadra produce il tombstone per l'operatore rimosso
+        DB::table('team_members')
+            ->where('team_id', $this->team->id)
+            ->where('user_id', $this->operator->id)
+            ->update(['left_on' => now()->toDateString()]);
+
+        $changes = collect($this->getJson('/api/v1/sync/changes?cursor='.$cursor)->assertOk()->json('changes'))
+            ->where('table', 'work_orders');
+        $this->assertSame($order->id, $changes->firstWhere('op', 'delete')['id']);
+
+        // Il rientro in squadra rimette gli ordini nel delta come upsert
+        $cursor = $this->getJson('/api/v1/sync/bootstrap')->assertOk()->json('cursor');
+        DB::table('team_members')
+            ->where('team_id', $this->team->id)
+            ->where('user_id', $this->operator->id)
+            ->update(['left_on' => null]);
+
+        $changes = collect($this->getJson('/api/v1/sync/changes?cursor='.$cursor)->assertOk()->json('changes'))
+            ->where('table', 'work_orders');
+        $this->assertSame($order->id, $changes->firstWhere('op', 'upsert')['row']['id']);
+    }
+
     public function test_changes_upserts_new_orders_and_tombstones_closed_ones(): void
     {
         $order = $this->makeOrder();

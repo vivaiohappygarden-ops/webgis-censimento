@@ -247,31 +247,59 @@ export class SyncManager {
         await this.notify();
     }
 
-    /** Consuntivo di campo (ore, quantità, note): evento append-only. */
-    async enqueueWorkLog({ workOrderId, assetId = null, startedAt, endedAt = null, manHours = null, quantity = null, unit = null, notes = null }) {
+    /**
+     * Consuntivo di campo + chiusura del lavoro in un'unica transazione
+     * locale: o entrambi i comandi entrano in coda o nessuno dei due
+     * (mai un consuntivo orfano, mai un doppione da un nuovo tentativo).
+     */
+    async enqueueConsuntivoAndComplete({ workOrderId, startedAt, endedAt, manHours = null, quantity = null, unit = null, notes = null }) {
         const logId = uuidv7();
-        await this.db.sync_queue.add({
-            idempotency_key: crypto.randomUUID(),
-            device_seq: await this.nextDeviceSeq(),
-            type: 'work_log.add',
-            entity_id: logId,
-            payload: {
-                work_order_id: workOrderId,
-                asset_id: assetId,
-                started_at: startedAt,
-                ended_at: endedAt,
-                man_hours: manHours,
-                quantity,
-                unit,
-                notes,
-            },
-            client_ts: new Date().toISOString(),
-            status: 'PENDING',
-            attempts: 0,
-            last_error: null,
+        await this.db.transaction('rw', [this.db.sync_queue, this.db.work_orders, this.db.meta], async () => {
+            const order = await this.db.work_orders.get(workOrderId);
+            if (! order) {
+                const err = new Error('Ordine non presente sul dispositivo.');
+                err.code = 'ORDER_GONE';
+                throw err;
+            }
+
+            // Prima il consuntivo, poi la chiusura: la coda è FIFO e il server
+            // riceve il lavoro svolto mentre l'ordine è ancora "in corso"
+            await this.db.sync_queue.add({
+                idempotency_key: crypto.randomUUID(),
+                device_seq: await this.nextDeviceSeq(),
+                type: 'work_log.add',
+                entity_id: logId,
+                payload: {
+                    work_order_id: workOrderId,
+                    asset_id: null,
+                    started_at: startedAt,
+                    ended_at: endedAt,
+                    man_hours: manHours,
+                    quantity,
+                    unit,
+                    notes,
+                },
+                client_ts: new Date().toISOString(),
+                status: 'PENDING',
+                attempts: 0,
+                last_error: null,
+            });
+            await this.db.sync_queue.add({
+                idempotency_key: crypto.randomUUID(),
+                device_seq: await this.nextDeviceSeq(),
+                type: 'work_order.transition',
+                entity_id: workOrderId,
+                base_version: order.version,
+                payload: { status: 'completed' },
+                client_ts: new Date().toISOString(),
+                status: 'PENDING',
+                attempts: 0,
+                last_error: null,
+            });
+            await this.db.work_orders.put({ ...order, status: 'completed', version: order.version + 1, dirty: true });
         });
 
-        await this.log('info', 'In coda: consuntivo del lavoro.');
+        await this.log('info', 'In coda: consuntivo e chiusura del lavoro.');
         await this.notify();
         return logId;
     }
@@ -593,6 +621,15 @@ export class SyncManager {
             await this.db.assets.delete(cmd.entity_id);
             await this.db.trees.delete(cmd.entity_id);
             await this.db.asset_tags.where('asset_id').equals(cmd.entity_id).delete();
+        }
+        // Una transizione scartata lascia sul device uno stato ottimistico ormai
+        // falso: si toglie il flag dirty così la verità del server (già richiesta
+        // qui sopra per id) possa rimpiazzare la riga al prossimo pull
+        if (cmd.type === 'work_order.transition') {
+            const remaining = await this.db.sync_queue.where('entity_id').equals(cmd.entity_id).count();
+            if (remaining === 0) {
+                await this.db.work_orders.update(cmd.entity_id, { dirty: false });
+            }
         }
         // Un'associazione tag scartata rimuove SOLO la riga ottimistica di questo
         // elemento: quella dell'eventuale elemento occupante è verità del server

@@ -501,6 +501,22 @@ async function refreshLocal() {
         .sort((a, b) => a.code.localeCompare(b.code));
     localAssets.value = (await db.assets.orderBy('updated_at').reverse().limit(200).toArray());
     localOrders.value = await db.work_orders.toArray();
+    // La scheda ordine aperta segue le sincronizzazioni in background: mai
+    // proporre azioni su uno stato o una versione ormai superati
+    if (selectedOrder.value) {
+        const current = await db.work_orders.get(selectedOrder.value.id);
+        if (current) {
+            selectedOrder.value = current;
+        } else {
+            // L'avviso serve solo se l'operatore stava compilando il consuntivo:
+            // dopo una chiusura fatta da lui la scomparsa è quella attesa
+            if (consuntivo.open) {
+                setMessage('Il lavoro aperto non è più sul dispositivo: probabilmente è stato chiuso o riassegnato da altri.', false);
+            }
+            selectedOrder.value = null;
+            consuntivo.open = false;
+        }
+    }
     queueRows.value = await db.sync_queue.orderBy('device_seq').toArray();
     logRows.value = (await db.sync_log.orderBy('seq').reverse().limit(30).toArray());
     await sync.notify();
@@ -659,28 +675,50 @@ function openConsuntivo(order) {
 }
 
 async function completeWithConsuntivo(order) {
+    // Le stesse regole del server, verificate PRIMA di accodare: un consuntivo
+    // rifiutato dopo la chiusura non avrebbe più una via di correzione dal campo
+    const manHours = numOrNull(consuntivo.manHours);
+    const quantity = numOrNull(consuntivo.quantity);
+    const unit = consuntivo.unit.trim();
+    if (manHours !== null && (manHours < 0 || manHours > 9999.99)) {
+        setMessage('Ore uomo: inserisci un valore tra 0 e 9999,99.', false);
+        return;
+    }
+    if (quantity !== null && (quantity < 0 || quantity > 99999999)) {
+        setMessage('Quantità eseguita: inserisci un valore tra 0 e 99.999.999.', false);
+        return;
+    }
+    if (unit.length > 20) {
+        setMessage('Unità di misura: al massimo 20 caratteri.', false);
+        return;
+    }
+
     busy.value = true;
     try {
-        // Prima il consuntivo, poi la chiusura: la coda è FIFO e il server
-        // riceve il lavoro svolto mentre l'ordine è ancora "in corso"
-        await sync.enqueueWorkLog({
+        await sync.enqueueConsuntivoAndComplete({
             workOrderId: order.id,
             startedAt: order.field_started_at ?? new Date().toISOString(),
             endedAt: new Date().toISOString(),
-            manHours: numOrNull(consuntivo.manHours),
-            quantity: numOrNull(consuntivo.quantity),
-            unit: consuntivo.unit.trim() || null,
+            manHours,
+            quantity,
+            unit: unit || null,
             notes: consuntivo.notes.trim() || null,
         });
-        await sync.enqueueWoTransition({ workOrderId: order.id, status: 'completed' });
         consuntivo.open = false;
         setMessage(state.online
             ? 'Lavoro completato con consuntivo: sincronizzazione in corso.'
             : 'Lavoro completato sul dispositivo: verrà inviato quando torna la rete.');
         if (state.online) await runSync();
         await reloadOrder(order.id);
-    } catch {
-        setMessage('Registrazione del consuntivo non riuscita: riprova.', false);
+    } catch (err) {
+        if (err?.code === 'ORDER_GONE') {
+            consuntivo.open = false;
+            selectedOrder.value = null;
+            await refreshLocal();
+            setMessage('Questo lavoro non è più sul dispositivo: probabilmente è stato chiuso da un collega. Nulla è stato inviato.', false);
+        } else {
+            setMessage('Registrazione del consuntivo non riuscita: riprova.', false);
+        }
     } finally {
         busy.value = false;
     }
@@ -1285,15 +1323,15 @@ onBeforeUnmount(() => {
                     <div class="mt-2 grid grid-cols-2 gap-3">
                         <label class="block text-xs">
                             <span class="text-gray-500">Ore uomo</span>
-                            <input v-model.number="consuntivo.manHours" type="number" step="0.5" min="0" data-test="wo-man-hours" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            <input v-model.number="consuntivo.manHours" type="number" step="0.5" min="0" max="9999.99" data-test="wo-man-hours" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
                         </label>
                         <label class="block text-xs">
                             <span class="text-gray-500">Quantità eseguita</span>
-                            <input v-model.number="consuntivo.quantity" type="number" step="0.01" min="0" data-test="wo-quantity" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            <input v-model.number="consuntivo.quantity" type="number" step="0.01" min="0" max="99999999" data-test="wo-quantity" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
                         </label>
                         <label class="block text-xs">
                             <span class="text-gray-500">Unità di misura</span>
-                            <input v-model="consuntivo.unit" data-test="wo-unit" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. mq, cad">
+                            <input v-model="consuntivo.unit" maxlength="20" data-test="wo-unit" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. mq, cad">
                         </label>
                     </div>
                     <label class="mt-3 block text-xs">

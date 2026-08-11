@@ -479,7 +479,9 @@ class CommandApplier
             'asset_id' => ['nullable', 'uuid'],
             'started_at' => ['required', 'date'],
             'ended_at' => ['nullable', 'date', 'after_or_equal:started_at'],
-            'man_hours' => ['nullable', 'numeric', 'min:0', 'max:10000'],
+            // Il massimo rispecchia la colonna numeric(6,2): oltre 9999.99 il DB
+            // andrebbe in overflow e il rifiuto diventerebbe un errore "ritentabile"
+            'man_hours' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
             'quantity' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             'unit' => ['nullable', 'string', 'max:20'],
             'notes' => ['nullable', 'string'],
