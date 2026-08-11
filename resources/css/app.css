@@ -3,7 +3,14 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
+/* Carattere unico dell'applicazione (decisione committente 11/08/2026):
+   Courier New, monospazio di sistema — niente webfont, funziona anche offline */
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans: 'Courier New', 'Courier', ui-monospace, monospace;
+    --font-mono: 'Courier New', 'Courier', ui-monospace, monospace;
+}
+
+/* Anche i controlli della mappa (MapLibre usa una propria famiglia) */
+.maplibregl-map {
+    font-family: 'Courier New', 'Courier', ui-monospace, monospace;
 }

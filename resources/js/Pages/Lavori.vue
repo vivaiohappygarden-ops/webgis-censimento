@@ -40,6 +40,7 @@ const personnel = ref([]);
 const workTypes = ref([]);
 const clients = ref([]);
 const areas = ref([]);
+const priceLists = ref([]);
 
 const creator = reactive({ open: false, busy: false, error: '', form: {} });
 const detail = ref(null);
@@ -51,6 +52,7 @@ function resetForm() {
     creator.form = {
         title: '', description: '', client_id: '', area_id: '', work_type_id: '',
         priority: 'normal', planned_start: '', planned_end: '', team_id: '', assigned_to: '',
+        price_list_id: '',
     };
 }
 resetForm();
@@ -76,15 +78,17 @@ async function loadLookups() {
     const requests = [
         axios.get('/api/v1/teams'),
         axios.get('/api/v1/work-types'),
+        axios.get('/api/v1/price-lists'),
     ];
     if (canManage.value) {
         requests.push(axios.get('/api/v1/personnel'));
         requests.push(axios.get('/api/v1/clients', { params: { per_page: 100 } }));
         requests.push(axios.get('/api/v1/areas', { params: { per_page: 100 } }));
     }
-    const [t, wt, p, c, a] = await Promise.all(requests);
+    const [t, wt, pl, p, c, a] = await Promise.all(requests);
     teams.value = t.data.data;
     workTypes.value = wt.data.data;
+    priceLists.value = pl.data.data;
     if (p) personnel.value = p.data.data;
     if (c) clients.value = c.data.data;
     if (a) areas.value = a.data.data;
@@ -188,6 +192,28 @@ async function detachAsset(rowId) {
 }
 
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '—');
+const fmtEuro = (v) => (v == null ? '—' : Number(v).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' }));
+const fmtDateTime = (iso) => (iso ? new Date(iso).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
+const fmtQty = (v) => Number(v).toLocaleString('it-IT');
+
+async function setPriceList(priceListId) {
+    detailBusy.value = true;
+    detailError.value = '';
+    try {
+        const { data } = await axios.patch(`/api/v1/work-orders/${detail.value.id}`, {
+            price_list_id: priceListId || null,
+            version: detail.value.version,
+        });
+        detail.value = data.data;
+    } catch (err) {
+        detailError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Errore nel cambio di listino';
+        // Su conflitto di versione si ricarica l'ordine: il prossimo tentativo vale
+        if (err.response?.status === 409) await openDetail(detail.value.id);
+    } finally {
+        detailBusy.value = false;
+    }
+}
 
 onMounted(async () => {
     await Promise.all([load(), loadLookups()]);
@@ -360,6 +386,13 @@ onMounted(async () => {
                                     <option v-for="p in personnel" :key="p.id" :value="p.id">{{ p.name }}</option>
                                 </select>
                             </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Listino prezzi</span>
+                                <select v-model="creator.form.price_list_id" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
+                                    <option value="">—</option>
+                                    <option v-for="l in priceLists" :key="l.id" :value="l.id">{{ l.code }} — {{ l.name }}</option>
+                                </select>
+                            </label>
                             <label class="col-span-full block text-xs">
                                 <span class="text-gray-500">Descrizione</span>
                                 <textarea v-model="creator.form.description" rows="2" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" />
@@ -411,12 +444,13 @@ onMounted(async () => {
                         <p v-if="detailError" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="wo-error">{{ detailError }}</p>
 
                         <dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-                            <div class="flex justify-between border-b border-gray-50 py-1"><dt class="text-gray-500">Lavorazione</dt><dd>{{ detail.work_type?.name || '—' }}</dd></div>
-                            <div class="flex justify-between border-b border-gray-50 py-1"><dt class="text-gray-500">Cliente</dt><dd>{{ detail.client?.name || '—' }}</dd></div>
-                            <div class="flex justify-between border-b border-gray-50 py-1"><dt class="text-gray-500">Area</dt><dd>{{ detail.area?.name || '—' }}</dd></div>
-                            <div class="flex justify-between border-b border-gray-50 py-1"><dt class="text-gray-500">Squadra</dt><dd>{{ detail.team?.name || '—' }}</dd></div>
-                            <div class="flex justify-between border-b border-gray-50 py-1"><dt class="text-gray-500">Responsabile</dt><dd>{{ detail.assignee?.name || '—' }}</dd></div>
-                            <div class="flex justify-between border-b border-gray-50 py-1"><dt class="text-gray-500">Periodo</dt><dd>{{ fmt(detail.planned_start) }} – {{ fmt(detail.planned_end) }}</dd></div>
+                            <div class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Lavorazione</dt><dd>{{ detail.work_type?.name || '—' }}</dd></div>
+                            <div class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Cliente</dt><dd>{{ detail.client?.name || '—' }}</dd></div>
+                            <div class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Area</dt><dd>{{ detail.area?.name || '—' }}</dd></div>
+                            <div class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Squadra</dt><dd>{{ detail.team?.name || '—' }}</dd></div>
+                            <div class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Responsabile</dt><dd>{{ detail.assignee?.name || '—' }}</dd></div>
+                            <div class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Periodo</dt><dd>{{ fmt(detail.planned_start) }} – {{ fmt(detail.planned_end) }}</dd></div>
+                            <div class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Listino</dt><dd>{{ detail.price_list?.name || '—' }}</dd></div>
                         </dl>
 
                         <p v-if="detail.description" class="mt-3 whitespace-pre-line rounded-lg bg-gray-50 p-3 text-sm text-gray-700">{{ detail.description }}</p>
@@ -437,6 +471,73 @@ onMounted(async () => {
                             </li>
                             <li v-if="! detail.assets.length" class="px-3 py-3 text-sm text-gray-400">Nessun elemento collegato.</li>
                         </ul>
+
+                        <!-- Consuntivi ed economia -->
+                        <h3 class="mt-5 text-sm font-semibold">Consuntivi ({{ (detail.logs ?? []).length }})</h3>
+                        <div v-if="canManage" class="mt-2 flex items-center gap-2 text-xs">
+                            <span class="text-gray-500">Listino applicato</span>
+                            <select
+                                :value="detail.price_list_id ?? ''"
+                                data-test="wo-price-list"
+                                class="rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-50"
+                                :disabled="detailBusy || detail.status === 'completed' || detail.status === 'cancelled'"
+                                @change="setPriceList($event.target.value)"
+                            >
+                                <option value="">Nessuno</option>
+                                <option v-for="l in priceLists" :key="l.id" :value="l.id">{{ l.code }} — {{ l.name }}</option>
+                            </select>
+                            <span v-if="detail.status === 'completed' || detail.status === 'cancelled'" class="text-gray-400">
+                                (ordine chiuso: il listino non si cambia più)
+                            </span>
+                        </div>
+                        <table v-if="(detail.logs ?? []).length" class="mt-2 w-full text-sm" data-test="wo-logs">
+                            <thead>
+                                <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
+                                    <th class="py-1.5 pr-2 font-medium">Inizio</th>
+                                    <th class="py-1.5 pr-2 font-medium">Operatore</th>
+                                    <th class="py-1.5 pr-2 text-right font-medium">Ore</th>
+                                    <th class="py-1.5 pr-2 text-right font-medium">Quantità</th>
+                                    <th class="py-1.5 font-medium">Note</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-50">
+                                <tr v-for="log in detail.logs" :key="log.id">
+                                    <td class="py-1.5 pr-2 text-gray-600">{{ fmtDateTime(log.started_at) }}</td>
+                                    <td class="py-1.5 pr-2">{{ log.operator?.name ?? '—' }}</td>
+                                    <td class="py-1.5 pr-2 text-right">{{ log.man_hours != null ? fmtQty(log.man_hours) : '—' }}</td>
+                                    <td class="py-1.5 pr-2 text-right">
+                                        {{ log.quantity != null ? `${fmtQty(log.quantity)} ${log.unit ?? ''}` : '—' }}
+                                    </td>
+                                    <td class="max-w-40 truncate py-1.5 text-xs text-gray-500" :title="log.notes ?? ''">{{ log.notes ?? '' }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p v-else class="mt-2 text-sm text-gray-400">Nessun consuntivo registrato dal campo.</p>
+
+                        <div v-if="detail.consuntivo" class="mt-3 rounded-lg bg-gray-50 p-3 text-sm" data-test="wo-economia">
+                            <div class="flex justify-between">
+                                <span class="text-gray-500">Ore uomo totali</span>
+                                <span class="font-medium">{{ fmtQty(detail.consuntivo.total_man_hours) }}</span>
+                            </div>
+                            <div v-for="(qty, unit) in detail.consuntivo.quantities" :key="unit" class="mt-1 flex justify-between">
+                                <span class="text-gray-500">Quantità eseguita ({{ unit || 'senza unità' }})</span>
+                                <span class="font-medium">{{ fmtQty(qty) }}</span>
+                            </div>
+                            <div v-if="detail.consuntivo.valued" class="mt-2 flex justify-between border-t border-gray-200 pt-2">
+                                <span class="text-gray-500">
+                                    Valore da listino
+                                    ({{ fmtQty(detail.consuntivo.valued.quantity ?? 0) }} {{ detail.consuntivo.valued.unit }}
+                                    × {{ fmtEuro(detail.consuntivo.valued.unit_price) }})
+                                </span>
+                                <span class="font-semibold" data-test="wo-valore">{{ fmtEuro(detail.consuntivo.valued.amount) }}</span>
+                            </div>
+                            <p v-else-if="! detail.price_list_id" class="mt-2 border-t border-gray-200 pt-2 text-xs text-gray-400">
+                                Nessun listino applicato: il valore economico non viene calcolato.
+                            </p>
+                            <p v-else class="mt-2 border-t border-gray-200 pt-2 text-xs text-gray-400">
+                                Il listino non ha una voce per la lavorazione di questo ordine.
+                            </p>
+                        </div>
 
                         <div v-if="canManage" class="mt-3">
                             <input

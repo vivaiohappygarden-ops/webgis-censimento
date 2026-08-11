@@ -67,6 +67,10 @@ Route::prefix('v1')->group(function () {
                 ->orderBy('name')->get(['id', 'name']),
         ]))->middleware('can:works.manage');
 
+        Route::apiResource('price-lists', \App\Http\Controllers\Api\V1\PriceListController::class)
+            ->whereUuid('price_list');
+        Route::put('price-lists/{id}/items', [\App\Http\Controllers\Api\V1\PriceListController::class, 'syncItems'])->whereUuid('id');
+
         Route::apiResource('work-orders', \App\Http\Controllers\Api\V1\WorkOrderController::class)
             ->whereUuid('work_order');
         Route::post('work-orders/{id}/transition', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'transition'])->whereUuid('id');

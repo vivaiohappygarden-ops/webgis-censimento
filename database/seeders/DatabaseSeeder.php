@@ -193,6 +193,23 @@ class DatabaseSeeder extends Seeder
             $operator->id => ['tenant_id' => $organization->id, 'member_role' => 'operator'],
         ]);
 
+        // Listino demo: valorizza i consuntivi che arrivano dal campo
+        $priceList = \App\Models\PriceList::query()->withoutGlobalScopes()->firstOrCreate(
+            ['tenant_id' => $organization->id, 'code' => 'LIS-'.now()->year],
+            ['name' => 'Listino interno '.now()->year, 'year' => now()->year, 'source' => 'Interno'],
+        );
+        $demoPrices = ['SFA' => ['mq', 0.35], 'POT' => ['cad', 85.00], 'ABB' => ['cad', 320.00], 'MAD' => ['cad', 140.00]];
+        foreach ($demoPrices as $code => [$unit, $price]) {
+            $workType = \App\Models\WorkType::query()->withoutGlobalScopes()
+                ->where('tenant_id', $organization->id)->where('code', $code)->first();
+            if ($workType) {
+                \App\Models\PriceListItem::query()->withoutGlobalScopes()->firstOrCreate(
+                    ['tenant_id' => $organization->id, 'price_list_id' => $priceList->id, 'work_type_id' => $workType->id],
+                    ['unit' => $unit, 'unit_price' => $price],
+                );
+            }
+        }
+
         if (! \App\Models\WorkOrder::query()->withoutGlobalScopes()->where('tenant_id', $organization->id)->exists()) {
             $pot = \App\Models\WorkType::query()->withoutGlobalScopes()
                 ->where('tenant_id', $organization->id)->where('code', 'POT')->first();
@@ -212,6 +229,7 @@ class DatabaseSeeder extends Seeder
                 'planned_end' => now()->addDays(4)->toDateString(),
                 'team_id' => $team->id,
                 'assigned_to' => $admin->id,
+                'price_list_id' => $priceList->id,
                 'created_by' => $admin->id,
                 'updated_by' => $admin->id,
             ]);

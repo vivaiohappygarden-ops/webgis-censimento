@@ -109,9 +109,11 @@ class WorkOrderController extends Controller implements HasMiddleware
             ->with([
                 'team:id,name', 'assignee:id,name', 'workType:id,code,name,unit',
                 'area:id,name,code', 'client:id,name',
+                'priceList:id,code,name,currency',
                 'assets.asset' => fn ($q) => $q->select('assets.id', 'census_code', 'object_type_id', 'status')
                     ->with('objectType:id,code,name'),
                 'assets.workType:id,code,name,unit',
+                'logs' => fn ($q) => $q->with('operator:id,name')->orderByDesc('started_at'),
             ])
             ->findOrFail($id);
 
@@ -119,8 +121,48 @@ class WorkOrderController extends Controller implements HasMiddleware
             'data' => [
                 ...$workOrder->toArray(),
                 'allowed_transitions' => WorkOrder::TRANSITIONS[$workOrder->status] ?? [],
+                'consuntivo' => $this->consuntivo($workOrder),
             ],
         ]);
+    }
+
+    /**
+     * Riepilogo economico dei consuntivi: ore e quantità totali e, se
+     * l'ordine ha listino e lavorazione, la valorizzazione della quantità
+     * nell'unità di misura della voce di listino corrispondente.
+     */
+    private function consuntivo(WorkOrder $workOrder): array
+    {
+        $logs = $workOrder->logs;
+        $quantities = $logs->whereNotNull('quantity')
+            ->groupBy(fn ($log) => $log->unit ?? '')
+            ->map(fn ($group) => round((float) $group->sum('quantity'), 2));
+
+        $valued = null;
+        if ($workOrder->price_list_id !== null && $workOrder->work_type_id !== null) {
+            $item = \App\Models\PriceListItem::query()
+                ->where('price_list_id', $workOrder->price_list_id)
+                ->where('work_type_id', $workOrder->work_type_id)
+                ->orderByRaw('item_code NULLS FIRST')
+                ->first();
+            if ($item !== null) {
+                // Si valorizza solo la quantità espressa nella stessa unità
+                // della voce di listino: mai moltiplicare mele per prezzo delle pere
+                $quantity = $quantities[$item->unit] ?? null;
+                $valued = [
+                    'unit' => $item->unit,
+                    'unit_price' => (float) $item->unit_price,
+                    'quantity' => $quantity,
+                    'amount' => $quantity !== null ? round($quantity * (float) $item->unit_price, 2) : null,
+                ];
+            }
+        }
+
+        return [
+            'total_man_hours' => round((float) $logs->sum('man_hours'), 2),
+            'quantities' => $quantities,
+            'valued' => $valued,
+        ];
     }
 
     public function update(Request $request, string $id): JsonResponse
@@ -313,6 +355,7 @@ class WorkOrderController extends Controller implements HasMiddleware
             'estimated_duration_min' => ['nullable', 'integer', 'min:0'],
             'team_id' => ['nullable', 'uuid'],
             'assigned_to' => ['nullable', 'uuid'],
+            'price_list_id' => ['nullable', 'uuid'],
             'risks' => ['nullable', 'string'],
             'version' => ['sometimes', 'integer', 'min:1'],
         ]);
@@ -324,6 +367,7 @@ class WorkOrderController extends Controller implements HasMiddleware
             'area_id' => \App\Models\Area::class,
             'work_type_id' => \App\Models\WorkType::class,
             'team_id' => \App\Models\Team::class,
+            'price_list_id' => \App\Models\PriceList::class,
         ] as $key => $model) {
             if (! empty($data[$key])) {
                 $model::query()->findOrFail($data[$key]);

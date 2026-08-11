@@ -4,10 +4,13 @@ WebGIS multi-tenant per la gestione del verde (censimento, catasto alberi/VTA, l
 Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-MODEL.md`,
 `docs/OFFLINE-SYNC.md`, `docs/ZEBRA-INTEGRATION.md`.
 
-## Stile interfaccia (decisione committente 10/08/2026)
+## Stile interfaccia (decisione committente 10/08/2026, agg. 11/08/2026)
 
 - Stile **molto analitico, senza emoji**: nessuna emoji o icona pittografica in etichette,
   pulsanti, titoli, messaggi o placeholder dell'interfaccia.
+- Stile **pulito e minimale**; carattere unico **Courier New** (monospazio di sistema,
+  fallback `Courier, ui-monospace, monospace`), definito in `resources/css/app.css`
+  (`--font-sans`/`--font-mono` + `.maplibregl-map`): niente webfont esterni.
 - Ammessi solo simboli tipografici funzionali: frecce di navigazione (← →), "✕" per chiudere.
 - Preferire testo sobrio, dati in evidenza, tabelle dense; l'informazione prevale sulla decorazione.
 - Lingua dell'interfaccia e dei messaggi: italiano.

@@ -35,4 +35,9 @@ class WorkLog extends Model
     {
         return $this->belongsTo(WorkOrder::class);
     }
+
+    public function operator()
+    {
+        return $this->belongsTo(User::class, 'operator_id');
+    }
 }

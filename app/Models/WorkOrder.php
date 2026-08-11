@@ -92,6 +92,11 @@ class WorkOrder extends Model
         return $this->belongsTo(User::class, 'assigned_to');
     }
 
+    public function priceList()
+    {
+        return $this->belongsTo(PriceList::class);
+    }
+
     public function assets()
     {
         return $this->hasMany(WorkOrderAsset::class);
