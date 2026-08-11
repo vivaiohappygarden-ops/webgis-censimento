@@ -170,6 +170,63 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
+        // Lavorazioni base e squadra demo per il modulo Lavori
+        $workTypes = [
+            ['code' => 'SFA', 'name' => 'Sfalcio tappeto erboso', 'category' => 'verde orizzontale', 'unit' => 'mq', 'applicable_geometry' => 'S'],
+            ['code' => 'POT', 'name' => 'Potatura', 'category' => 'verde verticale', 'unit' => 'cad', 'applicable_geometry' => 'P', 'requires_photos' => true],
+            ['code' => 'ABB', 'name' => 'Abbattimento', 'category' => 'verde verticale', 'unit' => 'cad', 'applicable_geometry' => 'P', 'requires_photos' => true],
+            ['code' => 'MAD', 'name' => 'Messa a dimora', 'category' => 'verde verticale', 'unit' => 'cad', 'applicable_geometry' => 'P'],
+        ];
+        foreach ($workTypes as $wt) {
+            \App\Models\WorkType::query()->withoutGlobalScopes()->firstOrCreate(
+                ['tenant_id' => $organization->id, 'code' => $wt['code']],
+                $wt,
+            );
+        }
+
+        $team = \App\Models\Team::query()->withoutGlobalScopes()->firstOrCreate(
+            ['tenant_id' => $organization->id, 'code' => 'SQ1'],
+            ['name' => 'Squadra 1', 'leader_id' => $admin->id],
+        );
+        $team->members()->syncWithoutDetaching([
+            $admin->id => ['tenant_id' => $organization->id, 'member_role' => 'leader'],
+            $operator->id => ['tenant_id' => $organization->id, 'member_role' => 'operator'],
+        ]);
+
+        if (! \App\Models\WorkOrder::query()->withoutGlobalScopes()->where('tenant_id', $organization->id)->exists()) {
+            $pot = \App\Models\WorkType::query()->withoutGlobalScopes()
+                ->where('tenant_id', $organization->id)->where('code', 'POT')->first();
+            $treeAssetId = Asset::query()->withoutGlobalScopes()
+                ->where('tenant_id', $organization->id)->where('census_code', 'ALB-0001')->value('id');
+
+            $workOrder = \App\Models\WorkOrder::create([
+                'tenant_id' => $organization->id,
+                'code' => 'ODL-'.now()->year.'-0001',
+                'client_id' => $client->id,
+                'area_id' => $area->id,
+                'work_type_id' => $pot?->id,
+                'title' => 'Potatura di contenimento tigli Parco Demo',
+                'status' => 'assigned',
+                'priority' => 'high',
+                'planned_start' => now()->addDays(3)->toDateString(),
+                'planned_end' => now()->addDays(4)->toDateString(),
+                'team_id' => $team->id,
+                'assigned_to' => $admin->id,
+                'created_by' => $admin->id,
+                'updated_by' => $admin->id,
+            ]);
+            if ($treeAssetId) {
+                \App\Models\WorkOrderAsset::create([
+                    'tenant_id' => $organization->id,
+                    'work_order_id' => $workOrder->id,
+                    'asset_id' => $treeAssetId,
+                    'work_type_id' => $pot?->id,
+                    'planned_quantity' => 1,
+                    'unit' => 'cad',
+                ]);
+            }
+        }
+
         $this->command?->info('Tenant demo pronto: login admin@demo.local / password (slug organizzazione: demo).');
     }
 }

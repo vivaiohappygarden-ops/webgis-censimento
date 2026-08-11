@@ -15,6 +15,7 @@ const nav = computed(() =>
         { label: 'Mappa', href: '/mappa', show: can('assets.view') },
         { label: 'Censimento', href: '/censimento', show: can('assets.view') },
         { label: 'VTA', href: '/vta', show: can('assets.view') },
+        { label: 'Lavori', href: '/lavori', show: can('works.view') },
         { label: 'Territorio', href: '/territorio', show: can('clients.view') },
         { label: 'Catalogo', href: '/catalogo', show: can('catalog.view') },
         { label: 'Campo (operatore)', href: '/operatore', show: can('assets.create') },

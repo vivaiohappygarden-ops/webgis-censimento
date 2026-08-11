@@ -1,0 +1,136 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Team;
+use App\Models\WorkOrder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\InteractsWithTenant;
+use Tests\TestCase;
+
+class WorkOrderTest extends TestCase
+{
+    use InteractsWithTenant, RefreshDatabase;
+
+    private $organization;
+
+    private $user;
+
+    private $area;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        [$this->organization, $this->user] = $this->createTenantUser();
+        $this->area = $this->createArea($this->organization);
+        $this->actingAsTenantUser($this->user);
+    }
+
+    public function test_work_orders_get_sequential_codes_per_year(): void
+    {
+        $first = $this->postJson('/api/v1/work-orders', ['title' => 'Sfalcio primaverile'])
+            ->assertCreated()->json('data');
+        $second = $this->postJson('/api/v1/work-orders', ['title' => 'Potatura filare'])
+            ->assertCreated()->json('data');
+
+        $year = now()->year;
+        $this->assertSame("ODL-{$year}-0001", $first['code']);
+        $this->assertSame("ODL-{$year}-0002", $second['code']);
+        $this->assertSame('draft', $first['status']);
+    }
+
+    public function test_state_machine_allows_only_valid_transitions(): void
+    {
+        $team = Team::create(['tenant_id' => $this->organization->id, 'name' => 'Squadra A']);
+        $id = $this->postJson('/api/v1/work-orders', ['title' => 'Ordine', 'team_id' => $team->id])
+            ->json('data.id');
+
+        // draft -> completed non è ammesso
+        $this->postJson("/api/v1/work-orders/{$id}/transition", ['status' => 'completed'])
+            ->assertUnprocessable();
+
+        // Percorso valido: draft -> planned -> assigned -> in_progress -> completed
+        foreach (['planned', 'assigned', 'in_progress', 'completed'] as $status) {
+            $this->postJson("/api/v1/work-orders/{$id}/transition", ['status' => $status])
+                ->assertOk()->assertJsonPath('data.status', $status);
+        }
+
+        // Da completed non si esce
+        $this->postJson("/api/v1/work-orders/{$id}/transition", ['status' => 'in_progress'])
+            ->assertUnprocessable();
+    }
+
+    public function test_assignment_required_before_assigning(): void
+    {
+        $id = $this->postJson('/api/v1/work-orders', ['title' => 'Senza squadra'])->json('data.id');
+        $this->postJson("/api/v1/work-orders/{$id}/transition", ['status' => 'planned'])->assertOk();
+
+        // Senza squadra né responsabile il passaggio ad 'assigned' è rifiutato
+        $this->postJson("/api/v1/work-orders/{$id}/transition", ['status' => 'assigned'])
+            ->assertUnprocessable();
+    }
+
+    public function test_stale_version_is_rejected_with_conflict(): void
+    {
+        $id = $this->postJson('/api/v1/work-orders', ['title' => 'Concorrenza'])->json('data.id');
+
+        $this->postJson("/api/v1/work-orders/{$id}/transition", ['status' => 'planned', 'version' => 1])
+            ->assertOk();
+        $this->postJson("/api/v1/work-orders/{$id}/transition", ['status' => 'cancelled', 'version' => 1])
+            ->assertConflict();
+    }
+
+    public function test_assets_can_be_attached_and_detached(): void
+    {
+        $type = $this->makeObjectType($this->organization, 'P');
+        $assetId = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $type->id,
+            'census_code' => 'WO-EL-1',
+            'geometry' => $this->pointGeometry(),
+        ])->json('data.id');
+
+        $woId = $this->postJson('/api/v1/work-orders', ['title' => 'Con elementi'])->json('data.id');
+
+        $detail = $this->postJson("/api/v1/work-orders/{$woId}/assets", ['asset_id' => $assetId])
+            ->assertOk()->json('data');
+        $this->assertCount(1, $detail['assets']);
+        $this->assertSame('WO-EL-1', $detail['assets'][0]['asset']['census_code']);
+
+        // Doppione rifiutato
+        $this->postJson("/api/v1/work-orders/{$woId}/assets", ['asset_id' => $assetId])
+            ->assertUnprocessable();
+
+        $this->deleteJson("/api/v1/work-orders/{$woId}/assets/{$detail['assets'][0]['id']}")
+            ->assertOk()->assertJsonCount(0, 'data.assets');
+    }
+
+    public function test_operator_can_view_but_not_manage(): void
+    {
+        $this->postJson('/api/v1/work-orders', ['title' => 'Visibile'])->assertCreated();
+
+        [, $operator] = [null, \App\Models\User::factory()->create(['tenant_id' => $this->organization->id])];
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($this->organization->id);
+        $operator->assignRole('operatore');
+        $this->actingAsTenantUser($operator);
+
+        $this->getJson('/api/v1/work-orders')->assertOk()->assertJsonCount(1, 'data');
+        $this->postJson('/api/v1/work-orders', ['title' => 'Vietato'])->assertForbidden();
+    }
+
+    public function test_work_orders_are_tenant_isolated(): void
+    {
+        $id = $this->postJson('/api/v1/work-orders', ['title' => 'Riservato'])->json('data.id');
+
+        [, $otherUser] = $this->createTenantUser();
+        $this->actingAsTenantUser($otherUser);
+
+        $this->getJson('/api/v1/work-orders')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson("/api/v1/work-orders/{$id}")->assertNotFound();
+
+        // La numerazione riparte per ogni tenant
+        $this->postJson('/api/v1/work-orders', ['title' => 'Altro tenant'])
+            ->assertCreated()->assertJsonPath('data.code', 'ODL-'.now()->year.'-0001');
+    }
+}

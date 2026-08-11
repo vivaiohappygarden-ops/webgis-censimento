@@ -18,6 +18,7 @@ class TenantProvisioner
         'areas.view', 'areas.create', 'areas.update', 'areas.delete',
         'assets.view', 'assets.create', 'assets.update', 'assets.delete',
         'clients.view', 'clients.manage',
+        'works.view', 'works.manage',
         'users.manage',
     ];
 
@@ -26,8 +27,9 @@ class TenantProvisioner
         'tecnico' => [
             'catalog.view', 'areas.view', 'areas.create', 'areas.update',
             'assets.view', 'assets.create', 'assets.update', 'assets.delete', 'clients.view',
+            'works.view', 'works.manage',
         ],
-        'operatore' => ['catalog.view', 'areas.view', 'assets.view', 'assets.create', 'assets.update'],
+        'operatore' => ['catalog.view', 'areas.view', 'assets.view', 'assets.create', 'assets.update', 'works.view'],
         'cliente' => ['areas.view', 'assets.view'],
     ];
 

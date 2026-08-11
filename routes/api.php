@@ -55,6 +55,24 @@ Route::prefix('v1')->group(function () {
         Route::get('vta/tutelati', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'tutelati']);
         Route::get('vta/bilancio', [\App\Http\Controllers\Api\V1\TreeBalanceController::class, 'index']);
 
+        Route::get('teams', [\App\Http\Controllers\Api\V1\TeamController::class, 'index']);
+        Route::post('teams', [\App\Http\Controllers\Api\V1\TeamController::class, 'store']);
+        Route::patch('teams/{id}', [\App\Http\Controllers\Api\V1\TeamController::class, 'update'])->whereUuid('id');
+
+        Route::get('work-types', fn () => response()->json([
+            'data' => \App\Models\WorkType::query()->where('is_active', true)->orderBy('name')->get(),
+        ]))->middleware('can:works.view');
+        Route::get('personnel', fn () => response()->json([
+            'data' => \App\Models\User::query()->where('user_type', 'internal')
+                ->orderBy('name')->get(['id', 'name']),
+        ]))->middleware('can:works.manage');
+
+        Route::apiResource('work-orders', \App\Http\Controllers\Api\V1\WorkOrderController::class)
+            ->whereUuid('work_order');
+        Route::post('work-orders/{id}/transition', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'transition'])->whereUuid('id');
+        Route::post('work-orders/{id}/assets', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'attachAsset'])->whereUuid('id');
+        Route::delete('work-orders/{id}/assets/{rowId}', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'detachAsset'])->whereUuid(['id', 'rowId']);
+
         Route::apiResource('areas', AreaController::class)->whereUuid('area');
         Route::apiResource('assets', AssetController::class)->whereUuid('asset');
 
