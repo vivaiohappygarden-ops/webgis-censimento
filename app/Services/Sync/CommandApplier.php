@@ -460,7 +460,19 @@ class CommandApplier
 
         $order->status = $target;
         if ($target === 'completed') {
-            $order->completed_at = now();
+            // Il lavoro è stato completato quando l'operatore ha premuto il
+            // pulsante in campo (client_ts), non quando il device ha ritrovato
+            // la rete: altrimenti il rendiconto attribuisce il mese sbagliato.
+            // Valori non plausibili (futuro, o più vecchi di 30 giorni) cadono
+            // sull'ora del server (OFFLINE-SYNC §10.3)
+            $completedAt = now();
+            if (! empty($command['client_ts'])) {
+                $claimed = \Illuminate\Support\Carbon::parse($command['client_ts'])->utc();
+                if ($claimed->lte(now()->addMinutes(10)) && $claimed->gte(now()->subDays(30))) {
+                    $completedAt = $claimed;
+                }
+            }
+            $order->completed_at = $completedAt;
         }
         $order->version += 1;
         $order->updated_by = $user->id;

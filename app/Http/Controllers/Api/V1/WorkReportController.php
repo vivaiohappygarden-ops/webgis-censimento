@@ -16,6 +16,13 @@ use Illuminate\Routing\Controllers\Middleware;
  */
 class WorkReportController extends Controller implements HasMiddleware
 {
+    /**
+     * Il rendiconto ragiona in giorni italiani: i confini del periodo e la
+     * data di completamento mostrata devono usare lo stesso fuso, o un
+     * lavoro chiuso a mezzanotte finirebbe nel mese sbagliato.
+     */
+    private const TIMEZONE = 'Europe/Rome';
+
     public static function middleware(): array
     {
         return [new Middleware('can:works.view')];
@@ -27,14 +34,20 @@ class WorkReportController extends Controller implements HasMiddleware
             'from' => ['required', 'date'],
             'to' => ['required', 'date', 'after_or_equal:from'],
             'client_id' => ['nullable', 'uuid'],
+        ], [
+            'from.required' => 'Indicare la data iniziale del periodo.',
+            'to.required' => 'Indicare la data finale del periodo.',
+            'to.after_or_equal' => 'La data finale deve essere uguale o successiva a quella iniziale.',
         ]);
 
         $orders = WorkOrder::query()
             ->where('status', 'completed')
             ->whereNotNull('completed_at')
             ->whereBetween('completed_at', [
-                $request->date('from')->startOfDay(),
-                $request->date('to')->endOfDay(),
+                // ->utc() prima del binding: il driver serializza l'orario senza
+                // offset e Postgres lo leggerebbe nel fuso di sessione (UTC)
+                \Illuminate\Support\Carbon::parse($data['from'], self::TIMEZONE)->startOfDay()->utc(),
+                \Illuminate\Support\Carbon::parse($data['to'], self::TIMEZONE)->endOfDay()->utc(),
             ])
             ->when(! empty($data['client_id']), fn ($q) => $q->where('client_id', $data['client_id']))
             ->with([
@@ -45,14 +58,18 @@ class WorkReportController extends Controller implements HasMiddleware
             ->orderBy('completed_at')
             ->get();
 
-        $rows = $orders->map(function (WorkOrder $order) use ($economics) {
-            $consuntivo = $economics->consuntivo($order);
+        // Voci di listino per tutte le coppie listino+lavorazione in UNA query
+        $itemsByPair = $economics->itemsForOrders($orders);
+
+        $rows = $orders->map(function (WorkOrder $order) use ($economics, $itemsByPair) {
+            $consuntivo = $economics->consuntivo($order, $itemsByPair);
             $valued = $consuntivo['valued'];
 
             // Stato della valorizzazione, dichiarato: un rendiconto che tace
             // il motivo di un importo mancante non è un rendiconto
             $valueState = match (true) {
                 $order->price_list_id === null => 'no_list',
+                $order->work_type_id === null => 'no_work_type',
                 $valued === null => 'no_item',
                 ($valued['ambiguous'] ?? false) === true => 'ambiguous',
                 $valued['amount'] === null => 'no_quantity',
@@ -69,6 +86,9 @@ class WorkReportController extends Controller implements HasMiddleware
                 'team' => $order->team?->name,
                 'price_list' => $order->priceList?->code,
                 'completed_at' => $order->completed_at?->toIso8601String(),
+                // Data già formattata nel fuso del rendiconto: tabella e CSV
+                // la usano così com'è, senza reinterpretarla nel fuso del browser
+                'completed_on' => $order->completed_at?->timezone(self::TIMEZONE)->format('d/m/Y'),
                 'man_hours' => round((float) $order->logs->sum('man_hours'), 2),
                 'quantities' => $consuntivo['quantities'],
                 'amount' => $valueState === 'ok' ? $valued['amount'] : null,

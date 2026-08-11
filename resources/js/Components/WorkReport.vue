@@ -11,6 +11,7 @@ const emit = defineEmits(['open']);
 const VALUE_STATES = {
     ambiguous: 'Più voci di listino: importo non univoco',
     no_list: 'Senza listino',
+    no_work_type: 'Ordine senza lavorazione',
     no_item: 'Listino senza voce per la lavorazione',
     no_quantity: 'Nessuna quantità nell\'unità del listino',
 };
@@ -28,6 +29,7 @@ const filters = reactive({
 const report = ref(null);
 const loading = ref(false);
 const loadError = ref(false);
+const validationError = ref('');
 
 // Le risposte fuori ordine vanno scartate: vale solo l'interrogazione più recente
 let seq = 0;
@@ -44,13 +46,30 @@ async function reload() {
         if (mySeq !== seq) return;
         report.value = data;
         loadError.value = false;
-    } catch {
-        if (mySeq === seq) loadError.value = true;
+        validationError.value = '';
+    } catch (err) {
+        if (mySeq !== seq) return;
+        // Un periodo scritto male non è un problema di rete: "Riprova"
+        // rilancerebbe la stessa richiesta sbagliata
+        if (err.response?.status === 422) {
+            validationError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+                ?? 'Periodo non valido: controlla le date.';
+            loadError.value = false;
+        } else {
+            loadError.value = true;
+            validationError.value = '';
+        }
     } finally {
         if (mySeq === seq) loading.value = false;
     }
 }
 defineExpose({ reload });
+
+// Chi non gestisce i lavori non ha l'anagrafica clienti: il filtro si
+// popola in subordine dai clienti presenti nel rendiconto caricato
+const clientOptions = computed(() => (props.clients.length
+    ? props.clients
+    : (report.value?.clients ?? []).map((g) => g.client).filter(Boolean)));
 
 function setMonth(offset) {
     const base = new Date();
@@ -62,11 +81,19 @@ function setMonth(offset) {
 
 const fmtEuro = (v) => (v == null ? '—' : Number(v).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' }));
 const fmtQty = (v) => Number(v).toLocaleString('it-IT');
-const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('it-IT') : '—');
+// Data solo-testo YYYY-MM-DD -> GG/MM/AAAA senza passare da Date (che la
+// reinterpreterebbe come mezzanotte UTC, sbagliando giorno in certi fusi)
+const fmtYmd = (s) => (s ? s.split('-').reverse().join('/') : '—');
+// Numero in formato foglio di calcolo italiano: virgola decimale
+const csvNum = (v) => (v == null ? '' : String(v).replace('.', ','));
 const quantitiesLabel = (quantities) => Object.entries(quantities ?? {})
     .map(([unit, qty]) => `${fmtQty(qty)} ${unit || 'senza unità'}`).join(', ') || '—';
 
-const periodLabel = computed(() => `${fmtDate(filters.from)} – ${fmtDate(filters.to)}`);
+// Etichetta e nome file usano il periodo del rendiconto CARICATO, non i
+// filtri correnti (che potrebbero essere cambiati senza ricaricare)
+const periodLabel = computed(() => (report.value
+    ? `${fmtYmd(report.value.from)} – ${fmtYmd(report.value.to)}`
+    : ''));
 
 // Esport CSV con separatore ';' (convenzione italiana per i fogli di calcolo)
 function exportCsv() {
@@ -83,20 +110,20 @@ function exportCsv() {
                 row.title,
                 row.work_type ?? '',
                 row.team ?? '',
-                fmtDate(row.completed_at),
-                row.man_hours,
+                row.completed_on ?? '',
+                csvNum(row.man_hours),
                 quantitiesLabel(row.quantities),
-                row.amount != null ? String(row.amount).replace('.', ',') : '',
+                csvNum(row.amount),
                 row.value_state === 'ok' ? '' : (VALUE_STATES[row.value_state] ?? row.value_state),
             ].map(esc).join(';'));
         }
     }
-    lines.push(['TOTALE', '', '', '', '', '', report.value.total_hours, '', String(report.value.total_amount).replace('.', ','), ''].map(esc).join(';'));
+    lines.push(['TOTALE', '', '', '', '', '', csvNum(report.value.total_hours), '', csvNum(report.value.total_amount), ''].map(esc).join(';'));
 
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `rendiconto-lavori-${filters.from}-${filters.to}.csv`;
+    a.download = `rendiconto-lavori-${report.value.from}-${report.value.to}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
 }
@@ -119,7 +146,7 @@ onMounted(reload);
                 <span class="text-gray-500">Cliente</span>
                 <select v-model="filters.client_id" data-test="report-client" class="mt-1 rounded-lg border border-gray-300 px-2 py-2 text-sm" @change="reload">
                     <option value="">Tutti</option>
-                    <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                    <option v-for="c in clientOptions" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
             </label>
             <button class="rounded-lg border border-gray-300 px-3 py-2 text-sm" @click="setMonth(0)">Questo mese</button>
@@ -132,6 +159,9 @@ onMounted(reload);
             >Esporta CSV</button>
         </div>
 
+        <p v-if="validationError" class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" data-test="report-validation">
+            {{ validationError }}
+        </p>
         <p v-if="loadError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
             Caricamento del rendiconto non riuscito.
             <button class="ml-1 font-medium underline" @click="reload">Riprova</button>
@@ -162,9 +192,12 @@ onMounted(reload);
 
             <!-- Un blocco per cliente -->
             <div v-for="group in report.clients" :key="group.client?.id ?? 'none'" class="overflow-hidden rounded-xl border border-gray-200 bg-white" data-test="report-client-group">
-                <div class="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
+                <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5">
                     <h2 class="text-sm font-semibold">{{ group.client?.name ?? 'Senza cliente' }}</h2>
                     <div class="text-sm">
+                        <span v-if="group.unvalued_count" class="mr-2 text-xs text-amber-700">
+                            {{ group.unvalued_count }} senza importo
+                        </span>
                         <span class="text-gray-500">{{ fmtQty(group.subtotal_hours) }} ore · </span>
                         <span class="font-semibold">{{ fmtEuro(group.subtotal_amount) }}</span>
                     </div>
@@ -191,7 +224,7 @@ onMounted(reload);
                             <td class="px-4 py-2 font-medium">{{ row.code }}</td>
                             <td class="max-w-56 truncate px-4 py-2">{{ row.title }}</td>
                             <td class="px-4 py-2 text-gray-600">{{ row.work_type ?? '—' }}</td>
-                            <td class="px-4 py-2 text-gray-500">{{ fmtDate(row.completed_at) }}</td>
+                            <td class="px-4 py-2 text-gray-500">{{ row.completed_on ?? '—' }}</td>
                             <td class="px-4 py-2 text-right">{{ fmtQty(row.man_hours) }}</td>
                             <td class="px-4 py-2 text-right text-gray-600">{{ quantitiesLabel(row.quantities) }}</td>
                             <td class="px-4 py-2 text-right">

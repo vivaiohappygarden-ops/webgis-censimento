@@ -13,11 +13,40 @@ use App\Models\WorkOrder;
  */
 class WorkOrderEconomics
 {
+    /** Chiave della coppia listino+lavorazione nelle lookup precaricate. */
+    public static function pairKey(string $priceListId, string $workTypeId): string
+    {
+        return $priceListId.'|'.$workTypeId;
+    }
+
+    /**
+     * Voci di listino per tutte le coppie (listino, lavorazione) di un insieme
+     * di ordini, in UNA query: il rendiconto non deve fare una query per ordine.
+     *
+     * @param  \Illuminate\Support\Collection<int, WorkOrder>  $orders
+     * @return \Illuminate\Support\Collection raggruppata per pairKey
+     */
+    public function itemsForOrders($orders)
+    {
+        $pairs = $orders
+            ->filter(fn ($o) => $o->price_list_id !== null && $o->work_type_id !== null);
+        if ($pairs->isEmpty()) {
+            return collect();
+        }
+
+        return PriceListItem::query()
+            ->whereIn('price_list_id', $pairs->pluck('price_list_id')->unique())
+            ->whereIn('work_type_id', $pairs->pluck('work_type_id')->unique())
+            ->get()
+            ->groupBy(fn ($item) => self::pairKey($item->price_list_id, $item->work_type_id));
+    }
+
     /**
      * @param  WorkOrder  $workOrder  con la relazione logs già caricata
+     * @param  \Illuminate\Support\Collection|null  $itemsByPair  lookup di itemsForOrders (facoltativa)
      * @return array{total_man_hours: float, quantities: \Illuminate\Support\Collection, valued: ?array}
      */
-    public function consuntivo(WorkOrder $workOrder): array
+    public function consuntivo(WorkOrder $workOrder, $itemsByPair = null): array
     {
         $logs = $workOrder->logs;
         $quantities = $logs->whereNotNull('quantity')
@@ -26,10 +55,12 @@ class WorkOrderEconomics
 
         $valued = null;
         if ($workOrder->price_list_id !== null && $workOrder->work_type_id !== null) {
-            $items = PriceListItem::query()
-                ->where('price_list_id', $workOrder->price_list_id)
-                ->where('work_type_id', $workOrder->work_type_id)
-                ->get();
+            $items = $itemsByPair !== null
+                ? ($itemsByPair[self::pairKey($workOrder->price_list_id, $workOrder->work_type_id)] ?? collect())
+                : PriceListItem::query()
+                    ->where('price_list_id', $workOrder->price_list_id)
+                    ->where('work_type_id', $workOrder->work_type_id)
+                    ->get();
             if ($items->count() > 1) {
                 // Più fasce di prezzo (codici articolo diversi): scegliere in
                 // silenzio darebbe un importo che può essere semplicemente sbagliato

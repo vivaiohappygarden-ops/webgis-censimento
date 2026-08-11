@@ -119,6 +119,32 @@ class WorkReportTest extends TestCase
             ->assertOk()->assertJsonPath('orders_count', 1);
     }
 
+    public function test_period_boundaries_follow_italian_days_not_utc(): void
+    {
+        $client = Client::create(['tenant_id' => $this->organization->id, 'name' => 'Notturno', 'client_type' => 'private']);
+        // 22:30 UTC del 31/08 = 00:30 del 1/09 in Italia: appartiene a settembre
+        $order = $this->makeCompleted(['client_id' => $client->id], completedAt: '2026-08-31 22:30:00');
+
+        $this->getJson('/api/v1/reports/lavori?from=2026-08-01&to=2026-08-31')
+            ->assertOk()->assertJsonPath('orders_count', 0);
+
+        $september = $this->getJson('/api/v1/reports/lavori?from=2026-09-01&to=2026-09-30')
+            ->assertOk()->json();
+        $this->assertSame(1, $september['orders_count']);
+        $this->assertSame('01/09/2026', $september['clients'][0]['orders'][0]['completed_on']);
+        $this->assertSame($order->id, $september['clients'][0]['orders'][0]['id']);
+    }
+
+    public function test_order_without_work_type_gets_its_own_value_state(): void
+    {
+        $this->makeCompleted(['price_list_id' => $this->listId], [['man_hours' => 2]]);
+
+        $report = $this->getJson('/api/v1/reports/lavori?from=2026-08-01&to=2026-08-31')
+            ->assertOk()->json();
+
+        $this->assertSame('no_work_type', $report['clients'][0]['orders'][0]['value_state']);
+    }
+
     public function test_report_requires_a_period(): void
     {
         $this->getJson('/api/v1/reports/lavori')->assertUnprocessable();

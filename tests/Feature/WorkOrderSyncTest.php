@@ -213,6 +213,29 @@ class WorkOrderSyncTest extends TestCase
             ->assertJsonPath('results.0.code', 'VALIDATION_FAILED');
     }
 
+    public function test_offline_completion_uses_the_field_timestamp_not_the_sync_time(): void
+    {
+        $order = $this->makeOrder(['status' => 'in_progress']);
+        $fieldTime = now()->subDay()->startOfSecond();
+
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([[
+            ...$this->transitionCommand($order, 'completed', 1),
+            'client_ts' => $fieldTime->toIso8601String(),
+        ]]))->assertOk()->assertJsonPath('results.0.status', 'applied');
+
+        // Il lavoro risulta completato quando l'operatore ha premuto il
+        // pulsante in campo, non quando il device ha ritrovato la rete
+        $this->assertTrue($order->fresh()->completed_at->equalTo($fieldTime));
+
+        // Un timestamp non plausibile (60 giorni fa) cade sull'ora del server
+        $stale = $this->makeOrder(['status' => 'in_progress']);
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([[
+            ...$this->transitionCommand($stale, 'completed', 1),
+            'client_ts' => now()->subDays(60)->toIso8601String(),
+        ]]))->assertOk()->assertJsonPath('results.0.status', 'applied');
+        $this->assertTrue($stale->fresh()->completed_at->greaterThan(now()->subMinute()));
+    }
+
     public function test_worklog_hours_beyond_column_range_are_rejected_not_internal(): void
     {
         $order = $this->makeOrder();
