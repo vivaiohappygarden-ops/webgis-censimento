@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import WorkAgenda from '@/Components/WorkAgenda.vue';
 
 const page = usePage();
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('works.manage'));
@@ -31,6 +32,8 @@ const rows = ref([]);
 const meta = reactive({ total: 0, current_page: 1, last_page: 1 });
 const filters = reactive({ status: '', q: '', page: 1 });
 const loading = ref(false);
+const view = ref('elenco');
+const agendaRef = ref(null);
 
 const teams = ref([]);
 const personnel = ref([]);
@@ -98,6 +101,7 @@ async function createOrder() {
         creator.open = false;
         resetForm();
         await load();
+        await agendaRef.value?.reload();
         await openDetail(data.data.id);
     } catch (err) {
         creator.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
@@ -129,6 +133,8 @@ async function doTransition(status) {
         });
         detail.value = data.data;
         await load();
+        // L'agenda, se aperta, deve riflettere subito il nuovo stato
+        await agendaRef.value?.reload();
     } catch (err) {
         detailError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
             ?? err.response?.data?.message ?? 'Errore nel cambio di stato';
@@ -196,7 +202,7 @@ onMounted(async () => {
             <div class="mb-4 flex items-center justify-between">
                 <div>
                     <h1 class="text-xl font-semibold">Ordini di lavoro</h1>
-                    <p class="text-sm text-gray-500">{{ meta.total }} ordini · flusso: bozza, pianificato, assegnato, in corso, completato</p>
+                    <p class="text-sm text-gray-500">{{ meta.total }} {{ meta.total === 1 ? 'ordine' : 'ordini' }} · flusso: bozza, pianificato, assegnato, in corso, completato</p>
                 </div>
                 <button
                     v-if="canManage"
@@ -206,7 +212,32 @@ onMounted(async () => {
                 >Nuovo ordine</button>
             </div>
 
-            <div class="mb-3 flex flex-wrap gap-2">
+            <!-- Selettore vista: elenco tabellare o agenda settimanale -->
+            <div class="mb-3 inline-flex overflow-hidden rounded-lg border border-gray-300 text-sm">
+                <button
+                    class="px-4 py-1.5 font-medium"
+                    :class="view === 'elenco' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    data-test="view-elenco"
+                    @click="view = 'elenco'"
+                >Elenco</button>
+                <button
+                    class="border-l border-gray-300 px-4 py-1.5 font-medium"
+                    :class="view === 'agenda' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    data-test="view-agenda"
+                    @click="view = 'agenda'"
+                >Agenda</button>
+            </div>
+
+            <WorkAgenda
+                v-if="view === 'agenda'"
+                ref="agendaRef"
+                :teams="teams"
+                :personnel="personnel"
+                :can-manage="canManage"
+                @open="openDetail"
+            />
+
+            <div v-if="view === 'elenco'" class="mb-3 flex flex-wrap gap-2">
                 <select v-model="filters.status" class="rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @change="filters.page = 1; load()">
                     <option value="">Tutti gli stati</option>
                     <option v-for="(label, value) in STATUS_LABELS" :key="value" :value="value">{{ label }}</option>
@@ -219,7 +250,7 @@ onMounted(async () => {
                 >
             </div>
 
-            <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
+            <div v-if="view === 'elenco'" class="overflow-hidden rounded-xl border border-gray-200 bg-white">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
@@ -258,7 +289,7 @@ onMounted(async () => {
                 </table>
             </div>
 
-            <div v-if="meta.last_page > 1" class="mt-3 flex items-center justify-between text-sm">
+            <div v-if="view === 'elenco' && meta.last_page > 1" class="mt-3 flex items-center justify-between text-sm">
                 <button class="rounded-lg border border-gray-300 px-3 py-1.5 disabled:opacity-40" :disabled="meta.current_page <= 1" @click="filters.page -= 1; load()">← Precedente</button>
                 <span class="text-gray-500">Pagina {{ meta.current_page }} di {{ meta.last_page }}</span>
                 <button class="rounded-lg border border-gray-300 px-3 py-1.5 disabled:opacity-40" :disabled="meta.current_page >= meta.last_page" @click="filters.page += 1; load()">Successiva →</button>

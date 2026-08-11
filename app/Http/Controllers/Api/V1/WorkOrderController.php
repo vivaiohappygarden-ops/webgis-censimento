@@ -30,6 +30,11 @@ class WorkOrderController extends Controller implements HasMiddleware
     public function index(Request $request): JsonResponse
     {
         ListQuery::validateUuidFilters($request, ['team_id', 'client_id', 'area_id']);
+        $request->validate([
+            'from' => ['sometimes', 'date'],
+            'to' => ['sometimes', 'date', 'after_or_equal:from'],
+            'unplanned' => ['sometimes', 'boolean'],
+        ]);
 
         $query = WorkOrder::query()
             ->with(['team:id,name', 'assignee:id,name', 'workType:id,code,name,unit', 'area:id,name', 'client:id,name'])
@@ -49,6 +54,20 @@ class WorkOrderController extends Controller implements HasMiddleware
         if ($request->filled('q')) {
             $q = '%'.$request->string('q').'%';
             $query->where(fn ($w) => $w->where('code', 'ilike', $q)->orWhere('title', 'ilike', $q));
+        }
+
+        // Finestra dell'agenda: ordini il cui periodo previsto interseca [from, to]
+        // (un ordine senza fine prevista occupa il solo giorno di inizio)
+        if ($request->filled('from') && $request->filled('to')) {
+            $query->whereNotNull('planned_start')
+                ->whereDate('planned_start', '<=', $request->date('to'))
+                ->whereRaw('COALESCE(planned_end, planned_start) >= ?', [$request->date('from')->toDateString()]);
+        }
+
+        // "Da pianificare": ordini ancora vivi senza data di inizio prevista
+        if ($request->boolean('unplanned')) {
+            $query->whereNull('planned_start')
+                ->whereNotIn('status', ['completed', 'cancelled']);
         }
 
         return response()->json(

@@ -153,6 +153,49 @@ class WorkOrderTest extends TestCase
         $this->postJson('/api/v1/work-orders', ['title' => 'Vietato'])->assertForbidden();
     }
 
+    public function test_agenda_window_returns_only_overlapping_orders(): void
+    {
+        $inWindow = $this->postJson('/api/v1/work-orders', [
+            'title' => 'Dentro la settimana',
+            'planned_start' => '2026-08-12', 'planned_end' => '2026-08-13',
+        ])->json('data.id');
+        $spanning = $this->postJson('/api/v1/work-orders', [
+            'title' => 'A cavallo della finestra',
+            'planned_start' => '2026-08-05', 'planned_end' => '2026-08-20',
+        ])->json('data.id');
+        $singleDay = $this->postJson('/api/v1/work-orders', [
+            'title' => 'Un solo giorno, senza fine prevista',
+            'planned_start' => '2026-08-14',
+        ])->json('data.id');
+        $this->postJson('/api/v1/work-orders', [
+            'title' => 'Fuori finestra',
+            'planned_start' => '2026-08-20', 'planned_end' => '2026-08-22',
+        ]);
+        $this->postJson('/api/v1/work-orders', ['title' => 'Senza date']);
+
+        $ids = collect($this->getJson('/api/v1/work-orders?from=2026-08-10&to=2026-08-16')
+            ->assertOk()->json('data'))->pluck('id');
+
+        $this->assertEqualsCanonicalizing([$inWindow, $spanning, $singleDay], $ids->all());
+
+        // Finestra incoerente rifiutata
+        $this->getJson('/api/v1/work-orders?from=2026-08-16&to=2026-08-10')->assertUnprocessable();
+    }
+
+    public function test_unplanned_filter_returns_live_orders_without_start_date(): void
+    {
+        $unplanned = $this->postJson('/api/v1/work-orders', ['title' => 'Da pianificare'])->json('data.id');
+        $this->postJson('/api/v1/work-orders', [
+            'title' => 'Gia pianificato', 'planned_start' => '2026-08-12',
+        ]);
+        $cancelledId = $this->postJson('/api/v1/work-orders', ['title' => 'Annullato senza date'])->json('data.id');
+        $this->postJson("/api/v1/work-orders/{$cancelledId}/transition", ['status' => 'cancelled'])->assertOk();
+
+        $ids = collect($this->getJson('/api/v1/work-orders?unplanned=1')->assertOk()->json('data'))->pluck('id');
+
+        $this->assertSame([$unplanned], $ids->all());
+    }
+
     public function test_work_orders_are_tenant_isolated(): void
     {
         $id = $this->postJson('/api/v1/work-orders', ['title' => 'Riservato'])->json('data.id');
