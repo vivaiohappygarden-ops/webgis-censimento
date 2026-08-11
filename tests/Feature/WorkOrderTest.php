@@ -168,8 +168,12 @@ class WorkOrderTest extends TestCase
             'planned_start' => '2026-08-14',
         ])->json('data.id');
         $this->postJson('/api/v1/work-orders', [
-            'title' => 'Fuori finestra',
+            'title' => 'Fuori finestra (dopo)',
             'planned_start' => '2026-08-20', 'planned_end' => '2026-08-22',
+        ]);
+        $this->postJson('/api/v1/work-orders', [
+            'title' => 'Fuori finestra (terminato prima)',
+            'planned_start' => '2026-08-01', 'planned_end' => '2026-08-05',
         ]);
         $this->postJson('/api/v1/work-orders', ['title' => 'Senza date']);
 
@@ -178,8 +182,10 @@ class WorkOrderTest extends TestCase
 
         $this->assertEqualsCanonicalizing([$inWindow, $spanning, $singleDay], $ids->all());
 
-        // Finestra incoerente rifiutata
+        // Finestra incoerente o monca rifiutata
         $this->getJson('/api/v1/work-orders?from=2026-08-16&to=2026-08-10')->assertUnprocessable();
+        $this->getJson('/api/v1/work-orders?from=2026-08-10')->assertUnprocessable();
+        $this->getJson('/api/v1/work-orders?to=2026-08-16')->assertUnprocessable();
     }
 
     public function test_unplanned_filter_returns_live_orders_without_start_date(): void

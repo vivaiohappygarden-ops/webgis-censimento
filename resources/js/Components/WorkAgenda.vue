@@ -39,10 +39,13 @@ function addDays(date, n) {
 }
 
 const weekStart = ref(mondayOf(new Date()));
-const todayYmd = ymd(new Date());
+// Ref e non costante: la pagina può restare aperta oltre la mezzanotte
+const todayYmd = ref(ymd(new Date()));
 const rows = ref([]);
 const unplanned = ref([]);
 const loading = ref(false);
+const loadError = ref(false);
+const truncated = reactive({ grid: 0, unplanned: 0 });
 
 const days = computed(() => Array.from({ length: 7 }, (_, i) => {
     const date = addDays(weekStart.value, i);
@@ -60,19 +63,48 @@ const weekLabel = computed(() => {
     return `${fmt(start, { day: 'numeric', month: 'long' })} – ${fmt(end, { day: 'numeric', month: 'long', year: 'numeric' })}`;
 });
 
+// Tutte le pagine, non solo la prima: l'agenda non deve tacere ordini.
+// Oltre il tetto (1000) si segnala quanti ne restano invece di mentire.
+const MAX_PAGES = 10;
+async function fetchAll(params) {
+    const out = [];
+    let page = 1;
+    let total = 0;
+    let lastPage = 1;
+    do {
+        const { data } = await axios.get('/api/v1/work-orders', {
+            params: { ...params, per_page: 100, page },
+        });
+        out.push(...data.data);
+        total = data.total;
+        lastPage = data.last_page;
+        page += 1;
+    } while (page <= lastPage && page <= MAX_PAGES);
+    return { rows: out, missing: Math.max(0, total - out.length) };
+}
+
+// Le risposte fuori ordine (doppio cambio settimana veloce) vanno scartate:
+// vale solo il caricamento più recente
+let reloadSeq = 0;
 async function reload() {
+    const seq = ++reloadSeq;
     loading.value = true;
+    todayYmd.value = ymd(new Date());
     try {
         const [win, unp] = await Promise.all([
-            axios.get('/api/v1/work-orders', {
-                params: { from: days.value[0].ymd, to: days.value[6].ymd, per_page: 100 },
-            }),
-            axios.get('/api/v1/work-orders', { params: { unplanned: 1, per_page: 100 } }),
+            fetchAll({ from: days.value[0].ymd, to: days.value[6].ymd }),
+            fetchAll({ unplanned: 1 }),
         ]);
-        rows.value = win.data.data;
-        unplanned.value = unp.data.data;
+        if (seq !== reloadSeq) return;
+        rows.value = win.rows;
+        unplanned.value = unp.rows;
+        truncated.grid = win.missing;
+        truncated.unplanned = unp.missing;
+        loadError.value = false;
+    } catch {
+        if (seq === reloadSeq) loadError.value = true;
     } finally {
-        loading.value = false;
+        if (seq === reloadSeq) loading.value = false;
     }
 }
 defineExpose({ reload });
@@ -117,7 +149,7 @@ const planner = reactive({
 function openPlanner(order) {
     Object.assign(planner, { open: true, busy: false, error: '', order });
     planner.form = {
-        planned_start: (order.planned_start ?? '').slice(0, 10) || todayYmd,
+        planned_start: (order.planned_start ?? '').slice(0, 10) || todayYmd.value,
         planned_end: (order.planned_end ?? '').slice(0, 10),
         team_id: order.team_id ?? '',
         assigned_to: order.assigned_to ?? '',
@@ -140,6 +172,15 @@ async function savePlan() {
     } catch (err) {
         planner.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
             ?? err.response?.data?.message ?? 'Errore nel salvataggio della pianificazione';
+        // La version locale può essere stantia (es. 409 per modifica di un
+        // collega): si riparte da quella corrente, così il nuovo tentativo vale
+        try {
+            const { data } = await axios.get(`/api/v1/work-orders/${planner.order.id}`);
+            planner.order = data.data;
+            if (err.response?.status === 409) await reload();
+        } catch {
+            // Ordine sparito (eliminato da altri): la modale resta con l'errore
+        }
     } finally {
         planner.busy = false;
     }
@@ -158,6 +199,14 @@ onMounted(reload);
             <span class="ml-2 text-sm font-medium" data-test="agenda-week">{{ weekLabel }}</span>
             <span v-if="loading" class="text-xs text-gray-400">Caricamento…</span>
         </div>
+
+        <p v-if="loadError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="agenda-error">
+            Caricamento dell'agenda non riuscito: controlla la connessione.
+            <button class="ml-1 font-medium underline" @click="reload">Riprova</button>
+        </p>
+        <p v-if="truncated.grid" class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            Mostrati {{ rows.length }} ordini su {{ rows.length + truncated.grid }} nel periodo.
+        </p>
 
         <!-- Griglia squadre x giorni -->
         <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
@@ -214,7 +263,7 @@ onMounted(reload);
         <!-- Da pianificare -->
         <div class="mt-4 rounded-xl border border-gray-200 bg-white">
             <h2 class="border-b border-gray-100 px-4 py-2.5 text-sm font-semibold">
-                Da pianificare ({{ unplanned.length }})
+                Da pianificare ({{ truncated.unplanned ? `primi ${unplanned.length} di ${unplanned.length + truncated.unplanned}` : unplanned.length }})
             </h2>
             <ul class="divide-y divide-gray-50" data-test="agenda-unplanned">
                 <li v-for="o in unplanned" :key="o.id" class="flex items-center gap-3 px-4 py-2 text-sm">

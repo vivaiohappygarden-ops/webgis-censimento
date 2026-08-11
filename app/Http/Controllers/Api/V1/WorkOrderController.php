@@ -30,9 +30,11 @@ class WorkOrderController extends Controller implements HasMiddleware
     public function index(Request $request): JsonResponse
     {
         ListQuery::validateUuidFilters($request, ['team_id', 'client_id', 'area_id']);
+        // La finestra va in coppia: un solo estremo sarebbe ignorato in silenzio
+        // (nullable e non sometimes: required_with deve valere anche sul campo assente)
         $request->validate([
-            'from' => ['sometimes', 'date'],
-            'to' => ['sometimes', 'date', 'after_or_equal:from'],
+            'from' => ['nullable', 'required_with:to', 'date'],
+            'to' => ['nullable', 'required_with:from', 'date', 'after_or_equal:from'],
             'unplanned' => ['sometimes', 'boolean'],
         ]);
 
@@ -58,7 +60,8 @@ class WorkOrderController extends Controller implements HasMiddleware
 
         // Finestra dell'agenda: ordini il cui periodo previsto interseca [from, to]
         // (un ordine senza fine prevista occupa il solo giorno di inizio)
-        if ($request->filled('from') && $request->filled('to')) {
+        $windowed = $request->filled('from') && $request->filled('to');
+        if ($windowed) {
             $query->whereNotNull('planned_start')
                 ->whereDate('planned_start', '<=', $request->date('to'))
                 ->whereRaw('COALESCE(planned_end, planned_start) >= ?', [$request->date('from')->toDateString()]);
@@ -70,8 +73,13 @@ class WorkOrderController extends Controller implements HasMiddleware
                 ->whereNotIn('status', ['completed', 'cancelled']);
         }
 
+        // In agenda l'ordine sensato è quello del calendario, non della creazione
+        $query = $windowed
+            ? $query->orderBy('planned_start')->orderByDesc('created_at')
+            : $query->orderByDesc('created_at');
+
         return response()->json(
-            $query->orderByDesc('created_at')->paginate(ListQuery::perPage($request, 25, 100))
+            $query->paginate(ListQuery::perPage($request, 25, 100))
         );
     }
 

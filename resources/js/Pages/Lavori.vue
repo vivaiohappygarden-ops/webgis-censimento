@@ -202,7 +202,9 @@ onMounted(async () => {
             <div class="mb-4 flex items-center justify-between">
                 <div>
                     <h1 class="text-xl font-semibold">Ordini di lavoro</h1>
-                    <p class="text-sm text-gray-500">{{ meta.total }} {{ meta.total === 1 ? 'ordine' : 'ordini' }} · flusso: bozza, pianificato, assegnato, in corso, completato</p>
+                    <!-- Il conteggio segue i filtri dell'elenco: in agenda sarebbe fuorviante -->
+                    <p v-if="view === 'elenco'" class="text-sm text-gray-500">{{ meta.total }} {{ meta.total === 1 ? 'ordine' : 'ordini' }} · flusso: bozza, pianificato, assegnato, in corso, completato</p>
+                    <p v-else class="text-sm text-gray-500">Programmazione settimanale per squadra</p>
                 </div>
                 <button
                     v-if="canManage"
