@@ -106,6 +106,40 @@ class WorkOrderTest extends TestCase
             ->assertOk()->assertJsonCount(0, 'data.assets');
     }
 
+    public function test_update_cannot_remove_assignment_while_assigned(): void
+    {
+        $team = Team::create(['tenant_id' => $this->organization->id, 'name' => 'Squadra B']);
+        $id = $this->postJson('/api/v1/work-orders', ['title' => 'Guardia', 'team_id' => $team->id])
+            ->json('data.id');
+        $this->postJson("/api/v1/work-orders/{$id}/transition", ['status' => 'planned'])->assertOk();
+        $this->postJson("/api/v1/work-orders/{$id}/transition", ['status' => 'assigned'])->assertOk();
+
+        // Togliere squadra e responsabile a ordine assegnato è rifiutato
+        $this->patchJson("/api/v1/work-orders/{$id}", ['team_id' => null, 'assigned_to' => null])
+            ->assertUnprocessable();
+
+        $this->getJson("/api/v1/work-orders/{$id}")
+            ->assertJsonPath('data.team_id', $team->id);
+    }
+
+    public function test_terminal_orders_are_immutable(): void
+    {
+        $id = $this->postJson('/api/v1/work-orders', ['title' => 'Chiuso'])->json('data.id');
+        $this->postJson("/api/v1/work-orders/{$id}/transition", ['status' => 'cancelled'])->assertOk();
+
+        $this->patchJson("/api/v1/work-orders/{$id}", ['title' => 'Riscritto'])
+            ->assertUnprocessable();
+
+        $type = $this->makeObjectType($this->organization, 'P');
+        $assetId = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $type->id,
+            'geometry' => $this->pointGeometry(),
+        ])->json('data.id');
+        $this->postJson("/api/v1/work-orders/{$id}/assets", ['asset_id' => $assetId])
+            ->assertUnprocessable();
+    }
+
     public function test_operator_can_view_but_not_manage(): void
     {
         $this->postJson('/api/v1/work-orders', ['title' => 'Visibile'])->assertCreated();

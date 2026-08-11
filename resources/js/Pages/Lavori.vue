@@ -108,11 +108,15 @@ async function createOrder() {
 }
 
 async function openDetail(id) {
-    const { data } = await axios.get(`/api/v1/work-orders/${id}`);
-    detail.value = data.data;
-    detailError.value = '';
-    assetSearch.q = '';
-    assetSearch.results = [];
+    try {
+        const { data } = await axios.get(`/api/v1/work-orders/${id}`);
+        detail.value = data.data;
+        detailError.value = '';
+        assetSearch.q = '';
+        assetSearch.results = [];
+    } catch {
+        detailError.value = 'Ordine non trovato o non accessibile.';
+    }
 }
 
 async function doTransition(status) {
@@ -166,9 +170,15 @@ async function attachAsset(asset) {
 }
 
 async function detachAsset(rowId) {
-    const { data } = await axios.delete(`/api/v1/work-orders/${detail.value.id}/assets/${rowId}`);
-    detail.value = data.data;
-    await load();
+    detailError.value = '';
+    try {
+        const { data } = await axios.delete(`/api/v1/work-orders/${detail.value.id}/assets/${rowId}`);
+        detail.value = data.data;
+        await load();
+    } catch (err) {
+        detailError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Errore nella rimozione';
+    }
 }
 
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '—');

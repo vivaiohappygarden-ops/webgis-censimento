@@ -104,7 +104,25 @@ class WorkOrderController extends Controller implements HasMiddleware
             $workOrder = WorkOrder::query()->lockForUpdate()->findOrFail($id);
             $this->assertVersion($request, $workOrder);
 
+            // Gli stati terminali sono immutabili: la storia di un ordine
+            // completato o annullato non si riscrive
+            if (in_array($workOrder->status, ['completed', 'cancelled'], true)) {
+                throw ValidationException::withMessages([
+                    'work_order' => 'Un ordine completato o annullato non è modificabile.',
+                ]);
+            }
+
             $workOrder->fill($data);
+
+            // L'invariante della macchina a stati vale anche qui: un ordine
+            // assegnato o in corso non può restare senza squadra né responsabile
+            if (in_array($workOrder->status, ['assigned', 'in_progress'], true)
+                && $workOrder->team_id === null && $workOrder->assigned_to === null) {
+                throw ValidationException::withMessages([
+                    'team_id' => 'Un ordine assegnato o in corso deve avere una squadra o un responsabile.',
+                ]);
+            }
+
             $workOrder->updated_by = $request->user()->id;
             if ($workOrder->isDirty()) {
                 $workOrder->version += 1;
@@ -163,31 +181,29 @@ class WorkOrderController extends Controller implements HasMiddleware
         ]);
 
         $workOrder = WorkOrder::query()->findOrFail($id);
+        $this->assertNotTerminal($workOrder);
         $asset = Asset::query()->findOrFail($data['asset_id']);
         if (! empty($data['work_type_id'])) {
             \App\Models\WorkType::query()->findOrFail($data['work_type_id']);
         }
 
-        $exists = WorkOrderAsset::query()
-            ->where('work_order_id', $workOrder->id)
-            ->where('asset_id', $asset->id)
-            ->where('work_type_id', $data['work_type_id'] ?? null)
-            ->exists();
-        if ($exists) {
+        try {
+            WorkOrderAsset::create([
+                'tenant_id' => $workOrder->tenant_id,
+                'work_order_id' => $workOrder->id,
+                'asset_id' => $asset->id,
+                'work_type_id' => $data['work_type_id'] ?? null,
+                'planned_quantity' => $data['planned_quantity'] ?? null,
+                'unit' => $data['unit'] ?? null,
+                'notes' => $data['notes'] ?? null,
+            ]);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            // Il vincolo del DB è l'arbitro: anche due richieste simultanee
+            // ricevono lo stesso 422, mai un errore interno
             throw ValidationException::withMessages([
                 'asset_id' => 'Elemento già presente nell\'ordine di lavoro con questa lavorazione.',
             ]);
         }
-
-        WorkOrderAsset::create([
-            'tenant_id' => $workOrder->tenant_id,
-            'work_order_id' => $workOrder->id,
-            'asset_id' => $asset->id,
-            'work_type_id' => $data['work_type_id'] ?? null,
-            'planned_quantity' => $data['planned_quantity'] ?? null,
-            'unit' => $data['unit'] ?? null,
-            'notes' => $data['notes'] ?? null,
-        ]);
 
         return $this->show($id);
     }
@@ -195,12 +211,22 @@ class WorkOrderController extends Controller implements HasMiddleware
     public function detachAsset(string $id, string $rowId): JsonResponse
     {
         $workOrder = WorkOrder::query()->findOrFail($id);
+        $this->assertNotTerminal($workOrder);
         WorkOrderAsset::query()
             ->where('work_order_id', $workOrder->id)
             ->findOrFail($rowId)
             ->delete();
 
         return $this->show($id);
+    }
+
+    private function assertNotTerminal(WorkOrder $workOrder): void
+    {
+        if (in_array($workOrder->status, ['completed', 'cancelled'], true)) {
+            throw ValidationException::withMessages([
+                'work_order' => 'Un ordine completato o annullato non è modificabile.',
+            ]);
+        }
     }
 
     public function destroy(string $id): Response

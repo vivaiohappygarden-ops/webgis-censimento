@@ -101,7 +101,8 @@ return new class extends Migration
               work_type_id        uuid REFERENCES work_types(id),
               title               text NOT NULL,
               description         text,
-              status              text NOT NULL DEFAULT 'draft',
+              status              text NOT NULL DEFAULT 'draft'
+                                  CHECK (status IN ('draft','planned','assigned','in_progress','suspended','completed','cancelled')),
               priority            text NOT NULL DEFAULT 'normal' CHECK (priority IN ('low','normal','high','urgent')),
               origin              text NOT NULL DEFAULT 'manual' CHECK (origin IN
                                   ('manual','maintenance_plan','issue','non_conformity','inspection','estimate','client_request')),
@@ -144,9 +145,11 @@ return new class extends Migration
             );
             CREATE INDEX ix_wo_assets_tenant_asset ON work_order_assets (tenant_id, asset_id);
 
-            -- Consuntivi di campo (la UI arriva nel blocco consuntivazione)
+            -- Consuntivi di campo (la UI arriva nel blocco consuntivazione).
+            -- L'id arriva di norma dal device offline (UUID v7); il DEFAULT è
+            -- la rete di sicurezza per gli inserimenti lato server
             CREATE TABLE work_logs (
-              id                  uuid PRIMARY KEY,
+              id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
               tenant_id           uuid NOT NULL REFERENCES organizations(id),
               work_order_id       uuid NOT NULL REFERENCES work_orders(id),
               asset_id            uuid REFERENCES assets(id),
