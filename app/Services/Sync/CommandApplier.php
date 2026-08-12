@@ -81,6 +81,11 @@ class CommandApplier
         } catch (ValidationException $e) {
             return $this->rejected($command, 'VALIDATION_FAILED', collect($e->errors())->flatten()->first());
         } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            // Due comandi concorrenti con lo stesso identificativo di segnalazione:
+            // l'esito di business è la collisione, non un errore interno
+            if ($type === 'issue.create') {
+                return $this->rejected($command, 'ID_COLLISION', 'Esiste già una segnalazione con questo identificativo.');
+            }
             // Race tra due device sull'associazione dello stesso tag: la transazione
             // è già annullata, si rilegge l'occupante e si risponde con l'esito
             // di business corretto invece di un errore interno
@@ -557,10 +562,12 @@ class CommandApplier
         if (\App\Models\Issue::withoutGlobalScopes()->withTrashed()->whereKey($command['entity_id'])->exists()) {
             return $this->rejected($command, 'ID_COLLISION', 'Esiste già una segnalazione con questo identificativo.');
         }
-        if (! empty($payload['asset_id']) && ! Asset::query()->whereKey($payload['asset_id'])->exists()) {
+        // withTrashed: se il backoffice ha eliminato l'elemento mentre il device
+        // era offline, l'osservazione fatta sul campo non deve andare persa
+        if (! empty($payload['asset_id']) && ! Asset::query()->withTrashed()->whereKey($payload['asset_id'])->exists()) {
             return $this->rejected($command, 'VALIDATION_FAILED', 'Elemento inesistente per questa organizzazione.');
         }
-        if (! empty($payload['area_id']) && ! \App\Models\Area::query()->whereKey($payload['area_id'])->exists()) {
+        if (! empty($payload['area_id']) && ! \App\Models\Area::query()->withTrashed()->whereKey($payload['area_id'])->exists()) {
             return $this->rejected($command, 'VALIDATION_FAILED', 'Area inesistente per questa organizzazione.');
         }
 
@@ -577,6 +584,15 @@ class CommandApplier
             'description' => $payload['description'],
         ]);
         $issue->id = $command['entity_id'];
+        // La segnalazione è di quando l'operatore l'ha scritta in campo, non
+        // di quando il device ha ritrovato la rete (stessa finestra di
+        // plausibilità della chiusura lavori)
+        if (! empty($command['client_ts'])) {
+            $claimed = \Illuminate\Support\Carbon::parse($command['client_ts'])->utc();
+            if ($claimed->lte(now()->addMinutes(10)) && $claimed->gte(now()->subDays(30))) {
+                $issue->created_at = $claimed;
+            }
+        }
         $issue->save();
 
         Audit::log('issue.created', $issue, ['source' => 'sync', 'code' => $issue->code]);

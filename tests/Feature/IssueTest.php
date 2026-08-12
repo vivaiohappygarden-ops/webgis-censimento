@@ -187,18 +187,47 @@ class IssueTest extends TestCase
         $this->assertSame('pwa', $issue->channel);
         $this->assertSame($operator->id, $issue->reporter_user_id);
         $this->assertSame('open', $issue->status);
+        $this->assertSame('high', $issue->severity);
+        // La data è quella dichiarata dal device, non quella della sync
+        $this->assertLessThan(2, abs($issue->created_at->diffInSeconds(
+            \Illuminate\Support\Carbon::parse($command['client_ts']),
+        )));
 
         // Replay dello stesso batch: nessun doppione
         $this->postJson('/api/v1/sync/batch', $batch)->assertOk()
             ->assertJsonPath('results.0.status', 'duplicate');
         $this->assertSame(1, Issue::query()->count());
 
-        // Stesso entity_id con chiave nuova: collisione rifiutata
+        // Stesso entity_id con chiave nuova: collisione rifiutata col codice giusto
         $this->postJson('/api/v1/sync/batch', [
             ...$batch,
             'batch_id' => (string) \Illuminate\Support\Str::uuid(),
             'commands' => [[...$command, 'idempotency_key' => (string) \Illuminate\Support\Str::uuid()]],
-        ])->assertOk()->assertJsonPath('results.0.status', 'rejected');
+        ])->assertOk()
+            ->assertJsonPath('results.0.status', 'rejected')
+            ->assertJsonPath('results.0.code', 'ID_COLLISION');
+
+        // Un elemento di un'altra organizzazione è invisibile: rifiuto pulito
+        [$otherOrg] = $this->createTenantUser();
+        $foreignAsset = \App\Models\Asset::withoutGlobalScopes()->create([
+            'tenant_id' => $otherOrg->id,
+            'area_id' => $this->createArea($otherOrg)->id,
+            'object_type_id' => $this->makeObjectType($otherOrg, 'P')->id,
+            'geom' => \App\Support\Geometry::toEwkb($this->pointGeometry()),
+        ]);
+        $this->actingAsTenantUser($operator);
+        $this->postJson('/api/v1/sync/batch', [
+            ...$batch,
+            'batch_id' => (string) \Illuminate\Support\Str::uuid(),
+            'commands' => [[
+                ...$command,
+                'idempotency_key' => (string) \Illuminate\Support\Str::uuid(),
+                'entity_id' => (string) \Illuminate\Support\Str::uuid(),
+                'payload' => ['description' => 'Su elemento altrui.', 'asset_id' => $foreignAsset->id],
+            ]],
+        ])->assertOk()
+            ->assertJsonPath('results.0.status', 'rejected')
+            ->assertJsonPath('results.0.code', 'VALIDATION_FAILED');
     }
 
     public function test_issues_are_tenant_isolated(): void

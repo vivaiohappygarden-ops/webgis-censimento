@@ -38,42 +38,57 @@ const localOrders = ref([]);
 const selectedOrder = ref(null);
 const consuntivo = reactive({ open: false, manHours: null, quantity: null, unit: '', notes: '' });
 
-// Segnalazione dal campo (dalla scheda elemento o generica per area)
+// Segnalazioni dal campo: due bozze SEPARATE (scheda elemento e scheda
+// Rilievo), così il testo scritto in un contesto non parte mai nell'altro
 const ISSUE_SEVERITY = { low: 'Bassa', medium: 'Media', high: 'Alta', critical: 'Critica' };
-const issueForm = reactive({ open: false, description: '', severity: 'medium', areaId: '' });
+const assetIssue = reactive({ open: false, description: '', severity: 'medium' });
+const areaIssue = reactive({ areaId: '', description: '', severity: 'medium' });
 
-function openIssueForm() {
-    Object.assign(issueForm, { open: true, description: '', severity: 'medium', areaId: issueForm.areaId || '' });
+function resetAssetIssue() {
+    Object.assign(assetIssue, { open: false, description: '', severity: 'medium' });
 }
 
-async function submitIssue(assetId = null) {
-    const description = issueForm.description.trim();
-    if (! description) {
-        setMessage('Descrivi il problema segnalato.', false);
-        return;
-    }
-    if (! assetId && ! issueForm.areaId) {
-        setMessage('Indica l\'area interessata dalla segnalazione.', false);
-        return;
-    }
+async function sendIssue({ description, severity, assetId = null, areaId = null }) {
     busy.value = true;
     try {
-        await sync.enqueueIssueCreate({
-            description,
-            severity: issueForm.severity,
-            assetId,
-            areaId: assetId ? null : issueForm.areaId,
-        });
-        Object.assign(issueForm, { open: false, description: '', severity: 'medium' });
+        await sync.enqueueIssueCreate({ description, severity, assetId, areaId });
         setMessage(state.online
             ? 'Segnalazione registrata: invio in corso.'
             : 'Segnalazione registrata sul dispositivo: verrà inviata quando torna la rete.');
         if (state.online) await runSync();
         await refreshLocal();
+        return true;
     } catch {
         setMessage('Registrazione della segnalazione non riuscita: riprova.', false);
+        return false;
     } finally {
         busy.value = false;
+    }
+}
+
+async function submitAssetIssue() {
+    const description = assetIssue.description.trim();
+    if (! description) {
+        setMessage('Descrivi il problema segnalato.', false);
+        return;
+    }
+    if (await sendIssue({ description, severity: assetIssue.severity, assetId: selected.value.asset.id })) {
+        resetAssetIssue();
+    }
+}
+
+async function submitAreaIssue() {
+    const description = areaIssue.description.trim();
+    if (! description) {
+        setMessage('Descrivi il problema segnalato.', false);
+        return;
+    }
+    if (! areaIssue.areaId) {
+        setMessage('Indica l\'area interessata dalla segnalazione.', false);
+        return;
+    }
+    if (await sendIssue({ description, severity: areaIssue.severity, areaId: areaIssue.areaId })) {
+        Object.assign(areaIssue, { description: '', severity: 'medium' });
     }
 }
 const measureForm = reactive({ species: '', height_m: null, dbh_cm: null, crown_diameter_m: null });
@@ -112,6 +127,9 @@ async function openAsset(asset) {
     const tree = await db.trees.get(asset.id);
     const tags = await db.asset_tags.where('asset_id').equals(asset.id).toArray();
     const photos = await localPhotosFor(asset.id);
+    // La bozza di segnalazione appartiene all'elemento su cui è stata
+    // scritta: aprendo un altro elemento si riparte da zero
+    resetAssetIssue();
     selected.value = { asset, tree: tree ?? null, tags, photos };
     Object.assign(measureForm, {
         species: tree?.species ?? '',
@@ -314,7 +332,7 @@ function switchTab(key) {
     selected.value = null;
     selectedOrder.value = null;
     consuntivo.open = false;
-    issueForm.open = false;
+    resetAssetIssue();
     tab.value = key;
     refreshLocal();
     if (key === 'mappa') {
@@ -765,14 +783,19 @@ async function completeWithConsuntivo(order) {
 }
 
 async function discardCommand(cmd) {
-    const ok = window.confirm(
-        `Scartare definitivamente l'operazione #${cmd.device_seq} (${cmd.type})? `
-        + 'La modifica locale andrà persa e varrà la versione del server.',
-    );
+    // Consuntivi e segnalazioni non sono mai arrivati al server: scartarli
+    // li perde e basta, non c'è nessuna "versione del server" che subentra
+    const isLocalOnly = ['work_log.add', 'issue.create'].includes(cmd.type);
+    const ok = window.confirm(isLocalOnly
+        ? `Scartare definitivamente l'operazione #${cmd.device_seq} (${cmd.type})? Non è mai arrivata al server e andrà persa.`
+        : `Scartare definitivamente l'operazione #${cmd.device_seq} (${cmd.type})? `
+            + 'La modifica locale andrà persa e varrà la versione del server.');
     if (! ok) return;
     await sync.discard(cmd.idempotency_key);
     await refreshLocal();
-    setMessage('Operazione scartata: al prossimo aggiornamento varrà la versione del server.');
+    setMessage(isLocalOnly
+        ? 'Operazione scartata definitivamente.'
+        : 'Operazione scartata: al prossimo aggiornamento varrà la versione del server.');
 }
 
 async function retryCommand(cmd) {
@@ -930,18 +953,18 @@ onBeforeUnmount(() => {
                     <div class="mt-3 space-y-3">
                         <label class="block text-xs">
                             <span class="text-gray-500">Area interessata *</span>
-                            <select v-model="issueForm.areaId" data-test="area-issue-area" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2.5 text-sm">
+                            <select v-model="areaIssue.areaId" data-test="area-issue-area" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2.5 text-sm">
                                 <option value="" disabled>Seleziona…</option>
                                 <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.name }}</option>
                             </select>
                         </label>
                         <label class="block text-xs">
                             <span class="text-gray-500">Cosa hai notato *</span>
-                            <textarea v-model="issueForm.description" rows="2" data-test="area-issue-description" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Recinzione divelta vicino all'ingresso nord" />
+                            <textarea v-model="areaIssue.description" rows="2" data-test="area-issue-description" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Recinzione divelta vicino all'ingresso nord" />
                         </label>
                         <label class="block text-xs">
                             <span class="text-gray-500">Gravità</span>
-                            <select v-model="issueForm.severity" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
+                            <select v-model="areaIssue.severity" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
                                 <option v-for="(label, value) in ISSUE_SEVERITY" :key="value" :value="value">{{ label }}</option>
                             </select>
                         </label>
@@ -949,7 +972,7 @@ onBeforeUnmount(() => {
                             class="w-full rounded-lg border border-green-700 px-4 py-2.5 text-sm font-medium text-green-700 disabled:opacity-50"
                             :disabled="busy || ! bootstrapped"
                             data-test="area-issue-save"
-                            @click="submitIssue()"
+                            @click="submitAreaIssue"
                         >Invia la segnalazione</button>
                     </div>
                 </div>
@@ -1290,20 +1313,20 @@ onBeforeUnmount(() => {
                     <div class="flex items-center justify-between">
                         <h2 class="text-sm font-semibold">Segnalazione</h2>
                         <button
-                            v-if="! issueForm.open"
+                            v-if="! assetIssue.open"
                             class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700"
                             data-test="asset-issue-open"
-                            @click="openIssueForm"
+                            @click="assetIssue.open = true"
                         >Segnala un problema</button>
                     </div>
-                    <div v-if="issueForm.open" class="mt-3 space-y-3">
+                    <div v-if="assetIssue.open" class="mt-3 space-y-3">
                         <label class="block text-xs">
                             <span class="text-gray-500">Cosa hai notato *</span>
-                            <textarea v-model="issueForm.description" rows="2" data-test="asset-issue-description" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Ramo spezzato pericolante sul lato strada" />
+                            <textarea v-model="assetIssue.description" rows="2" data-test="asset-issue-description" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Ramo spezzato pericolante sul lato strada" />
                         </label>
                         <label class="block text-xs">
                             <span class="text-gray-500">Gravità</span>
-                            <select v-model="issueForm.severity" data-test="asset-issue-severity" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
+                            <select v-model="assetIssue.severity" data-test="asset-issue-severity" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
                                 <option v-for="(label, value) in ISSUE_SEVERITY" :key="value" :value="value">{{ label }}</option>
                             </select>
                         </label>
@@ -1311,13 +1334,13 @@ onBeforeUnmount(() => {
                             <button
                                 class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700"
                                 :disabled="busy"
-                                @click="issueForm.open = false"
+                                @click="resetAssetIssue"
                             >Annulla</button>
                             <button
                                 class="rounded-lg bg-green-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                                 :disabled="busy"
                                 data-test="asset-issue-save"
-                                @click="submitIssue(selected.asset.id)"
+                                @click="submitAssetIssue"
                             >Invia la segnalazione</button>
                         </div>
                     </div>

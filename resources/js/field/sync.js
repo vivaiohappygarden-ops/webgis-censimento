@@ -669,9 +669,21 @@ export class SyncManager {
         await this.notify();
     }
 
-    /** Rimette in coda un comando rifiutato dopo la correzione. */
+    /** Rimette in coda un comando rifiutato dopo la correzione.
+     *  Con una chiave NUOVA: la vecchia è consumata sul server con l'esito
+     *  "rifiutato" e un reinvio identico riceverebbe per sempre lo stesso no. */
     async retry(idempotencyKey) {
-        await this.db.sync_queue.update(idempotencyKey, { status: 'PENDING', last_error: null });
+        await this.db.transaction('rw', this.db.sync_queue, async () => {
+            const cmd = await this.db.sync_queue.get(idempotencyKey);
+            if (! cmd) return;
+            await this.db.sync_queue.delete(idempotencyKey);
+            await this.db.sync_queue.add({
+                ...cmd,
+                idempotency_key: crypto.randomUUID(),
+                status: 'PENDING',
+                last_error: null,
+            });
+        });
         await this.log('info', 'Operazione rimessa in coda per un nuovo invio.');
         await this.notify();
     }
