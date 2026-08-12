@@ -37,5 +37,10 @@ export function openFieldDb(tenantId, userId) {
         work_orders: '&id, status, code',
     });
 
+    // v5: modelli di ispezione per le checklist compilate in campo
+    db.version(5).stores({
+        inspection_templates: '&id, target, name',
+    });
+
     return db;
 }

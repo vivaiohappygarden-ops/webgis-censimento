@@ -206,6 +206,74 @@ class InspectionTest extends TestCase
         $this->postJson('/api/v1/inspections', ['template_id' => $templateId, 'answers' => []])->assertForbidden();
     }
 
+    public function test_inspection_completed_from_field_via_sync_command(): void
+    {
+        [$templateId, $items] = $this->makeTemplate();
+        $area = $this->createArea($this->organization);
+
+        [, $operator] = [null, \App\Models\User::factory()->create(['tenant_id' => $this->organization->id])];
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($this->organization->id);
+        $operator->assignRole('operatore');
+        $this->actingAsTenantUser($operator);
+
+        // Sul working set del device i modelli arrivano dal bootstrap
+        $bootstrap = $this->getJson('/api/v1/sync/bootstrap')->assertOk()->json();
+        $this->assertCount(1, $bootstrap['inspection_templates']);
+        $this->assertCount(3, $bootstrap['inspection_templates'][0]['items']);
+
+        $inspectionId = (string) \Illuminate\Support\Str::uuid();
+        $fieldTime = now()->subHours(5)->startOfSecond();
+        $command = [
+            'idempotency_key' => (string) \Illuminate\Support\Str::uuid(),
+            'device_seq' => 1,
+            'type' => 'inspection.complete',
+            'entity_id' => $inspectionId,
+            'payload' => [
+                'template_id' => $templateId,
+                'area_id' => $area->id,
+                'answers' => [
+                    $items[0]['id'] => ['value' => 'ko', 'note' => 'Gomma sollevata.'],
+                    $items[1]['id'] => ['value' => 'ok'],
+                    $items[2]['id'] => ['value' => 'na'],
+                ],
+            ],
+            'client_ts' => $fieldTime->toIso8601String(),
+        ];
+        $batch = [
+            'batch_id' => (string) \Illuminate\Support\Str::uuid(),
+            'device_id' => 'dev-test-0001',
+            'schema' => 1,
+            'commands' => [$command],
+        ];
+
+        $this->postJson('/api/v1/sync/batch', $batch)->assertOk()
+            ->assertJsonPath('results.0.status', 'applied')
+            ->assertJsonPath('results.0.outcome', 'failed');
+
+        $inspection = Inspection::query()->findOrFail($inspectionId);
+        $this->assertSame('failed', $inspection->outcome);
+        $this->assertSame($operator->id, $inspection->inspector_id);
+        $this->assertTrue($inspection->completed_at->equalTo($fieldTime));
+        $this->assertSame('Superfici antitrauma integre', collect($inspection->answers)->first()['question']);
+
+        // La voce KO ha aperto la non conformità con origine ispezione
+        $nc = NonConformity::query()->sole();
+        $this->assertSame('inspection', $nc->origin);
+        $this->assertSame($inspectionId, $nc->origin_id);
+
+        // Replay: nessun doppione; id riusato con chiave nuova: collisione
+        $this->postJson('/api/v1/sync/batch', $batch)->assertOk()
+            ->assertJsonPath('results.0.status', 'duplicate');
+        $this->assertSame(1, Inspection::query()->count());
+        $this->postJson('/api/v1/sync/batch', [
+            ...$batch,
+            'batch_id' => (string) \Illuminate\Support\Str::uuid(),
+            'commands' => [[...$command, 'idempotency_key' => (string) \Illuminate\Support\Str::uuid()]],
+        ])->assertOk()
+            ->assertJsonPath('results.0.status', 'rejected')
+            ->assertJsonPath('results.0.code', 'ID_COLLISION');
+    }
+
     public function test_inspections_are_tenant_isolated(): void
     {
         [$templateId] = $this->makeTemplate();

@@ -59,7 +59,7 @@ export class SyncManager {
         const { data } = await axios.get('/api/v1/sync/bootstrap');
 
         await this.db.transaction('rw',
-            [this.db.meta, this.db.areas, this.db.assets, this.db.trees, this.db.asset_tags, this.db.catalog_types, this.db.custom_fields, this.db.sync_queue, this.db.work_orders],
+            [this.db.meta, this.db.areas, this.db.assets, this.db.trees, this.db.asset_tags, this.db.catalog_types, this.db.custom_fields, this.db.sync_queue, this.db.work_orders, this.db.inspection_templates],
             async () => {
                 // Il lavoro locale non ancora sincronizzato non si tocca (P1):
                 // le righe ottimistiche sopravvivono al ri-scarico del working set
@@ -75,7 +75,7 @@ export class SyncManager {
                 await Promise.all([
                     this.db.areas.clear(), this.db.assets.clear(), this.db.trees.clear(),
                     this.db.asset_tags.clear(), this.db.catalog_types.clear(), this.db.custom_fields.clear(),
-                    this.db.work_orders.clear(),
+                    this.db.work_orders.clear(), this.db.inspection_templates.clear(),
                 ]);
                 await this.db.areas.bulkPut(data.areas);
                 await this.db.assets.bulkPut(data.assets.map((a) => ({ ...a, dirty: false })));
@@ -89,6 +89,7 @@ export class SyncManager {
                     ...(startedAtById.has(w.id) ? { field_started_at: startedAtById.get(w.id) } : {}),
                 })));
                 await this.db.work_orders.bulkPut(dirtyOrders);
+                await this.db.inspection_templates.bulkPut(data.inspection_templates ?? []);
                 await this.db.catalog_types.bulkPut(data.catalog.object_types);
                 await this.db.custom_fields.bulkPut(data.custom_fields);
                 await this.db.meta.put({ key: 'cursor', value: data.cursor });
@@ -302,6 +303,32 @@ export class SyncManager {
         await this.log('info', 'In coda: consuntivo e chiusura del lavoro.');
         await this.notify();
         return logId;
+    }
+
+    /** Ispezione compilata in campo (append-only): esito e non conformità
+     *  li calcola il server all'arrivo, con lo stesso motore del backoffice. */
+    async enqueueInspectionComplete({ templateId, assetId = null, areaId = null, answers }) {
+        const inspectionId = uuidv7();
+        await this.db.sync_queue.add({
+            idempotency_key: crypto.randomUUID(),
+            device_seq: await this.nextDeviceSeq(),
+            type: 'inspection.complete',
+            entity_id: inspectionId,
+            payload: {
+                template_id: templateId,
+                asset_id: assetId,
+                area_id: areaId,
+                answers,
+            },
+            client_ts: new Date().toISOString(),
+            status: 'PENDING',
+            attempts: 0,
+            last_error: null,
+        });
+
+        await this.log('info', 'In coda: ispezione compilata in campo.');
+        await this.notify();
+        return inspectionId;
     }
 
     /** Segnalazione dal campo (append-only): il numero SEG lo assegna il server. */
@@ -570,11 +597,15 @@ export class SyncManager {
                 params: { cursor, ...(askIds.length ? { ids: askIds } : {}) },
             });
 
-            await this.db.transaction('rw', [this.db.meta, this.db.areas, this.db.assets, this.db.trees, this.db.asset_tags, this.db.work_orders], async () => {
+            await this.db.transaction('rw', [this.db.meta, this.db.areas, this.db.assets, this.db.trees, this.db.asset_tags, this.db.work_orders, this.db.inspection_templates], async () => {
                 for (const change of data.changes) {
                     if (change.table === 'areas') {
                         if (change.op === 'delete') await this.db.areas.delete(change.id);
                         else await this.db.areas.put(change.row);
+                    } else if (change.table === 'inspection_templates') {
+                        // I modelli non hanno stato locale: la verità del server basta
+                        if (change.op === 'delete') await this.db.inspection_templates.delete(change.id);
+                        else await this.db.inspection_templates.put(change.row);
                     } else if (change.table === 'work_orders') {
                         const id = change.op === 'delete' ? change.id : change.row.id;
                         // Come per gli elementi: un ordine con comandi locali in coda
@@ -638,7 +669,7 @@ export class SyncManager {
         // (consuntivi e segnalazioni scartati no: non sono replicati localmente)
         const deferredRow = await this.db.meta.get('deferred_ids');
         const deferred = new Set(deferredRow?.value ?? []);
-        if (cmd.entity_id && ! ['work_log.add', 'issue.create'].includes(cmd.type)) deferred.add(cmd.entity_id);
+        if (cmd.entity_id && ! ['work_log.add', 'issue.create', 'inspection.complete'].includes(cmd.type)) deferred.add(cmd.entity_id);
         await this.db.meta.put({ key: 'deferred_ids', value: [...deferred] });
 
         // Una creazione mai arrivata al server non deve restare come riga fantasma

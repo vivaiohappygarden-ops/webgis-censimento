@@ -38,6 +38,62 @@ const localOrders = ref([]);
 const selectedOrder = ref(null);
 const consuntivo = reactive({ open: false, manHours: null, quantity: null, unit: '', notes: '' });
 
+// Ispezioni su checklist compilate in campo (modelli dal working set)
+const localTemplates = ref([]);
+const inspectionRun = reactive({ open: false, template: null, assetId: null, assetLabel: '', areaId: '' });
+const inspectionAnswers = ref([]);
+
+const assetTemplates = computed(() => localTemplates.value.filter((t) => t.target === 'asset'));
+const areaTemplates = computed(() => localTemplates.value.filter((t) => t.target === 'area'));
+const inspectionPick = reactive({ assetTemplateId: '', areaTemplateId: '', areaId: '' });
+
+function startInspection(template, { assetId = null, assetLabel = '', areaId = '' } = {}) {
+    Object.assign(inspectionRun, { open: true, template, assetId, assetLabel, areaId });
+    inspectionAnswers.value = (template.items ?? []).map((item) => ({
+        item_id: item.id, question: item.question, answer_type: item.answer_type,
+        value: '', note: '',
+    }));
+}
+
+function closeInspection() {
+    const hasWork = inspectionAnswers.value.some((a) => String(a.value) !== '' || a.note.trim() !== '');
+    if (hasWork && ! window.confirm('Chiudere senza registrare l\'ispezione? Le risposte andranno perse.')) {
+        return;
+    }
+    inspectionRun.open = false;
+}
+
+const inspectionComplete = computed(() => inspectionAnswers.value.length > 0
+    && inspectionAnswers.value.every((a) => {
+        if (['ok_ko', 'ok_ko_na'].includes(a.answer_type)) return a.value !== '';
+        return String(a.value).trim() !== '';
+    }));
+
+async function submitInspection() {
+    busy.value = true;
+    try {
+        const answers = Object.fromEntries(inspectionAnswers.value.map((a) => [
+            a.item_id, { value: String(a.value), note: a.note.trim() || null },
+        ]));
+        await sync.enqueueInspectionComplete({
+            templateId: inspectionRun.template.id,
+            assetId: inspectionRun.assetId,
+            areaId: inspectionRun.assetId ? null : inspectionRun.areaId,
+            answers,
+        });
+        inspectionRun.open = false;
+        setMessage(state.online
+            ? 'Ispezione registrata: invio in corso.'
+            : 'Ispezione registrata sul dispositivo: verrà inviata quando torna la rete.');
+        if (state.online) await runSync();
+        await refreshLocal();
+    } catch {
+        setMessage('Registrazione dell\'ispezione non riuscita: riprova.', false);
+    } finally {
+        busy.value = false;
+    }
+}
+
 // Segnalazioni dal campo: due bozze SEPARATE (scheda elemento e scheda
 // Rilievo), così il testo scritto in un contesto non parte mai nell'altro
 const ISSUE_SEVERITY = { low: 'Bassa', medium: 'Media', high: 'Alta', critical: 'Critica' };
@@ -332,6 +388,7 @@ function switchTab(key) {
     selected.value = null;
     selectedOrder.value = null;
     consuntivo.open = false;
+    inspectionRun.open = false;
     resetAssetIssue();
     tab.value = key;
     refreshLocal();
@@ -559,6 +616,7 @@ async function refreshLocal() {
         .sort((a, b) => a.code.localeCompare(b.code));
     localAssets.value = (await db.assets.orderBy('updated_at').reverse().limit(200).toArray());
     localOrders.value = await db.work_orders.toArray();
+    localTemplates.value = await db.inspection_templates.orderBy('name').toArray();
     // La scheda ordine aperta segue le sincronizzazioni in background: mai
     // proporre azioni su uno stato o una versione ormai superati
     if (selectedOrder.value) {
@@ -785,7 +843,7 @@ async function completeWithConsuntivo(order) {
 async function discardCommand(cmd) {
     // Consuntivi e segnalazioni non sono mai arrivati al server: scartarli
     // li perde e basta, non c'è nessuna "versione del server" che subentra
-    const isLocalOnly = ['work_log.add', 'issue.create'].includes(cmd.type);
+    const isLocalOnly = ['work_log.add', 'issue.create', 'inspection.complete'].includes(cmd.type);
     const ok = window.confirm(isLocalOnly
         ? `Scartare definitivamente l'operazione #${cmd.device_seq} (${cmd.type})? Non è mai arrivata al server e andrà persa.`
         : `Scartare definitivamente l'operazione #${cmd.device_seq} (${cmd.type})? `
@@ -942,6 +1000,33 @@ onBeforeUnmount(() => {
                         data-test="save-census"
                         @click="saveCensus"
                     >Registra elemento</button>
+                </div>
+
+                <!-- Ispezione su un'area (checklist dal modello) -->
+                <div v-if="areaTemplates.length" class="mt-3 rounded-xl border border-gray-200 bg-white p-4">
+                    <h2 class="text-sm font-semibold">Ispezione di un'area</h2>
+                    <div class="mt-3 space-y-3">
+                        <label class="block text-xs">
+                            <span class="text-gray-500">Area *</span>
+                            <select v-model="inspectionPick.areaId" data-test="area-inspection-area" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2.5 text-sm">
+                                <option value="" disabled>Seleziona…</option>
+                                <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.name }}</option>
+                            </select>
+                        </label>
+                        <label class="block text-xs">
+                            <span class="text-gray-500">Modello di controllo *</span>
+                            <select v-model="inspectionPick.areaTemplateId" data-test="area-inspection-template" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2.5 text-sm">
+                                <option value="" disabled>Seleziona…</option>
+                                <option v-for="t in areaTemplates" :key="t.id" :value="t.id">{{ t.name }}</option>
+                            </select>
+                        </label>
+                        <button
+                            class="w-full rounded-lg border border-green-700 px-4 py-2.5 text-sm font-medium text-green-700 disabled:opacity-50"
+                            :disabled="! inspectionPick.areaId || ! inspectionPick.areaTemplateId || ! bootstrapped"
+                            data-test="area-inspection-start"
+                            @click="startInspection(areaTemplates.find((t) => t.id === inspectionPick.areaTemplateId), { areaId: inspectionPick.areaId })"
+                        >Compila la checklist</button>
+                    </div>
                 </div>
 
                 <!-- Segnalazione generica sull'area (senza elemento preciso) -->
@@ -1308,6 +1393,23 @@ onBeforeUnmount(() => {
                     </p>
                 </div>
 
+                <!-- Ispezione sull'elemento -->
+                <div v-if="assetTemplates.length" class="rounded-xl border border-gray-200 bg-white p-4">
+                    <h2 class="text-sm font-semibold">Ispezione</h2>
+                    <div class="mt-2 grid grid-cols-3 gap-2">
+                        <select v-model="inspectionPick.assetTemplateId" data-test="asset-inspection-template" class="col-span-2 rounded-lg border border-gray-300 px-2 py-2 text-sm">
+                            <option value="" disabled>Scegli il modello…</option>
+                            <option v-for="t in assetTemplates" :key="t.id" :value="t.id">{{ t.name }}</option>
+                        </select>
+                        <button
+                            class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 disabled:opacity-50"
+                            :disabled="! inspectionPick.assetTemplateId"
+                            data-test="asset-inspection-start"
+                            @click="startInspection(assetTemplates.find((t) => t.id === inspectionPick.assetTemplateId), { assetId: selected.asset.id, assetLabel: selected.asset.census_code || selected.asset.id.slice(0, 8) })"
+                        >Avvia</button>
+                    </div>
+                </div>
+
                 <!-- Segnalazione sull'elemento -->
                 <div class="rounded-xl border border-gray-200 bg-white p-4">
                     <div class="flex items-center justify-between">
@@ -1489,6 +1591,61 @@ onBeforeUnmount(() => {
                         >Completa il lavoro</button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Checklist di ispezione a schermo intero (funziona offline) -->
+        <div v-if="inspectionRun.open" class="fixed inset-x-0 bottom-14 top-0 z-40 flex flex-col bg-gray-100" data-test="inspection-run">
+            <header class="border-b border-gray-200 bg-white px-4 py-3">
+                <button class="text-sm font-medium text-green-700" @click="closeInspection">← Annulla</button>
+                <div class="mt-1">
+                    <div class="text-base font-semibold">{{ inspectionRun.template.name }}</div>
+                    <div class="text-xs text-gray-500">
+                        {{ inspectionRun.assetId ? `Elemento ${inspectionRun.assetLabel}` : (areas.find((a) => a.id === inspectionRun.areaId)?.name ?? 'Area') }}
+                        <template v-if="inspectionRun.template.standard_ref"> · {{ inspectionRun.template.standard_ref }}</template>
+                    </div>
+                </div>
+            </header>
+
+            <div class="flex-1 space-y-3 overflow-y-auto p-4">
+                <div v-for="(answer, index) in inspectionAnswers" :key="answer.item_id" class="rounded-xl border border-gray-200 bg-white p-3" data-test="field-check-item">
+                    <p class="text-sm font-medium">{{ index + 1 }}. {{ answer.question }}</p>
+                    <div v-if="['ok_ko', 'ok_ko_na'].includes(answer.answer_type)" class="mt-2 grid gap-2" :class="answer.answer_type === 'ok_ko' ? 'grid-cols-2' : 'grid-cols-3'">
+                        <button
+                            v-for="option in (answer.answer_type === 'ok_ko' ? ['ok', 'ko'] : ['ok', 'ko', 'na'])"
+                            :key="option"
+                            class="rounded-lg border py-2.5 text-sm font-semibold"
+                            :class="answer.value === option
+                                ? (option === 'ko' ? 'border-red-700 bg-red-700 text-white' : option === 'na' ? 'border-gray-500 bg-gray-500 text-white' : 'border-green-700 bg-green-700 text-white')
+                                : 'border-gray-300 text-gray-600'"
+                            :data-test="`field-check-${option}-${index}`"
+                            @click="answer.value = option"
+                        >{{ option === 'ok' ? 'OK' : option === 'ko' ? 'KO' : 'N.A.' }}</button>
+                    </div>
+                    <input
+                        v-else
+                        v-model="answer.value"
+                        :type="answer.answer_type === 'number' ? 'number' : 'text'"
+                        :inputmode="answer.answer_type === 'number' ? 'decimal' : 'text'"
+                        class="mt-2 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm"
+                        placeholder="Risposta"
+                    >
+                    <input
+                        v-model="answer.note"
+                        class="mt-2 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-xs"
+                        placeholder="Nota (solo se serve spiegare)"
+                        :data-test="`field-check-note-${index}`"
+                    >
+                </div>
+            </div>
+
+            <div class="border-t border-gray-200 bg-white p-4">
+                <button
+                    class="w-full rounded-lg bg-green-700 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                    :disabled="busy || ! inspectionComplete"
+                    data-test="field-check-save"
+                    @click="submitInspection"
+                >Registra l'ispezione</button>
             </div>
         </div>
 

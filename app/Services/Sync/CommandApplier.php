@@ -26,7 +26,7 @@ class CommandApplier
     public const TYPES = [
         'asset.create', 'asset.update_attrs', 'asset.update_measures',
         'asset.update_geom', 'asset.change_status', 'tag.associate',
-        'work_order.transition', 'work_log.add', 'issue.create',
+        'work_order.transition', 'work_log.add', 'issue.create', 'inspection.complete',
     ];
 
     /**
@@ -59,7 +59,7 @@ class CommandApplier
         $permission = match ($type) {
             'asset.create' => 'assets.create',
             // La regola fine (proprio ordine/squadra) è dentro l'applier
-            'work_order.transition', 'work_log.add', 'issue.create' => 'works.view',
+            'work_order.transition', 'work_log.add', 'issue.create', 'inspection.complete' => 'works.view',
             default => 'assets.update',
         };
         if (! $user->can($permission)) {
@@ -77,14 +77,18 @@ class CommandApplier
                 'work_order.transition' => $this->applyWorkOrderTransition($command, $user),
                 'work_log.add' => $this->applyWorkLogAdd($command, $user),
                 'issue.create' => $this->applyIssueCreate($command, $user),
+                'inspection.complete' => $this->applyInspectionComplete($command, $user),
             });
         } catch (ValidationException $e) {
             return $this->rejected($command, 'VALIDATION_FAILED', collect($e->errors())->flatten()->first());
         } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
-            // Due comandi concorrenti con lo stesso identificativo di segnalazione:
+            // Due comandi concorrenti con lo stesso identificativo:
             // l'esito di business è la collisione, non un errore interno
             if ($type === 'issue.create') {
                 return $this->rejected($command, 'ID_COLLISION', 'Esiste già una segnalazione con questo identificativo.');
+            }
+            if ($type === 'inspection.complete') {
+                return $this->rejected($command, 'ID_COLLISION', 'Esiste già un\'ispezione con questo identificativo.');
             }
             // Race tra due device sull'associazione dello stesso tag: la transazione
             // è già annullata, si rilegge l'occupante e si risponde con l'esito
@@ -598,6 +602,42 @@ class CommandApplier
         Audit::log('issue.created', $issue, ['source' => 'sync', 'code' => $issue->code]);
 
         return $this->applied($command, 1);
+    }
+
+    /**
+     * Ispezione compilata in campo: stesso motore del backoffice
+     * (validazioni, esito, non conformità), id scelto dal device.
+     */
+    private function applyInspectionComplete(array $command, User $user): array
+    {
+        $payload = Validator::make($command['payload'] ?? [], [
+            'template_id' => ['required', 'uuid'],
+            'asset_id' => ['nullable', 'uuid'],
+            'area_id' => ['nullable', 'uuid'],
+            'answers' => ['required', 'array'],
+        ])->validate();
+
+        if (\App\Models\Inspection::withoutGlobalScopes()->withTrashed()->whereKey($command['entity_id'])->exists()) {
+            return $this->rejected($command, 'ID_COLLISION', 'Esiste già un\'ispezione con questo identificativo.');
+        }
+
+        // L'ispezione è di quando l'operatore l'ha chiusa in campo, non di
+        // quando il device ha ritrovato la rete (finestra di plausibilità)
+        $completedAt = now();
+        if (! empty($command['client_ts'])) {
+            $claimed = \Illuminate\Support\Carbon::parse($command['client_ts'])->utc();
+            if ($claimed->lte(now()->addMinutes(10)) && $claimed->gte(now()->subDays(30))) {
+                $completedAt = $claimed;
+            }
+        }
+
+        $inspection = app(\App\Services\Inspections\InspectionRunner::class)
+            ->run($user, $payload, forcedId: $command['entity_id'], completedAt: $completedAt);
+
+        return [
+            ...$this->applied($command, 1),
+            'outcome' => $inspection->outcome,
+        ];
     }
 
     /** Chi gestisce i lavori agisce su tutto; l'operatore solo sul suo. */

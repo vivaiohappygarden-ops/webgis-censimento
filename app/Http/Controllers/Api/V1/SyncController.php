@@ -74,6 +74,7 @@ class SyncController extends Controller implements HasMiddleware
             'areas' => $areas,
             'assets' => $assets,
             'work_orders' => $user->can('works.view') ? $this->workOrderRows($user) : [],
+            'inspection_templates' => $user->can('works.view') ? $this->inspectionTemplateRows() : [],
             'catalog' => [
                 'main_types' => CatalogMainType::query()->orderBy('code')->get(),
                 'sub_types' => CatalogSubType::query()->orderBy('code')->get(),
@@ -144,6 +145,18 @@ class SyncController extends Controller implements HasMiddleware
             $changes[] = $asset->deleted_at !== null
                 ? ['op' => 'delete', 'table' => 'assets', 'id' => $asset->id]
                 : ['op' => 'upsert', 'table' => 'assets', 'row' => $asset];
+        }
+
+        // Modelli di ispezione: gli attivi si aggiornano, i disattivati o
+        // eliminati escono dal device come delete
+        $templateIds = $byTable->get('inspection_templates', []);
+        if ($templateIds !== [] && $user->can('works.view')) {
+            $visibleTemplates = $this->inspectionTemplateRows($templateIds)->keyBy('id');
+            foreach ($templateIds as $templateId) {
+                $changes[] = isset($visibleTemplates[$templateId])
+                    ? ['op' => 'upsert', 'table' => 'inspection_templates', 'row' => $visibleTemplates[$templateId]]
+                    : ['op' => 'delete', 'table' => 'inspection_templates', 'id' => $templateId];
+            }
         }
 
         // Ordini di lavoro: ciò che non è più visibile dal campo (completato,
@@ -322,6 +335,21 @@ class SyncController extends Controller implements HasMiddleware
                     ]),
             ])
             ->orderBy('created_at')
+            ->get();
+    }
+
+    /** Modelli di ispezione attivi, con le domande in ordine. */
+    private function inspectionTemplateRows(?array $ids = null)
+    {
+        if ($ids !== null && $ids === []) {
+            return collect();
+        }
+
+        return \App\Models\InspectionTemplate::query()
+            ->when($ids !== null, fn ($q) => $q->whereIn('id', $ids))
+            ->where('is_active', true)
+            ->with('items:id,template_id,sort_order,question,answer_type,ko_creates_nc')
+            ->orderBy('name')
             ->get();
     }
 
