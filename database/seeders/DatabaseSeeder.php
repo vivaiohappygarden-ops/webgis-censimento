@@ -311,6 +311,7 @@ class DatabaseSeeder extends Seeder
                 'area_id' => $area->id,
                 'description' => 'Panchina divelta vicino all\'ingresso nord, appoggiata alla siepe.',
                 'sla_due_at' => \App\Support\IssueSla::resolveDueAt($openedAt, 'high'),
+                'taken_charge_due_at' => \App\Support\IssueSla::takeChargeDueAt($openedAt, 'high'),
             ]);
             // created_at non è assegnabile in massa: la data di apertura
             // all'indietro va impostata direttamente

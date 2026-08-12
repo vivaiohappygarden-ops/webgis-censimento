@@ -163,10 +163,12 @@ class IssueTest extends TestCase
 
         $issue = Issue::query()->findOrFail($created['id']);
         $this->assertLessThan(2, abs($issue->sla_due_at->diffInSeconds($issue->created_at->copy()->addDays(3))));
+        $this->assertLessThan(2, abs($issue->taken_charge_due_at->diffInSeconds($issue->created_at->copy()->addDays(1))));
 
         // Aperta da 2 giorni e mai presa in carico: fuori tempo massimo
         $issue->created_at = now()->subDays(2);
         $issue->sla_due_at = $issue->created_at->copy()->addDays(3);
+        $issue->taken_charge_due_at = $issue->created_at->copy()->addDays(1);
         $issue->save();
 
         // Una lieve appena aperta invece è nei tempi e resta fuori dal filtro
@@ -213,6 +215,40 @@ class IssueTest extends TestCase
         $this->assertNull($data['sla']);
     }
 
+    public function test_late_handling_is_filterable_and_not_rewritten_by_severity_change(): void
+    {
+        $id = $this->postJson('/api/v1/issues', [
+            'description' => 'Cancello dell\'area cani che non chiude.', 'severity' => 'critical',
+        ])->assertCreated()->json('data.id');
+
+        // Aperta 2 giorni fa (finestra critica: presa in carico 1 giorno)
+        $issue = Issue::query()->findOrFail($id);
+        $issue->created_at = now()->subDays(2);
+        $issue->taken_charge_due_at = $issue->created_at->copy()->addDays(1);
+        $issue->sla_due_at = $issue->created_at->copy()->addDays(3);
+        $issue->save();
+
+        // Presa in carico oggi: fase conclusa, ma oltre la finestra
+        $data = $this->patchJson("/api/v1/issues/{$id}", ['status' => 'in_charge'])->assertOk()->json('data');
+        $this->assertSame('late', $data['sla']['take_charge']['state']);
+
+        // Non è "fuori tempo massimo" (risoluzione ancora nei tempi),
+        // ma compare tra le "gestite oltre i tempi"
+        $this->assertCount(0, $this->getJson('/api/v1/issues?sla=overdue')->json('data'));
+        $late = $this->getJson('/api/v1/issues?sla=late')->assertOk()->json('data');
+        $this->assertCount(1, $late);
+        $this->assertSame($id, $late[0]['id']);
+
+        // La riclassificazione non rigiudica la presa in carico già conclusa
+        // (con la finestra bassa da 10 giorni risulterebbe rispettata)
+        $data = $this->patchJson("/api/v1/issues/{$id}", ['severity' => 'low'])->assertOk()->json('data');
+        $this->assertSame('late', $data['sla']['take_charge']['state']);
+        $issue->refresh();
+        $this->assertLessThan(2, abs($issue->taken_charge_due_at->diffInSeconds($issue->created_at->copy()->addDays(1))));
+        // Mentre la risoluzione, ancora aperta, si sposta (bassa: 30 giorni)
+        $this->assertLessThan(2, abs($issue->sla_due_at->diffInSeconds($issue->created_at->copy()->addDays(30))));
+    }
+
     public function test_issue_created_from_field_via_sync_command(): void
     {
         [, $operator] = [null, \App\Models\User::factory()->create(['tenant_id' => $this->organization->id])];
@@ -253,9 +289,12 @@ class IssueTest extends TestCase
         $this->assertLessThan(2, abs($issue->created_at->diffInSeconds(
             \Illuminate\Support\Carbon::parse($command['client_ts']),
         )));
-        // E la scadenza di risoluzione decorre da lì (alta: 7 giorni)
+        // E le scadenze decorrono da lì (alta: presa in carico 2 giorni, risoluzione 7)
         $this->assertLessThan(2, abs($issue->sla_due_at->diffInSeconds(
             $issue->created_at->copy()->addDays(7),
+        )));
+        $this->assertLessThan(2, abs($issue->taken_charge_due_at->diffInSeconds(
+            $issue->created_at->copy()->addDays(2),
         )));
 
         // Replay dello stesso batch: nessun doppione

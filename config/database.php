@@ -97,6 +97,10 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // Sessione sempre in UTC: l'aritmetica "timestamptz + interval"
+            // deve coincidere col calcolo Carbon lato PHP anche se il server
+            // di produzione ha un fuso locale
+            'timezone' => 'UTC',
         ],
 
         'sqlsrv' => [

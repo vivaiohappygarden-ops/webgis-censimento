@@ -48,6 +48,7 @@ class InspectionController extends Controller implements HasMiddleware
             ->whereNull('t.deleted_at')
             ->where('t.is_active', true)
             ->whereNotNull('t.frequency_days')
+            ->whereNotNull('inspections.completed_at')
             ->groupBy('inspections.template_id', 't.code', 't.name', 't.frequency_days', 't.target',
                 'inspections.asset_id', 'inspections.area_id')
             ->selectRaw('inspections.template_id, t.code AS template_code, t.name AS template_name,
@@ -55,15 +56,23 @@ class InspectionController extends Controller implements HasMiddleware
                 MAX(inspections.completed_at) AS last_completed_at')
             ->get();
 
-        $assetLabels = \App\Models\Asset::query()
-            ->whereIn('id', $rows->pluck('asset_id')->filter())->pluck('census_code', 'id');
+        // L'esistenza si verifica sull'id, non sull'etichetta: un elemento
+        // senza codice censimento è legittimo e non deve sparire in silenzio
+        // proprio dalla vista nata per far emergere i ritardi
+        $assets = \App\Models\Asset::query()
+            ->whereIn('id', $rows->pluck('asset_id')->filter())
+            ->get(['id', 'census_code'])->keyBy('id');
         $areaLabels = \App\Models\Area::query()
             ->whereIn('id', $rows->pluck('area_id')->filter())->pluck('name', 'id');
 
         $today = \Illuminate\Support\Carbon::now(self::TIMEZONE)->startOfDay();
-        $data = $rows->map(function ($row) use ($assetLabels, $areaLabels, $today) {
+        $data = $rows->map(function ($row) use ($assets, $areaLabels, $today) {
             $isAsset = $row->asset_id !== null;
-            $label = $isAsset ? ($assetLabels[$row->asset_id] ?? null) : ($areaLabels[$row->area_id] ?? null);
+            $label = $isAsset
+                ? (isset($assets[$row->asset_id])
+                    ? ($assets[$row->asset_id]->census_code ?? 'Elemento '.substr($row->asset_id, 0, 8))
+                    : null)
+                : ($areaLabels[$row->area_id] ?? null);
             // Bersaglio eliminato dal censimento: nessun controllo da pianificare
             if ($label === null) {
                 return null;

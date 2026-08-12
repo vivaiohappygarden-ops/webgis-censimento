@@ -38,7 +38,7 @@ class IssueController extends Controller implements HasMiddleware
         $request->validate([
             'status' => ['nullable', Rule::in(Issue::STATUSES)],
             'severity' => ['nullable', Rule::in(['low', 'medium', 'high', 'critical'])],
-            'sla' => ['nullable', Rule::in(['overdue'])],
+            'sla' => ['nullable', Rule::in(['overdue', 'late'])],
             'q' => ['nullable', 'string', 'max:200'],
         ]);
 
@@ -71,7 +71,13 @@ class IssueController extends Controller implements HasMiddleware
             $query->whereIn('status', ['open', 'in_charge'])
                 ->where(fn ($w) => $w->where('sla_due_at', '<', now())
                     ->orWhere(fn ($o) => $o->where('status', 'open')
-                        ->whereRaw('created_at + ('.\App\Support\IssueSla::takeChargeDaysSql().") * interval '1 day' < now()")));
+                        ->where('taken_charge_due_at', '<', now())));
+        }
+        // "Gestite oltre i tempi": fasi concluse, ma dopo la loro scadenza
+        if ($request->string('sla')->value() === 'late') {
+            $query->where('status', '!=', 'dismissed')
+                ->where(fn ($w) => $w->whereColumn('taken_charge_at', '>', 'taken_charge_due_at')
+                    ->orWhereColumn('resolved_at', '>', 'sla_due_at'));
         }
 
         // Le aperte prima, le più gravi in alto; risolte e archiviate in coda
@@ -121,6 +127,7 @@ class IssueController extends Controller implements HasMiddleware
                 // deve già contenere la gravità effettiva
                 'severity' => $data['severity'] ?? 'medium',
                 'sla_due_at' => \App\Support\IssueSla::resolveDueAt(now(), $data['severity'] ?? 'medium'),
+                'taken_charge_due_at' => \App\Support\IssueSla::takeChargeDueAt(now(), $data['severity'] ?? 'medium'),
                 'reporter_type' => $data['reporter_type'] ?? 'internal',
                 'reporter_user_id' => $user->id,
                 'channel' => 'backoffice',
@@ -178,10 +185,14 @@ class IssueController extends Controller implements HasMiddleware
             }
 
             $issue->fill($data);
-            // Il cambio di gravità sposta la scadenza di risoluzione, sempre
-            // contata dall'apertura: declassare non azzera il tempo già corso
+            // Il cambio di gravità sposta le scadenze non ancora onorate,
+            // sempre contate dall'apertura: declassare non azzera il tempo
+            // già corso, e una presa in carico conclusa non si rigiudica
             if ($issue->isDirty('severity')) {
                 $issue->sla_due_at = \App\Support\IssueSla::resolveDueAt($issue->created_at, $issue->severity);
+                if ($issue->taken_charge_at === null) {
+                    $issue->taken_charge_due_at = \App\Support\IssueSla::takeChargeDueAt($issue->created_at, $issue->severity);
+                }
             }
             $issue->save();
 

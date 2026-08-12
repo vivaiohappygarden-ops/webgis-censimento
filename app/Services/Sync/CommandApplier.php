@@ -597,8 +597,9 @@ class CommandApplier
                 $issue->created_at = $claimed;
             }
         }
-        // La scadenza di risoluzione decorre da quando è stata scritta in campo
+        // Le scadenze SLA decorrono da quando è stata scritta in campo
         $issue->sla_due_at = \App\Support\IssueSla::resolveDueAt($issue->created_at ?? now(), $issue->severity);
+        $issue->taken_charge_due_at = \App\Support\IssueSla::takeChargeDueAt($issue->created_at ?? now(), $issue->severity);
         $issue->save();
 
         Audit::log('issue.created', $issue, ['source' => 'sync', 'code' => $issue->code]);

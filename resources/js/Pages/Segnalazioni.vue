@@ -235,6 +235,7 @@ onMounted(async () => {
                 <select v-model="filters.sla" data-test="filter-sla" class="rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @change="filters.page = 1; load()">
                     <option value="">Tempi: tutte</option>
                     <option value="overdue">Fuori tempo massimo</option>
+                    <option value="late">Gestite oltre i tempi</option>
                 </select>
                 <input
                     v-model="filters.q"

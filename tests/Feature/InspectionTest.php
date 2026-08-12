@@ -386,6 +386,38 @@ class InspectionTest extends TestCase
         $this->assertCount(0, $this->getJson('/api/v1/inspections/deadlines')->json('data'));
     }
 
+    public function test_deadlines_keep_assets_without_census_code(): void
+    {
+        [$templateId, $items] = $this->makeTemplate('asset');
+        $this->patchJson("/api/v1/inspection-templates/{$templateId}", ['frequency_days' => 30])->assertOk();
+
+        // Un elemento senza codice censimento è legittimo (colonna nullable)
+        $area = $this->createArea($this->organization);
+        $type = $this->makeObjectType($this->organization, 'P');
+        $assetId = $this->postJson('/api/v1/assets', [
+            'area_id' => $area->id, 'object_type_id' => $type->id,
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated()->json('data.id');
+        $this->assertNull(\App\Models\Asset::query()->findOrFail($assetId)->census_code);
+
+        $this->postJson('/api/v1/inspections', [
+            'template_id' => $templateId, 'asset_id' => $assetId,
+            'answers' => $items->mapWithKeys(fn ($i) => [$i['id'] => ['value' => 'ok']])->all(),
+        ])->assertOk();
+        Inspection::query()->where('asset_id', $assetId)->update(['completed_at' => now()->subDays(40)]);
+
+        // Il controllo scaduto NON deve sparire solo perché manca il codice
+        $data = $this->getJson('/api/v1/inspections/deadlines')->assertOk()->json('data');
+        $this->assertCount(1, $data);
+        $this->assertSame($assetId, $data[0]['target_id']);
+        $this->assertSame('overdue', $data[0]['state']);
+        $this->assertSame('Elemento '.substr($assetId, 0, 8), $data[0]['target_label']);
+
+        // L'eliminazione dell'elemento invece toglie la scadenza
+        $this->deleteJson("/api/v1/assets/{$assetId}")->assertNoContent();
+        $this->assertCount(0, $this->getJson('/api/v1/inspections/deadlines')->json('data'));
+    }
+
     public function test_inspections_are_tenant_isolated(): void
     {
         [$templateId] = $this->makeTemplate();

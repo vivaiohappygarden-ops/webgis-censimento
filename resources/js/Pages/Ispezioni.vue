@@ -44,19 +44,17 @@ async function load() {
     const mySeq = ++seq;
     loading.value = true;
     try {
-        const [t, i, d] = await Promise.all([
+        const [t, i] = await Promise.all([
             axios.get('/api/v1/inspection-templates'),
             axios.get('/api/v1/inspections', { params: {
                 page: filters.page,
                 outcome: filters.outcome || undefined,
                 template_id: filters.template_id || undefined,
             } }),
-            axios.get('/api/v1/inspections/deadlines'),
         ]);
         if (mySeq !== seq) return;
         templates.value = t.data.data;
         inspections.value = i.data.data;
-        deadlines.value = d.data.data;
         Object.assign(meta, { total: i.data.total, current_page: i.data.current_page, last_page: i.data.last_page });
         loadError.value = false;
         if (meta.last_page >= 1 && filters.page > meta.last_page) {
@@ -67,6 +65,19 @@ async function load() {
         if (mySeq === seq) loadError.value = true;
     } finally {
         if (mySeq === seq) loading.value = false;
+    }
+}
+
+// Fuori da load(): la query aggregata non deve pesare su ogni cambio di
+// pagina dell'elenco, e un suo errore non deve azzerare le altre viste
+const deadlinesError = ref(false);
+async function loadDeadlines() {
+    try {
+        const { data } = await axios.get('/api/v1/inspections/deadlines');
+        deadlines.value = data.data;
+        deadlinesError.value = false;
+    } catch {
+        deadlinesError.value = true;
     }
 }
 
@@ -286,6 +297,7 @@ async function submitInspection() {
         runner.open = false;
         filters.page = 1;
         await load();
+        loadDeadlines();
         detail.value = data.data;
         view.value = 'esecuzioni';
     } catch (err) {
@@ -314,7 +326,7 @@ function deadlineBadge(d) {
 }
 
 onMounted(async () => {
-    await Promise.all([load(), loadAreas()]);
+    await Promise.all([load(), loadAreas(), loadDeadlines()]);
 });
 </script>
 
@@ -353,7 +365,7 @@ onMounted(async () => {
                     class="border-l border-gray-300 px-4 py-1.5 font-medium"
                     :class="view === 'scadenzario' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
                     data-test="view-scadenzario"
-                    @click="view = 'scadenzario'"
+                    @click="view = 'scadenzario'; loadDeadlines()"
                 >Scadenzario<template v-if="overdueCount"> ({{ overdueCount }})</template></button>
             </div>
 
@@ -411,6 +423,10 @@ onMounted(async () => {
                 <p class="mb-3 text-sm text-gray-500">
                     Controlli ricorrenti da ripetere: la scadenza parte dall'ultima ispezione registrata,
                     secondo la periodicità impostata sul modello.
+                </p>
+                <p v-if="deadlinesError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                    Caricamento delle scadenze non riuscito.
+                    <button class="ml-1 font-medium underline" @click="loadDeadlines">Riprova</button>
                 </p>
                 <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
                     <table class="w-full text-sm" data-test="deadline-list">

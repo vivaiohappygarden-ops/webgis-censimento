@@ -29,14 +29,9 @@ class IssueSla
         return $createdAt->copy()->addDays(self::days($severity, 'resolve'));
     }
 
-    /** CASE SQL con i giorni di presa in carico, per il filtro "in ritardo". */
-    public static function takeChargeDaysSql(): string
+    public static function takeChargeDueAt(Carbon $createdAt, ?string $severity): Carbon
     {
-        $cases = collect(self::POLICY)
-            ->map(fn ($p, $severity) => "WHEN '{$severity}' THEN {$p['take_charge']}")
-            ->implode(' ');
-
-        return "CASE severity {$cases} ELSE 5 END";
+        return $createdAt->copy()->addDays(self::days($severity, 'take_charge'));
     }
 
     /** Scadenze e stato delle due fasi; null per le archiviate. */
@@ -48,12 +43,12 @@ class IssueSla
         $createdAt = $issue->created_at ?? now();
 
         return [
+            // Le scadenze registrate fanno fede; il calcolo è la rete di
+            // sicurezza per righe storiche senza valore
             'take_charge' => self::phase(
-                $createdAt->copy()->addDays(self::days($issue->severity, 'take_charge')),
+                $issue->taken_charge_due_at ?? self::takeChargeDueAt($createdAt, $issue->severity),
                 $issue->taken_charge_at,
             ),
-            // La scadenza di risoluzione registrata fa fede; il calcolo è
-            // solo la rete di sicurezza per righe storiche senza valore
             'resolve' => self::phase(
                 $issue->sla_due_at ?? self::resolveDueAt($createdAt, $issue->severity),
                 $issue->resolved_at,

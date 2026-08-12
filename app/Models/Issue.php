@@ -25,13 +25,15 @@ class Issue extends Model
         'tenant_id', 'code', 'reporter_type', 'reporter_user_id', 'reporter_name',
         'reporter_contact', 'channel', 'category', 'severity', 'status',
         'asset_id', 'area_id', 'geom', 'description', 'sla_due_at',
-        'taken_charge_at', 'resolved_at', 'resolution_notes', 'work_order_id',
+        'taken_charge_due_at', 'taken_charge_at', 'resolved_at',
+        'resolution_notes', 'work_order_id',
     ];
 
     protected function casts(): array
     {
         return [
             'sla_due_at' => 'datetime',
+            'taken_charge_due_at' => 'datetime',
             'taken_charge_at' => 'datetime',
             'resolved_at' => 'datetime',
         ];
