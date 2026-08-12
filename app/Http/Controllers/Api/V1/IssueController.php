@@ -106,7 +106,7 @@ class IssueController extends Controller implements HasMiddleware
             return Issue::create([
                 ...$data,
                 'tenant_id' => $user->tenant_id,
-                'code' => $this->nextCode($user->tenant_id),
+                'code' => Issue::nextCode($user->tenant_id),
                 'status' => 'open',
                 // Esplicita, non lasciata al DEFAULT del DB: la risposta 201
                 // deve già contenere la gravità effettiva
@@ -246,17 +246,4 @@ class IssueController extends Controller implements HasMiddleware
         ];
     }
 
-    /** Numerazione per tenant: SEG-ANNO-progressivo, serializzata con advisory lock. */
-    private function nextCode(string $tenantId): string
-    {
-        DB::statement('SELECT pg_advisory_xact_lock(hashtextextended(?, 44))', ["issue:{$tenantId}"]);
-        $year = now()->year;
-        $next = (int) DB::selectOne(
-            "SELECT COALESCE(MAX((substring(code FROM '\\d+$'))::int), 0) + 1 AS n
-             FROM issues WHERE tenant_id = ? AND code LIKE ?",
-            [$tenantId, "SEG-{$year}-%"],
-        )->n;
-
-        return sprintf('SEG-%d-%04d', $year, $next);
-    }
 }

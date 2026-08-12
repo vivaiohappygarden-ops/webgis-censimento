@@ -304,6 +304,31 @@ export class SyncManager {
         return logId;
     }
 
+    /** Segnalazione dal campo (append-only): il numero SEG lo assegna il server. */
+    async enqueueIssueCreate({ description, severity = 'medium', assetId = null, areaId = null }) {
+        const issueId = uuidv7();
+        await this.db.sync_queue.add({
+            idempotency_key: crypto.randomUUID(),
+            device_seq: await this.nextDeviceSeq(),
+            type: 'issue.create',
+            entity_id: issueId,
+            payload: {
+                description,
+                severity,
+                asset_id: assetId,
+                area_id: areaId,
+            },
+            client_ts: new Date().toISOString(),
+            status: 'PENDING',
+            attempts: 0,
+            last_error: null,
+        });
+
+        await this.log('info', 'In coda: segnalazione dal campo.');
+        await this.notify();
+        return issueId;
+    }
+
     /** Ricerca locale di un tag per uid; con tagType preferisce la corrispondenza esatta. */
     async findByTag(uid, tagType = null) {
         const tags = await this.db.asset_tags.where('uid').equals(uid).toArray();
@@ -610,10 +635,10 @@ export class SyncManager {
         await this.db.conflicts.delete(idempotencyKey);
 
         // La verità del server per questa entità va ripresa al prossimo pull
-        // (un consuntivo scartato no: non è replicato localmente)
+        // (consuntivi e segnalazioni scartati no: non sono replicati localmente)
         const deferredRow = await this.db.meta.get('deferred_ids');
         const deferred = new Set(deferredRow?.value ?? []);
-        if (cmd.entity_id && cmd.type !== 'work_log.add') deferred.add(cmd.entity_id);
+        if (cmd.entity_id && ! ['work_log.add', 'issue.create'].includes(cmd.type)) deferred.add(cmd.entity_id);
         await this.db.meta.put({ key: 'deferred_ids', value: [...deferred] });
 
         // Una creazione mai arrivata al server non deve restare come riga fantasma

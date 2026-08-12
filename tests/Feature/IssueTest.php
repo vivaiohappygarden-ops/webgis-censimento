@@ -152,6 +152,55 @@ class IssueTest extends TestCase
         $this->postJson("/api/v1/issues/{$issueId}/work-order")->assertForbidden();
     }
 
+    public function test_issue_created_from_field_via_sync_command(): void
+    {
+        [, $operator] = [null, \App\Models\User::factory()->create(['tenant_id' => $this->organization->id])];
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($this->organization->id);
+        $operator->assignRole('operatore');
+        $this->actingAsTenantUser($operator);
+
+        $issueId = (string) \Illuminate\Support\Str::uuid();
+        $command = [
+            'idempotency_key' => (string) \Illuminate\Support\Str::uuid(),
+            'device_seq' => 1,
+            'type' => 'issue.create',
+            'entity_id' => $issueId,
+            'payload' => [
+                'description' => 'Panchina divelta vicino al vialetto.',
+                'severity' => 'high',
+            ],
+            'client_ts' => now()->toIso8601String(),
+        ];
+        $batch = [
+            'batch_id' => (string) \Illuminate\Support\Str::uuid(),
+            'device_id' => 'dev-test-0001',
+            'schema' => 1,
+            'commands' => [$command],
+        ];
+
+        $this->postJson('/api/v1/sync/batch', $batch)->assertOk()
+            ->assertJsonPath('results.0.status', 'applied')
+            ->assertJsonPath('results.0.entity_id', $issueId);
+
+        $issue = Issue::query()->findOrFail($issueId);
+        $this->assertSame('SEG-'.now()->year.'-0001', $issue->code);
+        $this->assertSame('pwa', $issue->channel);
+        $this->assertSame($operator->id, $issue->reporter_user_id);
+        $this->assertSame('open', $issue->status);
+
+        // Replay dello stesso batch: nessun doppione
+        $this->postJson('/api/v1/sync/batch', $batch)->assertOk()
+            ->assertJsonPath('results.0.status', 'duplicate');
+        $this->assertSame(1, Issue::query()->count());
+
+        // Stesso entity_id con chiave nuova: collisione rifiutata
+        $this->postJson('/api/v1/sync/batch', [
+            ...$batch,
+            'batch_id' => (string) \Illuminate\Support\Str::uuid(),
+            'commands' => [[...$command, 'idempotency_key' => (string) \Illuminate\Support\Str::uuid()]],
+        ])->assertOk()->assertJsonPath('results.0.status', 'rejected');
+    }
+
     public function test_issues_are_tenant_isolated(): void
     {
         $issueId = $this->postJson('/api/v1/issues', ['description' => 'Riservata.'])->json('data.id');

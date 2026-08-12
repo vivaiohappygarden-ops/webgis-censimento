@@ -37,6 +37,45 @@ const selected = ref(null);
 const localOrders = ref([]);
 const selectedOrder = ref(null);
 const consuntivo = reactive({ open: false, manHours: null, quantity: null, unit: '', notes: '' });
+
+// Segnalazione dal campo (dalla scheda elemento o generica per area)
+const ISSUE_SEVERITY = { low: 'Bassa', medium: 'Media', high: 'Alta', critical: 'Critica' };
+const issueForm = reactive({ open: false, description: '', severity: 'medium', areaId: '' });
+
+function openIssueForm() {
+    Object.assign(issueForm, { open: true, description: '', severity: 'medium', areaId: issueForm.areaId || '' });
+}
+
+async function submitIssue(assetId = null) {
+    const description = issueForm.description.trim();
+    if (! description) {
+        setMessage('Descrivi il problema segnalato.', false);
+        return;
+    }
+    if (! assetId && ! issueForm.areaId) {
+        setMessage('Indica l\'area interessata dalla segnalazione.', false);
+        return;
+    }
+    busy.value = true;
+    try {
+        await sync.enqueueIssueCreate({
+            description,
+            severity: issueForm.severity,
+            assetId,
+            areaId: assetId ? null : issueForm.areaId,
+        });
+        Object.assign(issueForm, { open: false, description: '', severity: 'medium' });
+        setMessage(state.online
+            ? 'Segnalazione registrata: invio in corso.'
+            : 'Segnalazione registrata sul dispositivo: verrà inviata quando torna la rete.');
+        if (state.online) await runSync();
+        await refreshLocal();
+    } catch {
+        setMessage('Registrazione della segnalazione non riuscita: riprova.', false);
+    } finally {
+        busy.value = false;
+    }
+}
 const measureForm = reactive({ species: '', height_m: null, dbh_cm: null, crown_diameter_m: null });
 const tagForm = reactive({ uid: '', tagType: 'qr' });
 
@@ -275,6 +314,7 @@ function switchTab(key) {
     selected.value = null;
     selectedOrder.value = null;
     consuntivo.open = false;
+    issueForm.open = false;
     tab.value = key;
     refreshLocal();
     if (key === 'mappa') {
@@ -880,6 +920,39 @@ onBeforeUnmount(() => {
                         @click="saveCensus"
                     >Registra elemento</button>
                 </div>
+
+                <!-- Segnalazione generica sull'area (senza elemento preciso) -->
+                <div class="mt-3 rounded-xl border border-gray-200 bg-white p-4">
+                    <h2 class="text-sm font-semibold">Segnala un problema nell'area</h2>
+                    <p class="mt-1 text-xs text-gray-400">
+                        Per un problema su un elemento preciso apri la sua scheda da Elementi o Scansiona.
+                    </p>
+                    <div class="mt-3 space-y-3">
+                        <label class="block text-xs">
+                            <span class="text-gray-500">Area interessata *</span>
+                            <select v-model="issueForm.areaId" data-test="area-issue-area" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2.5 text-sm">
+                                <option value="" disabled>Seleziona…</option>
+                                <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.name }}</option>
+                            </select>
+                        </label>
+                        <label class="block text-xs">
+                            <span class="text-gray-500">Cosa hai notato *</span>
+                            <textarea v-model="issueForm.description" rows="2" data-test="area-issue-description" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Recinzione divelta vicino all'ingresso nord" />
+                        </label>
+                        <label class="block text-xs">
+                            <span class="text-gray-500">Gravità</span>
+                            <select v-model="issueForm.severity" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
+                                <option v-for="(label, value) in ISSUE_SEVERITY" :key="value" :value="value">{{ label }}</option>
+                            </select>
+                        </label>
+                        <button
+                            class="w-full rounded-lg border border-green-700 px-4 py-2.5 text-sm font-medium text-green-700 disabled:opacity-50"
+                            :disabled="busy || ! bootstrapped"
+                            data-test="area-issue-save"
+                            @click="submitIssue()"
+                        >Invia la segnalazione</button>
+                    </div>
+                </div>
             </section>
 
             <!-- ELEMENTI -->
@@ -1209,6 +1282,47 @@ onBeforeUnmount(() => {
                     </div>
                     <p v-else class="mt-2 text-xs text-gray-400">
                         Le foto scattate qui restano sul dispositivo finché non c'è rete, poi partono da sole.
+                    </p>
+                </div>
+
+                <!-- Segnalazione sull'elemento -->
+                <div class="rounded-xl border border-gray-200 bg-white p-4">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-semibold">Segnalazione</h2>
+                        <button
+                            v-if="! issueForm.open"
+                            class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700"
+                            data-test="asset-issue-open"
+                            @click="openIssueForm"
+                        >Segnala un problema</button>
+                    </div>
+                    <div v-if="issueForm.open" class="mt-3 space-y-3">
+                        <label class="block text-xs">
+                            <span class="text-gray-500">Cosa hai notato *</span>
+                            <textarea v-model="issueForm.description" rows="2" data-test="asset-issue-description" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Ramo spezzato pericolante sul lato strada" />
+                        </label>
+                        <label class="block text-xs">
+                            <span class="text-gray-500">Gravità</span>
+                            <select v-model="issueForm.severity" data-test="asset-issue-severity" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
+                                <option v-for="(label, value) in ISSUE_SEVERITY" :key="value" :value="value">{{ label }}</option>
+                            </select>
+                        </label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button
+                                class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700"
+                                :disabled="busy"
+                                @click="issueForm.open = false"
+                            >Annulla</button>
+                            <button
+                                class="rounded-lg bg-green-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                                :disabled="busy"
+                                data-test="asset-issue-save"
+                                @click="submitIssue(selected.asset.id)"
+                            >Invia la segnalazione</button>
+                        </div>
+                    </div>
+                    <p v-else class="mt-2 text-xs text-gray-400">
+                        Un problema su questo elemento arriva in ufficio alla sincronizzazione.
                     </p>
                 </div>
 

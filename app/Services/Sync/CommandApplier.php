@@ -26,7 +26,7 @@ class CommandApplier
     public const TYPES = [
         'asset.create', 'asset.update_attrs', 'asset.update_measures',
         'asset.update_geom', 'asset.change_status', 'tag.associate',
-        'work_order.transition', 'work_log.add',
+        'work_order.transition', 'work_log.add', 'issue.create',
     ];
 
     /**
@@ -59,7 +59,7 @@ class CommandApplier
         $permission = match ($type) {
             'asset.create' => 'assets.create',
             // La regola fine (proprio ordine/squadra) è dentro l'applier
-            'work_order.transition', 'work_log.add' => 'works.view',
+            'work_order.transition', 'work_log.add', 'issue.create' => 'works.view',
             default => 'assets.update',
         };
         if (! $user->can($permission)) {
@@ -76,6 +76,7 @@ class CommandApplier
                 'tag.associate' => $this->applyTagAssociate($command, $user),
                 'work_order.transition' => $this->applyWorkOrderTransition($command, $user),
                 'work_log.add' => $this->applyWorkLogAdd($command, $user),
+                'issue.create' => $this->applyIssueCreate($command, $user),
             });
         } catch (ValidationException $e) {
             return $this->rejected($command, 'VALIDATION_FAILED', collect($e->errors())->flatten()->first());
@@ -536,6 +537,49 @@ class CommandApplier
         ]);
 
         Audit::log('work_log.created', $log, ['source' => 'sync', 'work_order_id' => $order->id]);
+
+        return $this->applied($command, 1);
+    }
+
+    /**
+     * Segnalazione aperta dal campo: evento append-only con id (UUID v7)
+     * scelto dal device; il numero SEG lo assegna il server all'arrivo.
+     */
+    private function applyIssueCreate(array $command, User $user): array
+    {
+        $payload = Validator::make($command['payload'] ?? [], [
+            'description' => ['required', 'string', 'max:4000'],
+            'severity' => ['sometimes', 'in:low,medium,high,critical'],
+            'asset_id' => ['nullable', 'uuid'],
+            'area_id' => ['nullable', 'uuid'],
+        ])->validate();
+
+        if (\App\Models\Issue::withoutGlobalScopes()->withTrashed()->whereKey($command['entity_id'])->exists()) {
+            return $this->rejected($command, 'ID_COLLISION', 'Esiste già una segnalazione con questo identificativo.');
+        }
+        if (! empty($payload['asset_id']) && ! Asset::query()->whereKey($payload['asset_id'])->exists()) {
+            return $this->rejected($command, 'VALIDATION_FAILED', 'Elemento inesistente per questa organizzazione.');
+        }
+        if (! empty($payload['area_id']) && ! \App\Models\Area::query()->whereKey($payload['area_id'])->exists()) {
+            return $this->rejected($command, 'VALIDATION_FAILED', 'Area inesistente per questa organizzazione.');
+        }
+
+        $issue = new \App\Models\Issue([
+            'tenant_id' => $user->tenant_id,
+            'code' => \App\Models\Issue::nextCode($user->tenant_id),
+            'status' => 'open',
+            'severity' => $payload['severity'] ?? 'medium',
+            'reporter_type' => 'internal',
+            'reporter_user_id' => $user->id,
+            'channel' => 'pwa',
+            'asset_id' => $payload['asset_id'] ?? null,
+            'area_id' => $payload['area_id'] ?? null,
+            'description' => $payload['description'],
+        ]);
+        $issue->id = $command['entity_id'];
+        $issue->save();
+
+        Audit::log('issue.created', $issue, ['source' => 'sync', 'code' => $issue->code]);
 
         return $this->applied($command, 1);
     }
