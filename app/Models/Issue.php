@@ -62,6 +62,14 @@ class Issue extends Model
         return in_array($status, self::TRANSITIONS[$this->status] ?? [], true);
     }
 
+    protected $appends = ['sla'];
+
+    /** Scadenze SLA (presa in carico e risoluzione) con il loro stato. */
+    public function getSlaAttribute(): ?array
+    {
+        return \App\Support\IssueSla::describe($this);
+    }
+
     /** Numerazione per tenant: SEG-ANNO-progressivo, serializzata con advisory lock. */
     public static function nextCode(string $tenantId): string
     {

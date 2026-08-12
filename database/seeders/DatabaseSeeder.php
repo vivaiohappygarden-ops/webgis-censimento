@@ -273,6 +273,51 @@ class DatabaseSeeder extends Seeder
             }
         }
 
+        // Scadenzario dimostrativo: un controllo di 100 giorni fa su periodicità
+        // 90 compare "in ritardo" appena si apre la pagina Ispezioni
+        if (! \App\Models\Inspection::query()->withoutGlobalScopes()->where('tenant_id', $organization->id)->exists()) {
+            $items = \App\Models\ChecklistItem::query()->withoutGlobalScopes()
+                ->where('template_id', $template->id)->orderBy('sort_order')->get();
+            \App\Models\Inspection::query()->withoutGlobalScopes()->create([
+                'tenant_id' => $organization->id,
+                'template_id' => $template->id,
+                // firstOrCreate non rilegge i DEFAULT del DB: senza fallback
+                // la versione resterebbe null
+                'template_version' => $template->version ?? 1,
+                'area_id' => $area->id,
+                'inspector_id' => $admin->id,
+                'completed_at' => now()->subDays(100),
+                'answers' => $items->mapWithKeys(fn ($item) => [$item->id => [
+                    'question' => $item->question,
+                    'answer_type' => $item->answer_type,
+                    'value' => 'ok',
+                    'note' => null,
+                ]])->all(),
+                'outcome' => 'passed',
+            ]);
+        }
+
+        // Una segnalazione grave aperta da giorni mostra gli SLA fuori tempo
+        if (! \App\Models\Issue::query()->withoutGlobalScopes()->where('tenant_id', $organization->id)->exists()) {
+            $openedAt = now()->subDays(10);
+            $issue = new \App\Models\Issue([
+                'tenant_id' => $organization->id,
+                'code' => \App\Models\Issue::nextCode($organization->id),
+                'status' => 'open',
+                'severity' => 'high',
+                'reporter_type' => 'client',
+                'reporter_name' => 'Condominio Girasoli',
+                'channel' => 'backoffice',
+                'area_id' => $area->id,
+                'description' => 'Panchina divelta vicino all\'ingresso nord, appoggiata alla siepe.',
+                'sla_due_at' => \App\Support\IssueSla::resolveDueAt($openedAt, 'high'),
+            ]);
+            // created_at non è assegnabile in massa: la data di apertura
+            // all'indietro va impostata direttamente
+            $issue->created_at = $openedAt;
+            $issue->save();
+        }
+
         $this->command?->info('Tenant demo pronto: login admin@demo.local / password (slug organizzazione: demo).');
     }
 }

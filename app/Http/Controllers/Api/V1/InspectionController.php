@@ -25,9 +25,72 @@ class InspectionController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:works.view', only: ['index', 'show']),
+            new Middleware('can:works.view', only: ['index', 'show', 'deadlines']),
             new Middleware('can:works.manage', only: ['store']),
         ];
+    }
+
+    /** Le scadenze si contano in date locali, non in ore UTC. */
+    private const TIMEZONE = 'Europe/Rome';
+
+    /**
+     * Scadenzario dei controlli ricorrenti: per ogni modello attivo con
+     * periodicità, l'ultima ispezione di ciascun bersaglio e la data entro
+     * cui ripeterla. La ricorrenza parte dalla prima ispezione registrata.
+     */
+    public function deadlines(): JsonResponse
+    {
+        $rows = Inspection::query()
+            ->join('inspection_templates as t', function ($join) {
+                $join->on('t.id', '=', 'inspections.template_id')
+                    ->on('t.tenant_id', '=', 'inspections.tenant_id');
+            })
+            ->whereNull('t.deleted_at')
+            ->where('t.is_active', true)
+            ->whereNotNull('t.frequency_days')
+            ->groupBy('inspections.template_id', 't.code', 't.name', 't.frequency_days', 't.target',
+                'inspections.asset_id', 'inspections.area_id')
+            ->selectRaw('inspections.template_id, t.code AS template_code, t.name AS template_name,
+                t.frequency_days, t.target, inspections.asset_id, inspections.area_id,
+                MAX(inspections.completed_at) AS last_completed_at')
+            ->get();
+
+        $assetLabels = \App\Models\Asset::query()
+            ->whereIn('id', $rows->pluck('asset_id')->filter())->pluck('census_code', 'id');
+        $areaLabels = \App\Models\Area::query()
+            ->whereIn('id', $rows->pluck('area_id')->filter())->pluck('name', 'id');
+
+        $today = \Illuminate\Support\Carbon::now(self::TIMEZONE)->startOfDay();
+        $data = $rows->map(function ($row) use ($assetLabels, $areaLabels, $today) {
+            $isAsset = $row->asset_id !== null;
+            $label = $isAsset ? ($assetLabels[$row->asset_id] ?? null) : ($areaLabels[$row->area_id] ?? null);
+            // Bersaglio eliminato dal censimento: nessun controllo da pianificare
+            if ($label === null) {
+                return null;
+            }
+
+            $last = \Illuminate\Support\Carbon::parse($row->last_completed_at)->timezone(self::TIMEZONE);
+            $due = $last->copy()->startOfDay()->addDays($row->frequency_days);
+            // round(): a cavallo dell'ora legale il divario tra mezzanotti
+            // non è un numero intero di giorni
+            $daysLeft = (int) round($today->diffInDays($due, false));
+
+            return [
+                'template_id' => $row->template_id,
+                'template_code' => $row->template_code,
+                'template_name' => $row->template_name,
+                'frequency_days' => (int) $row->frequency_days,
+                'target' => $isAsset ? 'asset' : 'area',
+                'target_id' => $isAsset ? $row->asset_id : $row->area_id,
+                'target_label' => $label,
+                'last_completed_at' => \Illuminate\Support\Carbon::parse($row->last_completed_at)->toIso8601String(),
+                'due_date' => $due->toDateString(),
+                'days_left' => $daysLeft,
+                'state' => $daysLeft < 0 ? 'overdue' : ($daysLeft <= 30 ? 'due_soon' : 'ok'),
+            ];
+        })->filter()->sortBy('due_date')->values();
+
+        return response()->json(['data' => $data]);
     }
 
     public function index(Request $request): JsonResponse

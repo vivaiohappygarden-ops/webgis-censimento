@@ -38,6 +38,7 @@ class IssueController extends Controller implements HasMiddleware
         $request->validate([
             'status' => ['nullable', Rule::in(Issue::STATUSES)],
             'severity' => ['nullable', Rule::in(['low', 'medium', 'high', 'critical'])],
+            'sla' => ['nullable', Rule::in(['overdue'])],
             'q' => ['nullable', 'string', 'max:200'],
         ]);
 
@@ -63,6 +64,14 @@ class IssueController extends Controller implements HasMiddleware
             $query->where(fn ($w) => $w->where('code', 'ilike', $q)
                 ->orWhere('description', 'ilike', $q)
                 ->orWhere('reporter_name', 'ilike', $q));
+        }
+        // "Fuori tempo massimo": aperte oltre la finestra di presa in carico
+        // o comunque oltre la scadenza di risoluzione
+        if ($request->string('sla')->value() === 'overdue') {
+            $query->whereIn('status', ['open', 'in_charge'])
+                ->where(fn ($w) => $w->where('sla_due_at', '<', now())
+                    ->orWhere(fn ($o) => $o->where('status', 'open')
+                        ->whereRaw('created_at + ('.\App\Support\IssueSla::takeChargeDaysSql().") * interval '1 day' < now()")));
         }
 
         // Le aperte prima, le più gravi in alto; risolte e archiviate in coda
@@ -111,6 +120,7 @@ class IssueController extends Controller implements HasMiddleware
                 // Esplicita, non lasciata al DEFAULT del DB: la risposta 201
                 // deve già contenere la gravità effettiva
                 'severity' => $data['severity'] ?? 'medium',
+                'sla_due_at' => \App\Support\IssueSla::resolveDueAt(now(), $data['severity'] ?? 'medium'),
                 'reporter_type' => $data['reporter_type'] ?? 'internal',
                 'reporter_user_id' => $user->id,
                 'channel' => 'backoffice',
@@ -168,6 +178,11 @@ class IssueController extends Controller implements HasMiddleware
             }
 
             $issue->fill($data);
+            // Il cambio di gravità sposta la scadenza di risoluzione, sempre
+            // contata dall'apertura: declassare non azzera il tempo già corso
+            if ($issue->isDirty('severity')) {
+                $issue->sla_due_at = \App\Support\IssueSla::resolveDueAt($issue->created_at, $issue->severity);
+            }
             $issue->save();
 
             Audit::log('issue.updated', $issue, ['status' => $issue->status]);

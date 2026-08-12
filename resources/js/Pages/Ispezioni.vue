@@ -18,6 +18,7 @@ const ANSWER_TYPES = { ok_ko: 'OK / KO', ok_ko_na: 'OK / KO / N.A.', text: 'Test
 const view = ref('esecuzioni');
 const templates = ref([]);
 const inspections = ref([]);
+const deadlines = ref([]);
 const meta = reactive({ total: 0, current_page: 1, last_page: 1 });
 const filters = reactive({ outcome: '', template_id: '', page: 1 });
 const areas = ref([]);
@@ -43,17 +44,19 @@ async function load() {
     const mySeq = ++seq;
     loading.value = true;
     try {
-        const [t, i] = await Promise.all([
+        const [t, i, d] = await Promise.all([
             axios.get('/api/v1/inspection-templates'),
             axios.get('/api/v1/inspections', { params: {
                 page: filters.page,
                 outcome: filters.outcome || undefined,
                 template_id: filters.template_id || undefined,
             } }),
+            axios.get('/api/v1/inspections/deadlines'),
         ]);
         if (mySeq !== seq) return;
         templates.value = t.data.data;
         inspections.value = i.data.data;
+        deadlines.value = d.data.data;
         Object.assign(meta, { total: i.data.total, current_page: i.data.current_page, last_page: i.data.last_page });
         loadError.value = false;
         if (meta.last_page >= 1 && filters.page > meta.last_page) {
@@ -294,7 +297,21 @@ async function submitInspection() {
 }
 
 const fmtDateTime = (iso) => (iso ? new Date(iso).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
+const fmtDate = (ymd) => (ymd ? new Date(`${ymd}T00:00:00`).toLocaleDateString('it-IT') : '—');
 const answerLabel = (a) => (a.value === 'ok' ? 'OK' : a.value === 'ko' ? 'KO' : a.value === 'na' ? 'N.A.' : a.value);
+
+// ---- Scadenzario ----
+const overdueCount = computed(() => deadlines.value.filter((d) => d.state === 'overdue').length);
+function deadlineBadge(d) {
+    if (d.state === 'overdue') {
+        return { label: `In ritardo di ${-d.days_left} ${-d.days_left === 1 ? 'giorno' : 'giorni'}`, cls: 'bg-red-100 text-red-800' };
+    }
+    if (d.days_left === 0) return { label: 'Scade oggi', cls: 'bg-amber-100 text-amber-800' };
+    if (d.state === 'due_soon') {
+        return { label: `Entro ${d.days_left} ${d.days_left === 1 ? 'giorno' : 'giorni'}`, cls: 'bg-amber-100 text-amber-800' };
+    }
+    return { label: 'Programmata', cls: 'bg-green-100 text-green-800' };
+}
 
 onMounted(async () => {
     await Promise.all([load(), loadAreas()]);
@@ -332,6 +349,12 @@ onMounted(async () => {
                     data-test="view-modelli"
                     @click="view = 'modelli'"
                 >Modelli</button>
+                <button
+                    class="border-l border-gray-300 px-4 py-1.5 font-medium"
+                    :class="view === 'scadenzario' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    data-test="view-scadenzario"
+                    @click="view = 'scadenzario'"
+                >Scadenzario<template v-if="overdueCount"> ({{ overdueCount }})</template></button>
             </div>
 
             <p v-if="loadError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -381,6 +404,46 @@ onMounted(async () => {
                         </tr>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- SCADENZARIO -->
+            <div v-if="view === 'scadenzario'">
+                <p class="mb-3 text-sm text-gray-500">
+                    Controlli ricorrenti da ripetere: la scadenza parte dall'ultima ispezione registrata,
+                    secondo la periodicità impostata sul modello.
+                </p>
+                <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                    <table class="w-full text-sm" data-test="deadline-list">
+                        <thead>
+                            <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
+                                <th class="px-4 py-2.5 font-medium">Modello</th>
+                                <th class="px-4 py-2.5 font-medium">Su</th>
+                                <th class="px-4 py-2.5 font-medium">Ultima ispezione</th>
+                                <th class="px-4 py-2.5 font-medium">Da ripetere entro</th>
+                                <th class="px-4 py-2.5 font-medium">Stato</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-50">
+                            <tr v-for="d in deadlines" :key="`${d.template_id}-${d.target_id}`" data-test="deadline-row">
+                                <td class="px-4 py-2 font-medium">{{ d.template_name }}<span v-if="d.template_code" class="ml-1 text-xs font-normal text-gray-400">{{ d.template_code }}</span></td>
+                                <td class="px-4 py-2 text-gray-600">{{ d.target_label }}</td>
+                                <td class="px-4 py-2 text-gray-600">{{ fmtDateTime(d.last_completed_at) }}</td>
+                                <td class="px-4 py-2">{{ fmtDate(d.due_date) }}</td>
+                                <td class="px-4 py-2">
+                                    <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="deadlineBadge(d).cls" data-test="deadline-state">
+                                        {{ deadlineBadge(d).label }}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr v-if="! deadlines.length && ! loading">
+                                <td colspan="5" class="px-4 py-8 text-center text-gray-400">
+                                    Nessuna scadenza: compaiono qui i modelli con periodicità impostata,
+                                    dopo la prima ispezione registrata su un'area o un elemento.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- ESECUZIONI -->

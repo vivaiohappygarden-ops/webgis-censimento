@@ -152,6 +152,67 @@ class IssueTest extends TestCase
         $this->postJson("/api/v1/issues/{$issueId}/work-order")->assertForbidden();
     }
 
+    public function test_sla_deadlines_follow_severity_and_track_delays(): void
+    {
+        // Critica: presa in carico entro 1 giorno, risoluzione entro 3
+        $created = $this->postJson('/api/v1/issues', [
+            'description' => 'Ramo pericolante sul passaggio pedonale.', 'severity' => 'critical',
+        ])->assertCreated()->json('data');
+        $this->assertSame('pending', $created['sla']['take_charge']['state']);
+        $this->assertSame('pending', $created['sla']['resolve']['state']);
+
+        $issue = Issue::query()->findOrFail($created['id']);
+        $this->assertLessThan(2, abs($issue->sla_due_at->diffInSeconds($issue->created_at->copy()->addDays(3))));
+
+        // Aperta da 2 giorni e mai presa in carico: fuori tempo massimo
+        $issue->created_at = now()->subDays(2);
+        $issue->sla_due_at = $issue->created_at->copy()->addDays(3);
+        $issue->save();
+
+        // Una lieve appena aperta invece è nei tempi e resta fuori dal filtro
+        $this->postJson('/api/v1/issues', ['description' => 'Erba alta lungo la recinzione.', 'severity' => 'low'])
+            ->assertCreated();
+
+        $listed = $this->getJson('/api/v1/issues?sla=overdue')->assertOk()->json('data');
+        $this->assertCount(1, $listed);
+        $this->assertSame($issue->id, $listed[0]['id']);
+        $this->assertSame('overdue', $listed[0]['sla']['take_charge']['state']);
+        $this->assertSame(1, $listed[0]['sla']['take_charge']['days_late']);
+        $this->assertSame('pending', $listed[0]['sla']['resolve']['state']);
+
+        // Presa in carico tardiva, ma risoluzione entro la scadenza
+        $data = $this->patchJson("/api/v1/issues/{$issue->id}", ['status' => 'in_charge'])->assertOk()->json('data');
+        $this->assertSame('late', $data['sla']['take_charge']['state']);
+        $data = $this->patchJson("/api/v1/issues/{$issue->id}", [
+            'status' => 'resolved', 'resolution_notes' => 'Ramo rimosso in giornata.',
+        ])->assertOk()->json('data');
+        $this->assertSame('met', $data['sla']['resolve']['state']);
+
+        // Risolta: non è più "fuori tempo massimo"
+        $this->assertCount(0, $this->getJson('/api/v1/issues?sla=overdue')->json('data'));
+
+        // Il filtro accetta solo valori conosciuti
+        $this->getJson('/api/v1/issues?sla=qualsiasi')->assertUnprocessable();
+    }
+
+    public function test_severity_change_moves_resolution_deadline_from_opening(): void
+    {
+        $id = $this->postJson('/api/v1/issues', ['description' => 'Giostrina scheggiata.'])
+            ->assertCreated()->json('data.id'); // media: 15 giorni
+
+        $issue = Issue::query()->findOrFail($id);
+        $this->assertLessThan(2, abs($issue->sla_due_at->diffInSeconds($issue->created_at->copy()->addDays(15))));
+
+        // Riclassificata critica: la scadenza si accorcia, contata dall'apertura
+        $this->patchJson("/api/v1/issues/{$id}", ['severity' => 'critical'])->assertOk();
+        $issue->refresh();
+        $this->assertLessThan(2, abs($issue->sla_due_at->diffInSeconds($issue->created_at->copy()->addDays(3))));
+
+        // Le archiviate non hanno SLA: nessun intervento richiesto
+        $data = $this->patchJson("/api/v1/issues/{$id}", ['status' => 'dismissed'])->assertOk()->json('data');
+        $this->assertNull($data['sla']);
+    }
+
     public function test_issue_created_from_field_via_sync_command(): void
     {
         [, $operator] = [null, \App\Models\User::factory()->create(['tenant_id' => $this->organization->id])];
@@ -191,6 +252,10 @@ class IssueTest extends TestCase
         // La data è quella dichiarata dal device, non quella della sync
         $this->assertLessThan(2, abs($issue->created_at->diffInSeconds(
             \Illuminate\Support\Carbon::parse($command['client_ts']),
+        )));
+        // E la scadenza di risoluzione decorre da lì (alta: 7 giorni)
+        $this->assertLessThan(2, abs($issue->sla_due_at->diffInSeconds(
+            $issue->created_at->copy()->addDays(7),
         )));
 
         // Replay dello stesso batch: nessun doppione

@@ -17,7 +17,7 @@ const SEVERITY = { low: 'Bassa', medium: 'Media', high: 'Alta', critical: 'Criti
 
 const rows = ref([]);
 const meta = reactive({ total: 0, current_page: 1, last_page: 1 });
-const filters = reactive({ status: '', severity: '', q: '', page: 1 });
+const filters = reactive({ status: '', severity: '', sla: '', q: '', page: 1 });
 const loading = ref(false);
 const loadError = ref(false);
 const areas = ref([]);
@@ -45,6 +45,7 @@ async function load() {
             page: filters.page,
             status: filters.status || undefined,
             severity: filters.severity || undefined,
+            sla: filters.sla || undefined,
             q: filters.q || undefined,
         } });
         if (mySeq !== seq) return;
@@ -176,6 +177,30 @@ const dismissIssue = () => {
 
 const fmtDateTime = (iso) => (iso ? new Date(iso).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
 
+// ---- SLA: tempi attesi di presa in carico e risoluzione ----
+function slaBadge(issue) {
+    const s = issue.sla;
+    if (! s) return { label: '—', cls: 'text-gray-400' }; // archiviata: nessun intervento richiesto
+    if (s.take_charge.state === 'overdue' || s.resolve.state === 'overdue') {
+        const late = Math.max(
+            s.take_charge.state === 'overdue' ? s.take_charge.days_late : 0,
+            s.resolve.state === 'overdue' ? s.resolve.days_late : 0,
+        );
+        return { label: late > 0 ? `In ritardo di ${late} ${late === 1 ? 'giorno' : 'giorni'}` : 'In ritardo', cls: 'bg-red-100 text-red-800' };
+    }
+    if (s.take_charge.state === 'late' || s.resolve.state === 'late') {
+        return { label: 'Oltre i tempi', cls: 'bg-amber-100 text-amber-800' };
+    }
+    return { label: 'Nei tempi', cls: 'bg-green-100 text-green-800' };
+}
+
+function slaPhaseText(phase) {
+    if (phase.state === 'met') return 'rispettata';
+    if (phase.state === 'late') return phase.days_late > 0 ? `superata di ${phase.days_late} ${phase.days_late === 1 ? 'giorno' : 'giorni'}` : 'superata';
+    if (phase.state === 'overdue') return phase.days_late > 0 ? `in ritardo di ${phase.days_late} ${phase.days_late === 1 ? 'giorno' : 'giorni'}` : 'in ritardo';
+    return 'nei tempi';
+}
+
 onMounted(async () => {
     await Promise.all([load(), loadAreas()]);
 });
@@ -207,6 +232,10 @@ onMounted(async () => {
                     <option value="">Tutte le gravità</option>
                     <option v-for="(label, value) in SEVERITY" :key="value" :value="value">{{ label }}</option>
                 </select>
+                <select v-model="filters.sla" data-test="filter-sla" class="rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @change="filters.page = 1; load()">
+                    <option value="">Tempi: tutte</option>
+                    <option value="overdue">Fuori tempo massimo</option>
+                </select>
                 <input
                     v-model="filters.q"
                     placeholder="Cerca per codice, testo o segnalante…"
@@ -227,6 +256,7 @@ onMounted(async () => {
                             <th class="px-4 py-2.5 font-medium">Codice</th>
                             <th class="px-4 py-2.5 font-medium">Gravità</th>
                             <th class="px-4 py-2.5 font-medium">Stato</th>
+                            <th class="px-4 py-2.5 font-medium">Tempi</th>
                             <th class="px-4 py-2.5 font-medium">Descrizione</th>
                             <th class="px-4 py-2.5 font-medium">Dove</th>
                             <th class="px-4 py-2.5 font-medium">Segnalante</th>
@@ -248,13 +278,18 @@ onMounted(async () => {
                                     {{ STATUS[issue.status]?.label ?? issue.status }}
                                 </span>
                             </td>
+                            <td class="px-4 py-2" data-test="issue-sla">
+                                <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="slaBadge(issue).cls">
+                                    {{ slaBadge(issue).label }}
+                                </span>
+                            </td>
                             <td class="max-w-64 truncate px-4 py-2" :title="issue.description">{{ issue.description }}</td>
                             <td class="px-4 py-2 text-gray-600">{{ issue.asset?.census_code ?? issue.area?.name ?? '—' }}</td>
                             <td class="px-4 py-2 text-gray-600">{{ issue.reporter_name || issue.reporter?.name || '—' }}</td>
                             <td class="px-4 py-2 text-gray-600">{{ issue.work_order?.code ?? '—' }}</td>
                         </tr>
                         <tr v-if="! rows.length && ! loading">
-                            <td colspan="7" class="px-4 py-8 text-center text-gray-400">Nessuna segnalazione.</td>
+                            <td colspan="8" class="px-4 py-8 text-center text-gray-400">Nessuna segnalazione.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -381,6 +416,18 @@ onMounted(async () => {
                             <div class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Elemento</dt><dd>{{ detail.asset?.census_code ?? '—' }}</dd></div>
                             <div class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Area</dt><dd>{{ detail.area?.name ?? '—' }}</dd></div>
                             <div class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Aperta il</dt><dd>{{ fmtDateTime(detail.created_at) }}</dd></div>
+                            <div v-if="detail.sla" class="flex justify-between gap-3 border-b border-gray-50 py-1" data-test="sla-take-charge">
+                                <dt class="text-gray-500">Presa in carico attesa entro</dt>
+                                <dd>{{ fmtDateTime(detail.sla.take_charge.due_at) }}
+                                    <span class="text-xs" :class="['overdue', 'late'].includes(detail.sla.take_charge.state) ? 'text-red-700' : 'text-green-700'">· {{ slaPhaseText(detail.sla.take_charge) }}</span>
+                                </dd>
+                            </div>
+                            <div v-if="detail.sla" class="flex justify-between gap-3 border-b border-gray-50 py-1" data-test="sla-resolve">
+                                <dt class="text-gray-500">Risoluzione attesa entro</dt>
+                                <dd>{{ fmtDateTime(detail.sla.resolve.due_at) }}
+                                    <span class="text-xs" :class="['overdue', 'late'].includes(detail.sla.resolve.state) ? 'text-red-700' : 'text-green-700'">· {{ slaPhaseText(detail.sla.resolve) }}</span>
+                                </dd>
+                            </div>
                             <div v-if="detail.taken_charge_at" class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Presa in carico</dt><dd>{{ fmtDateTime(detail.taken_charge_at) }}</dd></div>
                             <div v-if="detail.resolved_at" class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Risolta il</dt><dd>{{ fmtDateTime(detail.resolved_at) }}</dd></div>
                             <div class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Ordine di lavoro</dt><dd>{{ detail.work_order?.code ?? '—' }}</dd></div>

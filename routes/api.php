@@ -80,6 +80,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('inspection-templates', \App\Http\Controllers\Api\V1\InspectionTemplateController::class)
             ->whereUuid('inspection_template');
         Route::put('inspection-templates/{id}/items', [\App\Http\Controllers\Api\V1\InspectionTemplateController::class, 'syncItems'])->whereUuid('id');
+        Route::get('inspections/deadlines', [\App\Http\Controllers\Api\V1\InspectionController::class, 'deadlines']);
         Route::get('inspections', [\App\Http\Controllers\Api\V1\InspectionController::class, 'index']);
         Route::post('inspections', [\App\Http\Controllers\Api\V1\InspectionController::class, 'store']);
         Route::get('inspections/{id}', [\App\Http\Controllers\Api\V1\InspectionController::class, 'show'])->whereUuid('id');

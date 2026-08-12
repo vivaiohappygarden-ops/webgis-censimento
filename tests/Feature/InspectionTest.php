@@ -346,6 +346,46 @@ class InspectionTest extends TestCase
         $this->assertSame($templateId, $tombstone['id']);
     }
 
+    public function test_deadlines_track_recurring_controls_per_target(): void
+    {
+        [$templateId, $items] = $this->makeTemplate();
+        $this->patchJson("/api/v1/inspection-templates/{$templateId}", ['frequency_days' => 30])->assertOk();
+
+        $areaOld = $this->createArea($this->organization);
+        $areaFresh = $this->createArea($this->organization);
+        $answers = $items->mapWithKeys(fn ($i) => [$i['id'] => ['value' => 'ok']])->all();
+        foreach ([$areaOld, $areaFresh] as $area) {
+            $this->postJson('/api/v1/inspections', [
+                'template_id' => $templateId, 'area_id' => $area->id, 'answers' => $answers,
+            ])->assertOk();
+        }
+        Inspection::query()->where('area_id', $areaOld->id)->update(['completed_at' => now()->subDays(40)]);
+        Inspection::query()->where('area_id', $areaFresh->id)->update(['completed_at' => now()->subDays(5)]);
+
+        // Un modello senza periodicità non produce scadenze
+        [$noFreqId, $noFreqItems] = $this->makeTemplate();
+        $this->postJson('/api/v1/inspections', [
+            'template_id' => $noFreqId, 'area_id' => $areaOld->id,
+            'answers' => $noFreqItems->mapWithKeys(fn ($i) => [$i['id'] => ['value' => 'ok']])->all(),
+        ])->assertOk();
+
+        $data = $this->getJson('/api/v1/inspections/deadlines')->assertOk()->json('data');
+        $this->assertCount(2, $data);
+
+        // Prima la più urgente: controllo di 40 giorni fa, periodicità 30
+        $this->assertSame($areaOld->id, $data[0]['target_id']);
+        $this->assertSame($areaOld->name, $data[0]['target_label']);
+        $this->assertSame('overdue', $data[0]['state']);
+        $this->assertSame(-10, $data[0]['days_left']);
+        $this->assertSame($areaFresh->id, $data[1]['target_id']);
+        $this->assertSame('due_soon', $data[1]['state']);
+        $this->assertSame(25, $data[1]['days_left']);
+
+        // La disattivazione del modello toglie le sue scadenze
+        $this->patchJson("/api/v1/inspection-templates/{$templateId}", ['is_active' => false])->assertOk();
+        $this->assertCount(0, $this->getJson('/api/v1/inspections/deadlines')->json('data'));
+    }
+
     public function test_inspections_are_tenant_isolated(): void
     {
         [$templateId] = $this->makeTemplate();
