@@ -122,6 +122,44 @@ class InspectionTest extends TestCase
         ])->assertOk()->assertJsonPath('data.outcome', 'passed_with_remarks');
     }
 
+    public function test_number_answers_and_notes_on_free_types(): void
+    {
+        [$templateId, $items] = $this->makeTemplate(items: [
+            ['question' => 'Altezza caduta libera (m)', 'answer_type' => 'number', 'ko_creates_nc' => false],
+            ['question' => 'Osservazioni generali', 'answer_type' => 'text', 'ko_creates_nc' => false],
+        ]);
+        $detail = $this->getJson("/api/v1/inspection-templates/{$templateId}")->json('data.items');
+        $area = $this->createArea($this->organization);
+
+        // Un valore numerico JSON (non stringa) è accettato
+        $this->postJson('/api/v1/inspections', [
+            'template_id' => $templateId, 'area_id' => $area->id,
+            'answers' => [
+                $detail[0]['id'] => ['value' => 1.8],
+                $detail[1]['id'] => ['value' => 'Tutto in ordine.'],
+            ],
+        ])->assertOk()->assertJsonPath('data.outcome', 'passed');
+
+        // Una nota su una risposta di tipo testo declassa a "con riserve"
+        $this->postJson('/api/v1/inspections', [
+            'template_id' => $templateId, 'area_id' => $area->id,
+            'answers' => [
+                $detail[0]['id'] => ['value' => 2],
+                $detail[1]['id'] => ['value' => 'In ordine.', 'note' => 'Da ricontrollare dopo le piogge.'],
+            ],
+        ])->assertOk()->assertJsonPath('data.outcome', 'passed_with_remarks');
+
+        // Risposte a domande estranee: errore esplicito
+        $this->postJson('/api/v1/inspections', [
+            'template_id' => $templateId, 'area_id' => $area->id,
+            'answers' => [
+                $detail[0]['id'] => ['value' => 2],
+                $detail[1]['id'] => ['value' => 'Ok.'],
+                (string) \Illuminate\Support\Str::uuid() => ['value' => 'estranea'],
+            ],
+        ])->assertUnprocessable();
+    }
+
     public function test_target_and_answers_are_validated(): void
     {
         [$templateId, $items] = $this->makeTemplate(); // target: area

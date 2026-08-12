@@ -80,7 +80,9 @@ class InspectionController extends Controller implements HasMiddleware
             'area_id' => ['nullable', 'uuid'],
             'started_at' => ['nullable', 'date'],
             'answers' => ['required', 'array'],
-            'answers.*.value' => ['required', 'string', 'max:2000'],
+            // Niente regola 'string': una risposta numerica arriva come numero
+            // JSON e va accettata (il controllo fine è nel ciclo per tipo)
+            'answers.*.value' => ['required'],
             'answers.*.note' => ['nullable', 'string', 'max:2000'],
         ]);
 
@@ -107,6 +109,15 @@ class InspectionController extends Controller implements HasMiddleware
             \App\Models\Area::query()->findOrFail($data['area_id']);
         }
 
+        // Risposte a domande estranee al modello: errore esplicito, mai scarto silenzioso
+        $knownIds = $template->items->pluck('id')->all();
+        $unknown = array_diff(array_keys($data['answers']), $knownIds);
+        if ($unknown !== []) {
+            throw ValidationException::withMessages([
+                'answers' => 'Il modulo contiene risposte a domande non presenti nel modello: ricaricalo e riprova.',
+            ]);
+        }
+
         // Ogni domanda vuole la sua risposta, con valori ammessi per tipo
         $answers = [];
         $koItems = [];
@@ -118,7 +129,17 @@ class InspectionController extends Controller implements HasMiddleware
                     'answers' => "Manca la risposta alla domanda: \"{$item->question}\".",
                 ]);
             }
-            $value = trim($answer['value']);
+            if (! is_scalar($answer['value'])) {
+                throw ValidationException::withMessages([
+                    'answers' => "Risposta non valida per \"{$item->question}\".",
+                ]);
+            }
+            $value = trim((string) $answer['value']);
+            if (mb_strlen($value) > 2000) {
+                throw ValidationException::withMessages([
+                    'answers' => "Risposta troppo lunga per \"{$item->question}\" (massimo 2000 caratteri).",
+                ]);
+            }
             if (in_array($item->answer_type, ['ok_ko', 'ok_ko_na'], true)) {
                 $allowed = $item->answer_type === 'ok_ko' ? ['ok', 'ko'] : ['ok', 'ko', 'na'];
                 if (! in_array($value, $allowed, true)) {
@@ -129,13 +150,17 @@ class InspectionController extends Controller implements HasMiddleware
                 if ($value === 'ko') {
                     $koItems[] = ['item' => $item, 'note' => $answer['note'] ?? null];
                 }
-                if ($value === 'na' || ! empty($answer['note'])) {
+                if ($value === 'na') {
                     $remarks = true;
                 }
             } elseif ($item->answer_type === 'number' && ! is_numeric($value)) {
                 throw ValidationException::withMessages([
                     'answers' => "Risposta non numerica per \"{$item->question}\".",
                 ]);
+            }
+            // Una nota su QUALSIASI tipo di risposta è una riserva da segnalare
+            if (! empty($answer['note'])) {
+                $remarks = true;
             }
 
             // Fotografia completa: anche il testo della domanda resta

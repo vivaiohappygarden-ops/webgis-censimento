@@ -68,16 +68,33 @@ async function load() {
 }
 
 async function loadAreas() {
+    // Tutte le pagine (tetto 500): oltre le prime 100 aree la tendina
+    // non deve tacere le successive
     try {
-        const { data } = await axios.get('/api/v1/areas', { params: { per_page: 100 } });
-        areas.value = data.data;
+        const out = [];
+        let pageN = 1;
+        let lastPage = 1;
+        do {
+            const { data } = await axios.get('/api/v1/areas', { params: { per_page: 100, page: pageN } });
+            out.push(...data.data);
+            lastPage = data.last_page;
+            pageN += 1;
+        } while (pageN <= lastPage && pageN <= 5);
+        areas.value = out;
     } catch {
         areas.value = [];
     }
 }
 
 // ---- Modelli ----
+function markTplDirty() {
+    templateEditor.dirty = true;
+    templateEditor.saved = false;
+}
+
+let editorSeq = 0;
 function openTemplateEditor(template = null) {
+    const mySeq = ++editorSeq;
     Object.assign(templateEditor, { open: true, busy: false, error: '', saved: false, isNew: ! template, dirty: false });
     if (template) {
         Object.assign(templateForm, {
@@ -86,10 +103,18 @@ function openTemplateEditor(template = null) {
             frequency_days: template.frequency_days, is_active: template.is_active,
             inspections_count: template.inspections_count ?? 0, version: template.version,
         });
+        // Mai domande stantie di un altro modello: si parte vuoti e vale
+        // solo la risposta dell'ultimo modello aperto
+        templateItems.value = [];
         axios.get(`/api/v1/inspection-templates/${template.id}`).then(({ data }) => {
+            if (mySeq !== editorSeq || ! templateEditor.open) return;
             templateItems.value = data.data.items.map((i) => ({
                 question: i.question, answer_type: i.answer_type, ko_creates_nc: i.ko_creates_nc,
             }));
+        }).catch(() => {
+            if (mySeq === editorSeq) {
+                templateEditor.error = 'Caricamento delle domande non riuscito: chiudi e riapri il modello.';
+            }
         });
     } else {
         Object.assign(templateForm, {
@@ -142,6 +167,26 @@ async function saveTemplate() {
     } catch (err) {
         templateEditor.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
             ?? err.response?.data?.message ?? 'Salvataggio non riuscito';
+        // La testata potrebbe essere già stata creata: l'elenco deve saperlo
+        await load();
+    } finally {
+        templateEditor.busy = false;
+    }
+}
+
+// Il percorso suggerito quando un modello usato non si può eliminare
+async function toggleTemplateActive() {
+    templateEditor.error = '';
+    templateEditor.busy = true;
+    try {
+        await axios.patch(`/api/v1/inspection-templates/${templateForm.id}`, {
+            is_active: ! templateForm.is_active,
+        });
+        templateForm.is_active = ! templateForm.is_active;
+        await load();
+    } catch (err) {
+        templateEditor.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Aggiornamento non riuscito';
     } finally {
         templateEditor.busy = false;
     }
@@ -161,14 +206,33 @@ async function deleteTemplate() {
 }
 
 // ---- Esecuzione ----
+let runnerOpening = false;
 async function openRunner(template) {
-    const { data } = await axios.get(`/api/v1/inspection-templates/${template.id}`);
-    Object.assign(runner, { open: true, busy: false, error: '', template: data.data, areaId: '', assetId: '' });
-    Object.assign(assetSearch, { q: '', results: [], selectedLabel: '' });
-    runnerAnswers.value = data.data.items.map((item) => ({
-        item_id: item.id, question: item.question, answer_type: item.answer_type,
-        value: '', note: '',
-    }));
+    if (runnerOpening) return;
+    runnerOpening = true;
+    try {
+        const { data } = await axios.get(`/api/v1/inspection-templates/${template.id}`);
+        Object.assign(runner, { open: true, busy: false, error: '', template: data.data, areaId: '', assetId: '' });
+        Object.assign(assetSearch, { q: '', results: [], selectedLabel: '' });
+        runnerAnswers.value = data.data.items.map((item) => ({
+            item_id: item.id, question: item.question, answer_type: item.answer_type,
+            value: '', note: '',
+        }));
+    } catch {
+        loadError.value = true;
+    } finally {
+        runnerOpening = false;
+    }
+}
+
+// Un tocco fuori dal pannello non deve buttare via una checklist compilata
+function closeRunner() {
+    if (runner.busy) return;
+    const hasWork = runnerAnswers.value.some((a) => String(a.value) !== '' || a.note.trim() !== '');
+    if (hasWork && ! window.confirm('Chiudere senza registrare l\'ispezione? Le risposte andranno perse.')) {
+        return;
+    }
+    runner.open = false;
 }
 
 function searchAssets() {
@@ -197,9 +261,11 @@ function pickAsset(asset) {
     assetSearch.results = [];
 }
 
+// String(): un input numerico diventa Number col v-model e .trim()
+// su un numero manderebbe in errore il calcolo
 const runnerComplete = computed(() => runnerAnswers.value.every((a) => {
     if (['ok_ko', 'ok_ko_na'].includes(a.answer_type)) return a.value !== '';
-    return a.value.trim() !== '';
+    return String(a.value).trim() !== '';
 }));
 
 async function submitInspection() {
@@ -207,7 +273,7 @@ async function submitInspection() {
     runner.error = '';
     try {
         const answers = Object.fromEntries(runnerAnswers.value.map((a) => [
-            a.item_id, { value: a.value, note: a.note.trim() || null },
+            a.item_id, { value: String(a.value), note: a.note.trim() || null },
         ]));
         const { data } = await axios.post('/api/v1/inspections', {
             template_id: runner.template.id,
@@ -392,26 +458,26 @@ onMounted(async () => {
                         <div class="mt-4 grid grid-cols-2 gap-3">
                             <label class="col-span-2 block text-xs">
                                 <span class="text-gray-500">Nome *</span>
-                                <input v-model="templateForm.name" data-test="template-name" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Controllo funzionale area giochi" @input="templateEditor.dirty = true">
+                                <input v-model="templateForm.name" data-test="template-name" :disabled="! canManage" class="mt-1 w-full disabled:bg-gray-50 rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Controllo funzionale area giochi" @input="markTplDirty()">
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Codice</span>
-                                <input v-model="templateForm.code" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. EN1176-7" @input="templateEditor.dirty = true">
+                                <input v-model="templateForm.code" :disabled="! canManage" class="mt-1 w-full disabled:bg-gray-50 rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. EN1176-7" @input="markTplDirty()">
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Si applica a</span>
-                                <select v-model="templateForm.target" data-test="template-target" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm" :disabled="templateForm.inspections_count > 0" @change="templateEditor.dirty = true">
+                                <select v-model="templateForm.target" data-test="template-target" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm" :disabled="! canManage || templateForm.inspections_count > 0" @change="markTplDirty()">
                                     <option value="area">Area</option>
                                     <option value="asset">Elemento censito</option>
                                 </select>
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Norma di riferimento</span>
-                                <input v-model="templateForm.standard_ref" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. UNI EN 1176-7:2020" @input="templateEditor.dirty = true">
+                                <input v-model="templateForm.standard_ref" :disabled="! canManage" class="mt-1 w-full disabled:bg-gray-50 rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. UNI EN 1176-7:2020" @input="markTplDirty()">
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Periodicità suggerita (giorni)</span>
-                                <input v-model.number="templateForm.frequency_days" type="number" min="1" max="3650" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @input="templateEditor.dirty = true">
+                                <input v-model.number="templateForm.frequency_days" type="number" min="1" max="3650" :disabled="! canManage" class="mt-1 w-full disabled:bg-gray-50 rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @input="markTplDirty()">
                             </label>
                         </div>
 
@@ -422,33 +488,41 @@ onMounted(async () => {
                         <div class="mt-2 space-y-2">
                             <div v-for="(item, index) in templateItems" :key="index" class="flex items-start gap-2" data-test="template-item">
                                 <span class="mt-2 w-6 text-right text-xs text-gray-400">{{ index + 1 }}.</span>
-                                <input v-model="item.question" :disabled="! canManage" class="flex-1 rounded-lg border border-gray-300 px-2.5 py-2 text-sm disabled:bg-gray-50" placeholder="Domanda del controllo" @input="templateEditor.dirty = true">
-                                <select v-model="item.answer_type" :disabled="! canManage" class="w-32 rounded-lg border border-gray-300 px-2 py-2 text-sm disabled:bg-gray-50" @change="templateEditor.dirty = true">
+                                <input v-model="item.question" :disabled="! canManage" class="flex-1 rounded-lg border border-gray-300 px-2.5 py-2 text-sm disabled:bg-gray-50" placeholder="Domanda del controllo" @input="markTplDirty()">
+                                <select v-model="item.answer_type" :disabled="! canManage" class="w-40 rounded-lg border border-gray-300 px-2 py-2 text-sm disabled:bg-gray-50" @change="markTplDirty()">
                                     <option v-for="(label, value) in ANSWER_TYPES" :key="value" :value="value">{{ label }}</option>
                                 </select>
                                 <label class="mt-2 flex items-center gap-1 text-xs text-gray-500" title="Una risposta KO apre una non conformità">
-                                    <input v-model="item.ko_creates_nc" type="checkbox" :disabled="! canManage" class="rounded border-gray-300" @change="templateEditor.dirty = true"> NC
+                                    <input v-model="item.ko_creates_nc" type="checkbox" :disabled="! canManage" class="rounded border-gray-300" @change="markTplDirty()"> NC
                                 </label>
-                                <button v-if="canManage" class="mt-1.5 text-xs font-medium text-red-600 hover:underline" @click="templateItems.splice(index, 1); templateEditor.dirty = true">✕</button>
+                                <button v-if="canManage" class="mt-1.5 text-xs font-medium text-red-600 hover:underline" @click="templateItems.splice(index, 1); markTplDirty()">✕</button>
                             </div>
                         </div>
                         <button
                             v-if="canManage"
                             class="mt-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
                             data-test="template-add-item"
-                            @click="templateItems.push({ question: '', answer_type: 'ok_ko', ko_creates_nc: true }); templateEditor.dirty = true"
+                            @click="templateItems.push({ question: '', answer_type: 'ok_ko', ko_creates_nc: true }); markTplDirty()"
                         >Aggiungi domanda</button>
 
                         <p v-if="templateEditor.error" class="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="template-error">{{ templateEditor.error }}</p>
                         <p v-if="templateEditor.saved" class="mt-3 rounded-lg bg-green-100 px-3 py-2 text-sm text-green-900" data-test="template-saved">Modello salvato.</p>
 
                         <div v-if="canManage" class="mt-4 flex items-center justify-between">
-                            <button
-                                v-if="! templateEditor.isNew"
-                                class="text-sm font-medium text-red-600 hover:underline"
-                                @click="deleteTemplate"
-                            >Elimina modello</button>
-                            <span v-else />
+                            <span class="flex items-center gap-5">
+                                <button
+                                    v-if="! templateEditor.isNew"
+                                    class="text-sm font-medium text-gray-700 hover:underline disabled:opacity-50"
+                                    :disabled="templateEditor.busy"
+                                    data-test="template-toggle-active"
+                                    @click="toggleTemplateActive"
+                                >{{ templateForm.is_active ? 'Disattiva modello' : 'Riattiva modello' }}</button>
+                                <button
+                                    v-if="! templateEditor.isNew"
+                                    class="text-sm font-medium text-red-600 hover:underline"
+                                    @click="deleteTemplate"
+                                >Elimina modello</button>
+                            </span>
                             <button
                                 class="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                                 :disabled="templateEditor.busy || ! templateForm.name.trim() || ! templateItems.some((i) => i.question.trim())"
@@ -462,14 +536,14 @@ onMounted(async () => {
 
             <!-- Esecuzione ispezione -->
             <Teleport to="body">
-                <div v-if="runner.open" class="fixed inset-0 z-50 flex justify-end bg-black/30" @click.self="! runner.busy && (runner.open = false)">
+                <div v-if="runner.open" class="fixed inset-0 z-50 flex justify-end bg-black/30" @click.self="closeRunner">
                     <div class="h-full w-full max-w-2xl overflow-y-auto bg-white p-6 shadow-2xl" data-test="runner">
                         <div class="flex items-start justify-between">
                             <div>
                                 <div class="text-xs uppercase tracking-wide text-gray-400">{{ runner.template.code ?? '' }} <template v-if="runner.template.standard_ref">· {{ runner.template.standard_ref }}</template></div>
                                 <h2 class="text-lg font-semibold">{{ runner.template.name }}</h2>
                             </div>
-                            <button class="text-gray-400 hover:text-gray-600 disabled:opacity-40" :disabled="runner.busy" @click="runner.open = false">✕</button>
+                            <button class="text-gray-400 hover:text-gray-600 disabled:opacity-40" :disabled="runner.busy" @click="closeRunner">✕</button>
                         </div>
 
                         <div class="mt-4">
