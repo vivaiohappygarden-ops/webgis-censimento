@@ -20,9 +20,16 @@ class CamExporter
 
     public function featureCollection(string $layer, int $tenantMetricSrid): array
     {
+        // Il layer S3 (fruizione e gestione) porta sia gli elementi censiti
+        // (aree gioco, aree cani, ...) sia i perimetri delle aree di gestione
         $features = $layer === 'S3'
-            ? $this->areaFeatures()
+            ? [...$this->assetFeatures($layer), ...$this->areaFeatures()]
             : $this->assetFeatures($layer);
+
+        // PROG: progressivo di consegna per layer, generato dal writer
+        foreach ($features as $i => $feature) {
+            $features[$i]['properties']['PROG'] = $i + 1;
+        }
 
         return [
             'type' => 'FeatureCollection',
@@ -108,7 +115,8 @@ class CamExporter
                 sites.istat_code, localities.code AS zona, localities.survey_zone_code,
                 areas.code AS area_code,
                 assets.census_code, assets.valid_from, assets.valid_to, assets.updated_at,
-                assets.notes, assets.status,
+                assets.notes, assets.status, assets.surveyed_at, assets.attributes,
+                assets.computed_area_sqm, assets.computed_length_m, assets.computed_perimeter_m,
                 t.code AS codice, substring(t.code, 2, 1) AS tp, substring(t.code, 3, 2) AS ts,
                 COALESCE(editor.username, editor.name) AS modif_da,
                 trees.plant_number, trees.genus, trees.species, trees.cultivar,
@@ -120,6 +128,11 @@ class CamExporter
             ->get();
 
         return $rows->map(function ($row, $i) use ($layer) {
+            // Il cast del modello può aver già trasformato il JSON in array
+            $attrs = is_array($row->attributes)
+                ? $row->attributes
+                : (json_decode((string) $row->attributes, true) ?: []);
+
             $props = [
                 'ID_ZRIL' => $row->survey_zone_code,
                 'CODE_ISTAT' => $row->istat_code,
@@ -132,26 +145,45 @@ class CamExporter
                 'DATA_INI' => $this->camDate($row->valid_from),
                 'DATA_FINE' => $this->camDate($row->valid_to),
                 'DATA_AGG' => $this->camDate($row->updated_at),
+                'DATA_RIL' => $this->camDate($row->surveyed_at),
                 'MODIF_DA' => $row->modif_da,
                 'NOTE' => $row->notes,
                 'FOTO' => $row->foto,
             ];
 
-            // Campi specifici Master P1/L1/S1 (vegetazione)
+            // Campi vegetazione (P1/L1/S1): per gli alberi dalla scheda albero,
+            // per siepi e superfici vegetali dagli attributi del tipo
             if (in_array($layer, ['P1', 'L1', 'S1'], true)) {
                 $props += [
-                    'PT' => $row->plant_number ?? $row->census_code,
-                    'GENERE' => $row->genus,
-                    'SPECIE' => $row->species,
-                    'VARIETA' => $row->cultivar,
+                    'GENERE' => $row->genus ?? $this->text($attrs, 'genere'),
+                    'SPECIE' => $row->species ?? $this->text($attrs, 'specie'),
+                    'VARIETA' => $row->cultivar ?? $this->text($attrs, 'varieta'),
                     'STATO' => $this->camStato($row->status),
                 ];
             }
             if ($layer === 'P1') {
                 $props += [
+                    'PT' => $row->plant_number ?? $row->census_code,
                     'H_m' => $row->height_m !== null ? (float) $row->height_m : null,
                     'DIAM_TRONC' => $row->dbh_cm !== null ? (float) $row->dbh_cm : null,
                     'DIAM_CHIOM' => $row->crown_diameter_m !== null ? (float) $row->crown_diameter_m : null,
+                ];
+            }
+            if ($layer === 'L1') {
+                $props['H_m'] = $this->number($attrs, 'altezza_m');
+            }
+            // Elementi lineari: larghezza dichiarata e lunghezza calcolata
+            if (in_array($layer, ['L1', 'L2', 'L3'], true)) {
+                $props += [
+                    'LARG_m' => $this->number($attrs, 'larghezza_m'),
+                    'LUNG_m' => $row->computed_length_m !== null ? (float) $row->computed_length_m : null,
+                ];
+            }
+            // Superfici: misure calcolate dalle colonne generate
+            if (in_array($layer, ['S1', 'S2', 'S3', 'S4'], true)) {
+                $props += [
+                    'AREA_mq' => $row->computed_area_sqm !== null ? (float) $row->computed_area_sqm : null,
+                    'PERIM_m' => $row->computed_perimeter_m !== null ? (float) $row->computed_perimeter_m : null,
                 ];
             }
 
@@ -161,6 +193,20 @@ class CamExporter
                 'properties' => $props,
             ];
         })->values()->all();
+    }
+
+    private function text(array $attrs, string $key): ?string
+    {
+        $value = trim((string) ($attrs[$key] ?? ''));
+
+        return $value !== '' ? $value : null;
+    }
+
+    private function number(array $attrs, string $key): ?float
+    {
+        $value = str_replace(',', '.', trim((string) ($attrs[$key] ?? '')));
+
+        return is_numeric($value) ? (float) $value : null;
     }
 
     /** Layer S3: perimetri delle aree di gestione (Master shapefile S3). */

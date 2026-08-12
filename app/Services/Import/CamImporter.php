@@ -28,6 +28,19 @@ class CamImporter
 {
     public const MAX_FEATURES = 5000;
 
+    /**
+     * Campi standard del Modello Dati che viaggiano negli attributi: se il
+     * tipo non li ha ancora tra i campi personalizzati, l'import li
+     * definisce, così la scheda li mostra e li valida come gli altri.
+     */
+    private const MD_CUSTOM_FIELDS = [
+        'genere' => ['label' => 'Genere', 'field_type' => 'text', 'cam_field' => 'GENERE'],
+        'specie' => ['label' => 'Specie', 'field_type' => 'text', 'cam_field' => 'SPECIE'],
+        'varieta' => ['label' => 'Varietà', 'field_type' => 'text', 'cam_field' => 'VARIETA'],
+        'altezza_m' => ['label' => 'Altezza (m)', 'field_type' => 'number', 'cam_field' => 'H_m'],
+        'larghezza_m' => ['label' => 'Larghezza (m)', 'field_type' => 'number', 'cam_field' => 'LARG_m'],
+    ];
+
     /** Stati CAM -> stati interni (inverso di CamExporter::camStato). */
     private const STATO_MAP = [
         'pianta viva' => 'active',
@@ -182,6 +195,7 @@ class CamImporter
         $assetRows = [];
         $treeRows = [];
         $censusInFile = [];
+        $customFieldNeeds = [];
 
         foreach ($features as $index => $feature) {
             $label = 'feature #'.($index + 1);
@@ -191,6 +205,14 @@ class CamImporter
             $codice = trim((string) ($props['CODICE'] ?? ''));
             if ($codice === '' || ! $typesByCode->has($codice)) {
                 $errors[] = ['index' => $index, 'error' => "{$label}: CODICE '{$codice}' assente o non presente nel catalogo."];
+
+                continue;
+            }
+            // Il nostro export S3 include i perimetri delle aree di gestione:
+            // reimportarli creerebbe elementi fittizi (le aree si gestiscono
+            // nella pagina Territorio)
+            if ($codice === 'S325500') {
+                $warnings[] = "{$label}: CODICE S325500 (limite area di gestione) ignorato: i perimetri si gestiscono nel Territorio.";
 
                 continue;
             }
@@ -251,6 +273,11 @@ class CamImporter
                 continue;
             }
 
+            $attributes = $this->layerAttributes($type->cam_layer, $props, $label, $warnings);
+            foreach (array_keys($attributes) as $key) {
+                $customFieldNeeds["{$type->id}|{$key}"] = ['object_type_id' => $type->id, 'key' => $key];
+            }
+
             $assetId = (string) Str::uuid7();
             $assetRows[] = [
                 'id' => $assetId,
@@ -261,9 +288,10 @@ class CamImporter
                 'status' => self::STATO_MAP[strtolower(trim((string) ($props['STATO'] ?? '')))] ?? 'active',
                 'geom' => $ewkb,
                 'survey_method' => 'shapefile_import',
+                'surveyed_at' => $this->fromCamDate($props['DATA_RIL'] ?? null),
                 'valid_from' => $validFrom,
                 'valid_to' => $validTo,
-                'attributes' => '{}',
+                'attributes' => $attributes === [] ? '{}' : json_encode($attributes),
                 'notes' => ($n = trim((string) ($props['NOTE'] ?? ''))) !== '' ? $n : null,
                 'created_by' => Auth::id(),
                 'updated_by' => Auth::id(),
@@ -305,7 +333,13 @@ class CamImporter
 
         $imported = 0;
         if (! $dryRun && $assetRows !== []) {
-            DB::transaction(function () use ($assetRows, $treeRows, &$imported) {
+            DB::transaction(function () use ($assetRows, $treeRows, $customFieldNeeds, $tenantId, &$imported) {
+                foreach ($customFieldNeeds as $need) {
+                    \App\Models\CustomField::query()->withoutGlobalScopes()->firstOrCreate(
+                        ['tenant_id' => $tenantId, 'object_type_id' => $need['object_type_id'], 'key' => $need['key']],
+                        [...self::MD_CUSTOM_FIELDS[$need['key']], 'required' => false, 'sort_order' => 90],
+                    );
+                }
                 foreach (array_chunk($assetRows, 200) as $chunk) {
                     Asset::insert($chunk);
                     $imported += count($chunk);
@@ -327,6 +361,34 @@ class CamImporter
             'warnings_total' => count($warnings),
             'dry_run' => $dryRun,
         ];
+    }
+
+    /**
+     * Campi specifici di layer -> attributi dell'elemento (inverso di
+     * CamExporter): vegetazione per siepi e superfici verdi non arboree,
+     * larghezza per gli elementi lineari. Le misure calcolate (LUNG_m,
+     * AREA_mq, PERIM_m) si rigenerano dalla geometria e non si importano.
+     */
+    private function layerAttributes(?string $layer, array $props, string $label, array &$warnings): array
+    {
+        $attributes = [];
+
+        if (in_array($layer, ['L1', 'S1'], true)) {
+            foreach (['GENERE' => 'genere', 'SPECIE' => 'specie', 'VARIETA' => 'varieta'] as $field => $key) {
+                $value = trim((string) ($props[$field] ?? ''));
+                if ($value !== '') {
+                    $attributes[$key] = $value;
+                }
+            }
+        }
+        if ($layer === 'L1') {
+            $attributes['altezza_m'] = $this->numeric($props['H_M'] ?? null, "{$label}: H_m", $warnings);
+        }
+        if (in_array($layer, ['L1', 'L2', 'L3'], true)) {
+            $attributes['larghezza_m'] = $this->numeric($props['LARG_M'] ?? null, "{$label}: LARG_m", $warnings);
+        }
+
+        return array_filter($attributes, fn ($v) => $v !== null);
     }
 
     /** Campi vegetazione delle Master P1/L1/S1 -> scheda albero. */

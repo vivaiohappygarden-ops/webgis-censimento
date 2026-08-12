@@ -154,6 +154,81 @@ class CamImportTest extends TestCase
         $this->assertEqualsWithDelta(45.4652, $coords[1], 0.00001);
     }
 
+    public function test_layer_specific_fields_import_into_attributes(): void
+    {
+        [, $destUser, $destArea] = $this->makeDestinationTenant();
+        $destOrg = $destArea->tenant_id;
+        $hedge = $this->makeObjectType(\App\Models\Organization::findOrFail($destOrg), 'L', 'L103104');
+        $this->actingAsTenantUser($destUser);
+
+        $collection = [
+            'type' => 'FeatureCollection',
+            'features' => [[
+                'type' => 'Feature',
+                'geometry' => ['type' => 'LineString', 'coordinates' => [[9.1900, 45.4650], [9.1910, 45.4650]]],
+                'properties' => [
+                    'CODICE' => 'L103104', 'OBJ_ID' => 'SIEPE-IMP-1',
+                    'GENERE' => 'Ligustrum', 'SPECIE' => 'Ligustrum vulgare',
+                    'H_m' => '1,6', 'LARG_m' => 0.8, 'DATA_RIL' => '05082026',
+                ],
+            ]],
+        ];
+
+        $this->post('/api/v1/imports/cam', [
+            'file' => UploadedFile::fake()->createWithContent('L1.geojson', json_encode($collection)),
+            'area_id' => $destArea->id,
+            'dry_run' => '0',
+        ], ['Accept' => 'application/json'])->assertOk()->assertJsonPath('data.imported', 1);
+
+        $asset = Asset::query()->where('census_code', 'SIEPE-IMP-1')->firstOrFail();
+        $this->assertSame('Ligustrum', $asset->attributes['genere']);
+        $this->assertSame('Ligustrum vulgare', $asset->attributes['specie']);
+        $this->assertEquals(1.6, $asset->attributes['altezza_m']);
+        $this->assertEquals(0.8, $asset->attributes['larghezza_m']);
+        $this->assertSame('2026-08-05', $asset->surveyed_at->toDateString());
+
+        // I campi standard MD vengono definiti sul tipo, così la scheda li
+        // mostra e una modifica successiva li accetta
+        $keys = \App\Models\CustomField::query()->withoutGlobalScopes()
+            ->where('object_type_id', $hedge->id)->pluck('key')->all();
+        $this->assertEqualsCanonicalizing(['genere', 'specie', 'altezza_m', 'larghezza_m'], $keys);
+        $this->patchJson("/api/v1/assets/{$asset->id}", [
+            'attributes' => ['genere' => 'Ligustrum', 'specie' => 'Ligustrum vulgare', 'altezza_m' => 1.8, 'larghezza_m' => 0.8],
+            'version' => $asset->version,
+        ])->assertOk();
+    }
+
+    public function test_area_perimeter_features_are_skipped_on_import(): void
+    {
+        [, $destUser, $destArea] = $this->makeDestinationTenant();
+        $destOrgModel = \App\Models\Organization::findOrFail($destArea->tenant_id);
+        $this->makeObjectType($destOrgModel, 'S', 'S325500', ['cam_layer' => 'S3']);
+        $this->makeObjectType($destOrgModel, 'S', 'S327552', ['cam_layer' => 'S3']);
+        $this->actingAsTenantUser($destUser);
+
+        $feature = fn (string $codice, string $objId) => [
+            'type' => 'Feature',
+            'geometry' => $this->squarePolygon(),
+            'properties' => ['CODICE' => $codice, 'OBJ_ID' => $objId],
+        ];
+        $collection = [
+            'type' => 'FeatureCollection',
+            'features' => [$feature('S325500', 'PERIM-1'), $feature('S327552', 'GIOCO-IMP-1')],
+        ];
+
+        // Il perimetro dell'area di gestione non diventa un elemento censito
+        $this->post('/api/v1/imports/cam', [
+            'file' => UploadedFile::fake()->createWithContent('S3.geojson', json_encode($collection)),
+            'area_id' => $destArea->id,
+            'dry_run' => '0',
+        ], ['Accept' => 'application/json'])->assertOk()
+            ->assertJsonPath('data.imported', 1)
+            ->assertJsonPath('data.warnings_total', 1);
+
+        $this->assertSame(1, Asset::query()->count());
+        $this->assertSame('GIOCO-IMP-1', Asset::query()->firstOrFail()->census_code);
+    }
+
     public function test_inverted_dates_are_rejected_in_dry_run_not_at_insert(): void
     {
         [, $destUser, $destArea] = $this->makeDestinationTenant();

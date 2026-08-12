@@ -16,6 +16,21 @@ const filters = reactive({ q: '', status: '', page: 1 });
 const importer = reactive({ open: false, format: 'geojson', areaId: '', file: null, report: null, busy: false, error: '' });
 const importAreas = ref([]);
 
+// Export CAM: un layer del Modello Dati per volta (P/L/S + macro-categoria)
+const CAM_LAYERS = {
+    P1: 'P1 Vegetazione (punti: alberi)',
+    L1: 'L1 Vegetazione (linee: siepi, filari)',
+    S1: 'S1 Vegetazione (superfici: prati, aiuole)',
+    P2: 'P2 Arredo urbano (punti)',
+    L2: 'L2 Arredo urbano (linee)',
+    S2: 'S2 Arredo urbano (superfici)',
+    P3: 'P3 Fruizione e gestione (punti)',
+    L3: 'L3 Fruizione e gestione (linee)',
+    S3: 'S3 Fruizione e gestione (superfici e perimetri aree)',
+    S4: 'S4 Fattori ambientali (superfici)',
+};
+const exportLayer = ref('P1');
+
 async function openImporter() {
     importer.open = true;
     importer.report = null;
@@ -103,11 +118,26 @@ const measure = (row) => {
                     <h1 class="text-xl font-semibold">Censimento</h1>
                     <p class="text-sm text-gray-500">{{ meta.total.toLocaleString('it-IT') }} elementi censiti</p>
                 </div>
-                <button
-                    v-if="canCreate"
-                    class="rounded-lg bg-green-700 px-3 py-2 text-sm font-medium text-white hover:bg-green-800"
-                    @click="openImporter"
-                >Importa GeoJSON</button>
+                <div class="flex items-center gap-2">
+                    <select v-model="exportLayer" data-test="cam-export-layer" class="rounded-lg border border-gray-300 px-2 py-2 text-sm">
+                        <option v-for="(label, value) in CAM_LAYERS" :key="value" :value="value">{{ label }}</option>
+                    </select>
+                    <a
+                        :href="`/api/v1/exports/cam?layer=${exportLayer}&format=geojson`"
+                        class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
+                        data-test="cam-export-geojson"
+                    >Esporta GeoJSON</a>
+                    <a
+                        :href="`/api/v1/exports/cam?layer=${exportLayer}&format=shapefile`"
+                        class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
+                        data-test="cam-export-shapefile"
+                    >Esporta Shapefile</a>
+                    <button
+                        v-if="canCreate"
+                        class="rounded-lg bg-green-700 px-3 py-2 text-sm font-medium text-white hover:bg-green-800"
+                        @click="openImporter"
+                    >Importa GeoJSON</button>
+                </div>
             </div>
 
             <div class="mb-4 flex gap-3">
@@ -197,7 +227,7 @@ const measure = (row) => {
                         </div>
                         <p class="mt-1 text-xs text-gray-500">
                             {{ importer.format === 'cam'
-                                ? 'Shapefile zippato o GeoJSON nel formato ministeriale (Modello Dati v2.1): campi CODICE, OBJ_ID, GENERE, SPECIE, H_m…'
+                                ? 'Shapefile zippato o GeoJSON nel formato ministeriale (Modello Dati v2.1), tutte le macro-categorie: campi CODICE, OBJ_ID, GENERE/SPECIE, H_m, LARG_m, DATA_RIL…'
                                 : 'FeatureCollection con proprietà codice (codice catalogo, es. P103108) per ogni feature.' }}
                             Prima l'analisi, poi l'import: nulla viene importato silenziosamente.
                         </p>
