@@ -128,20 +128,57 @@ class InspectionTemplateController extends Controller implements HasMiddleware
         ]);
 
         DB::transaction(function () use ($template, $data, $request) {
-            ChecklistItem::query()->where('template_id', $template->id)->delete();
+            // Le voci con domanda e tipo invariati CONSERVANO il loro id:
+            // un'ispezione compilata offline con il modello scaricato non deve
+            // essere respinta solo perché qualcuno ha risalvato l'editor
+            $pool = ChecklistItem::query()
+                ->where('template_id', $template->id)
+                ->get()
+                ->groupBy(fn ($item) => $item->question.'|'.$item->answer_type)
+                ->map(fn ($group) => $group->all())
+                ->all();
+
+            $keptIds = [];
+            $questionsChanged = false;
             foreach ($data['items'] as $index => $item) {
-                ChecklistItem::create([
-                    'tenant_id' => $request->user()->tenant_id,
-                    'template_id' => $template->id,
-                    'sort_order' => $index + 1,
-                    'question' => $item['question'],
-                    'answer_type' => $item['answer_type'] ?? 'ok_ko',
-                    'ko_creates_nc' => $item['ko_creates_nc'] ?? true,
-                    'weight' => $item['weight'] ?? 1,
-                ]);
+                $key = $item['question'].'|'.($item['answer_type'] ?? 'ok_ko');
+                $existing = null;
+                if (! empty($pool[$key])) {
+                    $existing = array_shift($pool[$key]);
+                }
+
+                if ($existing !== null) {
+                    $existing->update([
+                        'sort_order' => $index + 1,
+                        'ko_creates_nc' => $item['ko_creates_nc'] ?? true,
+                        'weight' => $item['weight'] ?? 1,
+                    ]);
+                    $keptIds[] = $existing->id;
+                } else {
+                    $questionsChanged = true;
+                    $keptIds[] = ChecklistItem::create([
+                        'tenant_id' => $request->user()->tenant_id,
+                        'template_id' => $template->id,
+                        'sort_order' => $index + 1,
+                        'question' => $item['question'],
+                        'answer_type' => $item['answer_type'] ?? 'ok_ko',
+                        'ko_creates_nc' => $item['ko_creates_nc'] ?? true,
+                        'weight' => $item['weight'] ?? 1,
+                    ])->id;
+                }
             }
 
-            if ($template->inspections()->exists()) {
+            $removed = ChecklistItem::query()
+                ->where('template_id', $template->id)
+                ->whereNotIn('id', $keptIds)
+                ->delete();
+            if ($removed > 0) {
+                $questionsChanged = true;
+            }
+
+            // La versione avanza solo se l'insieme delle domande è davvero
+            // cambiato: un risalvataggio identico non tocca nulla
+            if ($questionsChanged && $template->inspections()->exists()) {
                 $template->version += 1;
                 $template->save();
             }

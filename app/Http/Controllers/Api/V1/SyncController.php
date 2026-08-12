@@ -348,6 +348,8 @@ class SyncController extends Controller implements HasMiddleware
         return \App\Models\InspectionTemplate::query()
             ->when($ids !== null, fn ($q) => $q->whereIn('id', $ids))
             ->where('is_active', true)
+            // Un modello senza domande non è compilabile: non arriva sul device
+            ->whereHas('items')
             ->with('items:id,template_id,sort_order,question,answer_type,ko_creates_nc')
             ->orderBy('name')
             ->get();

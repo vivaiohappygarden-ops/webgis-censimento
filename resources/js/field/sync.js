@@ -1,6 +1,12 @@
 import axios from 'axios';
 import { uuidv7 } from './uuidv7';
 
+const INSPECTION_OUTCOMES = {
+    passed: 'superata',
+    passed_with_remarks: 'superata con riserve',
+    failed: 'non superata',
+};
+
 /**
  * Gestore di sincronizzazione della PWA operatore (OFFLINE-SYNC §4-§5, v1).
  * Coda FIFO per device_seq, push batch idempotente, pull delta a cursore.
@@ -535,6 +541,13 @@ export class SyncManager {
                 // scritto nulla (esiti idempotenti senza riga di change log)
                 const entityId = result.entity_id ?? result.original?.entity_id;
                 const version = result.version ?? result.original?.version;
+                // L'esito calcolato dal server va detto all'operatore
+                if (byKey.get(result.idempotency_key)?.type === 'inspection.complete') {
+                    const outcome = result.outcome ?? result.original?.outcome;
+                    if (outcome) {
+                        await this.log('info', `Ispezione registrata dal server: ${INSPECTION_OUTCOMES[outcome] ?? outcome}.`);
+                    }
+                }
                 if (entityId) {
                     const remaining = await this.db.sync_queue.where('entity_id').equals(entityId).count();
                     if (remaining === 0) {

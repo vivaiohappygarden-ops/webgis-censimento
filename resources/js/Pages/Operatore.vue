@@ -48,16 +48,30 @@ const areaTemplates = computed(() => localTemplates.value.filter((t) => t.target
 const inspectionPick = reactive({ assetTemplateId: '', areaTemplateId: '', areaId: '' });
 
 function startInspection(template, { assetId = null, assetLabel = '', areaId = '' } = {}) {
+    // Il modello può essere sparito dal device (disattivato in ufficio e
+    // rimosso dal pull): mai aprire una checklist su un modello fantasma
+    if (! template || ! (template.items ?? []).length) {
+        inspectionPick.assetTemplateId = '';
+        inspectionPick.areaTemplateId = '';
+        setMessage('Modello non più disponibile sul dispositivo: sincronizza e riprova.', false);
+        return;
+    }
     Object.assign(inspectionRun, { open: true, template, assetId, assetLabel, areaId });
-    inspectionAnswers.value = (template.items ?? []).map((item) => ({
+    inspectionAnswers.value = template.items.map((item) => ({
         item_id: item.id, question: item.question, answer_type: item.answer_type,
         value: '', note: '',
     }));
 }
 
+// Vero se la checklist aperta contiene lavoro non ancora registrato
+function inspectionHasWork() {
+    return inspectionRun.open
+        && inspectionAnswers.value.some((a) => String(a.value) !== '' || a.note.trim() !== '');
+}
+
 function closeInspection() {
-    const hasWork = inspectionAnswers.value.some((a) => String(a.value) !== '' || a.note.trim() !== '');
-    if (hasWork && ! window.confirm('Chiudere senza registrare l\'ispezione? Le risposte andranno perse.')) {
+    if (inspectionHasWork()
+        && ! window.confirm('Chiudere senza registrare l\'ispezione? Le risposte andranno perse.')) {
         return;
     }
     inspectionRun.open = false;
@@ -383,6 +397,11 @@ async function discardPhoto(photoId) {
 }
 
 function switchTab(key) {
+    // Un tocco sulla barra con una checklist compilata non deve buttarla via
+    if (inspectionHasWork()
+        && ! window.confirm('Chiudere senza registrare l\'ispezione? Le risposte andranno perse.')) {
+        return;
+    }
     stopCamera();
     revokePhotoUrls();
     selected.value = null;
@@ -617,6 +636,13 @@ async function refreshLocal() {
     localAssets.value = (await db.assets.orderBy('updated_at').reverse().limit(200).toArray());
     localOrders.value = await db.work_orders.toArray();
     localTemplates.value = await db.inspection_templates.orderBy('name').toArray();
+    // Un modello selezionato ma non più sul device non deve restare scelto
+    if (inspectionPick.assetTemplateId && ! localTemplates.value.some((t) => t.id === inspectionPick.assetTemplateId)) {
+        inspectionPick.assetTemplateId = '';
+    }
+    if (inspectionPick.areaTemplateId && ! localTemplates.value.some((t) => t.id === inspectionPick.areaTemplateId)) {
+        inspectionPick.areaTemplateId = '';
+    }
     // La scheda ordine aperta segue le sincronizzazioni in background: mai
     // proporre azioni su uno stato o una versione ormai superati
     if (selectedOrder.value) {

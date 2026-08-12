@@ -274,6 +274,78 @@ class InspectionTest extends TestCase
             ->assertJsonPath('results.0.code', 'ID_COLLISION');
     }
 
+    public function test_resaving_identical_items_keeps_ids_and_version(): void
+    {
+        [$templateId, $items] = $this->makeTemplate();
+        $area = $this->createArea($this->organization);
+        $this->postJson('/api/v1/inspections', [
+            'template_id' => $templateId,
+            'area_id' => $area->id,
+            'answers' => $items->mapWithKeys(fn ($i) => [$i['id'] => ['value' => 'ok']])->all(),
+        ])->assertOk();
+
+        // Risalvataggio con le stesse domande (ordine invertito, flag ritoccato):
+        // gli id delle voci NON ruotano e la versione NON avanza, così le
+        // ispezioni compilate offline col modello scaricato restano valide
+        $resaved = $this->putJson("/api/v1/inspection-templates/{$templateId}/items", [
+            'items' => [
+                ['question' => 'Cartellonistica presente', 'answer_type' => 'ok_ko_na', 'ko_creates_nc' => true],
+                ['question' => 'Assenza di parti taglienti'],
+                ['question' => 'Superfici antitrauma integre'],
+            ],
+        ])->assertOk()->assertJsonPath('data.version', 1)->json('data');
+
+        $this->assertEqualsCanonicalizing(
+            $items->pluck('id')->all(),
+            collect($resaved['items'])->pluck('id')->all(),
+        );
+        $byQuestion = collect($resaved['items'])->keyBy('question');
+        $this->assertSame(1, $byQuestion['Cartellonistica presente']['sort_order']);
+        $this->assertTrue((bool) $byQuestion['Cartellonistica presente']['ko_creates_nc']);
+
+        // Una domanda davvero nuova invece avanza la versione
+        $this->putJson("/api/v1/inspection-templates/{$templateId}/items", [
+            'items' => [
+                ['question' => 'Superfici antitrauma integre'],
+                ['question' => 'Ancoraggi dei giochi saldi'],
+            ],
+        ])->assertOk()->assertJsonPath('data.version', 2);
+    }
+
+    public function test_template_changes_reach_the_field_delta(): void
+    {
+        [$templateId] = $this->makeTemplate();
+
+        [, $operator] = [null, \App\Models\User::factory()->create(['tenant_id' => $this->organization->id])];
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($this->organization->id);
+        $operator->assignRole('operatore');
+
+        $this->actingAsTenantUser($operator);
+        $cursor = $this->getJson('/api/v1/sync/bootstrap')->assertOk()->json('cursor');
+
+        // Il backoffice riformula una domanda: il device riceve l'upsert completo
+        $this->actingAsTenantUser($this->user);
+        $this->putJson("/api/v1/inspection-templates/{$templateId}/items", [
+            'items' => [['question' => 'Domanda riformulata']],
+        ])->assertOk();
+
+        $this->actingAsTenantUser($operator);
+        $delta = $this->getJson('/api/v1/sync/changes?cursor='.$cursor)->assertOk()->json();
+        $upsert = collect($delta['changes'])
+            ->where('table', 'inspection_templates')->firstWhere('op', 'upsert');
+        $this->assertSame($templateId, $upsert['row']['id']);
+        $this->assertSame('Domanda riformulata', $upsert['row']['items'][0]['question']);
+
+        // La disattivazione arriva come rimozione dal working set
+        $this->actingAsTenantUser($this->user);
+        $this->putJson("/api/v1/inspection-templates/{$templateId}", ['is_active' => false])->assertOk();
+
+        $this->actingAsTenantUser($operator);
+        $tombstone = collect($this->getJson('/api/v1/sync/changes?cursor='.$delta['cursor'])->assertOk()->json('changes'))
+            ->where('table', 'inspection_templates')->firstWhere('op', 'delete');
+        $this->assertSame($templateId, $tombstone['id']);
+    }
+
     public function test_inspections_are_tenant_isolated(): void
     {
         [$templateId] = $this->makeTemplate();
