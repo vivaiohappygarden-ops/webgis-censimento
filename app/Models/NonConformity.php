@@ -58,4 +58,20 @@ class NonConformity extends Model
     {
         return in_array($status, self::TRANSITIONS[$this->status] ?? [], true);
     }
+
+    /** Numerazione per tenant: NC-ANNO-progressivo, serializzata con advisory lock. */
+    public static function nextCode(string $tenantId): string
+    {
+        \Illuminate\Support\Facades\DB::statement(
+            'SELECT pg_advisory_xact_lock(hashtextextended(?, 43))', ["nc:{$tenantId}"],
+        );
+        $year = now()->year;
+        $next = (int) \Illuminate\Support\Facades\DB::selectOne(
+            "SELECT COALESCE(MAX((substring(code FROM '\\d+$'))::int), 0) + 1 AS n
+             FROM non_conformities WHERE tenant_id = ? AND code LIKE ?",
+            [$tenantId, "NC-{$year}-%"],
+        )->n;
+
+        return sprintf('NC-%d-%04d', $year, $next);
+    }
 }

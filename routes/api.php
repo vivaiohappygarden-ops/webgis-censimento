@@ -77,6 +77,13 @@ Route::prefix('v1')->group(function () {
             ->whereUuid('work_order');
         Route::post('work-orders/{id}/transition', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'transition'])->whereUuid('id');
         Route::post('work-orders/{id}/checks', [\App\Http\Controllers\Api\V1\WorkCheckController::class, 'store'])->whereUuid('id');
+        Route::apiResource('inspection-templates', \App\Http\Controllers\Api\V1\InspectionTemplateController::class)
+            ->whereUuid('inspection_template');
+        Route::put('inspection-templates/{id}/items', [\App\Http\Controllers\Api\V1\InspectionTemplateController::class, 'syncItems'])->whereUuid('id');
+        Route::get('inspections', [\App\Http\Controllers\Api\V1\InspectionController::class, 'index']);
+        Route::post('inspections', [\App\Http\Controllers\Api\V1\InspectionController::class, 'store']);
+        Route::get('inspections/{id}', [\App\Http\Controllers\Api\V1\InspectionController::class, 'show'])->whereUuid('id');
+
         Route::get('issues', [\App\Http\Controllers\Api\V1\IssueController::class, 'index']);
         Route::post('issues', [\App\Http\Controllers\Api\V1\IssueController::class, 'store']);
         Route::patch('issues/{id}', [\App\Http\Controllers\Api\V1\IssueController::class, 'update'])->whereUuid('id');

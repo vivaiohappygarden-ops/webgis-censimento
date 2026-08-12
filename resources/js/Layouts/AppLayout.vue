@@ -17,6 +17,7 @@ const nav = computed(() =>
         { label: 'VTA', href: '/vta', show: can('assets.view') },
         { label: 'Lavori', href: '/lavori', show: can('works.view') },
         { label: 'Segnalazioni', href: '/segnalazioni', show: can('works.view') },
+        { label: 'Ispezioni', href: '/ispezioni', show: can('works.view') },
         { label: 'Listini', href: '/listini', show: can('works.view') },
         { label: 'Territorio', href: '/territorio', show: can('clients.view') },
         { label: 'Catalogo', href: '/catalogo', show: can('catalog.view') },

@@ -90,7 +90,7 @@ class WorkCheckController extends Controller implements HasMiddleware
             $ncData = $data['non_conformity'];
             $nonConformity = NonConformity::create([
                 'tenant_id' => $user->tenant_id,
-                'code' => $this->nextNcCode($user->tenant_id),
+                'code' => NonConformity::nextCode($user->tenant_id),
                 'origin' => 'work_check',
                 'origin_id' => $check->id,
                 'severity' => $ncData['severity'],
@@ -152,17 +152,4 @@ class WorkCheckController extends Controller implements HasMiddleware
         return app(WorkOrderController::class)->show($id);
     }
 
-    /** Numerazione per tenant: NC-ANNO-progressivo, serializzata con advisory lock. */
-    private function nextNcCode(string $tenantId): string
-    {
-        DB::statement('SELECT pg_advisory_xact_lock(hashtextextended(?, 43))', ["nc:{$tenantId}"]);
-        $year = now()->year;
-        $next = (int) DB::selectOne(
-            "SELECT COALESCE(MAX((substring(code FROM '\\d+$'))::int), 0) + 1 AS n
-             FROM non_conformities WHERE tenant_id = ? AND code LIKE ?",
-            [$tenantId, "NC-{$year}-%"],
-        )->n;
-
-        return sprintf('NC-%d-%04d', $year, $next);
-    }
 }

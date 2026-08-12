@@ -245,6 +245,34 @@ class DatabaseSeeder extends Seeder
             }
         }
 
+        // Modello di ispezione demo: controllo funzionale area giochi
+        $template = \App\Models\InspectionTemplate::query()->withoutGlobalScopes()->firstOrCreate(
+            ['tenant_id' => $organization->id, 'code' => 'EN1176-7'],
+            [
+                'name' => 'Controllo funzionale area giochi',
+                'target' => 'area',
+                'standard_ref' => 'UNI EN 1176-7:2020',
+                'frequency_days' => 90,
+            ],
+        );
+        if (! \App\Models\ChecklistItem::query()->withoutGlobalScopes()->where('template_id', $template->id)->exists()) {
+            foreach ([
+                'Superfici antitrauma integre e in sede',
+                'Assenza di parti taglienti o sporgenti',
+                'Fondazioni non scoperte',
+                'Cartellonistica presente e leggibile',
+            ] as $index => $question) {
+                \App\Models\ChecklistItem::query()->withoutGlobalScopes()->create([
+                    'tenant_id' => $organization->id,
+                    'template_id' => $template->id,
+                    'sort_order' => $index + 1,
+                    'question' => $question,
+                    'answer_type' => $index === 3 ? 'ok_ko_na' : 'ok_ko',
+                    'ko_creates_nc' => $index !== 3,
+                ]);
+            }
+        }
+
         $this->command?->info('Tenant demo pronto: login admin@demo.local / password (slug organizzazione: demo).');
     }
 }
