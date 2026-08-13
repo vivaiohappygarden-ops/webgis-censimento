@@ -115,46 +115,54 @@ class ExportController extends Controller implements HasMiddleware
 
         Audit::log('export.assets_csv', null, ['filters' => $request->only(['area_id', 'object_type_id', 'type_code', 'status', 'q'])]);
 
-        $statusLabels = [
-            'active' => 'attivo', 'removed' => 'rimosso', 'dead' => 'morto', 'planned' => 'previsto',
-        ];
+        // Gli stati usati dall'interfaccia del censimento
+        $statusLabels = ['active' => 'attivo', 'dismissed' => 'dismesso'];
         // I decimali con la virgola, come li aspetta l'Excel italiano
         $num = fn ($value) => $value === null ? '' : str_replace('.', ',', (string) (float) $value);
+        // Testo libero neutralizzato: una cella che inizia con = + - @ ecc.
+        // verrebbe eseguita da Excel come formula (iniezione CSV)
+        $text = fn (?string $value) => $value !== null && preg_match('/^[=+\-@\t\r]/', $value)
+            ? "'".$value
+            : ($value ?? '');
 
-        return response()->streamDownload(function () use ($query, $statusLabels, $num) {
+        return response()->streamDownload(function () use ($query, $statusLabels, $num, $text) {
             $out = fopen('php://output', 'w');
             // BOM: senza, l'Excel italiano legge le lettere accentate sbagliate
             fwrite($out, "\xEF\xBB\xBF");
+            // escape '': niente backslash "magici" (RFC 4180) e niente
+            // avviso di deprecazione a ogni riga su PHP 8.4
             fputcsv($out, [
                 'Codice', 'Tipo', 'Descrizione tipo', 'Categoria', 'Area', 'Località', 'Stato',
                 'Data rilievo', 'Specie', 'Nome comune', 'Altezza (m)', 'Diametro fusto (cm)',
                 'Superficie (m2)', 'Lunghezza (m)', 'Perimetro (m)', 'Note',
-            ], ';');
+            ], ';', '"', '');
 
-            $query->orderBy('census_code')->orderBy('id')
-                ->chunkById(500, function ($assets) use ($out, $statusLabels, $num) {
-                    foreach ($assets as $asset) {
-                        fputcsv($out, [
-                            $asset->census_code,
-                            $asset->objectType?->code,
-                            $asset->objectType?->name,
-                            $asset->objectType?->subType?->mainType?->name,
-                            $asset->area?->name,
-                            $asset->area?->locality?->name,
-                            $statusLabels[$asset->status] ?? $asset->status,
-                            $asset->surveyed_at?->format('d/m/Y'),
-                            // Il campo specie contiene già il binomio completo
-                            $asset->tree?->species ?: ($asset->tree?->genus ?? ''),
-                            $asset->tree?->common_name,
-                            $num($asset->tree?->height_m),
-                            $num($asset->tree?->dbh_cm),
-                            $num($asset->computed_area_sqm),
-                            $num($asset->computed_length_m),
-                            $num($asset->computed_perimeter_m),
-                            $asset->notes,
-                        ], ';');
-                    }
-                });
+            // Solo chunkById, nessun altro orderBy: un ordinamento diverso
+            // dalla colonna cursore romperebbe l'invariante dei blocchi
+            // (righe saltate o duplicate oltre le prime 500)
+            $query->chunkById(500, function ($assets) use ($out, $statusLabels, $num, $text) {
+                foreach ($assets as $asset) {
+                    fputcsv($out, [
+                        $text($asset->census_code),
+                        $text($asset->objectType?->code),
+                        $text($asset->objectType?->name),
+                        $text($asset->objectType?->subType?->mainType?->name),
+                        $text($asset->area?->name),
+                        $text($asset->area?->locality?->name),
+                        $statusLabels[$asset->status] ?? $text($asset->status),
+                        $asset->surveyed_at?->format('d/m/Y'),
+                        // Il campo specie contiene già il binomio completo
+                        $text($asset->tree?->species ?: ($asset->tree?->genus ?? '')),
+                        $text($asset->tree?->common_name),
+                        $num($asset->tree?->height_m),
+                        $num($asset->tree?->dbh_cm),
+                        $num($asset->computed_area_sqm),
+                        $num($asset->computed_length_m),
+                        $num($asset->computed_perimeter_m),
+                        $text($asset->notes),
+                    ], ';', '"', '');
+                }
+            });
             fclose($out);
         }, 'censimento_'.now()->format('Ymd').'.csv', [
             'Content-Type' => 'text/csv; charset=UTF-8',

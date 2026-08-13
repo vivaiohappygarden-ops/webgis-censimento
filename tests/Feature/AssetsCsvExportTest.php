@@ -71,7 +71,7 @@ class AssetsCsvExportTest extends TestCase
         $lines = array_values(array_filter(explode("\n", trim($csv))));
         $this->assertCount(3, $lines);
 
-        $row = str_getcsv($lines[1], ';');
+        $row = str_getcsv($lines[1], ';', '"', '');
         $this->assertSame('ALB-CSV-1', $row[0]);
         $this->assertSame('P103108', $row[1]);
         $this->assertSame('Parco Export', $row[4]);
@@ -81,6 +81,62 @@ class AssetsCsvExportTest extends TestCase
         $this->assertSame('Tilia cordata', $row[8]);
         $this->assertSame('12,5', $row[10]);
         $this->assertStringContainsString('è accentata', $row[15]);
+    }
+
+    public function test_cells_starting_like_formulas_are_neutralized_and_quotes_survive(): void
+    {
+        $id = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $this->treeType->id,
+            'census_code' => '=HYPERLINK("http://x";"clic")',
+            'geometry' => $this->pointGeometry(),
+            'notes' => 'percorso "C:\\rilievi\\" con virgolette',
+        ])->assertCreated()->json('data.id');
+
+        $csv = $this->download();
+        $lines = array_values(array_filter(explode("\n", trim($csv))));
+        $row = str_getcsv($lines[1], ';', '"', '');
+
+        // La cella-formula esce disinnescata con l'apostrofo davanti
+        $this->assertStringStartsWith("'=HYPERLINK", $row[0]);
+        // Le virgolette con backslash sopravvivono al giro (RFC 4180)
+        $this->assertSame('percorso "C:\\rilievi\\" con virgolette', $row[15]);
+    }
+
+    public function test_export_beyond_one_chunk_loses_nothing(): void
+    {
+        // 501 righe con codici in ordine alfabetico OPPOSTO a quello di
+        // creazione: se i blocchi usassero un ordinamento diverso dal
+        // cursore, qui salterebbero o raddoppierebbero delle righe
+        \Illuminate\Support\Facades\DB::statement(<<<'SQL'
+            INSERT INTO assets (id, tenant_id, area_id, object_type_id, census_code, status, geom, created_at, updated_at)
+            SELECT gen_random_uuid(), :tenant, :area, :type,
+                   'BULK-'||lpad((600 - i)::text, 4, '0'), 'active',
+                   ST_SetSRID(ST_MakePoint(9.19, 45.46), 4326), now(), now()
+            FROM generate_series(1, 501) AS i
+        SQL, [
+            'tenant' => $this->organization->id,
+            'area' => $this->area->id,
+            'type' => $this->treeType->id,
+        ]);
+
+        $csv = $this->download('?q=BULK-');
+        $lines = array_values(array_filter(explode("\n", trim($csv))));
+        array_shift($lines);
+
+        $codes = array_map(fn ($line) => str_getcsv($line, ';', '"', '')[0], $lines);
+        $this->assertCount(501, $codes);
+        $this->assertCount(501, array_unique($codes), 'righe duplicate nell\'export');
+    }
+
+    public function test_dismissed_status_is_translated(): void
+    {
+        $id = $this->makeAsset('ALB-DISMESSO');
+        $this->patchJson("/api/v1/assets/{$id}", ['status' => 'dismissed', 'version' => 1])->assertOk();
+
+        $csv = $this->download('?status=dismissed');
+        $this->assertStringContainsString(';dismesso;', $csv);
+        $this->assertStringNotContainsString(';dismissed;', $csv);
     }
 
     public function test_csv_respects_filters_permissions_and_tenants(): void
