@@ -49,7 +49,7 @@ const logout = async () => {
                 <div class="text-xs text-gray-500">{{ user?.organization?.name }}</div>
             </div>
 
-            <div class="px-3 pt-3">
+            <div v-if="can('assets.view')" class="px-3 pt-3">
                 <button
                     class="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400 transition hover:border-green-600 hover:text-gray-600"
                     @click="palette?.toggle(true)"
@@ -89,6 +89,6 @@ const logout = async () => {
             <slot />
         </main>
 
-        <SearchPalette ref="palette" />
+        <SearchPalette v-if="can('assets.view')" ref="palette" />
     </div>
 </template>

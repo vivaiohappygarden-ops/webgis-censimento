@@ -58,6 +58,12 @@ class WebAuthTest extends TestCase
     {
         [, $user] = $this->createTenantUser(role: 'cliente');
 
+        // Percorso reale: l'ospite digita la radice, viene mandato al login
+        // con la pagina vietata "ricordata" — che NON deve scavalcare
+        // l'atterraggio sul portale dopo il login
+        $this->get('/')->assertRedirect();
+        $this->get('/mappa')->assertRedirect('/login');
+
         $this->post('/login', [
             'email' => $user->email,
             'password' => 'password',
@@ -67,6 +73,9 @@ class WebAuthTest extends TestCase
         $this->get('/portale')->assertOk();
         // Le pagine interne restano fuori dalla sua portata
         $this->get('/censimento')->assertForbidden();
+        // E la radice lo riporta al portale, non alla mappa vietata
+        \Illuminate\Support\Facades\Auth::forgetGuards();
+        $this->get('/')->assertRedirect(route('portale'));
     }
 
     public function test_guest_is_redirected_to_login(): void

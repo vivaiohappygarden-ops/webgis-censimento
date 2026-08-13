@@ -15,7 +15,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->throttleApi();
         $middleware->statefulApi();
-        $middleware->redirectUsersTo('/mappa');
+        // La radice smista per permesso (mappa, portale o guida)
+        $middleware->redirectUsersTo('/');
         $middleware->web(append: [
             \App\Http\Middleware\SetPermissionsTeam::class,
             \App\Http\Middleware\HandleInertiaRequests::class,

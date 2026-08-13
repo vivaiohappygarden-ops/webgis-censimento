@@ -4,7 +4,12 @@ use App\Http\Controllers\Web\WebAuthController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::get('/', fn () => redirect()->route('mappa'));
+// La radice manda ognuno dove può lavorare: il cliente non ha la mappa
+Route::get('/', function () {
+    $user = \Illuminate\Support\Facades\Auth::user();
+
+    return redirect()->route($user ? \App\Support\HomeRoute::for($user) : 'login');
+});
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [WebAuthController::class, 'show'])->name('login');

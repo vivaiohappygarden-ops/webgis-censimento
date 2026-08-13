@@ -71,12 +71,16 @@ class WebAuthController extends Controller
         // successive: qui serve subito per decidere dove atterrare
         app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($user->tenant_id);
 
-        // Ognuno atterra dove può lavorare: il cliente sul suo portale
-        $home = match (true) {
-            $user->can('assets.view') => route('mappa'),
-            $user->can('portal.view') => route('portale'),
-            default => route('guida'),
-        };
+        $home = route(\App\Support\HomeRoute::for($user));
+
+        // intended() ricorda l'ultima pagina chiesta da ospite: per chi non
+        // ha la lettura del censimento sarebbe quasi sempre una pagina
+        // vietata (es. /mappa) e produrrebbe un 403 subito dopo il login
+        if (! $user->can('assets.view')) {
+            $request->session()->forget('url.intended');
+
+            return redirect()->to($home);
+        }
 
         return redirect()->intended($home);
     }
