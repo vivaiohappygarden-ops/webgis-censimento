@@ -57,6 +57,20 @@ const workOrderMessage = ref('');
 const editorDirty = ref(false);
 const pageError = ref('');
 
+// Letture del contatore idrico con consumo tra letture e confronto
+// con la stima settimanale del programma dei settori
+const readings = ref([]);
+const readingsSummary = ref(null);
+const readingError = ref('');
+const readingBusy = ref(false);
+const newReading = reactive({ read_on: new Date().toISOString().slice(0, 10), value_m3: null, note: '' });
+
+const deviationPct = computed(() => {
+    const s = readingsSummary.value;
+    if (! s || s.actual_weekly_m3 == null || ! s.weekly_estimate_m3) return null;
+    return Math.round((s.actual_weekly_m3 - s.weekly_estimate_m3) / s.weekly_estimate_m3 * 100);
+});
+
 function markDirty() {
     editorDirty.value = true;
     detailSaved.value = false;
@@ -172,6 +186,52 @@ function setDetail(system) {
         runs_per_week: s.runs_per_week,
     }));
     editorDirty.value = false;
+    loadReadings(system.id);
+}
+
+async function loadReadings(id) {
+    readingError.value = '';
+    try {
+        const { data } = await axios.get(`/api/v1/irrigation-systems/${id}/readings`);
+        readings.value = data.data;
+        readingsSummary.value = data.summary;
+    } catch {
+        readings.value = [];
+        readingsSummary.value = null;
+        readingError.value = 'Letture del contatore non caricate: riapri il dettaglio per riprovare.';
+    }
+}
+
+async function addReading() {
+    readingBusy.value = true;
+    readingError.value = '';
+    try {
+        const { data } = await axios.post(`/api/v1/irrigation-systems/${detail.value.id}/readings`, {
+            read_on: newReading.read_on,
+            value_m3: newReading.value_m3,
+            note: newReading.note.trim() || null,
+        });
+        readings.value = data.data;
+        readingsSummary.value = data.summary;
+        newReading.value_m3 = null;
+        newReading.note = '';
+    } catch (err) {
+        readingError.value = firstError(err, 'Registrazione della lettura non riuscita');
+    } finally {
+        readingBusy.value = false;
+    }
+}
+
+async function deleteReading(reading) {
+    if (! window.confirm(`Eliminare la lettura del ${formatDate(reading.read_on)}?`)) return;
+    readingError.value = '';
+    try {
+        const { data } = await axios.delete(`/api/v1/irrigation-systems/${detail.value.id}/readings/${reading.id}`);
+        readings.value = data.data;
+        readingsSummary.value = data.summary;
+    } catch (err) {
+        readingError.value = firstError(err, 'Eliminazione della lettura non riuscita');
+    }
 }
 
 function addSector() {
@@ -500,6 +560,73 @@ onMounted(load);
                                 data-test="irr-save-detail"
                                 @click="saveDetail"
                             >{{ detailBusy ? 'Salvataggio…' : 'Salva impianto e settori' }}</button>
+                        </div>
+
+                        <h3 class="mt-6 text-sm font-semibold">Contatore e consumi</h3>
+                        <p class="mt-1 text-xs text-gray-500" data-test="irr-readings-summary">
+                            Stima dal programma dei settori:
+                            <span class="font-medium text-gray-700">{{ readingsSummary?.weekly_estimate_m3 ?? '—' }} m³/settimana</span>
+                            <template v-if="readingsSummary?.actual_weekly_m3 != null">
+                                · Consumo reale (ultime due letture):
+                                <span class="font-medium text-gray-700">{{ readingsSummary.actual_weekly_m3 }} m³/settimana</span>
+                            </template>
+                            <template v-if="deviationPct != null">
+                                · Scostamento:
+                                <span class="font-medium" :class="deviationPct > 25 ? 'text-red-700' : 'text-gray-700'">{{ deviationPct > 0 ? '+' : '' }}{{ deviationPct }}%</span>
+                            </template>
+                        </p>
+
+                        <p v-if="readingError" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="irr-reading-error">{{ readingError }}</p>
+
+                        <table class="mt-2 w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
+                                    <th class="py-2 pr-2 font-medium">Data</th>
+                                    <th class="w-28 py-2 pr-2 text-right font-medium">Lettura m³</th>
+                                    <th class="w-40 py-2 pr-2 text-right font-medium">Consumo dal precedente</th>
+                                    <th class="py-2 pr-2 font-medium">Note</th>
+                                    <th v-if="canManage" class="w-8 py-2" />
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-50">
+                                <tr v-for="r in readings" :key="r.id" data-test="irr-reading-row">
+                                    <td class="py-1.5 pr-2">{{ formatDate(r.read_on) }}</td>
+                                    <td class="py-1.5 pr-2 text-right">{{ r.value_m3 }}</td>
+                                    <td class="py-1.5 pr-2 text-right text-gray-600">
+                                        <template v-if="r.consumption_m3 != null">{{ r.consumption_m3 }} m³ in {{ r.days_since_previous }} g</template>
+                                        <template v-else-if="r.days_since_previous != null">non calcolabile (contatore azzerato?)</template>
+                                        <template v-else>—</template>
+                                    </td>
+                                    <td class="py-1.5 pr-2 text-gray-600">{{ r.note ?? '—' }}</td>
+                                    <td v-if="canManage" class="py-1.5 text-right">
+                                        <button class="text-xs font-medium text-red-600 hover:underline" @click="deleteReading(r)">✕</button>
+                                    </td>
+                                </tr>
+                                <tr v-if="! readings.length">
+                                    <td :colspan="canManage ? 5 : 4" class="py-4 text-center text-sm text-gray-400">Nessuna lettura registrata.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div v-if="canManage" class="mt-2 flex flex-wrap items-end gap-2">
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Data lettura</span>
+                                <input v-model="newReading.read_on" type="date" data-test="irr-reading-date" class="mt-1 rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Valore contatore (m³)</span>
+                                <input v-model.number="newReading.value_m3" type="number" step="0.01" min="0" data-test="irr-reading-value" class="mt-1 w-36 rounded-lg border border-gray-300 px-2.5 py-2 text-right text-sm">
+                            </label>
+                            <label class="block flex-1 text-xs">
+                                <span class="text-gray-500">Nota (facoltativa)</span>
+                                <input v-model="newReading.note" maxlength="500" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            </label>
+                            <button
+                                class="rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
+                                :disabled="readingBusy || ! newReading.read_on || newReading.value_m3 == null || newReading.value_m3 === ''"
+                                data-test="irr-reading-add"
+                                @click="addReading"
+                            >{{ readingBusy ? 'Registrazione…' : 'Registra lettura' }}</button>
                         </div>
 
                         <div v-if="canWorks || canManage" class="mt-8 flex items-center gap-6 border-t border-gray-100 pt-4">

@@ -174,6 +174,10 @@ function goTo(id) {
                             (in esercizio, invernato, fuori servizio). Il pulsante
                             <strong>"Genera ordine di manutenzione"</strong> crea un ordine di lavoro in bozza
                             già intestato all'area, da programmare dalla pagina Lavori.
+                            Nella scheda dell'impianto si registrano anche le <strong>letture del contatore</strong>
+                            idrico: l'applicazione calcola il consumo tra una lettura e l'altra e lo confronta
+                            con la stima settimanale del programma, così un consumo anomalo (per esempio una
+                            perdita) salta subito all'occhio.
                         </p>
                     </section>
 

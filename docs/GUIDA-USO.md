@@ -96,7 +96,10 @@ siepi), con la possibilità di collegarli ai campi dei tracciati di consegna.
 La pagina **Irrigazione** tiene il registro degli impianti di ogni area: settori con
 portata e programma settimanale, stagione di apertura e chiusura, stato (in esercizio,
 invernato, fuori servizio). Il pulsante **"Genera ordine di manutenzione"** crea un ordine
-di lavoro in bozza già intestato all'area, da programmare dalla pagina Lavori.
+di lavoro in bozza già intestato all'area, da programmare dalla pagina Lavori. Nella scheda
+dell'impianto si registrano anche le **letture del contatore** idrico: l'applicazione
+calcola il consumo tra una lettura e l'altra e lo confronta con la stima settimanale del
+programma, così un consumo anomalo (per esempio una perdita) salta subito all'occhio.
 
 ## La consegna CAM
 

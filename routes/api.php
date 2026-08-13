@@ -48,6 +48,9 @@ Route::prefix('v1')->group(function () {
             ->whereUuid('irrigation_system');
         Route::put('irrigation-systems/{id}/sectors', [\App\Http\Controllers\Api\V1\IrrigationController::class, 'syncSectors'])->whereUuid('id');
         Route::post('irrigation-systems/{id}/work-order', [\App\Http\Controllers\Api\V1\IrrigationController::class, 'createWorkOrder'])->whereUuid('id');
+        Route::get('irrigation-systems/{id}/readings', [\App\Http\Controllers\Api\V1\IrrigationController::class, 'readings'])->whereUuid('id');
+        Route::post('irrigation-systems/{id}/readings', [\App\Http\Controllers\Api\V1\IrrigationController::class, 'storeReading'])->whereUuid('id');
+        Route::delete('irrigation-systems/{id}/readings/{readingId}', [\App\Http\Controllers\Api\V1\IrrigationController::class, 'destroyReading'])->whereUuid(['id', 'readingId']);
         Route::get('exports/cam/delivery', [\App\Http\Controllers\Api\V1\ExportController::class, 'camDelivery']);
         Route::get('exports/cam', [\App\Http\Controllers\Api\V1\ExportController::class, 'cam']);
 

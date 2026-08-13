@@ -59,13 +59,19 @@ class IrrigationTest extends TestCase
             'status' => 'winterized', 'notes' => 'Scaricato a novembre.',
         ])->assertOk()->assertJsonPath('data.status', 'winterized');
 
+        $this->postJson("/api/v1/irrigation-systems/{$system['id']}/readings", [
+            'read_on' => '2026-06-01', 'value_m3' => 42,
+        ])->assertCreated();
+
         $this->deleteJson("/api/v1/irrigation-systems/{$system['id']}")->assertNoContent();
         $this->getJson("/api/v1/irrigation-systems/{$system['id']}")->assertNotFound();
         $this->assertNotNull(IrrigationSystem::withTrashed()->find($system['id'])->deleted_at);
 
-        // I settori non hanno soft delete: con l'impianto eliminato sarebbero
-        // orfani irraggiungibili, quindi vengono rimossi fisicamente
+        // Settori e letture non hanno soft delete: con l'impianto eliminato
+        // sarebbero orfani irraggiungibili, quindi vengono rimossi fisicamente
         $this->assertSame(0, \App\Models\IrrigationSector::withoutGlobalScopes()
+            ->where('system_id', $system['id'])->count());
+        $this->assertSame(0, \App\Models\IrrigationMeterReading::withoutGlobalScopes()
             ->where('system_id', $system['id'])->count());
     }
 
@@ -216,6 +222,67 @@ class IrrigationTest extends TestCase
         $this->patchJson("/api/v1/irrigation-systems/{$system['id']}", ['name' => 'Rubato'])->assertNotFound();
     }
 
+    public function test_meter_readings_compute_consumption_and_weekly_summary(): void
+    {
+        $system = $this->makeSystem();
+        $this->putJson("/api/v1/irrigation-systems/{$system['id']}/sectors", ['sectors' => [
+            ['name' => 'Siepi', 'flow_lpm' => 12.5, 'run_minutes' => 30, 'runs_per_week' => 3],
+            ['name' => 'Aiuole', 'flow_lpm' => 8, 'run_minutes' => 20, 'runs_per_week' => 4],
+            ['name' => 'Alberi', 'flow_lpm' => 20, 'run_minutes' => 45, 'runs_per_week' => 2],
+        ]])->assertOk();
+
+        $post = fn (string $day, float $value) => $this->postJson(
+            "/api/v1/irrigation-systems/{$system['id']}/readings",
+            ['read_on' => $day, 'value_m3' => $value],
+        );
+        $post('2026-06-01', 100.00)->assertCreated();
+        $post('2026-06-08', 103.50)->assertCreated();
+        $body = $post('2026-06-15', 107.60)->assertCreated()->json();
+
+        // Elenco dalla più recente, con consumo e giorni dal precedente
+        $this->assertSame(['2026-06-15', '2026-06-08', '2026-06-01'], array_column($body['data'], 'read_on'));
+        $this->assertSame(4.1, $body['data'][0]['consumption_m3']);
+        $this->assertSame(7, $body['data'][0]['days_since_previous']);
+        $this->assertSame(3.5, $body['data'][1]['consumption_m3']);
+        $this->assertNull($body['data'][2]['consumption_m3']);
+
+        // Stima dal programma: (12.5*30*3 + 8*20*4 + 20*45*2) / 1000 = 3.57 m3
+        $this->assertSame(3.57, $body['summary']['weekly_estimate_m3']);
+        // Consumo reale dalle ultime due letture: 4.1 m3 in 7 giorni
+        $this->assertSame(4.1, $body['summary']['actual_weekly_m3']);
+
+        // Contatore azzerato/sostituito: consumo non calcolabile, niente stima reale
+        $body = $post('2026-06-22', 5.00)->assertCreated()->json();
+        $this->assertNull($body['data'][0]['consumption_m3']);
+        $this->assertNull($body['summary']['actual_weekly_m3']);
+
+        // Eliminando l'ultima lettura la stima reale torna disponibile
+        $deleted = $this->deleteJson("/api/v1/irrigation-systems/{$system['id']}/readings/{$body['data'][0]['id']}")
+            ->assertOk()->json();
+        $this->assertCount(3, $deleted['data']);
+        $this->assertSame(4.1, $deleted['summary']['actual_weekly_m3']);
+    }
+
+    public function test_meter_reading_validation_and_isolation(): void
+    {
+        $system = $this->makeSystem();
+        $url = "/api/v1/irrigation-systems/{$system['id']}/readings";
+
+        $this->postJson($url, ['read_on' => '2026-06-01', 'value_m3' => -5])->assertUnprocessable();
+        $this->postJson($url, ['read_on' => now()->addDay()->toDateString(), 'value_m3' => 10])->assertUnprocessable();
+
+        $this->postJson($url, ['read_on' => '2026-06-01', 'value_m3' => 10])->assertCreated();
+        // Una sola lettura per giorno per impianto
+        $this->postJson($url, ['read_on' => '2026-06-01', 'value_m3' => 11])
+            ->assertUnprocessable()->assertJsonValidationErrors('read_on');
+
+        // Un altro tenant non vede né tocca le letture
+        [, $otherUser] = $this->createTenantUser();
+        $this->actingAsTenantUser($otherUser);
+        $this->getJson($url)->assertNotFound();
+        $this->postJson($url, ['read_on' => '2026-06-02', 'value_m3' => 12])->assertNotFound();
+    }
+
     public function test_operatore_reads_but_cannot_write_nor_create_orders(): void
     {
         $system = $this->makeSystem();
@@ -227,9 +294,13 @@ class IrrigationTest extends TestCase
 
         $this->getJson('/api/v1/irrigation-systems')->assertOk()->assertJsonCount(1, 'data');
         $this->getJson("/api/v1/irrigation-systems/{$system['id']}")->assertOk();
+        $this->getJson("/api/v1/irrigation-systems/{$system['id']}/readings")->assertOk();
 
         $this->postJson('/api/v1/irrigation-systems', [
             'area_id' => $this->area->id, 'name' => 'Nuovo',
+        ])->assertForbidden();
+        $this->postJson("/api/v1/irrigation-systems/{$system['id']}/readings", [
+            'read_on' => '2026-06-01', 'value_m3' => 10,
         ])->assertForbidden();
         $this->patchJson("/api/v1/irrigation-systems/{$system['id']}", ['name' => 'X'])->assertForbidden();
         $this->putJson("/api/v1/irrigation-systems/{$system['id']}/sectors", ['sectors' => []])->assertForbidden();

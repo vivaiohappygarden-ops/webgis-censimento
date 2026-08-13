@@ -354,6 +354,23 @@ class DatabaseSeeder extends Seeder
             'season_closes_on' => now()->year.'-10-15',
             'notes' => 'Contatore nel pozzetto vicino all\'ingresso nord.',
         ]);
+        if (! \App\Models\IrrigationMeterReading::query()->withoutGlobalScopes()->where('system_id', $irrigation->id)->exists()) {
+            // Tre letture quindicinali con consumi vicini alla stima del programma
+            foreach ([
+                [45, 120.00, 'Lettura di inizio stagione'],
+                [30, 127.80, null],
+                [15, 135.40, null],
+            ] as [$daysAgo, $value, $note]) {
+                \App\Models\IrrigationMeterReading::query()->withoutGlobalScopes()->create([
+                    'tenant_id' => $organization->id,
+                    'system_id' => $irrigation->id,
+                    'read_on' => now()->subDays($daysAgo)->toDateString(),
+                    'value_m3' => $value,
+                    'note' => $note,
+                    'created_by' => $admin->id,
+                ]);
+            }
+        }
         if (! \App\Models\IrrigationSector::query()->withoutGlobalScopes()->where('system_id', $irrigation->id)->exists()) {
             foreach ([
                 ['Siepi ingresso', 'Ala gocciolante sulle siepi di lauro', 12.5, 30, 3],

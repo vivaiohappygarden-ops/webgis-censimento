@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Area;
+use App\Models\IrrigationMeterReading;
 use App\Models\IrrigationSector;
 use App\Models\IrrigationSystem;
 use App\Models\WorkOrder;
@@ -27,8 +28,8 @@ class IrrigationController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:areas.view', only: ['index', 'show']),
-            new Middleware('can:areas.update', only: ['store', 'update', 'destroy', 'syncSectors']),
+            new Middleware('can:areas.view', only: ['index', 'show', 'readings']),
+            new Middleware('can:areas.update', only: ['store', 'update', 'destroy', 'syncSectors', 'storeReading', 'destroyReading']),
             new Middleware('can:works.manage', only: ['createWorkOrder']),
         ];
     }
@@ -115,9 +116,10 @@ class IrrigationController extends Controller implements HasMiddleware
     {
         $system = DB::transaction(function () use ($id) {
             $system = IrrigationSystem::query()->lockForUpdate()->findOrFail($id);
-            // I settori non hanno soft delete né percorso di ripristino: vanno
-            // rimossi insieme all'impianto, o resterebbero righe orfane per sempre
+            // Settori e letture non hanno soft delete né percorso di ripristino:
+            // vanno rimossi insieme all'impianto, o resterebbero orfani per sempre
             IrrigationSector::query()->where('system_id', $system->id)->delete();
+            IrrigationMeterReading::query()->where('system_id', $system->id)->delete();
             $system->delete();
 
             return $system;
@@ -211,6 +213,108 @@ class IrrigationController extends Controller implements HasMiddleware
         Audit::log('work_order.created', $workOrder, ['code' => $workOrder->code, 'origin' => 'maintenance_plan']);
 
         return response()->json(['data' => $workOrder], 201);
+    }
+
+    /**
+     * Letture del contatore, dalla più recente: ogni lettura porta il consumo
+     * rispetto alla precedente; il riepilogo confronta il consumo reale con la
+     * stima settimanale ricavata dal programma dei settori.
+     */
+    public function readings(string $id): JsonResponse
+    {
+        $system = IrrigationSystem::query()->with('sectors')->findOrFail($id);
+
+        $readings = IrrigationMeterReading::query()
+            ->where('system_id', $system->id)
+            ->orderBy('read_on')->orderBy('created_at')
+            ->limit(500)->get();
+
+        $rows = [];
+        $previous = null;
+        foreach ($readings as $reading) {
+            $consumption = null;
+            $days = null;
+            if ($previous !== null) {
+                $delta = round((float) $reading->value_m3 - (float) $previous->value_m3, 2);
+                $days = $previous->read_on->diffInDays($reading->read_on);
+                // Un valore più basso della lettura precedente indica un
+                // contatore azzerato o sostituito: il consumo non è calcolabile
+                $consumption = $delta >= 0 ? $delta : null;
+            }
+            $rows[] = [
+                'id' => $reading->id,
+                'read_on' => $reading->read_on->toDateString(),
+                'value_m3' => (float) $reading->value_m3,
+                'note' => $reading->note,
+                'consumption_m3' => $consumption,
+                'days_since_previous' => $days,
+            ];
+            $previous = $reading;
+        }
+
+        // Stima dal programma: portata (l/min) x minuti x cicli/settimana
+        $weeklyEstimate = round($system->sectors->sum(fn ($s) => ((float) ($s->flow_lpm ?? 0)) * ($s->run_minutes ?? 0) * ($s->runs_per_week ?? 0)
+        ) / 1000, 2);
+
+        // Consumo reale settimanale dalle ultime due letture confrontabili
+        $actualWeekly = null;
+        $last = end($rows);
+        if ($last && $last['consumption_m3'] !== null && ($last['days_since_previous'] ?? 0) > 0) {
+            $actualWeekly = round($last['consumption_m3'] / $last['days_since_previous'] * 7, 2);
+        }
+
+        return response()->json([
+            'data' => array_reverse($rows),
+            'summary' => [
+                'weekly_estimate_m3' => $weeklyEstimate,
+                'actual_weekly_m3' => $actualWeekly,
+            ],
+        ]);
+    }
+
+    public function storeReading(Request $request, string $id): JsonResponse
+    {
+        $system = IrrigationSystem::query()->findOrFail($id);
+
+        $data = $request->validate([
+            'read_on' => ['required', 'date', 'before_or_equal:today'],
+            'value_m3' => ['required', 'numeric', 'min:0', 'max:999999999'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            // In transazione (savepoint): il fallimento del vincolo UNIQUE non
+            // deve avvelenare una eventuale transazione esterna
+            $reading = DB::transaction(fn () => IrrigationMeterReading::create([
+                'tenant_id' => $request->user()->tenant_id,
+                'system_id' => $system->id,
+                'read_on' => $data['read_on'],
+                'value_m3' => $data['value_m3'],
+                'note' => $data['note'] ?? null,
+                'created_by' => $request->user()->id,
+            ]));
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            throw ValidationException::withMessages([
+                'read_on' => 'Esiste già una lettura per quella data: eliminala o scegli un altro giorno.',
+            ]);
+        }
+
+        Audit::log('irrigation_reading.created', $reading, [
+            'system' => $system->name, 'read_on' => $data['read_on'], 'value_m3' => $data['value_m3'],
+        ]);
+
+        return $this->readings($id)->setStatusCode(201);
+    }
+
+    public function destroyReading(string $id, string $readingId): JsonResponse
+    {
+        $reading = IrrigationMeterReading::query()
+            ->where('system_id', $id)->findOrFail($readingId);
+        $reading->delete();
+
+        Audit::log('irrigation_reading.deleted', $reading, ['read_on' => $reading->read_on->toDateString()]);
+
+        return $this->readings($id);
     }
 
     private function validated(Request $request, bool $required = true): array
