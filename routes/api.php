@@ -44,6 +44,10 @@ Route::prefix('v1')->group(function () {
         Route::post('imports/geojson', [ImportController::class, 'geojson']);
         Route::post('imports/cam', [ImportController::class, 'cam']);
         Route::get('portal/overview', [\App\Http\Controllers\Api\V1\PortalController::class, 'overview']);
+        Route::apiResource('irrigation-systems', \App\Http\Controllers\Api\V1\IrrigationController::class)
+            ->whereUuid('irrigation_system');
+        Route::put('irrigation-systems/{id}/sectors', [\App\Http\Controllers\Api\V1\IrrigationController::class, 'syncSectors'])->whereUuid('id');
+        Route::post('irrigation-systems/{id}/work-order', [\App\Http\Controllers\Api\V1\IrrigationController::class, 'createWorkOrder'])->whereUuid('id');
         Route::get('exports/cam/delivery', [\App\Http\Controllers\Api\V1\ExportController::class, 'camDelivery']);
         Route::get('exports/cam', [\App\Http\Controllers\Api\V1\ExportController::class, 'cam']);
 

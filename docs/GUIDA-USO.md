@@ -93,6 +93,11 @@ oggetto del Modello Dati ministeriale (387 tipi, non modificabili) e i **campi
 personalizzati** che si possono aggiungere a ciascun tipo (per esempio la larghezza delle
 siepi), con la possibilità di collegarli ai campi dei tracciati di consegna.
 
+La pagina **Irrigazione** tiene il registro degli impianti di ogni area: settori con
+portata e programma settimanale, stagione di apertura e chiusura, stato (in esercizio,
+invernato, fuori servizio). Il pulsante **"Genera ordine di manutenzione"** crea un ordine
+di lavoro in bozza già intestato all'area, da programmare dalla pagina Lavori.
+
 ## La consegna CAM
 
 Per lavorare con i Comuni serve consegnare il censimento nel formato del "Modello dati per

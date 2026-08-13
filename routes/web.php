@@ -59,6 +59,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/territorio', fn () => Inertia::render('Territorio'))
         ->middleware('can:clients.view')->name('territorio');
 
+    Route::get('/irrigazione', fn () => Inertia::render('Irrigazione'))
+        ->middleware('can:areas.view')->name('irrigazione');
+
     Route::get('/catalogo', fn () => Inertia::render('Catalogo'))
         ->middleware('can:catalog.view')->name('catalogo');
 

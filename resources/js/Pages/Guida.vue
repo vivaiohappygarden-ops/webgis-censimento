@@ -168,6 +168,13 @@ function goTo(id) {
                             (per esempio la larghezza delle siepi), con la possibilità di collegarli ai campi
                             dei tracciati di consegna.
                         </p>
+                        <p class="mt-2">
+                            La pagina <strong>Irrigazione</strong> tiene il registro degli impianti di ogni area:
+                            settori con portata e programma settimanale, stagione di apertura e chiusura, stato
+                            (in esercizio, invernato, fuori servizio). Il pulsante
+                            <strong>"Genera ordine di manutenzione"</strong> crea un ordine di lavoro in bozza
+                            già intestato all'area, da programmare dalla pagina Lavori.
+                        </p>
                     </section>
 
                     <section id="consegna">

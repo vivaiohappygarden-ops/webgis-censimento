@@ -334,6 +334,39 @@ class DatabaseSeeder extends Seeder
             $portalUser->forceFill(['client_id' => $client->id])->save();
         }
 
+        // Impianto di irrigazione demo con i suoi settori e la stagione tipica
+        $irrigation = \App\Models\IrrigationSystem::query()->withoutGlobalScopes()->firstOrCreate(
+            ['tenant_id' => $organization->id, 'name' => 'Impianto Parco Demo'],
+            [
+                'area_id' => $area->id,
+                'system_type' => 'goccia',
+                'water_source' => 'pozzo',
+                'controller_model' => 'Hunter X2-401',
+                'status' => 'active',
+                'season_opens_on' => now()->year.'-04-01',
+                'season_closes_on' => now()->year.'-10-15',
+                'notes' => 'Contatore nel pozzetto vicino all\'ingresso nord.',
+            ],
+        );
+        if (! \App\Models\IrrigationSector::query()->withoutGlobalScopes()->where('system_id', $irrigation->id)->exists()) {
+            foreach ([
+                ['Siepi ingresso', 'Ala gocciolante sulle siepi di lauro', 12.5, 30, 3],
+                ['Aiuole centrali', 'Aiuole fiorite lato fontana', 8.0, 20, 4],
+                ['Nuovi impianti arborei', 'Anelli di bagnatura alberature 2026', 20.0, 45, 2],
+            ] as $index => [$name, $description, $flow, $minutes, $runs]) {
+                \App\Models\IrrigationSector::query()->withoutGlobalScopes()->create([
+                    'tenant_id' => $organization->id,
+                    'system_id' => $irrigation->id,
+                    'sort_order' => $index + 1,
+                    'name' => $name,
+                    'description' => $description,
+                    'flow_lpm' => $flow,
+                    'run_minutes' => $minutes,
+                    'runs_per_week' => $runs,
+                ]);
+            }
+        }
+
         $this->command?->info('Tenant demo pronto: login admin@demo.local / password (slug organizzazione: demo).');
     }
 }
