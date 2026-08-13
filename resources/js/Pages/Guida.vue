@@ -88,6 +88,8 @@ function goTo(id) {
                             <strong>Censimento</strong> è l'elenco completo, con ricerca per codice e note.
                             Ogni elemento ha una scheda con il tipo (dal catalogo ministeriale), le misure, le foto,
                             gli attributi del suo tipo e la storia delle modifiche.
+                            Il pulsante <strong>"Esporta CSV"</strong> scarica l'elenco (con i filtri attivi)
+                            in un file da aprire direttamente in Excel.
                         </p>
                         <h3>Se due persone modificano la stessa scheda</h3>
                         <p>

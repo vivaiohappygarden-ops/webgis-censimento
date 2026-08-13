@@ -76,4 +76,88 @@ class ExportController extends Controller implements HasMiddleware
             ['Content-Type' => 'application/geo+json'],
         );
     }
+
+    /**
+     * Elenco del censimento in CSV per Excel: punto e virgola, BOM UTF-8 e
+     * righe in streaming (mai tutto in memoria). Rispetta gli stessi filtri
+     * della pagina Censimento.
+     */
+    public function assetsCsv(Request $request)
+    {
+        \App\Support\ListQuery::validateUuidFilters($request, ['area_id', 'object_type_id']);
+
+        $query = \App\Models\Asset::query()
+            ->with([
+                'objectType:id,code,name,sub_type_id',
+                'objectType.subType:id,name,main_type_id',
+                'objectType.subType.mainType:id,name',
+                'area:id,name,locality_id',
+                'area.locality:id,name',
+                'tree:asset_id,genus,species,common_name,height_m,dbh_cm',
+            ]);
+
+        if ($request->filled('area_id')) {
+            $query->where('area_id', $request->string('area_id'));
+        }
+        if ($request->filled('object_type_id')) {
+            $query->where('object_type_id', $request->string('object_type_id'));
+        }
+        if ($request->filled('type_code')) {
+            $query->whereHas('objectType', fn ($w) => $w->where('code', $request->string('type_code')));
+        }
+        if ($request->filled('status')) {
+            $query->where('status', $request->string('status'));
+        }
+        if ($request->filled('q')) {
+            $q = '%'.$request->string('q').'%';
+            $query->where(fn ($w) => $w->where('census_code', 'ilike', $q)->orWhere('notes', 'ilike', $q));
+        }
+
+        Audit::log('export.assets_csv', null, ['filters' => $request->only(['area_id', 'object_type_id', 'type_code', 'status', 'q'])]);
+
+        $statusLabels = [
+            'active' => 'attivo', 'removed' => 'rimosso', 'dead' => 'morto', 'planned' => 'previsto',
+        ];
+        // I decimali con la virgola, come li aspetta l'Excel italiano
+        $num = fn ($value) => $value === null ? '' : str_replace('.', ',', (string) (float) $value);
+
+        return response()->streamDownload(function () use ($query, $statusLabels, $num) {
+            $out = fopen('php://output', 'w');
+            // BOM: senza, l'Excel italiano legge le lettere accentate sbagliate
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, [
+                'Codice', 'Tipo', 'Descrizione tipo', 'Categoria', 'Area', 'Località', 'Stato',
+                'Data rilievo', 'Specie', 'Nome comune', 'Altezza (m)', 'Diametro fusto (cm)',
+                'Superficie (m2)', 'Lunghezza (m)', 'Perimetro (m)', 'Note',
+            ], ';');
+
+            $query->orderBy('census_code')->orderBy('id')
+                ->chunkById(500, function ($assets) use ($out, $statusLabels, $num) {
+                    foreach ($assets as $asset) {
+                        fputcsv($out, [
+                            $asset->census_code,
+                            $asset->objectType?->code,
+                            $asset->objectType?->name,
+                            $asset->objectType?->subType?->mainType?->name,
+                            $asset->area?->name,
+                            $asset->area?->locality?->name,
+                            $statusLabels[$asset->status] ?? $asset->status,
+                            $asset->surveyed_at?->format('d/m/Y'),
+                            // Il campo specie contiene già il binomio completo
+                            $asset->tree?->species ?: ($asset->tree?->genus ?? ''),
+                            $asset->tree?->common_name,
+                            $num($asset->tree?->height_m),
+                            $num($asset->tree?->dbh_cm),
+                            $num($asset->computed_area_sqm),
+                            $num($asset->computed_length_m),
+                            $num($asset->computed_perimeter_m),
+                            $asset->notes,
+                        ], ';');
+                    }
+                });
+            fclose($out);
+        }, 'censimento_'.now()->format('Ymd').'.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
 }

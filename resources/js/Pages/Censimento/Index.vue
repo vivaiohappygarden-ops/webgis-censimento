@@ -53,6 +53,15 @@ async function exportDelivery(format = 'shapefile') {
     }
 }
 
+// CSV per Excel con gli stessi filtri attivi nell'elenco
+async function exportCsv() {
+    const params = new URLSearchParams();
+    if (filters.q) params.set('q', filters.q);
+    if (filters.status) params.set('status', filters.status);
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    await downloadCam(`/api/v1/exports/assets.csv${suffix}`, 'censimento', 'csv');
+}
+
 async function downloadCam(url, baseName, extension) {
     camExport.busy = true;
     camExport.error = '';
@@ -198,6 +207,13 @@ const measure = (row) => {
                         data-test="cam-export-delivery"
                         @click="exportDelivery()"
                     >Consegna completa</button>
+                    <button
+                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        :disabled="camExport.busy"
+                        title="Elenco degli elementi con i filtri attivi, da aprire in Excel"
+                        data-test="csv-export"
+                        @click="exportCsv()"
+                    >Esporta CSV</button>
                     <button
                         v-if="canCreate"
                         class="rounded-lg bg-green-700 px-3 py-2 text-sm font-medium text-white hover:bg-green-800"

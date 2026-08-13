@@ -33,7 +33,8 @@ dettaglio. È la prima pagina da guardare al mattino.
 La pagina **Mappa** mostra gli elementi censiti sul territorio; la pagina **Censimento** è
 l'elenco completo, con ricerca per codice e note. Ogni elemento ha una scheda con il tipo
 (dal catalogo ministeriale), le misure, le foto, gli attributi del suo tipo e la storia
-delle modifiche.
+delle modifiche. Il pulsante **"Esporta CSV"** scarica l'elenco (con i filtri attivi) in
+un file da aprire direttamente in Excel.
 
 Se due persone modificano la stessa scheda, vince chi salva per primo; al secondo il
 sistema chiede di ricaricare la scheda aggiornata prima di riprovare. Nessuna modifica va
