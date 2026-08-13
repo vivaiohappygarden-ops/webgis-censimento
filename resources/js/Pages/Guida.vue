@@ -57,7 +57,8 @@ function goTo(id) {
                         </p>
                         <h3>I ruoli</h3>
                         <p>
-                            <strong>Amministratore</strong>: vede e gestisce tutto, compresi listini, catalogo e utenti.
+                            <strong>Amministratore</strong>: vede e gestisce tutto, compresi listini e catalogo
+                            (gli account degli utenti si preparano in fase di attivazione, con l'assistenza).
                             <strong>Tecnico</strong>: gestisce censimento, lavori, ispezioni e segnalazioni.
                             <strong>Operatore</strong>: lavora dal telefono con l'app di campo; vede i lavori assegnati
                             alla sua squadra e registra rilievi, foto, consuntivi, ispezioni e segnalazioni.
@@ -111,7 +112,8 @@ function goTo(id) {
                     <section id="qualita">
                         <h2>Qualità e ispezioni</h2>
                         <p class="mt-2">
-                            Nella pagina <strong>Lavori</strong>, vista Qualità, ci sono i controlli di fine lavoro e le
+                            Il verbale di controllo di fine lavoro si compila dal dettaglio dell'ordine, nella pagina
+                            <strong>Lavori</strong>; la vista Qualità della stessa pagina raccoglie le
                             <strong>non conformità</strong> (aperta, azione correttiva, verificata, chiusa).
                             Nella pagina <strong>Ispezioni</strong> si preparano i <strong>modelli di checklist</strong>
                             (per aree o per elementi, con domande OK/KO, testi e numeri) e si registrano le esecuzioni:
@@ -131,7 +133,7 @@ function goTo(id) {
                             Una segnalazione (di un collega o di un cliente) ha un codice SEG, una gravità e uno stato:
                             aperta, presa in carico, risolta oppure archiviata. In base alla gravità il sistema fissa
                             due scadenze: entro quando va <strong>presa in carico</strong> (da 1 giorno per le critiche
-                            a 10 per le lievi) ed entro quando va <strong>risolta</strong> (da 3 a 30 giorni).
+                            a 10 per quelle di gravità bassa) ed entro quando va <strong>risolta</strong> (da 3 a 30 giorni).
                             La colonna Tempi e i filtri mostrano subito che cosa è fuori tempo massimo.
                             Da una segnalazione si genera l'ordine di lavoro con un solo pulsante.
                         </p>
@@ -157,8 +159,9 @@ function goTo(id) {
                     <section id="territorio">
                         <h2>Territorio e catalogo</h2>
                         <p class="mt-2">
-                            La pagina <strong>Territorio</strong> organizza clienti, siti (comuni), località e aree di
-                            gestione: ogni elemento censito appartiene a un'area. La pagina <strong>Catalogo</strong>
+                            La pagina <strong>Territorio</strong> organizza clienti, sedi (i comuni) e località;
+                            le aree di gestione si disegnano dalla <strong>Mappa</strong> e ogni elemento censito
+                            appartiene a un'area. La pagina <strong>Catalogo</strong>
                             contiene i tipi di oggetto del Modello Dati ministeriale (387 tipi, non modificabili) e i
                             <strong>campi personalizzati</strong> che si possono aggiungere a ciascun tipo
                             (per esempio la larghezza delle siepi), con la possibilità di collegarli ai campi
@@ -173,7 +176,8 @@ function goTo(id) {
                             "Modello dati per il censimento del verde urbano" (richiesto dai CAM).
                             Dalla pagina <strong>Censimento</strong> si può esportare un singolo layer
                             (scegliendo categoria e formato) oppure premere <strong>"Consegna completa"</strong>:
-                            un unico pacchetto con tutti i layer non vuoti nominati con il codice ISTAT del comune,
+                            un unico pacchetto con tutti i layer non vuoti, nominati con il codice ISTAT del comune
+                            (o con l'identificativo dell'organizzazione, se i comuni gestiti sono più d'uno),
                             la cartella FOTO con le immagini e un riepilogo dei conteggi.
                             L'import fa il percorso inverso e accetta i file di altri sistemi nello stesso formato,
                             con una prova a vuoto (analisi) prima di scrivere qualunque cosa.
@@ -185,7 +189,8 @@ function goTo(id) {
                         <h3>Il telefono era offline e ho censito 50 elementi: che succede?</h3>
                         <p>
                             Restano sul dispositivo, numerati in ordine. Appena c'è rete l'app li invia da sola,
-                            nell'ordine giusto; il diario della scheda Sync mostra l'esito di ogni invio.
+                            nell'ordine giusto: il contatore della coda nella scheda Sync scende a zero quando è
+                            tutto consegnato, e il Registro attività segnala gli invii che il server non ha accettato.
                         </p>
                         <h3>Chi vede che cosa?</h3>
                         <p>
@@ -200,7 +205,8 @@ function goTo(id) {
                         </p>
                         <h3>Serve aiuto in più?</h3>
                         <p>
-                            Ogni messaggio d'errore del sistema è scritto in italiano e dice come rimediare.
+                            I messaggi dell'applicazione sono scritti in italiano e dicono come rimediare;
+                            solo alcuni controlli automatici di compilazione dei moduli possono comparire in inglese.
                             Se qualcosa non torna, il punto di partenza è sempre: aggiornare la pagina,
                             sincronizzare il dispositivo e riprovare.
                         </p>

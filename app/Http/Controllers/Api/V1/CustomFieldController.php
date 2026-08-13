@@ -87,6 +87,9 @@ class CustomFieldController extends Controller implements HasMiddleware
             'options.*' => ['string', 'max:120'],
             'validation' => ['sometimes', 'array'],
             'unit' => ['sometimes', 'nullable', 'string', 'max:20'],
+            // Campo del tracciato CAM alimentato da questo campo custom
+            // all'export (GIS-DATA-MODEL §6.3.4), es. LARG_m
+            'cam_field' => ['sometimes', 'nullable', 'string', 'max:20', 'regex:/^[A-Za-z][A-Za-z0-9_]*$/'],
             'show_in_pwa' => ['sometimes', 'boolean'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:10000'],
         ]);

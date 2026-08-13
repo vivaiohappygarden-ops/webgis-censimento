@@ -214,14 +214,14 @@ class CamExportTest extends TestCase
     public function test_declared_cam_field_mapping_feeds_the_tracciato(): void
     {
         // Il Catalog Manager può dichiarare che un campo custom alimenta un
-        // campo del tracciato (GIS-DATA-MODEL §6.3.4), senza cablarlo nel writer
+        // campo del tracciato (GIS-DATA-MODEL §6.3.4), senza cablarlo nel
+        // writer: la dichiarazione passa dall'API come dal form del Catalogo
         $hedgeType = $this->makeObjectType($this->organization, 'L', 'L103106');
-        \App\Models\CustomField::create([
-            'tenant_id' => $this->organization->id,
+        $this->postJson('/api/v1/custom-fields', [
             'object_type_id' => $hedgeType->id,
             'key' => 'largh_media', 'label' => 'Larghezza media (m)',
-            'field_type' => 'number', 'required' => false, 'cam_field' => 'LARG_m',
-        ]);
+            'field_type' => 'number', 'cam_field' => 'LARG_m',
+        ])->assertCreated()->assertJsonPath('data.cam_field', 'LARG_m');
         $this->postJson('/api/v1/assets', [
             'area_id' => $this->area->id,
             'object_type_id' => $hedgeType->id,

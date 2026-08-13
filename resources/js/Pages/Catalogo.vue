@@ -17,7 +17,7 @@ const editing = ref(null); // tipo oggetto in modifica
 const fields = ref([]);
 const fieldError = ref('');
 const fieldForm = reactive({
-    key: '', label: '', field_type: 'text', required: false, options: '', unit: '',
+    key: '', label: '', field_type: 'text', required: false, options: '', unit: '', cam_field: '',
 });
 
 const FIELD_TYPES = {
@@ -42,11 +42,12 @@ async function addField() {
             field_type: fieldForm.field_type,
             required: fieldForm.required,
             unit: fieldForm.unit || null,
+            cam_field: fieldForm.cam_field.trim() || null,
             options: ['select', 'multiselect'].includes(fieldForm.field_type)
                 ? fieldForm.options.split(',').map((o) => o.trim()).filter(Boolean)
                 : [],
         });
-        Object.assign(fieldForm, { key: '', label: '', field_type: 'text', required: false, options: '', unit: '' });
+        Object.assign(fieldForm, { key: '', label: '', field_type: 'text', required: false, options: '', unit: '', cam_field: '' });
         await openFields(editing.value);
     } catch (err) {
         fieldError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0] ?? 'Errore';
@@ -179,7 +180,7 @@ const countTypes = (m) => m.sub_types.reduce((acc, s) => acc + s.object_types.le
                                     <span v-if="f.required" class="text-red-500">*</span>
                                     <span class="ml-1 text-xs text-gray-400">
                                         {{ FIELD_TYPES[f.field_type] }}{{ f.unit ? ` (${f.unit})` : '' }}
-                                        — <code>{{ f.key }}</code>
+                                        — <code>{{ f.key }}</code><template v-if="f.cam_field"> — tracciato CAM: {{ f.cam_field }}</template>
                                     </span>
                                 </span>
                                 <button class="text-xs text-red-500 hover:underline" @click="removeField(f)">elimina</button>
@@ -200,6 +201,7 @@ const countTypes = (m) => m.sub_types.reduce((acc, s) => acc + s.object_types.le
                                     <option v-for="(label, value) in FIELD_TYPES" :key="value" :value="value">{{ label }}</option>
                                 </select>
                                 <input v-model="fieldForm.unit" placeholder="Unità" class="w-20 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                                <input v-model="fieldForm.cam_field" placeholder="Campo CAM (es. LARG_m)" title="All'export CAM questo campo alimenta la colonna indicata del tracciato" data-test="field-cam" class="w-40 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
                             </div>
                             <input
                                 v-if="['select', 'multiselect'].includes(fieldForm.field_type)"

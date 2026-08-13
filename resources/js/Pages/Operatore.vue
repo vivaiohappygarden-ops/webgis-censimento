@@ -1258,7 +1258,7 @@ onBeforeUnmount(() => {
                                 :disabled="busy || ! state.online"
                                 data-test="download-ws"
                                 @click="downloadWorkingSet"
-                            >Scarica dati di lavoro</button>
+                            >Scarica i dati di lavoro</button>
                             <button
                                 class="rounded-lg bg-green-700 px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                                 :disabled="state.syncing || ! state.online"

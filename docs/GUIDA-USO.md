@@ -12,7 +12,8 @@ senza connessione e si allinea da solo appena torna la rete.
 
 ### I ruoli
 
-- **Amministratore**: vede e gestisce tutto, compresi listini, catalogo e utenti.
+- **Amministratore**: vede e gestisce tutto, compresi listini e catalogo (gli account
+  degli utenti si preparano in fase di attivazione, con l'assistenza).
 - **Tecnico**: gestisce censimento, lavori, ispezioni e segnalazioni.
 - **Operatore**: lavora dal telefono con l'app di campo; vede i lavori assegnati alla sua
   squadra e registra rilievi, foto, consuntivi, ispezioni e segnalazioni.
@@ -51,8 +52,9 @@ qualcosa (nessun listino, nessuna voce, quantità mancante).
 
 ## Qualità e ispezioni
 
-Nella pagina **Lavori**, vista Qualità, ci sono i controlli di fine lavoro e le **non
-conformità** (aperta, azione correttiva, verificata, chiusa). Nella pagina **Ispezioni** si
+Il verbale di controllo di fine lavoro si compila dal dettaglio dell'ordine, nella
+pagina **Lavori**; la vista Qualità della stessa pagina raccoglie le **non conformità**
+(aperta, azione correttiva, verificata, chiusa). Nella pagina **Ispezioni** si
 preparano i **modelli di checklist** (per aree o per elementi, con domande OK/KO, testi e
 numeri) e si registrano le esecuzioni: l'esito è calcolato dalle risposte e ogni voce
 negativa può aprire da sola una non conformità.
@@ -66,7 +68,7 @@ ripeterla, con i ritardi in cima e in rosso.
 Una segnalazione (di un collega o di un cliente) ha un codice SEG, una gravità e uno
 stato: aperta, presa in carico, risolta oppure archiviata. In base alla gravità il sistema
 fissa due scadenze: entro quando va **presa in carico** (da 1 giorno per le critiche a 10
-per le lievi) ed entro quando va **risolta** (da 3 a 30 giorni). La colonna Tempi e i
+per quelle di gravità bassa) ed entro quando va **risolta** (da 3 a 30 giorni). La colonna Tempi e i
 filtri mostrano subito che cosa è fuori tempo massimo. Da una segnalazione si genera
 l'ordine di lavoro con un solo pulsante.
 
@@ -84,8 +86,8 @@ dispositivo si riallinea e nulla resta a metà.
 
 ## Territorio e catalogo
 
-La pagina **Territorio** organizza clienti, siti (comuni), località e aree di gestione:
-ogni elemento censito appartiene a un'area. La pagina **Catalogo** contiene i tipi di
+La pagina **Territorio** organizza clienti, sedi (i comuni) e località; le aree di
+gestione si disegnano dalla **Mappa** e ogni elemento censito appartiene a un'area. La pagina **Catalogo** contiene i tipi di
 oggetto del Modello Dati ministeriale (387 tipi, non modificabili) e i **campi
 personalizzati** che si possono aggiungere a ciascun tipo (per esempio la larghezza delle
 siepi), con la possibilità di collegarli ai campi dei tracciati di consegna.
@@ -95,8 +97,9 @@ siepi), con la possibilità di collegarli ai campi dei tracciati di consegna.
 Per lavorare con i Comuni serve consegnare il censimento nel formato del "Modello dati per
 il censimento del verde urbano" (richiesto dai CAM). Dalla pagina **Censimento** si può
 esportare un singolo layer (scegliendo categoria e formato) oppure premere **"Consegna
-completa"**: un unico pacchetto con tutti i layer non vuoti nominati con il codice ISTAT
-del comune, la cartella FOTO con le immagini e un riepilogo dei conteggi. L'import fa il
+completa"**: un unico pacchetto con tutti i layer non vuoti, nominati con il codice ISTAT del comune
+(o con l'identificativo dell'organizzazione, se i comuni gestiti sono più d'uno), la
+cartella FOTO con le immagini e un riepilogo dei conteggi. L'import fa il
 percorso inverso e accetta i file di altri sistemi nello stesso formato, con una prova a
 vuoto (analisi) prima di scrivere qualunque cosa.
 
@@ -104,7 +107,8 @@ vuoto (analisi) prima di scrivere qualunque cosa.
 
 **Il telefono era offline e ho censito 50 elementi: che succede?**
 Restano sul dispositivo, numerati in ordine. Appena c'è rete l'app li invia da sola,
-nell'ordine giusto; il diario della scheda Sync mostra l'esito di ogni invio.
+nell'ordine giusto: il contatore della coda nella scheda Sync scende a zero quando è
+tutto consegnato, e il Registro attività segnala gli invii che il server non ha accettato.
 
 **Chi vede che cosa?**
 Ogni organizzazione vede solo i propri dati. Dentro l'organizzazione, i permessi seguono i
@@ -114,3 +118,9 @@ ruoli: per esempio i listini li gestisce chi coordina, non l'operatore.
 Le eliminazioni sono "morbide": il dato scompare dalle viste ma resta in archivio, con la
 storia delle modifiche. Le cose ormai chiuse (ordini completati, segnalazioni risolte,
 ispezioni registrate) non si modificano: fanno da registro.
+
+**Serve aiuto in più?**
+I messaggi dell'applicazione sono scritti in italiano e dicono come rimediare; solo
+alcuni controlli automatici di compilazione dei moduli possono comparire in inglese.
+Se qualcosa non torna, il punto di partenza è sempre: aggiornare la pagina,
+sincronizzare il dispositivo e riprovare.

@@ -62,10 +62,11 @@ class WebAuthTest extends TestCase
 
     public function test_guide_page_is_available_to_every_authenticated_user(): void
     {
-        [, $user] = $this->createTenantUser();
+        [$organization] = $this->createTenantUser();
 
-        // Anche senza alcun permesso specifico la guida resta leggibile
-        $this->actingAs($user)->get('/guida')->assertOk();
+        // Un utente SENZA alcun ruolo o permesso deve comunque leggere la guida
+        $bare = \App\Models\User::factory()->create(['tenant_id' => $organization->id]);
+        $this->actingAs($bare)->get('/guida')->assertOk();
     }
 
     public function test_logout_ends_the_session(): void
