@@ -15,12 +15,21 @@ const WO_STATUS = {
     suspended: 'Sospeso',
 };
 const SEVERITY = { critical: 'Critica', high: 'Alta', medium: 'Media', low: 'Bassa' };
+// Le non conformità hanno un vocabolario di gravità tutto loro
+const NC_SEVERITY = { minor: 'Lieve', major: 'Grave', critical: 'Critica' };
 const NC_STATUS = { open: 'Aperta', action: 'In azione', verified: 'Verificata' };
 
 function formatDate(value) {
     if (! value) return '—';
     const [y, m, d] = String(value).slice(0, 10).split('-');
     return `${d}/${m}/${y}`;
+}
+
+// Le scadenze SLA sono istanti ISO in UTC: la data va letta nel fuso
+// italiano, o intorno alla mezzanotte si mostrerebbe il giorno prima
+function formatDateTimeRome(value) {
+    if (! value) return '—';
+    return new Date(value).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
 }
 
 function issueDue(issue) {
@@ -30,8 +39,8 @@ function issueDue(issue) {
     const verb = issue.status === 'open' ? 'presa in carico' : 'risoluzione';
     return {
         label: late
-            ? `${verb} in ritardo di ${phase.days_late} g`
-            : `${verb} entro ${formatDate(phase.due_at)}`,
+            ? (phase.days_late > 0 ? `${verb} in ritardo di ${phase.days_late} g` : `${verb} scaduta oggi`)
+            : `${verb} entro ${formatDateTimeRome(phase.due_at)}`,
         late,
     };
 }
@@ -72,8 +81,10 @@ onMounted(load);
                         <Link href="/lavori" class="text-xs font-medium text-green-800 hover:underline">Vai ai lavori →</Link>
                     </div>
                     <div class="px-4 py-3">
-                        <p v-if="data.work_orders.overdue_count" class="mb-2 text-xs font-medium text-red-700" data-test="oggi-lavori-ritardo">
-                            {{ data.work_orders.overdue_count }} in ritardo sulla fine prevista
+                        <p v-if="data.work_orders.overdue_count || data.work_orders.week_count" class="mb-2 text-xs font-medium" data-test="oggi-lavori-ritardo">
+                            <span v-if="data.work_orders.overdue_count" class="text-red-700">{{ data.work_orders.overdue_count }} in ritardo sulla fine prevista</span>
+                            <span v-if="data.work_orders.overdue_count && data.work_orders.week_count" class="text-gray-400"> · </span>
+                            <span v-if="data.work_orders.week_count" class="text-gray-600">{{ data.work_orders.week_count }} in programma nei prossimi 7 giorni</span>
                         </p>
                         <table v-if="data.work_orders.overdue.length || data.work_orders.week.length" class="w-full text-sm">
                             <tbody class="divide-y divide-gray-50">
@@ -104,9 +115,10 @@ onMounted(load);
                         <Link href="/ispezioni" class="text-xs font-medium text-green-800 hover:underline">Vai alle ispezioni →</Link>
                     </div>
                     <div class="px-4 py-3">
-                        <p v-if="data.inspections.overdue_count" class="mb-2 text-xs font-medium text-red-700">
-                            {{ data.inspections.overdue_count }} scaduti
-                            <template v-if="data.inspections.due_soon_count"> · {{ data.inspections.due_soon_count }} in scadenza entro 14 giorni</template>
+                        <p v-if="data.inspections.overdue_count || data.inspections.due_soon_count" class="mb-2 text-xs font-medium">
+                            <span v-if="data.inspections.overdue_count" class="text-red-700">{{ data.inspections.overdue_count }} scaduti</span>
+                            <span v-if="data.inspections.overdue_count && data.inspections.due_soon_count" class="text-gray-400"> · </span>
+                            <span v-if="data.inspections.due_soon_count" class="text-gray-600">{{ data.inspections.due_soon_count }} in scadenza entro 14 giorni</span>
                         </p>
                         <table v-if="data.inspections.rows.length" class="w-full text-sm">
                             <tbody class="divide-y divide-gray-50">
@@ -151,14 +163,14 @@ onMounted(load);
                 <section class="rounded-xl border border-gray-200 bg-white" data-test="oggi-nc">
                     <div class="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
                         <h2 class="text-sm font-semibold">Non conformità aperte ({{ data.non_conformities.open_count }})</h2>
-                        <Link href="/segnalazioni" class="text-xs font-medium text-green-800 hover:underline">Vai all'elenco →</Link>
+                        <Link href="/lavori?vista=qualita" class="text-xs font-medium text-green-800 hover:underline">Vai alla qualità →</Link>
                     </div>
                     <div class="px-4 py-3">
                         <table v-if="data.non_conformities.rows.length" class="w-full text-sm">
                             <tbody class="divide-y divide-gray-50">
                                 <tr v-for="nc in data.non_conformities.rows" :key="nc.id">
                                     <td class="py-1.5 pr-2 font-medium">{{ nc.code }}</td>
-                                    <td class="py-1.5 pr-2 text-gray-600">{{ SEVERITY[nc.severity] ?? nc.severity }}</td>
+                                    <td class="py-1.5 pr-2 text-gray-600">{{ NC_SEVERITY[nc.severity] ?? nc.severity }}</td>
                                     <td class="py-1.5 pr-2 text-gray-600">{{ NC_STATUS[nc.status] ?? nc.status }}</td>
                                     <td class="py-1.5 pr-2">{{ nc.description }}</td>
                                     <td class="py-1.5 text-right text-gray-600">{{ nc.due_on ? `entro il ${formatDate(nc.due_on)}` : '—' }}</td>
@@ -169,8 +181,8 @@ onMounted(load);
                     </div>
                 </section>
 
-                <!-- Irrigazione -->
-                <section class="rounded-xl border border-gray-200 bg-white" data-test="oggi-irrigazione">
+                <!-- Irrigazione (solo per chi può aprire la pagina dedicata) -->
+                <section v-if="data.irrigation" class="rounded-xl border border-gray-200 bg-white" data-test="oggi-irrigazione">
                     <div class="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
                         <h2 class="text-sm font-semibold">Stagione irrigua</h2>
                         <Link href="/irrigazione" class="text-xs font-medium text-green-800 hover:underline">Vai all'irrigazione →</Link>

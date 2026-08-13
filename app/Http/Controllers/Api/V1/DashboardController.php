@@ -31,7 +31,7 @@ class DashboardController extends Controller implements HasMiddleware
         return [new Middleware('can:works.view')];
     }
 
-    public function today(InspectionDeadlines $deadlines): JsonResponse
+    public function today(\Illuminate\Http\Request $request, InspectionDeadlines $deadlines): JsonResponse
     {
         $today = Carbon::now(self::TIMEZONE)->startOfDay();
 
@@ -41,7 +41,9 @@ class DashboardController extends Controller implements HasMiddleware
             'inspections' => $this->inspections($deadlines),
             'issues' => $this->issues(),
             'non_conformities' => $this->nonConformities(),
-            'irrigation' => $this->irrigation($today),
+            // La pagina e le API dell'irrigazione richiedono areas.view: chi
+            // non le può aprire non deve vederne i dati nel cruscotto
+            'irrigation' => $request->user()->can('areas.view') ? $this->irrigation($today) : null,
         ]]);
     }
 
@@ -64,15 +66,17 @@ class DashboardController extends Controller implements HasMiddleware
 
         $overdueQuery = $base()->whereNotNull('planned_end')
             ->whereDate('planned_end', '<', $today->toDateString());
+        // Stessa semantica dell'agenda: un ordine senza fine prevista occupa
+        // il solo giorno di inizio, non resta "in settimana" per sempre
         $weekQuery = $base()
             ->whereNotNull('planned_start')
             ->whereDate('planned_start', '<=', $today->copy()->addDays(7)->toDateString())
-            ->where(fn ($q) => $q->whereNull('planned_end')
-                ->orWhereDate('planned_end', '>=', $today->toDateString()));
+            ->whereRaw('COALESCE(planned_end, planned_start) >= ?', [$today->toDateString()]);
 
         return [
             'overdue_count' => (clone $overdueQuery)->count(),
             'overdue' => $overdueQuery->orderBy('planned_end')->limit(self::LIMIT)->get()->map($present),
+            'week_count' => (clone $weekQuery)->count(),
             'week' => $weekQuery->orderBy('planned_start')->limit(self::LIMIT)->get()->map($present),
         ];
     }
@@ -96,14 +100,18 @@ class DashboardController extends Controller implements HasMiddleware
     {
         $soon = now()->addDays(3);
 
-        $rows = Issue::query()
+        $query = Issue::query()
             ->whereIn('status', ['open', 'in_charge'])
             ->where(function ($q) use ($soon) {
                 // La scadenza che conta: presa in carico se aperta, chiusura poi
                 $q->where(fn ($w) => $w->where('status', 'open')->where('taken_charge_due_at', '<=', $soon))
                     ->orWhere('sla_due_at', '<=', $soon);
-            })
-            ->orderByRaw('LEAST(COALESCE(taken_charge_due_at, sla_due_at), sla_due_at)')
+            });
+
+        $rows = (clone $query)
+            // Stessa scadenza del filtro: per le prese in carico conta
+            // taken_charge_due_at, per le altre la chiusura
+            ->orderByRaw("CASE WHEN status = 'open' THEN COALESCE(taken_charge_due_at, sla_due_at) ELSE sla_due_at END")
             ->limit(self::LIMIT)
             ->get()
             ->map(fn (Issue $issue) => [
@@ -116,7 +124,8 @@ class DashboardController extends Controller implements HasMiddleware
             ]);
 
         return [
-            'count' => $rows->count(),
+            // Il totale si conta prima del tetto: non è la dimensione della pagina
+            'count' => $query->count(),
             'rows' => $rows,
         ];
     }

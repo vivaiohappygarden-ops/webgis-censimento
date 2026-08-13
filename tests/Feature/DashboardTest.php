@@ -148,6 +148,101 @@ class DashboardTest extends TestCase
         $this->assertArrayNotHasKey('Impianto rotto', $actions->all());
     }
 
+    public function test_issue_ordering_uses_the_deadline_that_matters(): void
+    {
+        // In carico da tempo, risoluzione tra 2 giorni: la presa in carico
+        // (conclusa settimane fa) non deve pesare sull'ordinamento
+        $old = now()->subDays(20);
+        $inCharge = new Issue([
+            'tenant_id' => $this->organization->id,
+            'code' => Issue::nextCode($this->organization->id),
+            'status' => 'in_charge',
+            'severity' => 'low',
+            'reporter_type' => 'internal',
+            'channel' => 'backoffice',
+            'description' => 'Presa in carico da tempo.',
+            'taken_charge_at' => $old->copy()->addDay(),
+            'sla_due_at' => now()->addDays(2),
+            'taken_charge_due_at' => IssueSla::takeChargeDueAt($old, 'low'),
+        ]);
+        $inCharge->created_at = $old;
+        $inCharge->save();
+
+        // Aperta con presa in carico scaduta ieri: è lei l'urgenza
+        $critical = new Issue([
+            'tenant_id' => $this->organization->id,
+            'code' => Issue::nextCode($this->organization->id),
+            'status' => 'open',
+            'severity' => 'critical',
+            'reporter_type' => 'internal',
+            'channel' => 'backoffice',
+            'description' => 'Critica non ancora presa in carico.',
+            'sla_due_at' => now()->addDays(2),
+            'taken_charge_due_at' => now()->subDay(),
+        ]);
+        $critical->created_at = now()->subDays(2);
+        $critical->save();
+
+        $body = $this->getJson('/api/v1/dashboard/today')->assertOk()->json('data');
+        $this->assertSame(2, $body['issues']['count']);
+        $this->assertSame($critical->code, $body['issues']['rows'][0]['code']);
+    }
+
+    public function test_issue_count_is_the_total_not_the_page_size(): void
+    {
+        for ($i = 0; $i < 12; $i++) {
+            $issue = new Issue([
+                'tenant_id' => $this->organization->id,
+                'code' => Issue::nextCode($this->organization->id),
+                'status' => 'open',
+                'severity' => 'high',
+                'reporter_type' => 'internal',
+                'channel' => 'backoffice',
+                'description' => "Segnalazione {$i} fuori tempo.",
+                'sla_due_at' => now()->subDay(),
+                'taken_charge_due_at' => now()->subDays(2),
+            ]);
+            $issue->created_at = now()->subDays(10);
+            $issue->save();
+        }
+
+        $body = $this->getJson('/api/v1/dashboard/today')->assertOk()->json('data');
+        $this->assertSame(12, $body['issues']['count']);
+        $this->assertCount(10, $body['issues']['rows']);
+    }
+
+    public function test_week_follows_agenda_semantics_and_irrigation_needs_areas_view(): void
+    {
+        // Iniziato mesi fa senza fine prevista: occupa solo il giorno di
+        // inizio (come in agenda), non resta "in settimana" per sempre
+        $this->makeWorkOrder([
+            'title' => 'Cantiere eterno',
+            'status' => 'in_progress',
+            'planned_start' => now()->subMonths(3)->toDateString(),
+        ]);
+        // In corso con fine futura: legittimamente in settimana
+        $this->makeWorkOrder([
+            'title' => 'Cantiere in corso',
+            'status' => 'in_progress',
+            'planned_start' => now()->subDays(10)->toDateString(),
+            'planned_end' => now()->addDays(10)->toDateString(),
+        ]);
+
+        $body = $this->getJson('/api/v1/dashboard/today')->assertOk()->json('data');
+        $titles = array_column($body['work_orders']['week'], 'title');
+        $this->assertNotContains('Cantiere eterno', $titles);
+        $this->assertContains('Cantiere in corso', $titles);
+        $this->assertSame(1, $body['work_orders']['week_count']);
+
+        // Chi ha works.view ma non areas.view non riceve la sezione irrigazione
+        $viewer = \App\Models\User::factory()->create(['tenant_id' => $this->organization->id]);
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($this->organization->id);
+        $viewer->givePermissionTo('works.view');
+        $this->actingAsTenantUser($viewer);
+        $body = $this->getJson('/api/v1/dashboard/today')->assertOk()->json('data');
+        $this->assertNull($body['irrigation']);
+    }
+
     public function test_dashboard_requires_works_view_and_isolates_tenants(): void
     {
         $this->makeWorkOrder([

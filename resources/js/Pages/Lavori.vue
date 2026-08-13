@@ -34,7 +34,11 @@ const rows = ref([]);
 const meta = reactive({ total: 0, current_page: 1, last_page: 1 });
 const filters = reactive({ status: '', q: '', page: 1 });
 const loading = ref(false);
-const view = ref('elenco');
+// La vista iniziale può arrivare dall'URL (es. il cruscotto Oggi linka
+// direttamente la Qualità): valori sconosciuti ricadono sull'elenco
+const VIEWS = ['elenco', 'agenda', 'rendiconto', 'qualita'];
+const requested = new URLSearchParams(window.location.search).get('vista');
+const view = ref(VIEWS.includes(requested) ? requested : 'elenco');
 const agendaRef = ref(null);
 const reportRef = ref(null);
 const qualityRef = ref(null);
