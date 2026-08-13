@@ -30,7 +30,7 @@ const CAM_LAYERS = {
     S4: 'S4 Fattori ambientali (superfici)',
 };
 const exportLayer = ref('P1');
-const camExport = reactive({ busy: false, error: '' });
+const camExport = reactive({ busy: false, error: '', deliveryFallback: false });
 
 // Non un semplice link: l'errore del server (es. GDAL non installato per lo
 // shapefile) deve arrivare a video in italiano, non come pagina bianca
@@ -42,9 +42,15 @@ async function exportCam(format) {
     );
 }
 
-// La consegna completa: tutti i layer, foto e manifest in un unico zip
-async function exportDelivery() {
-    await downloadCam('/api/v1/exports/cam/delivery?format=shapefile', 'consegna_cam', 'zip');
+// La consegna completa: tutti i layer, foto e manifest in un unico zip.
+// Se lo shapefile non è disponibile sul server, il consiglio a video
+// diventa azionabile: si offre la stessa consegna in GeoJSON
+async function exportDelivery(format = 'shapefile') {
+    camExport.deliveryFallback = false;
+    const ok = await downloadCam(`/api/v1/exports/cam/delivery?format=${format}`, 'consegna_cam', 'zip');
+    if (! ok && format === 'shapefile') {
+        camExport.deliveryFallback = true;
+    }
 }
 
 async function downloadCam(url, baseName, extension) {
@@ -61,7 +67,7 @@ async function downloadCam(url, baseName, extension) {
                 message = Object.values(body.errors ?? {})[0]?.[0] ?? body.message ?? message;
             } catch { /* risposta non JSON: resta il messaggio generico */ }
             camExport.error = message;
-            return;
+            return false;
         }
         const blob = await r.blob();
         const link = document.createElement('a');
@@ -73,8 +79,10 @@ async function downloadCam(url, baseName, extension) {
         link.download = served ?? `${baseName}_${stamp}.${extension}`;
         link.click();
         URL.revokeObjectURL(link.href);
+        return true;
     } catch {
         camExport.error = 'Export non riuscito: problema di rete.';
+        return false;
     } finally {
         camExport.busy = false;
     }
@@ -188,7 +196,7 @@ const measure = (row) => {
                         :disabled="camExport.busy"
                         title="Tutti i layer, le foto e il manifest in un unico pacchetto"
                         data-test="cam-export-delivery"
-                        @click="exportDelivery"
+                        @click="exportDelivery()"
                     >Consegna completa</button>
                     <button
                         v-if="canCreate"
@@ -200,6 +208,12 @@ const measure = (row) => {
 
             <p v-if="camExport.error" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="cam-export-error">
                 {{ camExport.error }}
+                <button
+                    v-if="camExport.deliveryFallback"
+                    class="ml-2 font-medium underline"
+                    data-test="cam-delivery-geojson"
+                    @click="exportDelivery('geojson')"
+                >Scarica la consegna in GeoJSON</button>
             </p>
 
             <div class="mb-4 flex gap-3">

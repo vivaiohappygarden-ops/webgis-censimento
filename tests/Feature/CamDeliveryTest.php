@@ -42,7 +42,7 @@ class CamDeliveryTest extends TestCase
         $this->actingAsTenantUser($this->user);
     }
 
-    private function makeAssetWithPhoto(string $typeCode, string $censusCode, string $photoName): string
+    private function makeAssetWithPhoto(string $typeCode, string $censusCode, string $photoName, int $size = 100): string
     {
         $type = \App\Models\CatalogObjectType::query()->where('code', $typeCode)->first()
             ?? $this->makeObjectType($this->organization, 'P', $typeCode);
@@ -53,7 +53,7 @@ class CamDeliveryTest extends TestCase
             'geometry' => $this->pointGeometry(),
         ])->assertCreated()->json('data.id');
         $this->post("/api/v1/assets/{$id}/photos", [
-            'photo' => UploadedFile::fake()->image($photoName, 100, 100),
+            'photo' => UploadedFile::fake()->image($photoName, $size, $size),
             'category' => 'census',
         ])->assertCreated();
 
@@ -110,7 +110,7 @@ class CamDeliveryTest extends TestCase
     public function test_duplicate_photo_names_are_disambiguated(): void
     {
         $this->makeAssetWithPhoto('P103108', 'ALB-1', 'foto.jpg');
-        $this->makeAssetWithPhoto('P103108', 'ALB-2', 'foto.jpg');
+        $this->makeAssetWithPhoto('P103108', 'ALB-2', 'foto.jpg', size: 160);
 
         $zip = $this->download('geojson');
 
@@ -121,6 +121,76 @@ class CamDeliveryTest extends TestCase
         foreach ($names as $name) {
             $this->assertNotFalse($zip->locateName("FOTO/{$name}"), "FOTO/{$name} assente dalla consegna");
         }
+        // Due file davvero distinti, non lo stesso contenuto sotto due nomi
+        $this->assertSame(2, json_decode($zip->getFromName('manifest.json'), true)['foto']);
+        $this->assertNotEquals($zip->getFromName("FOTO/{$names[0]}"), $zip->getFromName("FOTO/{$names[1]}"));
+    }
+
+    public function test_missing_photo_file_is_counted_not_delivered_empty(): void
+    {
+        $this->makeAssetWithPhoto('P103108', 'ALB-1', 'albero.jpg');
+        $photo = \App\Models\Photo::query()->firstOrFail();
+        Storage::disk('local')->delete($photo->s3_key);
+
+        $zip = $this->download('geojson');
+
+        // Niente file da zero byte: il campo FOTO si azzera e il manifest
+        // dichiara la mancanza
+        $this->assertFalse($zip->locateName('FOTO/albero.jpg'));
+        $manifest = json_decode($zip->getFromName('manifest.json'), true);
+        $this->assertSame(0, $manifest['foto']);
+        $this->assertSame(1, $manifest['foto_mancanti']);
+        $p1 = json_decode($zip->getFromName('015146_P1.geojson'), true);
+        $this->assertNull($p1['features'][0]['properties']['FOTO']);
+        $this->assertStringContainsString('assenti', $zip->getFromName('LEGGIMI.txt'));
+    }
+
+    public function test_hostile_names_cannot_escape_the_foto_folder(): void
+    {
+        // Codice censimento con separatori di percorso: usato come prefisso
+        // di disambiguazione non deve creare sottocartelle o uscire da FOTO/
+        $this->makeAssetWithPhoto('P103108', '../../evil', 'foto.jpg');
+        $this->makeAssetWithPhoto('P103108', 'PARCO/12', 'foto.jpg');
+
+        $zip = $this->download('geojson');
+
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $entry = $zip->getNameIndex($i);
+            if (! str_starts_with($entry, 'FOTO/')) {
+                continue;
+            }
+            $inner = substr($entry, 5);
+            $this->assertStringNotContainsString('/', $inner, "Voce sospetta: {$entry}");
+            $this->assertStringNotContainsString('..', $inner, "Voce sospetta: {$entry}");
+        }
+        // Entrambe le foto sono comunque in consegna
+        $manifest = json_decode($zip->getFromName('manifest.json'), true);
+        $this->assertSame(2, $manifest['foto']);
+    }
+
+    public function test_census_photo_is_preferred_over_other_categories(): void
+    {
+        $type = $this->makeObjectType($this->organization, 'P', 'P103108');
+        $id = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $type->id,
+            'census_code' => 'ALB-1',
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated()->json('data.id');
+        // Prima una foto di dettaglio, poi quella di censimento
+        $this->post("/api/v1/assets/{$id}/photos", [
+            'photo' => UploadedFile::fake()->image('difetto.jpg', 100, 100), 'category' => 'defect',
+        ])->assertCreated();
+        $this->post("/api/v1/assets/{$id}/photos", [
+            'photo' => UploadedFile::fake()->image('scheda.jpg', 100, 100), 'category' => 'census',
+        ])->assertCreated();
+
+        $zip = $this->download('geojson');
+
+        $p1 = json_decode($zip->getFromName('015146_P1.geojson'), true);
+        $this->assertSame('scheda.jpg', $p1['features'][0]['properties']['FOTO']);
+        $this->assertNotFalse($zip->locateName('FOTO/scheda.jpg'));
+        $this->assertFalse($zip->locateName('FOTO/difetto.jpg'));
     }
 
     public function test_shapefile_delivery_contains_sidecar_files(): void
@@ -139,11 +209,25 @@ class CamDeliveryTest extends TestCase
         $this->assertNotFalse($zip->locateName('manifest.json'));
     }
 
-    public function test_empty_census_yields_a_clear_error(): void
+    public function test_empty_census_yields_a_clear_error_and_no_orphan_tempdirs(): void
     {
         \App\Models\Area::query()->delete();
+        $before = count(glob(sys_get_temp_dir().'/cam-delivery-*'));
 
         $this->get('/api/v1/exports/cam/delivery?format=geojson', ['Accept' => 'application/json'])
             ->assertUnprocessable();
+
+        // La cartella di lavoro si pulisce anche sul percorso d'errore
+        $this->assertCount($before, glob(sys_get_temp_dir().'/cam-delivery-*'));
+    }
+
+    public function test_working_tempdir_is_removed_after_a_successful_delivery(): void
+    {
+        $this->makeAssetWithPhoto('P103108', 'ALB-1', 'albero.jpg');
+        $before = count(glob(sys_get_temp_dir().'/cam-delivery-*'));
+
+        $this->download('geojson');
+
+        $this->assertCount($before, glob(sys_get_temp_dir().'/cam-delivery-*'));
     }
 }

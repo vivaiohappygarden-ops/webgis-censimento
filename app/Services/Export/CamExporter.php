@@ -139,7 +139,8 @@ class CamExporter
                 trees.height_m, trees.dbh_cm, trees.crown_diameter_m,
                 (SELECT p.original_filename FROM photos p
                   WHERE p.asset_id = assets.id AND p.deleted_at IS NULL
-                  ORDER BY p.created_at LIMIT 1) AS foto
+                  ORDER BY (p.category = 'census') DESC, p.created_at DESC, p.id DESC
+                  LIMIT 1) AS foto
                 SQL, [$srid, $srid, $srid])
             ->get();
 
