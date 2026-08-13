@@ -82,6 +82,8 @@ Route::prefix('v1')->group(function () {
             ->whereUuid('inspection_template');
         Route::put('inspection-templates/{id}/items', [\App\Http\Controllers\Api\V1\InspectionTemplateController::class, 'syncItems'])->whereUuid('id');
         Route::get('inspections/deadlines', [\App\Http\Controllers\Api\V1\InspectionController::class, 'deadlines']);
+        Route::get('inspections/{id}/pdf', [\App\Http\Controllers\Api\V1\PdfController::class, 'inspection'])->whereUuid('id');
+        Route::get('assets/{id}/pdf', [\App\Http\Controllers\Api\V1\PdfController::class, 'asset'])->whereUuid('id');
         Route::get('inspections', [\App\Http\Controllers\Api\V1\InspectionController::class, 'index']);
         Route::post('inspections', [\App\Http\Controllers\Api\V1\InspectionController::class, 'store']);
         Route::get('inspections/{id}', [\App\Http\Controllers\Api\V1\InspectionController::class, 'show'])->whereUuid('id');

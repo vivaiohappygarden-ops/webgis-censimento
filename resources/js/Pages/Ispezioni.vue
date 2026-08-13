@@ -713,7 +713,15 @@ onMounted(async () => {
                                 </div>
                                 <h2 class="text-lg font-semibold">Ispezione del {{ fmtDateTime(detail.completed_at) }}</h2>
                             </div>
-                            <button class="text-gray-400 hover:text-gray-600" @click="detail = null">✕</button>
+                            <span class="flex items-center gap-3">
+                                <a
+                                    :href="`/api/v1/inspections/${detail.id}/pdf`"
+                                    target="_blank"
+                                    class="rounded-lg border border-green-700 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-50"
+                                    data-test="inspection-pdf"
+                                >Verbale PDF</a>
+                                <button class="text-gray-400 hover:text-gray-600" @click="detail = null">✕</button>
+                            </span>
                         </div>
 
                         <div class="mt-3 flex flex-wrap items-center gap-2">

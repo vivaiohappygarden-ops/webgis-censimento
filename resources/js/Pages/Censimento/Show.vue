@@ -143,6 +143,12 @@ onBeforeUnmount(() => map?.remove());
                                 <p class="text-sm text-gray-500">{{ asset.object_type?.name }}</p>
                             </div>
                             <div class="flex items-center gap-2">
+                                <a
+                                    :href="`/api/v1/assets/${asset.id}/pdf`"
+                                    target="_blank"
+                                    class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                                    data-test="asset-pdf"
+                                >Scheda PDF</a>
                                 <button
                                     v-if="canUpdate && ! editing"
                                     class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
