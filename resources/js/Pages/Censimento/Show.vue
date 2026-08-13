@@ -29,6 +29,7 @@ async function openPdf() {
 
 // Pagina pubblica (QR): attivazione per elemento, revocabile
 const publicBusy = ref(false);
+const origin = window.location.origin;
 
 async function togglePublicPage() {
     publicBusy.value = true;
@@ -37,11 +38,12 @@ async function togglePublicPage() {
         if (asset.value.public_token) {
             if (! window.confirm('Disattivare la pagina pubblica? Il QR già stampato smetterà di funzionare.')) return;
             await axios.delete(`/api/v1/assets/${props.assetId}/public-page`);
-            asset.value = { ...asset.value, public_token: null };
         } else {
-            const { data } = await axios.post(`/api/v1/assets/${props.assetId}/public-page`);
-            asset.value = { ...asset.value, public_token: data.data.public_token };
+            await axios.post(`/api/v1/assets/${props.assetId}/public-page`);
         }
+        // Ricarica completa: il cambio incrementa la versione della scheda
+        // e un salvataggio con la versione vecchia verrebbe rifiutato
+        await load();
     } catch (err) {
         pdfError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
             ?? err.response?.data?.message ?? 'Operazione non riuscita';
@@ -221,6 +223,11 @@ onBeforeUnmount(() => map?.remove());
                         </div>
 
                         <p v-if="pdfError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ pdfError }}</p>
+
+                        <p v-if="asset.public_token" class="mb-3 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-900" data-test="public-url">
+                            Pagina pubblica attiva:
+                            <a :href="`/p/${asset.public_token}`" target="_blank" class="font-medium underline">{{ `${origin}/p/${asset.public_token}` }}</a>
+                        </p>
 
                         <AssetEditPanel
                             v-if="editing"

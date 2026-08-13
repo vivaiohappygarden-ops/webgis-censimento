@@ -67,6 +67,14 @@ class PublicPageController extends Controller implements HasMiddleware
             ]);
         }
 
+        $organization = \App\Models\Organization::query()
+            ->where('is_active', true)->find($asset->tenant_id);
+        if ($organization === null) {
+            throw ValidationException::withMessages([
+                'asset' => 'Organizzazione non attiva: la pagina pubblica non è raggiungibile.',
+            ]);
+        }
+
         $url = route('public.tree', $asset->public_token);
         $svg = (new \BaconQrCode\Writer(new \BaconQrCode\Renderer\ImageRenderer(
             new \BaconQrCode\Renderer\RendererStyle\RendererStyle(300),
@@ -74,7 +82,7 @@ class PublicPageController extends Controller implements HasMiddleware
         )))->writeString($url);
 
         $pdf = $renderer->render('pdf.tag', [
-            'organization' => \App\Models\Organization::find($asset->tenant_id),
+            'organization' => $organization,
             'asset' => $asset,
             'url' => $url,
             'qrDataUri' => 'data:image/svg+xml;base64,'.base64_encode($svg),

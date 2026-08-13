@@ -78,19 +78,57 @@ class PublicPageTest extends TestCase
         $this->get("/p/{$token}")->assertNotFound();
     }
 
-    public function test_public_photo_streams_only_when_present(): void
+    public function test_public_photo_is_reencoded_and_only_from_public_categories(): void
     {
         $token = $this->postJson("/api/v1/assets/{$this->assetId}/public-page")->json('data.public_token');
 
         $this->get("/p/{$token}/foto")->assertNotFound();
+
+        // Una foto di difetto NON diventa mai pubblica, nemmeno come ripiego
+        $this->post("/api/v1/assets/{$this->assetId}/photos", [
+            'photo' => UploadedFile::fake()->image('carie.jpg', 300, 200),
+            'category' => 'defect',
+        ])->assertCreated();
+        $this->get("/p/{$token}/foto")->assertNotFound();
+        $this->assertStringNotContainsString('/foto', $this->get("/p/{$token}")->getContent());
 
         $this->post("/api/v1/assets/{$this->assetId}/photos", [
             'photo' => UploadedFile::fake()->image('quercia.jpg', 300, 200),
             'category' => 'census',
         ])->assertCreated();
 
-        $photo = $this->get("/p/{$token}/foto")->assertOk();
-        $this->assertStringStartsWith('image/', $photo->headers->get('Content-Type'));
+        $response = $this->get("/p/{$token}/foto")->assertOk();
+        $this->assertSame('image/jpeg', $response->headers->get('Content-Type'));
+        // Ricodificata (via i metadati, incluso l'eventuale GPS), nome
+        // file originale mai esposto, niente cache condivisa
+        $stored = Storage::disk('local')->get(
+            \App\Models\Photo::query()->where('category', 'census')->firstOrFail()->s3_key,
+        );
+        $this->assertNotEquals($stored, $response->getContent());
+        $this->assertStringNotContainsString('quercia', (string) $response->headers->get('Content-Disposition'));
+        $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+
+        // File sparito dal disco: 404 pulito, non un errore del server
+        Storage::disk('local')->delete(
+            \App\Models\Photo::query()->where('category', 'census')->firstOrFail()->s3_key,
+        );
+        $this->get("/p/{$token}/foto")->assertNotFound();
+    }
+
+    public function test_page_goes_dark_with_inactive_organization_or_removed_tree(): void
+    {
+        $token = $this->postJson("/api/v1/assets/{$this->assetId}/public-page")->json('data.public_token');
+        $this->get("/p/{$token}")->assertOk();
+
+        // Elemento abbattuto: la vetrina si spegne
+        Asset::query()->findOrFail($this->assetId)->forceFill(['status' => 'felled'])->save();
+        $this->get("/p/{$token}")->assertNotFound();
+        Asset::query()->findOrFail($this->assetId)->forceFill(['status' => 'active'])->save();
+        $this->get("/p/{$token}")->assertOk();
+
+        // Organizzazione disattivata: tutte le pagine del tenant si spengono
+        $this->organization->update(['is_active' => false]);
+        $this->get("/p/{$token}")->assertNotFound();
     }
 
     public function test_tokens_are_not_guessable_and_permissions_hold(): void

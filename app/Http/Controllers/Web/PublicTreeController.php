@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use App\Models\Organization;
 use App\Models\Photo;
+use App\Services\Photos\ImageDerivative;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -15,51 +16,75 @@ use Illuminate\Support\Facades\Storage;
  */
 class PublicTreeController extends Controller
 {
+    /** Solo le categorie divulgative: mai foto di difetti o segnalazioni. */
+    private const PUBLIC_PHOTO_CATEGORIES = ['census', 'reference'];
+
     private function assetByToken(string $token): Asset
     {
         return Asset::query()
             ->withoutGlobalScopes()
             ->whereNull('deleted_at')
+            // Un elemento abbattuto o dismesso non resta in vetrina
+            ->where('status', 'active')
+            // A contratto cessato le pagine si spengono da sole
+            ->whereIn('tenant_id', Organization::query()->where('is_active', true)->select('id'))
             ->where('public_token', $token)
-            ->with(['objectType', 'tree', 'area.locality.site'])
+            // Anche le relazioni senza filtro tenant: un visitatore che è
+            // GIÀ autenticato in un'altra organizzazione non deve vedere la
+            // pagina rotta dai filtri della sua sessione
+            ->with([
+                'objectType' => fn ($q) => $q->withoutGlobalScopes(),
+                'tree' => fn ($q) => $q->withoutGlobalScopes(),
+                'area' => fn ($q) => $q->withoutGlobalScopes()->whereNull('deleted_at'),
+                'area.locality' => fn ($q) => $q->withoutGlobalScopes(),
+                'area.locality.site' => fn ($q) => $q->withoutGlobalScopes(),
+            ])
             ->firstOrFail();
+    }
+
+    private function publicPhoto(Asset $asset): ?Photo
+    {
+        return Photo::query()->withoutGlobalScopes()
+            ->whereNull('deleted_at')
+            ->where('asset_id', $asset->id)
+            ->whereIn('category', self::PUBLIC_PHOTO_CATEGORIES)
+            ->orderByRaw("(category = 'census') DESC")
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first();
     }
 
     public function show(string $token)
     {
         $asset = $this->assetByToken($token);
 
-        $hasPhoto = Photo::query()->withoutGlobalScopes()
-            ->whereNull('deleted_at')
-            ->where('asset_id', $asset->id)
-            ->exists();
-
         return view('public.tree', [
             'asset' => $asset,
             'organization' => Organization::find($asset->tenant_id),
-            'hasPhoto' => $hasPhoto,
+            'hasPhoto' => $this->publicPhoto($asset) !== null,
             'token' => $token,
         ]);
     }
 
-    /** La foto di riferimento (stessa regola dell'export: censimento, poi la più recente). */
+    /**
+     * La foto viene SEMPRE ricodificata: il file originale può contenere
+     * coordinate GPS e altri metadati che la pagina, per scelta, non
+     * pubblica. Niente nome file originale, niente cache condivisa (la
+     * revoca del gettone deve valere subito).
+     */
     public function photo(string $token)
     {
         $asset = $this->assetByToken($token);
-
-        $photo = Photo::query()->withoutGlobalScopes()
-            ->whereNull('deleted_at')
-            ->where('asset_id', $asset->id)
-            ->orderByRaw("(category = 'census') DESC")
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->first();
-
+        $photo = $this->publicPhoto($asset);
         abort_if($photo === null, 404);
 
-        return Storage::disk()->response($photo->s3_key, $photo->original_filename, [
-            'Content-Type' => $photo->mime_type ?: 'image/jpeg',
-            'Cache-Control' => 'public, max-age=3600',
+        $jpeg = ImageDerivative::jpeg(Storage::disk()->get($photo->s3_key));
+        abort_if($jpeg === null, 404);
+
+        return response($jpeg, 200, [
+            'Content-Type' => 'image/jpeg',
+            'Content-Disposition' => 'inline; filename="foto.jpg"',
+            'Cache-Control' => 'no-store',
         ]);
     }
 }

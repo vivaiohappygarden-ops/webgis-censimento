@@ -141,39 +141,12 @@ class PdfController extends Controller implements HasMiddleware
      */
     private function photoDataUri(\App\Models\Photo $photo): ?string
     {
-        if (($photo->size_bytes ?? 0) > 8 * 1024 * 1024) {
-            return null;
-        }
-        $content = Storage::disk()->get($photo->s3_key);
-        if ($content === null) {
-            return null;
-        }
+        $jpeg = \App\Services\Photos\ImageDerivative::jpeg(
+            Storage::disk()->get($photo->s3_key),
+            maxDimension: 1200,
+            quality: 78,
+        );
 
-        $info = @getimagesizefromstring($content);
-        if ($info === false || $info[0] * $info[1] > 12_000_000) {
-            return null;
-        }
-
-        [$width, $height] = $info;
-        $mime = $photo->mime_type ?: ($info['mime'] ?? 'image/jpeg');
-        if (max($width, $height) > 1200) {
-            $source = @imagecreatefromstring($content);
-            if ($source === false) {
-                return null;
-            }
-            $scale = 1200 / max($width, $height);
-            $newWidth = (int) round($width * $scale);
-            $newHeight = (int) round($height * $scale);
-            $resized = imagecreatetruecolor($newWidth, $newHeight);
-            imagecopyresampled($resized, $source, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
-            ob_start();
-            imagejpeg($resized, null, 78);
-            $content = (string) ob_get_clean();
-            imagedestroy($source);
-            imagedestroy($resized);
-            $mime = 'image/jpeg';
-        }
-
-        return 'data:'.$mime.';base64,'.base64_encode($content);
+        return $jpeg !== null ? 'data:image/jpeg;base64,'.base64_encode($jpeg) : null;
     }
 }

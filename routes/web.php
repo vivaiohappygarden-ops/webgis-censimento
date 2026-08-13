@@ -16,8 +16,10 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [WebAuthController::class, 'login'])->middleware('throttle:10,1');
 });
 
-// Pagina pubblica dell'elemento (QR sul cartellino): nessun accesso richiesto
-Route::middleware('throttle:60,1')->group(function () {
+// Pagina pubblica dell'elemento (QR sul cartellino): nessun accesso richiesto.
+// Ogni visita consuma due richieste (pagina + foto) e il pubblico mobile
+// condivide pochi IP di operatore: il tetto tiene conto di entrambe le cose
+Route::middleware('throttle:240,1')->group(function () {
     Route::get('/p/{token}', [\App\Http\Controllers\Web\PublicTreeController::class, 'show'])
         ->where('token', '[A-Za-z0-9]{16,64}')->name('public.tree');
     Route::get('/p/{token}/foto', [\App\Http\Controllers\Web\PublicTreeController::class, 'photo'])
