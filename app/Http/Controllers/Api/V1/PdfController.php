@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Asset;
+use App\Models\ChecklistItem;
 use App\Models\Inspection;
 use App\Models\NonConformity;
 use App\Models\Organization;
@@ -29,24 +30,66 @@ class PdfController extends Controller implements HasMiddleware
         $inspection = Inspection::query()
             ->with([
                 'template:id,code,name,target,standard_ref',
-                'asset:id,census_code', 'area:id,name', 'inspector:id,name',
+                // Il verbale resta leggibile anche se il bersaglio è stato
+                // poi rimosso dal censimento
+                'asset' => fn ($q) => $q->withTrashed()->select('id', 'census_code'),
+                'area' => fn ($q) => $q->withTrashed()->select('id', 'name'),
+                'inspector:id,name',
             ])
             ->findOrFail($id);
 
         $pdf = $renderer->render('pdf.inspection', [
             'organization' => Organization::find($request->user()->tenant_id),
             'inspection' => $inspection,
+            'rows' => $this->checklistRows($inspection),
             'nonConformities' => NonConformity::query()
                 ->where('origin', 'inspection')->where('origin_id', $inspection->id)
                 ->orderBy('code')->get(),
         ]);
 
-        $stamp = $inspection->completed_at?->format('Ymd') ?? now()->format('Ymd');
+        $stamp = ($inspection->completed_at ?? now())->timezone('Europe/Rome')->format('Ymd');
 
         return response($pdf, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => "inline; filename=\"verbale_ispezione_{$stamp}.pdf\"",
+            'Content-Disposition' => "inline; filename=\"verbale_ispezione_{$stamp}_".substr($inspection->id, 0, 8).'.pdf"',
         ]);
+    }
+
+    /**
+     * Righe della checklist in ordine di modello: jsonb non conserva
+     * l'ordine delle chiavi, quindi si ordina sulla fotografia (o sulla
+     * voce attuale per le ispezioni registrate prima di questa aggiunta).
+     * Le risposte libere lunghe scendono sotto la domanda: una cella
+     * stretta con duemila caratteri produrrebbe pagine illeggibili.
+     */
+    private function checklistRows(Inspection $inspection): array
+    {
+        $items = ChecklistItem::query()
+            ->whereIn('id', array_keys($inspection->answers ?? []))
+            ->get()->keyBy('id');
+
+        return collect($inspection->answers ?? [])
+            ->map(function ($answer, $itemId) use ($items) {
+                $type = $answer['answer_type'] ?? $items[$itemId]?->answer_type;
+                $value = $answer['value'] ?? null;
+                $isChoice = in_array($type, ['ok_ko', 'ok_ko_na'], true);
+                $display = $isChoice
+                    ? (['ok' => 'OK', 'ko' => 'KO', 'na' => 'N.A.'][$value] ?? (string) $value)
+                    : trim((string) ($value ?? ''));
+                $fits = $isChoice || mb_strlen($display) <= 20;
+
+                return [
+                    'question' => $answer['question'] ?? ($items[$itemId]?->question ?? '-'),
+                    'short' => $fits ? ($display !== '' ? $display : '-') : null,
+                    'long' => $fits ? null : $display,
+                    'note' => $answer['note'] ?? null,
+                    'order' => $answer['sort_order'] ?? $items[$itemId]?->sort_order ?? 9999,
+                    'tiebreak' => (string) $itemId,
+                ];
+            })
+            ->sortBy([['order', 'asc'], ['tiebreak', 'asc']])
+            ->values()
+            ->all();
     }
 
     public function asset(Request $request, PdfRenderer $renderer, string $id)
@@ -66,17 +109,10 @@ class PdfController extends Controller implements HasMiddleware
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->first();
-        $photoDataUri = null;
-        if ($photo !== null) {
-            $content = Storage::disk()->get($photo->s3_key);
-            if ($content !== null) {
-                $photoDataUri = 'data:'.($photo->mime_type ?: 'image/jpeg').';base64,'.base64_encode($content);
-            }
-        }
 
-        $fieldLabels = \App\Models\CustomField::query()
+        $fields = \App\Models\CustomField::query()
             ->where('object_type_id', $asset->object_type_id)
-            ->pluck('label', 'key');
+            ->get()->keyBy('key');
 
         $assessment = $asset->tree?->assessments()
             ->orderByDesc('assessed_on')->orderByDesc('created_at')->first();
@@ -84,8 +120,8 @@ class PdfController extends Controller implements HasMiddleware
         $pdf = $renderer->render('pdf.asset', [
             'organization' => Organization::find($request->user()->tenant_id),
             'asset' => $asset,
-            'photoDataUri' => $photoDataUri,
-            'fieldLabels' => $fieldLabels,
+            'photoDataUri' => $photo !== null ? $this->photoDataUri($photo) : null,
+            'fields' => $fields,
             'assessment' => $assessment,
         ]);
 
@@ -95,5 +131,49 @@ class PdfController extends Controller implements HasMiddleware
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => "inline; filename=\"scheda_{$name}.pdf\"",
         ]);
+    }
+
+    /**
+     * Foto incorporata in dimensione da stampa: l'originale può pesare
+     * 15 MB e decine di megapixel, e finirebbe intero nel PDF (e nella
+     * memoria di dompdf). Oltre le soglie di sicurezza si rinuncia alla
+     * foto, mai alla scheda.
+     */
+    private function photoDataUri(\App\Models\Photo $photo): ?string
+    {
+        if (($photo->size_bytes ?? 0) > 8 * 1024 * 1024) {
+            return null;
+        }
+        $content = Storage::disk()->get($photo->s3_key);
+        if ($content === null) {
+            return null;
+        }
+
+        $info = @getimagesizefromstring($content);
+        if ($info === false || $info[0] * $info[1] > 12_000_000) {
+            return null;
+        }
+
+        [$width, $height] = $info;
+        $mime = $photo->mime_type ?: ($info['mime'] ?? 'image/jpeg');
+        if (max($width, $height) > 1200) {
+            $source = @imagecreatefromstring($content);
+            if ($source === false) {
+                return null;
+            }
+            $scale = 1200 / max($width, $height);
+            $newWidth = (int) round($width * $scale);
+            $newHeight = (int) round($height * $scale);
+            $resized = imagecreatetruecolor($newWidth, $newHeight);
+            imagecopyresampled($resized, $source, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+            ob_start();
+            imagejpeg($resized, null, 78);
+            $content = (string) ob_get_clean();
+            imagedestroy($source);
+            imagedestroy($resized);
+            $mime = 'image/jpeg';
+        }
+
+        return 'data:'.$mime.';base64,'.base64_encode($content);
     }
 }

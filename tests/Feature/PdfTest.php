@@ -51,10 +51,20 @@ class PdfTest extends TestCase
         $this->assertStringStartsWith('%PDF-', $response->getContent());
         $this->assertStringContainsString('verbale_ispezione_', $response->headers->get('Content-Disposition'));
 
+        // La fotografia porta l'ordine delle domande: jsonb non conserva
+        // l'ordine delle chiavi e il verbale numera le righe
+        $answers = \App\Models\Inspection::query()->findOrFail($inspectionId)->answers;
+        $this->assertEqualsCanonicalizing([1, 2], array_column($answers, 'sort_order'));
+
         // Senza alcun permesso il verbale non si scarica
         $bare = \App\Models\User::factory()->create(['tenant_id' => $this->organization->id]);
         $this->actingAsTenantUser($bare);
         $this->get("/api/v1/inspections/{$inspectionId}/pdf")->assertForbidden();
+
+        // E per un'altra organizzazione l'ispezione non esiste
+        [, $otherUser] = $this->createTenantUser();
+        $this->actingAsTenantUser($otherUser);
+        $this->get("/api/v1/inspections/{$inspectionId}/pdf")->assertNotFound();
     }
 
     public function test_asset_sheet_pdf_with_tree_and_photo(): void
@@ -71,8 +81,9 @@ class PdfTest extends TestCase
         $this->patchJson("/api/v1/assets/{$assetId}", [
             'tree' => ['genus' => 'Platanus', 'species' => 'Platanus x acerifolia', 'height_m' => 22, 'dbh_cm' => 55],
         ])->assertOk();
+        // Foto grande: viene ridimensionata prima di entrare nel PDF
         $this->post("/api/v1/assets/{$assetId}/photos", [
-            'photo' => UploadedFile::fake()->image('albero.jpg', 120, 90),
+            'photo' => UploadedFile::fake()->image('albero.jpg', 2400, 1600),
             'category' => 'census',
         ])->assertCreated();
 
@@ -80,10 +91,17 @@ class PdfTest extends TestCase
         $this->assertSame('application/pdf', $response->headers->get('Content-Type'));
         $this->assertStringStartsWith('%PDF-', $response->getContent());
         $this->assertStringContainsString('scheda_ALB-PDF-1.pdf', $response->headers->get('Content-Disposition'));
+        $this->assertLessThan(1024 * 1024, strlen($response->getContent()),
+            'La scheda non deve incorporare la foto a piena risoluzione');
 
         // Un elemento di un'altra organizzazione resta invisibile
         [, $otherUser] = $this->createTenantUser();
         $this->actingAsTenantUser($otherUser);
         $this->get("/api/v1/assets/{$assetId}/pdf")->assertNotFound();
+
+        // E senza alcun permesso la scheda non si scarica
+        $bare = \App\Models\User::factory()->create(['tenant_id' => $this->organization->id]);
+        $this->actingAsTenantUser($bare);
+        $this->get("/api/v1/assets/{$assetId}/pdf")->assertForbidden();
     }
 }

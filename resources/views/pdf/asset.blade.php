@@ -8,8 +8,8 @@
     h2 { font-size: 11px; margin: 18px 0 6px; border-bottom: 1px solid #999; padding-bottom: 2px; }
     .muted { color: #555; }
     .head { border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 12px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-    th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: left; vertical-align: top; font-size: 9.5px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 4px; table-layout: fixed; }
+    th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: left; vertical-align: top; font-size: 9.5px; word-wrap: break-word; overflow-wrap: break-word; }
     th { background: #eee; width: 30%; }
     .foto { margin-top: 10px; max-width: 320px; max-height: 240px; }
 </style>
@@ -74,8 +74,16 @@
     <table>
         @foreach ($asset->attributes as $key => $value)
         <tr>
-            <th>{{ $fieldLabels[$key] ?? $key }}</th>
-            <td>{{ is_array($value) ? implode(', ', $value) : $value }}</td>
+            <th>{{ $fields[$key]->label ?? $key }}</th>
+            <td>
+                @if (($fields[$key]->field_type ?? null) === 'boolean')
+                    {{ $value ? 'sì' : 'no' }}
+                @elseif (is_array($value))
+                    {{ implode(', ', $value) }}
+                @else
+                    {{ $value }}
+                @endif
+            </td>
         </tr>
         @endforeach
     </table>

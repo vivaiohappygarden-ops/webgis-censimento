@@ -7,6 +7,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import AssetEditPanel from '@/Components/AssetEditPanel.vue';
 import PlantingSitePanel from '@/Components/PlantingSitePanel.vue';
 import TreeVtaPanel from '@/Components/TreeVtaPanel.vue';
+import { fetchPdf } from '@/pdf';
 
 const props = defineProps({ assetId: { type: String, required: true } });
 
@@ -15,6 +16,16 @@ const canUpdate = computed(() => (page.props.auth?.user?.permissions ?? []).incl
 
 const asset = ref(null);
 const editing = ref(false);
+const pdfBusy = ref(false);
+const pdfError = ref('');
+
+async function openPdf() {
+    pdfBusy.value = true;
+    pdfError.value = '';
+    const { error } = await fetchPdf(`/api/v1/assets/${props.assetId}/pdf`);
+    if (error) pdfError.value = error;
+    pdfBusy.value = false;
+}
 
 async function onSaved() {
     editing.value = false;
@@ -143,12 +154,12 @@ onBeforeUnmount(() => map?.remove());
                                 <p class="text-sm text-gray-500">{{ asset.object_type?.name }}</p>
                             </div>
                             <div class="flex items-center gap-2">
-                                <a
-                                    :href="`/api/v1/assets/${asset.id}/pdf`"
-                                    target="_blank"
-                                    class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                                <button
+                                    class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+                                    :disabled="pdfBusy"
                                     data-test="asset-pdf"
-                                >Scheda PDF</a>
+                                    @click="openPdf"
+                                >Scheda PDF</button>
                                 <button
                                     v-if="canUpdate && ! editing"
                                     class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
@@ -162,6 +173,8 @@ onBeforeUnmount(() => map?.remove());
                                 </span>
                             </div>
                         </div>
+
+                        <p v-if="pdfError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ pdfError }}</p>
 
                         <AssetEditPanel
                             v-if="editing"

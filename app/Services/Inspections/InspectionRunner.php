@@ -122,6 +122,9 @@ class InspectionRunner
             $answers[$item->id] = [
                 'question' => $item->question,
                 'answer_type' => $item->answer_type,
+                // jsonb non conserva l'ordine delle chiavi: l'ordine di
+                // stampa viaggia dentro la fotografia
+                'sort_order' => $item->sort_order,
                 'value' => $value,
                 'note' => $note,
             ];

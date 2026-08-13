@@ -8,8 +8,9 @@
     h2 { font-size: 11px; margin: 18px 0 6px; border-bottom: 1px solid #999; padding-bottom: 2px; }
     .muted { color: #555; }
     .head { border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 12px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-    th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: left; vertical-align: top; font-size: 9.5px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 4px; table-layout: fixed; }
+    th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: left; vertical-align: top; font-size: 9.5px; word-wrap: break-word; overflow-wrap: break-word; }
+    .valore { margin-top: 3px; color: #333; }
     th { background: #eee; }
     .esito { font-size: 12px; font-weight: bold; margin-top: 10px; }
     .firma { margin-top: 36px; }
@@ -51,12 +52,15 @@
             </tr>
         </thead>
         <tbody>
-            @foreach (array_values($inspection->answers ?? []) as $i => $answer)
+            @foreach ($rows as $i => $row)
             <tr>
                 <td>{{ $i + 1 }}</td>
-                <td>{{ $answer['question'] ?? '-' }}</td>
-                <td>{{ ['ok' => 'OK', 'ko' => 'KO', 'na' => 'N.A.'][$answer['value'] ?? ''] ?? ($answer['value'] ?? '-') }}</td>
-                <td>{{ $answer['note'] ?? '' }}</td>
+                <td>
+                    {{ $row['question'] }}
+                    @if ($row['long'] !== null)<div class="valore">{{ $row['long'] }}</div>@endif
+                </td>
+                <td>{{ $row['short'] ?? 'v. sotto la domanda' }}</td>
+                <td>{{ $row['note'] ?? '' }}</td>
             </tr>
             @endforeach
         </tbody>

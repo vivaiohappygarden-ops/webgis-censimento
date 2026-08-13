@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { fetchPdf } from '@/pdf';
 
 const page = usePage();
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('works.manage'));
@@ -27,6 +28,16 @@ const loadError = ref(false);
 
 // Dettaglio ispezione (sola lettura)
 const detail = ref(null);
+const pdfBusy = ref(false);
+const pdfError = ref('');
+
+async function openPdf(url) {
+    pdfBusy.value = true;
+    pdfError.value = '';
+    const { error } = await fetchPdf(url);
+    if (error) pdfError.value = error;
+    pdfBusy.value = false;
+}
 
 // Editor modello
 const templateEditor = reactive({ open: false, busy: false, error: '', saved: false, isNew: true, dirty: false });
@@ -714,15 +725,17 @@ onMounted(async () => {
                                 <h2 class="text-lg font-semibold">Ispezione del {{ fmtDateTime(detail.completed_at) }}</h2>
                             </div>
                             <span class="flex items-center gap-3">
-                                <a
-                                    :href="`/api/v1/inspections/${detail.id}/pdf`"
-                                    target="_blank"
-                                    class="rounded-lg border border-green-700 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-50"
+                                <button
+                                    class="rounded-lg border border-green-700 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+                                    :disabled="pdfBusy"
                                     data-test="inspection-pdf"
-                                >Verbale PDF</a>
+                                    @click="openPdf(`/api/v1/inspections/${detail.id}/pdf`)"
+                                >Verbale PDF</button>
                                 <button class="text-gray-400 hover:text-gray-600" @click="detail = null">✕</button>
                             </span>
                         </div>
+
+                        <p v-if="pdfError" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{{ pdfError }}</p>
 
                         <div class="mt-3 flex flex-wrap items-center gap-2">
                             <span class="rounded-full px-3 py-1 text-xs font-medium" :class="OUTCOMES[detail.outcome]?.cls" data-test="inspection-outcome">
