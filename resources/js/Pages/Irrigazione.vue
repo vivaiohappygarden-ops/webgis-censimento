@@ -63,7 +63,14 @@ const readings = ref([]);
 const readingsSummary = ref(null);
 const readingError = ref('');
 const readingBusy = ref(false);
-const newReading = reactive({ read_on: new Date().toISOString().slice(0, 10), value_m3: null, note: '' });
+
+// Data locale dell'utente: toISOString darebbe la data UTC, che intorno
+// alla mezzanotte italiana è ancora quella del giorno prima
+function todayLocal() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const newReading = reactive({ read_on: todayLocal(), value_m3: null, note: '' });
 
 const deviationPct = computed(() => {
     const s = readingsSummary.value;
@@ -166,6 +173,16 @@ async function openDetail(id) {
 }
 
 function setDetail(system) {
+    // Cambiando impianto niente deve restare del precedente: né le letture
+    // in tabella né i valori digitati e non registrati nel modulo
+    if (detail.value?.id !== system.id) {
+        readings.value = [];
+        readingsSummary.value = null;
+        readingError.value = '';
+        newReading.read_on = todayLocal();
+        newReading.value_m3 = null;
+        newReading.note = '';
+    }
     detail.value = system;
     Object.assign(form, {
         area_id: system.area_id,
@@ -189,13 +206,22 @@ function setDetail(system) {
     loadReadings(system.id);
 }
 
+// Ogni risposta viene applicata solo se l'impianto aperto è ancora quello
+// della richiesta: risposte in ritardo di un altro impianto vanno ignorate
+function applyReadings(id, data) {
+    if (detail.value?.id !== id) return false;
+    readings.value = data.data;
+    readingsSummary.value = data.summary;
+    return true;
+}
+
 async function loadReadings(id) {
     readingError.value = '';
     try {
         const { data } = await axios.get(`/api/v1/irrigation-systems/${id}/readings`);
-        readings.value = data.data;
-        readingsSummary.value = data.summary;
+        applyReadings(id, data);
     } catch {
+        if (detail.value?.id !== id) return;
         readings.value = [];
         readingsSummary.value = null;
         readingError.value = 'Letture del contatore non caricate: riapri il dettaglio per riprovare.';
@@ -203,20 +229,23 @@ async function loadReadings(id) {
 }
 
 async function addReading() {
+    const id = detail.value.id;
     readingBusy.value = true;
     readingError.value = '';
     try {
-        const { data } = await axios.post(`/api/v1/irrigation-systems/${detail.value.id}/readings`, {
+        const { data } = await axios.post(`/api/v1/irrigation-systems/${id}/readings`, {
             read_on: newReading.read_on,
             value_m3: newReading.value_m3,
             note: newReading.note.trim() || null,
         });
-        readings.value = data.data;
-        readingsSummary.value = data.summary;
-        newReading.value_m3 = null;
-        newReading.note = '';
+        if (applyReadings(id, data)) {
+            newReading.value_m3 = null;
+            newReading.note = '';
+        }
     } catch (err) {
-        readingError.value = firstError(err, 'Registrazione della lettura non riuscita');
+        if (detail.value?.id === id) {
+            readingError.value = firstError(err, 'Registrazione della lettura non riuscita');
+        }
     } finally {
         readingBusy.value = false;
     }
@@ -224,13 +253,15 @@ async function addReading() {
 
 async function deleteReading(reading) {
     if (! window.confirm(`Eliminare la lettura del ${formatDate(reading.read_on)}?`)) return;
+    const id = detail.value.id;
     readingError.value = '';
     try {
-        const { data } = await axios.delete(`/api/v1/irrigation-systems/${detail.value.id}/readings/${reading.id}`);
-        readings.value = data.data;
-        readingsSummary.value = data.summary;
+        const { data } = await axios.delete(`/api/v1/irrigation-systems/${id}/readings/${reading.id}`);
+        applyReadings(id, data);
     } catch (err) {
-        readingError.value = firstError(err, 'Eliminazione della lettura non riuscita');
+        if (detail.value?.id === id) {
+            readingError.value = firstError(err, 'Eliminazione della lettura non riuscita');
+        }
     }
 }
 
@@ -565,7 +596,8 @@ onMounted(load);
                         <h3 class="mt-6 text-sm font-semibold">Contatore e consumi</h3>
                         <p class="mt-1 text-xs text-gray-500" data-test="irr-readings-summary">
                             Stima dal programma dei settori:
-                            <span class="font-medium text-gray-700">{{ readingsSummary?.weekly_estimate_m3 ?? '—' }} m³/settimana</span>
+                            <!-- Con 0 la stima non è "zero acqua": è non calcolabile (programma assente) -->
+                            <span class="font-medium text-gray-700">{{ readingsSummary?.weekly_estimate_m3 > 0 ? `${readingsSummary.weekly_estimate_m3} m³/settimana` : '—' }}</span>
                             <template v-if="readingsSummary?.actual_weekly_m3 != null">
                                 · Consumo reale (ultime due letture):
                                 <span class="font-medium text-gray-700">{{ readingsSummary.actual_weekly_m3 }} m³/settimana</span>

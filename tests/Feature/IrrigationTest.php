@@ -283,6 +283,61 @@ class IrrigationTest extends TestCase
         $this->postJson($url, ['read_on' => '2026-06-02', 'value_m3' => 12])->assertNotFound();
     }
 
+    public function test_reading_cap_keeps_the_most_recent_entries(): void
+    {
+        $system = $this->makeSystem();
+
+        // 501 letture giornaliere: il tetto di 500 deve scartare la più
+        // vecchia, non la più recente, e il riepilogo usa le vere ultime due
+        $start = \Illuminate\Support\Carbon::parse('2025-01-01');
+        $rows = [];
+        for ($i = 0; $i < 501; $i++) {
+            $rows[] = [
+                'id' => (string) \Illuminate\Support\Str::uuid7(),
+                'tenant_id' => $this->organization->id,
+                'system_id' => $system['id'],
+                'read_on' => $start->copy()->addDays($i)->toDateString(),
+                'value_m3' => 100 + $i,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        }
+        foreach (array_chunk($rows, 100) as $chunk) {
+            \App\Models\IrrigationMeterReading::query()->insert($chunk);
+        }
+
+        $body = $this->getJson("/api/v1/irrigation-systems/{$system['id']}/readings")
+            ->assertOk()->json();
+
+        $this->assertCount(500, $body['data']);
+        $this->assertSame($start->copy()->addDays(500)->toDateString(), $body['data'][0]['read_on']);
+        $this->assertSame($start->copy()->addDays(1)->toDateString(), end($body['data'])['read_on']);
+        $this->assertEquals(7, $body['summary']['actual_weekly_m3']);
+    }
+
+    public function test_reading_rejects_extra_decimals_and_uses_rome_today(): void
+    {
+        $system = $this->makeSystem();
+        $url = "/api/v1/irrigation-systems/{$system['id']}/readings";
+
+        // La colonna ha due decimali: un terzo decimale verrebbe arrotondato
+        // in silenzio dal database, quindi va rifiutato
+        $this->postJson($url, ['read_on' => '2026-06-01', 'value_m3' => 100.005])
+            ->assertUnprocessable()->assertJsonValidationErrors('value_m3');
+
+        // 22:30 UTC = 00:30 del giorno dopo in Italia: la lettura con la data
+        // italiana corrente deve essere accettata, il dopodomani no
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-08-13 22:30:00', 'UTC'));
+        $this->postJson($url, ['read_on' => '2026-08-14', 'value_m3' => 10])->assertCreated();
+        $this->postJson($url, ['read_on' => '2026-08-15', 'value_m3' => 11])->assertUnprocessable();
+        $this->travelBack();
+
+        // Messaggi con i nomi dei campi tradotti
+        $errors = $this->postJson($url, ['read_on' => '2026-06-02', 'value_m3' => -5])
+            ->assertUnprocessable()->json('errors');
+        $this->assertStringContainsString('valore del contatore', $errors['value_m3'][0]);
+    }
+
     public function test_operatore_reads_but_cannot_write_nor_create_orders(): void
     {
         $system = $this->makeSystem();

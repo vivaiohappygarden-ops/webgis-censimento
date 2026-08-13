@@ -155,6 +155,8 @@ return [
         'controller_model' => 'centralina',
         'season_opens_on' => 'apertura stagione',
         'season_closes_on' => 'chiusura stagione',
+        'read_on' => 'data della lettura',
+        'value_m3' => 'valore del contatore',
         'sectors' => 'settori',
         'sectors.*.name' => 'nome del settore',
         'sectors.*.description' => 'descrizione del settore',

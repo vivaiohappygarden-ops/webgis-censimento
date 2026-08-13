@@ -224,10 +224,13 @@ class IrrigationController extends Controller implements HasMiddleware
     {
         $system = IrrigationSystem::query()->with('sectors')->findOrFail($id);
 
+        // Il tetto deve tagliare le letture vecchie, non le più recenti:
+        // si prendono le ultime 500 e si rimettono in ordine cronologico
         $readings = IrrigationMeterReading::query()
             ->where('system_id', $system->id)
-            ->orderBy('read_on')->orderBy('created_at')
-            ->limit(500)->get();
+            ->orderByDesc('read_on')->orderByDesc('created_at')
+            ->limit(500)->get()
+            ->reverse()->values();
 
         $rows = [];
         $previous = null;
@@ -274,25 +277,34 @@ class IrrigationController extends Controller implements HasMiddleware
 
     public function storeReading(Request $request, string $id): JsonResponse
     {
-        $system = IrrigationSystem::query()->findOrFail($id);
+        // "Oggi" nel fuso degli utenti (l'app gira in UTC): dopo la
+        // mezzanotte italiana la lettura del giorno deve restare valida
+        $today = now('Europe/Rome')->toDateString();
 
         $data = $request->validate([
-            'read_on' => ['required', 'date', 'before_or_equal:today'],
-            'value_m3' => ['required', 'numeric', 'min:0', 'max:999999999'],
+            'read_on' => ['required', 'date', 'before_or_equal:'.$today],
+            // decimal:0,2: la colonna è numeric(12,2), senza questa regola il
+            // DB arrotonderebbe in silenzio un valore con più decimali
+            'value_m3' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:999999999'],
             'note' => ['nullable', 'string', 'max:500'],
         ]);
 
         try {
-            // In transazione (savepoint): il fallimento del vincolo UNIQUE non
-            // deve avvelenare una eventuale transazione esterna
-            $reading = DB::transaction(fn () => IrrigationMeterReading::create([
-                'tenant_id' => $request->user()->tenant_id,
-                'system_id' => $system->id,
-                'read_on' => $data['read_on'],
-                'value_m3' => $data['value_m3'],
-                'note' => $data['note'] ?? null,
-                'created_by' => $request->user()->id,
-            ]));
+            // Impianto bloccato nella stessa transazione della insert: una
+            // eliminazione concorrente non deve lasciare letture orfane
+            // (la transazione fa anche da savepoint per il vincolo UNIQUE)
+            $reading = DB::transaction(function () use ($request, $id, $data) {
+                IrrigationSystem::query()->lockForUpdate()->findOrFail($id);
+
+                return IrrigationMeterReading::create([
+                    'tenant_id' => $request->user()->tenant_id,
+                    'system_id' => $id,
+                    'read_on' => $data['read_on'],
+                    'value_m3' => $data['value_m3'],
+                    'note' => $data['note'] ?? null,
+                    'created_by' => $request->user()->id,
+                ]);
+            });
         } catch (\Illuminate\Database\UniqueConstraintViolationException) {
             throw ValidationException::withMessages([
                 'read_on' => 'Esiste già una lettura per quella data: eliminala o scegli un altro giorno.',
@@ -300,7 +312,7 @@ class IrrigationController extends Controller implements HasMiddleware
         }
 
         Audit::log('irrigation_reading.created', $reading, [
-            'system' => $system->name, 'read_on' => $data['read_on'], 'value_m3' => $data['value_m3'],
+            'read_on' => $data['read_on'], 'value_m3' => $data['value_m3'],
         ]);
 
         return $this->readings($id)->setStatusCode(201);
