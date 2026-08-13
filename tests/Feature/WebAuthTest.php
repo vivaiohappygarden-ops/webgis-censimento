@@ -57,6 +57,15 @@ class WebAuthTest extends TestCase
     public function test_guest_is_redirected_to_login(): void
     {
         $this->get('/mappa')->assertRedirect('/login');
+        $this->get('/guida')->assertRedirect('/login');
+    }
+
+    public function test_guide_page_is_available_to_every_authenticated_user(): void
+    {
+        [, $user] = $this->createTenantUser();
+
+        // Anche senza alcun permesso specifico la guida resta leggibile
+        $this->actingAs($user)->get('/guida')->assertOk();
     }
 
     public function test_logout_ends_the_session(): void
