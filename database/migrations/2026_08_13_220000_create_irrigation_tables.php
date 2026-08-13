@@ -29,6 +29,7 @@ return new class extends Migration
               season_opens_on  date,
               season_closes_on date,
               notes            text,
+              version          int NOT NULL DEFAULT 1,
               created_at       timestamptz NOT NULL DEFAULT now(),
               updated_at       timestamptz NOT NULL DEFAULT now(),
               deleted_at       timestamptz,

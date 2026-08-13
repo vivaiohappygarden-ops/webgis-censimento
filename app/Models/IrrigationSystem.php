@@ -27,6 +27,7 @@ class IrrigationSystem extends Model
         return [
             'season_opens_on' => 'date',
             'season_closes_on' => 'date',
+            'version' => 'integer',
         ];
     }
 

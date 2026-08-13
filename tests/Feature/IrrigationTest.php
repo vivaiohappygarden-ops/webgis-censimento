@@ -62,6 +62,67 @@ class IrrigationTest extends TestCase
         $this->deleteJson("/api/v1/irrigation-systems/{$system['id']}")->assertNoContent();
         $this->getJson("/api/v1/irrigation-systems/{$system['id']}")->assertNotFound();
         $this->assertNotNull(IrrigationSystem::withTrashed()->find($system['id'])->deleted_at);
+
+        // I settori non hanno soft delete: con l'impianto eliminato sarebbero
+        // orfani irraggiungibili, quindi vengono rimossi fisicamente
+        $this->assertSame(0, \App\Models\IrrigationSector::withoutGlobalScopes()
+            ->where('system_id', $system['id'])->count());
+    }
+
+    public function test_stale_version_gets_409_on_update_and_sectors(): void
+    {
+        $system = $this->makeSystem();
+        $this->assertSame(1, $system['version']);
+
+        // Primo salvataggio con la versione giusta: passa e incrementa
+        $updated = $this->patchJson("/api/v1/irrigation-systems/{$system['id']}", [
+            'version' => 1, 'name' => 'Rinominato',
+        ])->assertOk()->json('data');
+        $this->assertSame(2, $updated['version']);
+
+        // Chi è rimasto alla versione 1 non sovrascrive: 409
+        $this->patchJson("/api/v1/irrigation-systems/{$system['id']}", [
+            'version' => 1, 'name' => 'Sovrascritto',
+        ])->assertStatus(409);
+        $this->putJson("/api/v1/irrigation-systems/{$system['id']}/sectors", [
+            'version' => 1, 'sectors' => [['name' => 'Perso']],
+        ])->assertStatus(409);
+
+        // Anche la sostituzione dei settori incrementa la versione
+        $after = $this->putJson("/api/v1/irrigation-systems/{$system['id']}/sectors", [
+            'version' => 2, 'sectors' => [['name' => 'Salvato']],
+        ])->assertOk()->json('data');
+        $this->assertSame(3, $after['version']);
+
+        // Senza versione (altri client API) il salvataggio resta permesso
+        $this->patchJson("/api/v1/irrigation-systems/{$system['id']}", ['name' => 'Senza lock'])
+            ->assertOk();
+    }
+
+    public function test_area_with_irrigation_system_cannot_be_deleted(): void
+    {
+        $this->makeSystem();
+
+        $this->deleteJson("/api/v1/areas/{$this->area->id}")
+            ->assertUnprocessable()->assertJsonValidationErrors('area');
+
+        // Le aree senza impianti (e senza elementi) restano eliminabili
+        $emptyArea = $this->createArea($this->organization, ['name' => 'Area vuota']);
+        $this->deleteJson("/api/v1/areas/{$emptyArea->id}")->assertNoContent();
+    }
+
+    public function test_validation_messages_are_in_italian(): void
+    {
+        $errors = $this->postJson('/api/v1/irrigation-systems', ['area_id' => $this->area->id])
+            ->assertUnprocessable()->json('errors');
+        $this->assertSame('Il campo nome è obbligatorio.', $errors['name'][0]);
+
+        $system = $this->makeSystem();
+        $errors = $this->putJson("/api/v1/irrigation-systems/{$system['id']}/sectors", ['sectors' => [
+            ['name' => 'Prato', 'run_minutes' => 2000],
+        ]])->assertUnprocessable()->json('errors');
+        $this->assertStringContainsString('minuti per ciclo', $errors['sectors.0.run_minutes'][0]);
+        $this->assertStringContainsString('maggiore di 1440', $errors['sectors.0.run_minutes'][0]);
     }
 
     public function test_validation_rejects_bad_season_type_and_foreign_area(): void

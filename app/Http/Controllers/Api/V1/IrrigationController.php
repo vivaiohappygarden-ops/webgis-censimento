@@ -77,32 +77,51 @@ class IrrigationController extends Controller implements HasMiddleware
 
     public function update(Request $request, string $id): JsonResponse
     {
-        $system = IrrigationSystem::query()->findOrFail($id);
         $data = $this->validated($request, required: false);
+        unset($data['version']);
 
-        if (isset($data['area_id'])) {
-            Area::query()->findOrFail($data['area_id']);
-        }
+        DB::transaction(function () use ($request, $id, $data) {
+            // Lock pessimistico: rende atomico il confronto di versione
+            $system = IrrigationSystem::query()->lockForUpdate()->findOrFail($id);
 
-        $system->fill($data);
-        // Aggiornando una sola delle due date la regola di validazione non
-        // può confrontarle: il controllo va fatto sulla coppia risultante
-        if ($system->season_opens_on && $system->season_closes_on
-            && $system->season_closes_on->lt($system->season_opens_on)) {
-            throw ValidationException::withMessages([
-                'season_closes_on' => 'La chiusura della stagione precede l\'apertura.',
-            ]);
-        }
-        $system->save();
-        Audit::log('irrigation_system.updated', $system);
+            if ($request->filled('version') && (int) $request->input('version') !== $system->version) {
+                abort(409, "Conflitto di versione: l'impianto è stato modificato da altri (versione attuale {$system->version}).");
+            }
+
+            if (isset($data['area_id'])) {
+                Area::query()->findOrFail($data['area_id']);
+            }
+
+            $system->fill($data);
+            // Aggiornando una sola delle due date la regola di validazione non
+            // può confrontarle: il controllo va fatto sulla coppia risultante
+            if ($system->season_opens_on && $system->season_closes_on
+                && $system->season_closes_on->lt($system->season_opens_on)) {
+                throw ValidationException::withMessages([
+                    'season_closes_on' => 'La chiusura della stagione precede l\'apertura.',
+                ]);
+            }
+            if ($system->isDirty()) {
+                $system->version = $system->version + 1;
+            }
+            $system->save();
+            Audit::log('irrigation_system.updated', $system);
+        });
 
         return $this->show($id);
     }
 
     public function destroy(string $id): Response
     {
-        $system = IrrigationSystem::query()->findOrFail($id);
-        $system->delete();
+        $system = DB::transaction(function () use ($id) {
+            $system = IrrigationSystem::query()->lockForUpdate()->findOrFail($id);
+            // I settori non hanno soft delete né percorso di ripristino: vanno
+            // rimossi insieme all'impianto, o resterebbero righe orfane per sempre
+            IrrigationSector::query()->where('system_id', $system->id)->delete();
+            $system->delete();
+
+            return $system;
+        });
 
         Audit::log('irrigation_system.deleted', $system, ['name' => $system->name]);
 
@@ -112,9 +131,8 @@ class IrrigationController extends Controller implements HasMiddleware
     /** Sostituzione integrale dei settori (nessun riferimento esterno). */
     public function syncSectors(Request $request, string $id): JsonResponse
     {
-        $system = IrrigationSystem::query()->findOrFail($id);
-
         $data = $request->validate([
+            'version' => ['nullable', 'integer'],
             'sectors' => ['present', 'array', 'max:100'],
             'sectors.*.name' => ['required', 'string', 'max:120'],
             'sectors.*.description' => ['nullable', 'string', 'max:500'],
@@ -130,21 +148,40 @@ class IrrigationController extends Controller implements HasMiddleware
             ]);
         }
 
-        DB::transaction(function () use ($system, $data, $request) {
-            IrrigationSector::query()->where('system_id', $system->id)->delete();
-            foreach ($data['sectors'] as $index => $sector) {
-                IrrigationSector::create([
-                    'tenant_id' => $request->user()->tenant_id,
-                    'system_id' => $system->id,
-                    'sort_order' => $index + 1,
-                    'name' => trim($sector['name']),
-                    'description' => $sector['description'] ?? null,
-                    'flow_lpm' => $sector['flow_lpm'] ?? null,
-                    'run_minutes' => $sector['run_minutes'] ?? null,
-                    'runs_per_week' => $sector['runs_per_week'] ?? null,
-                ]);
-            }
-        });
+        try {
+            $system = DB::transaction(function () use ($id, $data, $request) {
+                // Il lock serializza le sostituzioni concorrenti: senza, due
+                // salvataggi insieme lascerebbero l'unione dei due elenchi
+                $system = IrrigationSystem::query()->lockForUpdate()->findOrFail($id);
+
+                if (isset($data['version']) && (int) $data['version'] !== $system->version) {
+                    abort(409, "Conflitto di versione: l'impianto è stato modificato da altri (versione attuale {$system->version}).");
+                }
+
+                IrrigationSector::query()->where('system_id', $system->id)->delete();
+                foreach ($data['sectors'] as $index => $sector) {
+                    IrrigationSector::create([
+                        'tenant_id' => $request->user()->tenant_id,
+                        'system_id' => $system->id,
+                        'sort_order' => $index + 1,
+                        'name' => trim($sector['name']),
+                        'description' => $sector['description'] ?? null,
+                        'flow_lpm' => $sector['flow_lpm'] ?? null,
+                        'run_minutes' => $sector['run_minutes'] ?? null,
+                        'runs_per_week' => $sector['runs_per_week'] ?? null,
+                    ]);
+                }
+                $system->version = $system->version + 1;
+                $system->save();
+
+                return $system;
+            });
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            // Due salvataggi simultanei sugli stessi settori: uno dei due perde
+            throw ValidationException::withMessages([
+                'sectors' => 'Salvataggio simultaneo da un altro utente: ricarica l\'impianto e riprova.',
+            ]);
+        }
 
         Audit::log('irrigation_system.sectors_updated', $system, ['count' => count($data['sectors'])]);
 
@@ -157,7 +194,9 @@ class IrrigationController extends Controller implements HasMiddleware
         $system = IrrigationSystem::query()->with('area:id,name')->findOrFail($id);
         $user = $request->user();
 
-        $workOrder = WorkOrder::create([
+        // In transazione: il lock advisory di nextCode vive fino al commit,
+        // così due richieste simultanee non calcolano lo stesso codice
+        $workOrder = DB::transaction(fn () => WorkOrder::create([
             'tenant_id' => $user->tenant_id,
             'code' => WorkOrder::nextCode($user->tenant_id),
             'title' => "Manutenzione irrigazione: {$system->name}".($system->area ? " ({$system->area->name})" : ''),
@@ -167,7 +206,7 @@ class IrrigationController extends Controller implements HasMiddleware
             'area_id' => $system->area_id,
             'created_by' => $user->id,
             'updated_by' => $user->id,
-        ]);
+        ]));
 
         Audit::log('work_order.created', $workOrder, ['code' => $workOrder->code, 'origin' => 'maintenance_plan']);
 
@@ -179,6 +218,7 @@ class IrrigationController extends Controller implements HasMiddleware
         $presence = $required ? 'required' : 'sometimes';
 
         return $request->validate([
+            'version' => ['nullable', 'integer'],
             'area_id' => [$presence, 'uuid'],
             'name' => [$presence, 'string', 'max:150'],
             'system_type' => ['sometimes', Rule::in(IrrigationSystem::TYPES)],

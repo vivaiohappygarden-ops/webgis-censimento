@@ -138,6 +138,13 @@ class AreaController extends Controller implements HasMiddleware
                 ]);
             }
 
+            $irrigationCount = \App\Models\IrrigationSystem::query()->where('area_id', $area->id)->count();
+            if ($irrigationCount > 0) {
+                throw ValidationException::withMessages([
+                    'area' => "L'area ha {$irrigationCount} impianti di irrigazione: eliminali o spostali prima di eliminarla.",
+                ]);
+            }
+
             $area->delete();
             Audit::log('area.deleted', $area);
         });

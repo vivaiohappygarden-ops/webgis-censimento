@@ -334,20 +334,26 @@ class DatabaseSeeder extends Seeder
             $portalUser->forceFill(['client_id' => $client->id])->save();
         }
 
-        // Impianto di irrigazione demo con i suoi settori e la stagione tipica
-        $irrigation = \App\Models\IrrigationSystem::query()->withoutGlobalScopes()->firstOrCreate(
-            ['tenant_id' => $organization->id, 'name' => 'Impianto Parco Demo'],
-            [
-                'area_id' => $area->id,
-                'system_type' => 'goccia',
-                'water_source' => 'pozzo',
-                'controller_model' => 'Hunter X2-401',
-                'status' => 'active',
-                'season_opens_on' => now()->year.'-04-01',
-                'season_closes_on' => now()->year.'-10-15',
-                'notes' => 'Contatore nel pozzetto vicino all\'ingresso nord.',
-            ],
-        );
+        // Impianto di irrigazione demo con i suoi settori e la stagione tipica.
+        // withoutGlobalScopes toglie anche il SoftDeletingScope: un impianto demo
+        // eliminato dall'interfaccia va ripristinato, non ricreato (nome duplicato)
+        $irrigation = \App\Models\IrrigationSystem::query()->withoutGlobalScopes()
+            ->where('tenant_id', $organization->id)->where('name', 'Impianto Parco Demo')->first();
+        if ($irrigation?->trashed()) {
+            $irrigation->restore();
+        }
+        $irrigation ??= \App\Models\IrrigationSystem::create([
+            'tenant_id' => $organization->id,
+            'name' => 'Impianto Parco Demo',
+            'area_id' => $area->id,
+            'system_type' => 'goccia',
+            'water_source' => 'pozzo',
+            'controller_model' => 'Hunter X2-401',
+            'status' => 'active',
+            'season_opens_on' => now()->year.'-04-01',
+            'season_closes_on' => now()->year.'-10-15',
+            'notes' => 'Contatore nel pozzetto vicino all\'ingresso nord.',
+        ]);
         if (! \App\Models\IrrigationSector::query()->withoutGlobalScopes()->where('system_id', $irrigation->id)->exists()) {
             foreach ([
                 ['Siepi ingresso', 'Ala gocciolante sulle siepi di lauro', 12.5, 30, 3],

@@ -90,15 +90,30 @@ function seasonLabel(s) {
     return `${formatDate(s.season_opens_on)} → ${formatDate(s.season_closes_on)}`;
 }
 
+// L'API delle aree è paginata (massimo 100 per pagina): si scorrono
+// tutte le pagine, o le aree oltre la centesima non sarebbero selezionabili
+async function fetchAllAreas() {
+    const all = [];
+    for (let p = 1; p <= 20; p++) {
+        const { data } = await axios.get('/api/v1/areas', { params: { per_page: 100, page: p } });
+        all.push(...data.data);
+        if (! data.next_page_url) break;
+    }
+    return all;
+}
+
 async function load() {
     loading.value = true;
+    pageError.value = '';
     try {
         const [sy, ar] = await Promise.all([
             axios.get('/api/v1/irrigation-systems'),
-            axios.get('/api/v1/areas', { params: { per_page: 100 } }),
+            fetchAllAreas(),
         ]);
         systems.value = sy.data.data;
-        areas.value = ar.data.data;
+        areas.value = ar;
+    } catch {
+        pageError.value = 'Caricamento non riuscito: ricarica la pagina. Se il problema continua, esci e accedi di nuovo.';
     } finally {
         loading.value = false;
     }
@@ -111,6 +126,8 @@ async function createSystem() {
         const { data } = await axios.post('/api/v1/irrigation-systems', creator.form);
         creator.open = false;
         creator.form = { area_id: '', name: '', system_type: 'aspersione' };
+        // load() gestisce da sé i propri errori: un fallimento qui non deve
+        // comparire come errore di creazione (l'impianto è già stato creato)
         await load();
         await openDetail(data.data.id);
     } catch (err) {
@@ -167,12 +184,46 @@ function removeSector(index) {
     sectors.value.splice(index, 1);
 }
 
+// Controlli locali prima dell'invio: intercettano gli errori più comuni
+// senza passare dal server (e senza salvataggi a metà)
+function sectorsClientError() {
+    const names = sectors.value.map((s) => s.name.trim().toLowerCase());
+    if (new Set(names).size !== names.length) {
+        return 'Due settori hanno lo stesso nome: rinominane uno.';
+    }
+    for (const s of sectors.value) {
+        const label = s.name.trim() || 'senza nome';
+        if (s.flow_lpm !== null && s.flow_lpm !== '' && Number(s.flow_lpm) < 0) {
+            return `La portata del settore "${label}" non può essere negativa.`;
+        }
+        if (s.run_minutes !== null && s.run_minutes !== '' && (s.run_minutes < 1 || s.run_minutes > 1440)) {
+            return `I minuti per ciclo del settore "${label}" devono essere tra 1 e 1440.`;
+        }
+        if (s.runs_per_week !== null && s.runs_per_week !== '' && (s.runs_per_week < 1 || s.runs_per_week > 28)) {
+            return `I cicli a settimana del settore "${label}" devono essere tra 1 e 28.`;
+        }
+    }
+    if (form.season_opens_on && form.season_closes_on && form.season_closes_on < form.season_opens_on) {
+        return 'La chiusura della stagione precede l\'apertura.';
+    }
+    return '';
+}
+
 async function saveDetail() {
+    const clientError = sectorsClientError();
+    if (clientError) {
+        detailError.value = clientError;
+        return;
+    }
     detailBusy.value = true;
     detailError.value = '';
     detailSaved.value = false;
+    // Il salvataggio avviene in due chiamate (impianto, poi settori): se la
+    // seconda fallisce bisogna dirlo chiaramente, perché la prima è già salvata
+    let systemSaved = false;
     try {
-        await axios.patch(`/api/v1/irrigation-systems/${detail.value.id}`, {
+        const patched = await axios.patch(`/api/v1/irrigation-systems/${detail.value.id}`, {
+            version: detail.value.version,
             area_id: form.area_id,
             name: form.name.trim(),
             system_type: form.system_type,
@@ -183,7 +234,10 @@ async function saveDetail() {
             season_closes_on: form.season_closes_on || null,
             notes: form.notes.trim() || null,
         });
+        detail.value.version = patched.data.data.version;
+        systemSaved = true;
         const { data } = await axios.put(`/api/v1/irrigation-systems/${detail.value.id}/sectors`, {
+            version: detail.value.version,
             sectors: sectors.value.map((s) => ({
                 name: s.name.trim(),
                 description: s.description.trim() || null,
@@ -196,7 +250,15 @@ async function saveDetail() {
         detailSaved.value = true;
         await load();
     } catch (err) {
-        detailError.value = firstError(err, 'Errore nel salvataggio');
+        if (err.response?.status === 409) {
+            detailError.value = 'Un altro utente ha modificato questo impianto nel frattempo: chiudi e riapri il dettaglio per ripartire dai dati aggiornati.';
+        } else if (systemSaved) {
+            detailError.value = 'I dati dell\'impianto sono stati salvati, ma i settori no: '
+                + firstError(err, 'errore nel salvataggio dei settori')
+                + ' Correggi e premi di nuovo Salva.';
+        } else {
+            detailError.value = firstError(err, 'Errore nel salvataggio');
+        }
     } finally {
         detailBusy.value = false;
     }
@@ -282,7 +344,7 @@ onMounted(load);
                                 </span>
                             </td>
                         </tr>
-                        <tr v-if="! systems.length && ! loading">
+                        <tr v-if="! systems.length && ! loading && ! pageError">
                             <td colspan="7" class="px-4 py-8 text-center text-gray-400">Nessun impianto registrato. Aggiungi il primo per tenerne il programma stagionale.</td>
                         </tr>
                     </tbody>
