@@ -90,9 +90,11 @@ jobs:
           coverage: none
 
       - name: Composer audit (vulnerabilità dipendenze)
+        # --ignore-unreachable: un 502 di Packagist non deve bloccare la CI;
+        # con il servizio raggiungibile le vulnerabilità continuano a fallire il job
         run: |
           composer install --no-interaction --prefer-dist --no-progress
-          composer audit
+          composer audit --ignore-unreachable
 
       - name: Secret scanning (gitleaks)
         uses: gitleaks/gitleaks-action@v2
