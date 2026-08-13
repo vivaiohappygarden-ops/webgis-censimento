@@ -156,11 +156,12 @@ class SyncApiTest extends TestCase
 
     public function test_role_without_create_permission_gets_rejected_forbidden(): void
     {
-        [, $client] = [$this->organization, null];
-        $client = \App\Models\User::factory()->create(['tenant_id' => $this->organization->id]);
+        // Un utente che può leggere il censimento ma non creare elementi
+        // (il ruolo cliente ora vive solo nel portale, fuori dalla sync)
+        $reader = \App\Models\User::factory()->create(['tenant_id' => $this->organization->id]);
         app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($this->organization->id);
-        $client->assignRole('cliente');
-        $this->actingAsTenantUser($client);
+        $reader->givePermissionTo('assets.view');
+        $this->actingAsTenantUser($reader);
 
         $this->postJson('/api/v1/sync/batch', $this->batchPayload([$this->createCommand()]))
             ->assertOk()

@@ -19,8 +19,14 @@ class User extends Authenticatable
 
     protected $fillable = [
         'tenant_id', 'name', 'email', 'username', 'password', 'phone',
-        'user_type', 'locale', 'is_active',
+        'user_type', 'locale', 'is_active', 'client_id',
     ];
+
+    /** Il cliente a cui l'utente del portale è agganciato. */
+    public function client()
+    {
+        return $this->belongsTo(Client::class);
+    }
 
     protected $hidden = [
         'password', 'remember_token', 'mfa_secret',

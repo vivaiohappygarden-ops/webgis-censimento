@@ -20,6 +20,7 @@ class TenantProvisioner
         'clients.view', 'clients.manage',
         'works.view', 'works.manage',
         'users.manage',
+        'portal.view',
     ];
 
     public const ROLES = [
@@ -30,7 +31,9 @@ class TenantProvisioner
             'works.view', 'works.manage',
         ],
         'operatore' => ['catalog.view', 'areas.view', 'assets.view', 'assets.create', 'assets.update', 'works.view'],
-        'cliente' => ['areas.view', 'assets.view'],
+        // Il cliente vede solo il SUO territorio, dal portale dedicato:
+        // la lettura generale del censimento mostrerebbe gli altri clienti
+        'cliente' => ['portal.view'],
     ];
 
     public function ensurePermissions(): void

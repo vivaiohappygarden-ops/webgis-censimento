@@ -49,6 +49,16 @@ class DatabaseSeeder extends Seeder
         );
         $operator->assignRole('operatore');
 
+        $portalUser = User::query()->withoutGlobalScopes()->firstOrCreate(
+            ['tenant_id' => $organization->id, 'email' => 'cliente@demo.local'],
+            [
+                'name' => 'Cliente Demo',
+                'password' => 'password',
+                'user_type' => 'client_portal',
+            ],
+        );
+        $portalUser->assignRole('cliente');
+
         $counts = app(CatalogInstaller::class)->install($organization);
         $this->command?->info(sprintf(
             'Catalogo MD v2.1 installato: %d macro-categorie, %d tipi secondari, %d tipi oggetto.',
@@ -317,6 +327,11 @@ class DatabaseSeeder extends Seeder
             // all'indietro va impostata direttamente
             $issue->created_at = $openedAt;
             $issue->save();
+        }
+
+        // L'utente del portale è agganciato al cliente demo
+        if ($portalUser->client_id === null) {
+            $portalUser->forceFill(['client_id' => $client->id])->save();
         }
 
         $this->command?->info('Tenant demo pronto: login admin@demo.local / password (slug organizzazione: demo).');

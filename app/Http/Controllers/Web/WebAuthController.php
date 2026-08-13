@@ -67,7 +67,18 @@ class WebAuthController extends Controller
         $user->forceFill(['last_login_at' => now()])->save();
         Audit::log('auth.login', $user);
 
-        return redirect()->intended(route('mappa'));
+        // Il middleware imposta il contesto dei permessi solo dalle richieste
+        // successive: qui serve subito per decidere dove atterrare
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($user->tenant_id);
+
+        // Ognuno atterra dove può lavorare: il cliente sul suo portale
+        $home = match (true) {
+            $user->can('assets.view') => route('mappa'),
+            $user->can('portal.view') => route('portale'),
+            default => route('guida'),
+        };
+
+        return redirect()->intended($home);
     }
 
     public function logout(Request $request): RedirectResponse

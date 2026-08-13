@@ -54,6 +54,21 @@ class WebAuthTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_cliente_lands_on_the_portal(): void
+    {
+        [, $user] = $this->createTenantUser(role: 'cliente');
+
+        $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ])->assertRedirect(route('portale'));
+
+        \Illuminate\Support\Facades\Auth::forgetGuards();
+        $this->get('/portale')->assertOk();
+        // Le pagine interne restano fuori dalla sua portata
+        $this->get('/censimento')->assertForbidden();
+    }
+
     public function test_guest_is_redirected_to_login(): void
     {
         $this->get('/mappa')->assertRedirect('/login');

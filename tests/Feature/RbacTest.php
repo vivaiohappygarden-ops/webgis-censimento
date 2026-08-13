@@ -27,7 +27,7 @@ class RbacTest extends TestCase
         $this->deleteJson("/api/v1/assets/{$id}")->assertForbidden();
     }
 
-    public function test_cliente_is_read_only(): void
+    public function test_cliente_sees_only_the_portal(): void
     {
         [$organization, $user] = $this->createTenantUser(role: 'cliente');
         $area = $this->createArea($organization);
@@ -35,8 +35,12 @@ class RbacTest extends TestCase
 
         $this->actingAsTenantUser($user);
 
-        $this->getJson('/api/v1/assets')->assertOk();
-        $this->getJson('/api/v1/areas')->assertOk();
+        // Con più clienti nello stesso tenant la lettura generale del
+        // censimento mostrerebbe i dati degli altri: il cliente ha solo
+        // il suo portale
+        $this->getJson('/api/v1/portal/overview')->assertOk();
+        $this->getJson('/api/v1/assets')->assertForbidden();
+        $this->getJson('/api/v1/areas')->assertForbidden();
 
         $this->postJson('/api/v1/assets', [
             'area_id' => $area->id,
@@ -44,7 +48,6 @@ class RbacTest extends TestCase
             'geometry' => $this->pointGeometry(),
         ])->assertForbidden();
 
-        // Il ruolo cliente non ha catalog.view
         $this->getJson('/api/v1/catalog')->assertForbidden();
     }
 }

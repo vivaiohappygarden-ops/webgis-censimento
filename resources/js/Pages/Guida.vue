@@ -62,7 +62,8 @@ function goTo(id) {
                             <strong>Tecnico</strong>: gestisce censimento, lavori, ispezioni e segnalazioni.
                             <strong>Operatore</strong>: lavora dal telefono con l'app di campo; vede i lavori assegnati
                             alla sua squadra e registra rilievi, foto, consuntivi, ispezioni e segnalazioni.
-                            <strong>Cliente</strong>: consultazione (in arrivo con il portale dedicato).
+                            <strong>Cliente</strong>: dal suo portale vede solo il proprio territorio —
+                            aree, elementi censiti, lavori completati e segnalazioni, senza dati economici.
                         </p>
                     </section>
 

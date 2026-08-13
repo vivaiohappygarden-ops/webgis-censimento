@@ -17,7 +17,8 @@ senza connessione e si allinea da solo appena torna la rete.
 - **Tecnico**: gestisce censimento, lavori, ispezioni e segnalazioni.
 - **Operatore**: lavora dal telefono con l'app di campo; vede i lavori assegnati alla sua
   squadra e registra rilievi, foto, consuntivi, ispezioni e segnalazioni.
-- **Cliente**: consultazione (in arrivo con il portale dedicato).
+- **Cliente**: dal suo portale vede solo il proprio territorio — aree, elementi censiti,
+  lavori completati e segnalazioni, senza dati economici.
 
 ## Il censimento
 
