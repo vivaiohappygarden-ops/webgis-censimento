@@ -55,7 +55,7 @@
         <tr><th>Diametro del fusto</th><td>{{ $asset->tree->dbh_cm !== null ? $asset->tree->dbh_cm.' cm' : '-' }}</td></tr>
         <tr><th>Diametro della chioma</th><td>{{ $asset->tree->crown_diameter_m !== null ? $asset->tree->crown_diameter_m.' m' : '-' }}</td></tr>
         @if ($asset->tree->is_monumental)<tr><th>Monumentale</th><td>sì @if ($asset->tree->monumental_ref)({{ $asset->tree->monumental_ref }})@endif</td></tr>@endif
-        @if ($asset->tree->is_dedicated)<tr><th>Dedicato a</th><td>{{ $asset->tree->dedicated_to }}</td></tr>@endif
+        @if ($asset->tree->is_dedicated && ($asset->tree->dedicated_to['name'] ?? null))<tr><th>Dedicato a</th><td>{{ $asset->tree->dedicated_to['name'] }}@if ($asset->tree->dedicated_to['occasion'] ?? null) ({{ $asset->tree->dedicated_to['occasion'] }})@endif</td></tr>@endif
     </table>
     @endif
 

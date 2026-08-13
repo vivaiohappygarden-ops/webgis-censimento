@@ -27,6 +27,37 @@ async function openPdf() {
     pdfBusy.value = false;
 }
 
+// Pagina pubblica (QR): attivazione per elemento, revocabile
+const publicBusy = ref(false);
+
+async function togglePublicPage() {
+    publicBusy.value = true;
+    pdfError.value = '';
+    try {
+        if (asset.value.public_token) {
+            if (! window.confirm('Disattivare la pagina pubblica? Il QR già stampato smetterà di funzionare.')) return;
+            await axios.delete(`/api/v1/assets/${props.assetId}/public-page`);
+            asset.value = { ...asset.value, public_token: null };
+        } else {
+            const { data } = await axios.post(`/api/v1/assets/${props.assetId}/public-page`);
+            asset.value = { ...asset.value, public_token: data.data.public_token };
+        }
+    } catch (err) {
+        pdfError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Operazione non riuscita';
+    } finally {
+        publicBusy.value = false;
+    }
+}
+
+async function openTag() {
+    pdfBusy.value = true;
+    pdfError.value = '';
+    const { error } = await fetchPdf(`/api/v1/assets/${props.assetId}/public-tag`);
+    if (error) pdfError.value = error;
+    pdfBusy.value = false;
+}
+
 async function onSaved() {
     editing.value = false;
     await load();
@@ -160,6 +191,21 @@ onBeforeUnmount(() => map?.remove());
                                     data-test="asset-pdf"
                                     @click="openPdf"
                                 >Scheda PDF</button>
+                                <button
+                                    v-if="asset.public_token"
+                                    class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+                                    :disabled="pdfBusy"
+                                    data-test="asset-tag"
+                                    @click="openTag"
+                                >Cartellino QR</button>
+                                <button
+                                    v-if="canUpdate"
+                                    class="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                                    :class="asset.public_token ? 'border-gray-300 text-gray-600 hover:bg-gray-50' : 'border-green-700 text-green-700 hover:bg-green-50'"
+                                    :disabled="publicBusy"
+                                    data-test="asset-public-toggle"
+                                    @click="togglePublicPage"
+                                >{{ asset.public_token ? 'Disattiva pagina pubblica' : 'Attiva pagina pubblica' }}</button>
                                 <button
                                     v-if="canUpdate && ! editing"
                                     class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
