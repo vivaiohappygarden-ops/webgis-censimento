@@ -29,6 +29,9 @@ Route::middleware('throttle:240,1')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [WebAuthController::class, 'logout'])->name('logout');
 
+    Route::get('/oggi', fn () => Inertia::render('Oggi'))
+        ->middleware('can:works.view')->name('oggi');
+
     Route::get('/mappa', fn () => Inertia::render('Mappa'))
         ->middleware('can:assets.view')->name('mappa');
 

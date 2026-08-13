@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 
 const sections = [
     { id: 'in-breve', label: 'In breve' },
+    { id: 'oggi', label: 'Il cruscotto Oggi' },
     { id: 'censimento', label: 'Il censimento' },
     { id: 'alberi', label: 'Alberi e VTA' },
     { id: 'lavori', label: 'I lavori' },
@@ -65,6 +66,18 @@ function goTo(id) {
                             alla sua squadra e registra rilievi, foto, consuntivi, ispezioni e segnalazioni.
                             <strong>Cliente</strong>: dal suo portale vede solo il proprio territorio —
                             aree, elementi censiti, lavori completati e segnalazioni, senza dati economici.
+                        </p>
+                    </section>
+
+                    <section id="oggi">
+                        <h2>Il cruscotto Oggi</h2>
+                        <p class="mt-2">
+                            La pagina <strong>Oggi</strong> raccoglie in un colpo d'occhio ciò che richiede
+                            attenzione: lavori in ritardo o in programma nei prossimi 7 giorni, controlli
+                            ricorrenti scaduti o in scadenza, segnalazioni con i tempi di risposta a rischio,
+                            non conformità aperte e impianti di irrigazione da aprire o invernare.
+                            Ogni sezione porta con un clic alla pagina di dettaglio. È la prima pagina da
+                            guardare al mattino.
                         </p>
                     </section>
 

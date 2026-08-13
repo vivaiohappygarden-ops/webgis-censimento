@@ -12,6 +12,7 @@ const can = (permission) => permissions.value.includes(permission);
 
 const nav = computed(() =>
     [
+        { label: 'Oggi', href: '/oggi', show: can('works.view') },
         { label: 'Mappa', href: '/mappa', show: can('assets.view') },
         { label: 'Censimento', href: '/censimento', show: can('assets.view') },
         { label: 'VTA', href: '/vta', show: can('assets.view') },

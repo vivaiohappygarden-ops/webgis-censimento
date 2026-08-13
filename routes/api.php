@@ -82,6 +82,7 @@ Route::prefix('v1')->group(function () {
         ]))->middleware('can:works.manage');
 
         Route::get('reports/lavori', [\App\Http\Controllers\Api\V1\WorkReportController::class, 'lavori']);
+        Route::get('dashboard/today', [\App\Http\Controllers\Api\V1\DashboardController::class, 'today']);
 
         Route::apiResource('price-lists', \App\Http\Controllers\Api\V1\PriceListController::class)
             ->whereUuid('price_list');

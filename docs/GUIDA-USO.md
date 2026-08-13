@@ -20,6 +20,14 @@ senza connessione e si allinea da solo appena torna la rete.
 - **Cliente**: dal suo portale vede solo il proprio territorio — aree, elementi censiti,
   lavori completati e segnalazioni, senza dati economici.
 
+## Il cruscotto Oggi
+
+La pagina **Oggi** raccoglie in un colpo d'occhio ciò che richiede attenzione: lavori in
+ritardo o in programma nei prossimi 7 giorni, controlli ricorrenti scaduti o in scadenza,
+segnalazioni con i tempi di risposta a rischio, non conformità aperte e impianti di
+irrigazione da aprire o invernare. Ogni sezione porta con un clic alla pagina di
+dettaglio. È la prima pagina da guardare al mattino.
+
 ## Il censimento
 
 La pagina **Mappa** mostra gli elementi censiti sul territorio; la pagina **Censimento** è
