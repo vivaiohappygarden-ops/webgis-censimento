@@ -18,6 +18,31 @@ class ExportController extends Controller implements HasMiddleware
         return [new Middleware('can:assets.view')];
     }
 
+    /** Pacchetto di consegna completo: tutti i layer, foto e manifest. */
+    public function camDelivery(Request $request, \App\Services\Export\CamDeliveryBuilder $builder)
+    {
+        $data = $request->validate([
+            'format' => ['sometimes', 'in:geojson,shapefile'],
+        ]);
+        $format = $data['format'] ?? 'shapefile';
+        $srid = Organization::find($request->user()->tenant_id)?->metric_srid ?? 7791;
+
+        // Riferimento della consegna: il codice ISTAT quando il territorio è
+        // di un solo comune, altrimenti l'identificativo dell'organizzazione
+        $istat = \App\Models\Site::query()->whereNotNull('istat_code')->distinct()->pluck('istat_code');
+        $tag = $istat->count() === 1
+            ? $istat->first()
+            : (Organization::find($request->user()->tenant_id)?->slug ?? 'consegna');
+
+        $zipPath = $builder->build($srid, $format, $tag);
+
+        Audit::log('export.cam_delivery', null, ['format' => $format, 'riferimento' => $tag]);
+
+        return response()->download($zipPath, "consegna_cam_{$tag}_".now()->format('Ymd').'.zip', [
+            'Content-Type' => 'application/zip',
+        ])->deleteFileAfterSend(true);
+    }
+
     public function cam(Request $request, CamExporter $exporter)
     {
         $data = $request->validate([

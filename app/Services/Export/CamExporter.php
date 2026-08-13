@@ -18,13 +18,13 @@ class CamExporter
 {
     public const LAYERS = ['P1', 'L1', 'S1', 'P2', 'L2', 'S2', 'P3', 'L3', 'S3', 'S4'];
 
-    public function featureCollection(string $layer, int $tenantMetricSrid): array
+    public function featureCollection(string $layer, int $tenantMetricSrid, bool $withAssetIds = false): array
     {
         // Il layer S3 (fruizione e gestione) porta sia gli elementi censiti
         // (aree gioco, aree cani, ...) sia i perimetri delle aree di gestione
         $features = $layer === 'S3'
-            ? [...$this->assetFeatures($layer, $tenantMetricSrid), ...$this->areaFeatures($tenantMetricSrid)]
-            : $this->assetFeatures($layer, $tenantMetricSrid);
+            ? [...$this->assetFeatures($layer, $tenantMetricSrid, $withAssetIds), ...$this->areaFeatures($tenantMetricSrid)]
+            : $this->assetFeatures($layer, $tenantMetricSrid, $withAssetIds);
 
         // PROG: progressivo di consegna per layer, generato dal writer
         foreach ($features as $i => $feature) {
@@ -56,32 +56,38 @@ class CamExporter
 
         $dir = sys_get_temp_dir().'/cam-export-'.bin2hex(random_bytes(6));
         mkdir($dir, 0700, true);
-        $jsonPath = "{$dir}/{$layer}.geojson";
-        $shpPath = "{$dir}/{$layer}.shp";
         $zipPath = "{$dir}/{$layer}.zip";
 
+        $zip = new \ZipArchive;
+        $zip->open($zipPath, \ZipArchive::CREATE);
+        foreach ($this->shapefileParts($featureCollection, $targetSrid, $dir, $layer) as $file) {
+            $zip->addFile($file, basename($file));
+        }
+        $zip->close();
+
+        return $zipPath;
+    }
+
+    /** Scrive lo shapefile (con i file a corredo) in $dir e ne elenca i percorsi. */
+    public function shapefileParts(array $featureCollection, int $targetSrid, string $dir, string $baseName): array
+    {
+        $jsonPath = "{$dir}/{$baseName}.geojson.tmp";
         file_put_contents($jsonPath, json_encode($featureCollection));
 
         $process = new Process([
             'ogr2ogr', '-f', 'ESRI Shapefile',
             '-t_srs', "EPSG:{$targetSrid}",
             '-lco', 'ENCODING=UTF-8',
-            $shpPath, $jsonPath,
+            "{$dir}/{$baseName}.shp", $jsonPath,
         ]);
         $process->setTimeout(120)->run();
+        unlink($jsonPath);
 
         if (! $process->isSuccessful()) {
             throw new \RuntimeException('ogr2ogr fallito: '.substr($process->getErrorOutput(), 0, 500));
         }
 
-        $zip = new \ZipArchive;
-        $zip->open($zipPath, \ZipArchive::CREATE);
-        foreach (glob("{$dir}/{$layer}.{shp,shx,dbf,prj,cpg}", GLOB_BRACE) as $file) {
-            $zip->addFile($file, basename($file));
-        }
-        $zip->close();
-
-        return $zipPath;
+        return glob("{$dir}/{$baseName}.{shp,shx,dbf,prj,cpg}", GLOB_BRACE);
     }
 
     public function ogr2ogrAvailable(): bool
@@ -98,7 +104,7 @@ class CamExporter
         }
     }
 
-    private function assetFeatures(string $layer, int $srid): array
+    private function assetFeatures(string $layer, int $srid, bool $withAssetIds = false): array
     {
         $rows = Asset::query()
             ->join('catalog_object_types AS t', 't.id', '=', 'assets.object_type_id')
@@ -121,7 +127,7 @@ class CamExporter
                 ST_AsGeoJSON(assets.geom)::json AS geometry,
                 sites.istat_code, localities.code AS zona, localities.survey_zone_code,
                 areas.code AS area_code,
-                assets.object_type_id,
+                assets.id AS asset_id, assets.object_type_id,
                 assets.census_code, assets.valid_from, assets.valid_to, assets.updated_at,
                 assets.notes, assets.status, assets.surveyed_at, assets.attributes,
                 round(ST_Area(ST_Transform(assets.geom, (?)::int))::numeric, 2) AS export_area_sqm,
@@ -145,7 +151,7 @@ class CamExporter
             ->get()
             ->groupBy('object_type_id');
 
-        return $rows->map(function ($row, $i) use ($layer, $camFields) {
+        return $rows->map(function ($row, $i) use ($layer, $camFields, $withAssetIds) {
             // Il cast del modello può aver già trasformato il JSON in array
             $attrs = is_array($row->attributes)
                 ? $row->attributes
@@ -212,6 +218,11 @@ class CamExporter
                 if ($value !== null) {
                     $props[$definition->cam_field] = $value;
                 }
+            }
+
+            // Chiave interna per la consegna (abbinare le foto): mai nei file
+            if ($withAssetIds) {
+                $props['_asset_id'] = $row->asset_id;
             }
 
             return [

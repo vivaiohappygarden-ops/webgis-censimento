@@ -35,10 +35,23 @@ const camExport = reactive({ busy: false, error: '' });
 // Non un semplice link: l'errore del server (es. GDAL non installato per lo
 // shapefile) deve arrivare a video in italiano, non come pagina bianca
 async function exportCam(format) {
+    await downloadCam(
+        `/api/v1/exports/cam?layer=${exportLayer.value}&format=${format}`,
+        `cam_${exportLayer.value}`,
+        format === 'shapefile' ? 'zip' : 'geojson',
+    );
+}
+
+// La consegna completa: tutti i layer, foto e manifest in un unico zip
+async function exportDelivery() {
+    await downloadCam('/api/v1/exports/cam/delivery?format=shapefile', 'consegna_cam', 'zip');
+}
+
+async function downloadCam(url, baseName, extension) {
     camExport.busy = true;
     camExport.error = '';
     try {
-        const r = await fetch(`/api/v1/exports/cam?layer=${exportLayer.value}&format=${format}`, {
+        const r = await fetch(url, {
             headers: { Accept: 'application/json' },
         });
         if (! r.ok) {
@@ -54,7 +67,10 @@ async function exportCam(format) {
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         const stamp = new Date().toISOString().slice(0, 10).replaceAll('-', '');
-        link.download = `cam_${exportLayer.value}_${stamp}.${format === 'shapefile' ? 'zip' : 'geojson'}`;
+        // Il server nomina il file con il riferimento della consegna: se
+        // il nome arriva nell'intestazione, vale quello
+        const served = r.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1];
+        link.download = served ?? `${baseName}_${stamp}.${extension}`;
         link.click();
         URL.revokeObjectURL(link.href);
     } catch {
@@ -167,6 +183,13 @@ const measure = (row) => {
                         data-test="cam-export-shapefile"
                         @click="exportCam('shapefile')"
                     >Esporta Shapefile</button>
+                    <button
+                        class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+                        :disabled="camExport.busy"
+                        title="Tutti i layer, le foto e il manifest in un unico pacchetto"
+                        data-test="cam-export-delivery"
+                        @click="exportDelivery"
+                    >Consegna completa</button>
                     <button
                         v-if="canCreate"
                         class="rounded-lg bg-green-700 px-3 py-2 text-sm font-medium text-white hover:bg-green-800"
