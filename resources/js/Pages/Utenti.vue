@@ -43,21 +43,40 @@ function formatDate(value) {
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
+// L'anagrafica clienti è paginata (massimo 100 per pagina): si scorrono
+// tutte le pagine, o i clienti oltre il centesimo non sarebbero collegabili
+async function fetchAllClients() {
+    const all = [];
+    for (let p = 1; p <= 20; p++) {
+        const { data } = await axios.get('/api/v1/clients', { params: { per_page: 100, page: p } });
+        all.push(...(data.data ?? []));
+        if (! data.next_page_url) break;
+    }
+    return all;
+}
+
 async function load() {
     loading.value = true;
     pageError.value = '';
     try {
         const [u, c] = await Promise.all([
             axios.get('/api/v1/users'),
-            axios.get('/api/v1/clients', { params: { per_page: 100 } }),
+            fetchAllClients(),
         ]);
         users.value = u.data.data;
-        clients.value = c.data.data ?? c.data;
+        clients.value = c;
     } catch {
         pageError.value = 'Caricamento non riuscito: ricarica la pagina.';
     } finally {
         loading.value = false;
     }
+}
+
+// La modale riparte sempre pulita: niente errori o dati della volta prima
+function openCreator() {
+    creator.error = '';
+    creator.form = { name: '', email: '', role: 'operatore', client_id: '' };
+    creator.open = true;
 }
 
 async function createUser() {
@@ -159,7 +178,7 @@ onMounted(load);
                 <button
                     class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800"
                     data-test="usr-new"
-                    @click="creator.open = true"
+                    @click="openCreator"
                 >Nuovo utente</button>
             </div>
 

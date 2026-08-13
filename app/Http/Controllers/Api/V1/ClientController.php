@@ -75,6 +75,13 @@ class ClientController extends Controller implements HasMiddleware
             ]);
         }
 
+        $portalUsers = \App\Models\User::query()->where('client_id', $client->id)->count();
+        if ($portalUsers > 0) {
+            throw ValidationException::withMessages([
+                'client' => "Il cliente ha {$portalUsers} utenti del portale collegati: disattivali o spostali prima.",
+            ]);
+        }
+
         $client->delete();
         Audit::log('client.deleted', $client);
 

@@ -16,6 +16,12 @@ class EnsureUserIsActive
 {
     public function handle(Request $request, Closure $next): Response
     {
+        // La pagina pubblica del QR è per chiunque: anche chi ha in tasca
+        // una sessione di un utente disattivato deve poterla vedere
+        if ($request->routeIs('public.tree', 'public.tree.photo')) {
+            return $next($request);
+        }
+
         $user = $request->user();
         if ($user && ! $user->is_active) {
             if ($request->expectsJson() || $request->is('api/*')) {

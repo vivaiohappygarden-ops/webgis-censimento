@@ -269,7 +269,9 @@ class IrrigationTest extends TestCase
         $url = "/api/v1/irrigation-systems/{$system['id']}/readings";
 
         $this->postJson($url, ['read_on' => '2026-06-01', 'value_m3' => -5])->assertUnprocessable();
-        $this->postJson($url, ['read_on' => now()->addDay()->toDateString(), 'value_m3' => 10])->assertUnprocessable();
+        // "Domani" va calcolato nel fuso italiano: intorno alla mezzanotte
+        // il domani UTC è già l'oggi di Roma (e sarebbe accettato)
+        $this->postJson($url, ['read_on' => now('Europe/Rome')->addDay()->toDateString(), 'value_m3' => 10])->assertUnprocessable();
 
         $this->postJson($url, ['read_on' => '2026-06-01', 'value_m3' => 10])->assertCreated();
         // Una sola lettura per giorno per impianto

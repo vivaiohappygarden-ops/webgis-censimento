@@ -32,7 +32,9 @@ class UserAdminController extends Controller implements HasMiddleware
     public function index(): JsonResponse
     {
         $users = User::query()
-            ->with('client:id,name')
+            // withTrashed: un cliente eliminato deve restare visibile come
+            // collegamento storico, non sparire in un trattino
+            ->with(['client' => fn ($q) => $q->withTrashed()->select('id', 'name')])
             ->orderBy('name')
             ->get()
             ->map(fn (User $user) => [
@@ -95,7 +97,6 @@ class UserAdminController extends Controller implements HasMiddleware
 
     public function update(Request $request, string $id): JsonResponse
     {
-        $user = User::query()->findOrFail($id);
         $me = $request->user();
 
         $data = $request->validate([
@@ -105,28 +106,39 @@ class UserAdminController extends Controller implements HasMiddleware
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
-        $newRole = $data['role'] ?? $user->getRoleNames()->first();
-        $deactivating = array_key_exists('is_active', $data) && ! $data['is_active'];
+        $user = DB::transaction(function () use ($id, $me, $data) {
+            // Lock su tutti gli utenti del tenant: la guardia sull'ultimo
+            // amministratore conta su dati fermi, due disattivazioni
+            // incrociate simultanee non possono passare entrambe
+            User::query()->lockForUpdate()->get();
+            $user = User::query()->findOrFail($id);
 
-        if ($user->id === $me->id && ($deactivating || $newRole !== 'amministratore')) {
-            throw ValidationException::withMessages([
-                'is_active' => 'Non puoi disattivare o declassare il tuo stesso account.',
-            ]);
-        }
-        $this->guardLastAdministrator($user, $newRole, $deactivating);
+            $newRole = $data['role'] ?? $user->getRoleNames()->first();
+            $deactivating = array_key_exists('is_active', $data) && ! $data['is_active'];
 
-        if ($newRole === 'cliente') {
-            $clientId = $data['client_id'] ?? $user->client_id;
-            if (! $clientId) {
+            if ($user->id === $me->id && ($deactivating || $newRole !== 'amministratore')) {
                 throw ValidationException::withMessages([
-                    'client_id' => 'Il ruolo cliente richiede il collegamento a un cliente.',
+                    'is_active' => 'Non puoi disattivare o declassare il tuo stesso account.',
                 ]);
             }
-            Client::query()->findOrFail($clientId);
-            $data['client_id'] = $clientId;
-        }
+            $this->guardLastAdministrator($user, $newRole, $deactivating);
 
-        DB::transaction(function () use ($user, $data, $newRole) {
+            if ($newRole === 'cliente') {
+                $clientId = $data['client_id'] ?? $user->client_id;
+                if (! $clientId) {
+                    throw ValidationException::withMessages([
+                        'client_id' => 'Il ruolo cliente richiede il collegamento a un cliente.',
+                    ]);
+                }
+                // Si verifica solo un collegamento NUOVO: se il cliente è stato
+                // eliminato nel frattempo l'utente deve restare gestibile
+                // (disattivabile), non bloccato da un 404
+                if ($clientId !== $user->client_id) {
+                    Client::query()->findOrFail($clientId);
+                }
+                $data['client_id'] = $clientId;
+            }
+
             $user->fill([
                 'name' => $data['name'] ?? $user->name,
                 'is_active' => $data['is_active'] ?? $user->is_active,
@@ -139,9 +151,11 @@ class UserAdminController extends Controller implements HasMiddleware
                 // I token API di un utente disattivato non devono sopravvivere
                 $user->tokens()->delete();
             }
+
+            return $user;
         });
 
-        Audit::log('user.updated', $user, ['role' => $newRole, 'is_active' => $user->is_active]);
+        Audit::log('user.updated', $user, ['is_active' => $user->is_active]);
 
         return response()->json(['data' => $this->presented($user->refresh())]);
     }
@@ -151,8 +165,13 @@ class UserAdminController extends Controller implements HasMiddleware
         $user = User::query()->findOrFail($id);
         $temporaryPassword = $this->temporaryPassword();
 
-        $user->forceFill(['password' => $temporaryPassword])->save();
-        // Sessioni e token aperti con la vecchia password vanno chiusi
+        // Cambiare password deve chiudere tutto ciò che era aperto con la
+        // vecchia: token API, sessioni web (AuthenticateSession confronta
+        // l'hash a ogni richiesta) e cookie "ricordami" (ruotato qui)
+        $user->forceFill([
+            'password' => $temporaryPassword,
+            'remember_token' => Str::random(60),
+        ])->save();
         $user->tokens()->delete();
 
         Audit::log('user.password_reset', $user, ['email' => $user->email]);
@@ -184,7 +203,7 @@ class UserAdminController extends Controller implements HasMiddleware
 
     private function presented(User $user): array
     {
-        $user->loadMissing('client:id,name');
+        $user->load(['client' => fn ($q) => $q->withTrashed()->select('id', 'name')]);
 
         return [
             'id' => $user->id,

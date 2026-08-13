@@ -134,6 +134,68 @@ class UserAdminTest extends TestCase
         $this->assertFalse(Hash::check($body['temporary_password'], $user->password));
     }
 
+    public function test_reset_rotates_remember_token(): void
+    {
+        $body = $this->postJson('/api/v1/users', [
+            'name' => 'Ricordato', 'email' => 'ricordato@demo.local', 'role' => 'operatore',
+        ])->assertCreated()->json();
+
+        $user = User::query()->findOrFail($body['data']['id']);
+        $user->forceFill(['remember_token' => 'vecchio-ricordami'])->save();
+
+        $this->postJson("/api/v1/users/{$user->id}/reset-password")->assertOk();
+
+        // Il cookie "ricordami" emesso prima del reset non deve più valere
+        $this->assertNotSame('vecchio-ricordami', $user->refresh()->remember_token);
+    }
+
+    public function test_portal_user_with_deleted_client_stays_manageable(): void
+    {
+        $client = Client::create(['tenant_id' => $this->organization->id, 'name' => 'Effimero', 'client_type' => 'private']);
+        $portal = $this->postJson('/api/v1/users', [
+            'name' => 'Orfano', 'email' => 'orfano@demo.local', 'role' => 'cliente', 'client_id' => $client->id,
+        ])->assertCreated()->json('data');
+
+        // Un cliente con utenti del portale collegati non si elimina
+        $this->deleteJson("/api/v1/clients/{$client->id}")
+            ->assertUnprocessable()->assertJsonValidationErrors('client');
+
+        // Se però risulta eliminato (dati storici), l'utente resta gestibile
+        $client->delete();
+        $this->patchJson("/api/v1/users/{$portal['id']}", ['is_active' => false])
+            ->assertOk()->assertJsonPath('data.is_active', false);
+
+        // E il collegamento storico resta leggibile in elenco
+        $row = collect($this->getJson('/api/v1/users')->assertOk()->json('data'))
+            ->firstWhere('email', 'orfano@demo.local');
+        $this->assertSame('Effimero', $row['client']['name']);
+    }
+
+    public function test_deactivated_session_still_sees_public_tree_page(): void
+    {
+        // Elemento con pagina pubblica attiva
+        $area = $this->createArea($this->organization, ['name' => 'Parco QR']);
+        $type = $this->makeObjectType($this->organization, 'P', 'P103108');
+        $assetId = $this->postJson('/api/v1/assets', [
+            'area_id' => $area->id,
+            'object_type_id' => $type->id,
+            'census_code' => 'ALB-QR-9',
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated()->json('data.id');
+        $token = $this->postJson("/api/v1/assets/{$assetId}/public-page")
+            ->assertOk()->json('data.public_token');
+
+        // Un utente disattivato con la sessione ancora in tasca inquadra il
+        // QR: la pagina pubblica deve aprirsi, non rimbalzare al login
+        $body = $this->postJson('/api/v1/users', [
+            'name' => 'Ex Operaio', 'email' => 'ex@demo.local', 'role' => 'operatore',
+        ])->assertCreated()->json();
+        $this->patchJson("/api/v1/users/{$body['data']['id']}", ['is_active' => false])->assertOk();
+
+        $deactivated = User::query()->withoutGlobalScopes()->findOrFail($body['data']['id']);
+        $this->actingAs($deactivated)->get("/p/{$token}")->assertOk();
+    }
+
     public function test_only_administrators_manage_users_and_tenants_are_isolated(): void
     {
         [, $tech] = [null, User::factory()->create(['tenant_id' => $this->organization->id])];
