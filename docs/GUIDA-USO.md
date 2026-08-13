@@ -31,6 +31,13 @@ Se due persone modificano la stessa scheda, vince chi salva per primo; al second
 sistema chiede di ricaricare la scheda aggiornata prima di riprovare. Nessuna modifica va
 persa in silenzio.
 
+Dalla scheda di un elemento si scaricano la **scheda PDF** (per fascicoli e consegne) e,
+per gli alberi, il **cartellino con codice QR** da stampare e fissare in campo. Attivando
+la **pagina pubblica**, chi inquadra il QR vede una pagina informativa con foto e dati
+essenziali, senza bisogno di accesso; si può disattivare in qualunque momento e il vecchio
+collegamento smette di funzionare. Il verbale di ispezione in PDF si scarica dal dettaglio
+dell'ispezione.
+
 ## Alberi e VTA
 
 La pagina **VTA** raccoglie il catasto alberi: scheda completa per pianta, valutazioni di

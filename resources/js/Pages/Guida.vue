@@ -80,6 +80,16 @@ function goTo(id) {
                             Vince chi salva per primo; al secondo il sistema chiede di ricaricare la scheda
                             aggiornata prima di riprovare. Nessuna modifica va persa in silenzio.
                         </p>
+                        <h3>Stampe e pagina pubblica</h3>
+                        <p>
+                            Dalla scheda di un elemento si scaricano la <strong>scheda PDF</strong> (per
+                            fascicoli e consegne) e, per gli alberi, il <strong>cartellino con codice QR</strong>
+                            da stampare e fissare in campo. Attivando la <strong>pagina pubblica</strong>,
+                            chi inquadra il QR vede una pagina informativa con foto e dati essenziali,
+                            senza bisogno di accesso; si può disattivare in qualunque momento e il vecchio
+                            collegamento smette di funzionare. Il verbale di ispezione in PDF si scarica
+                            dal dettaglio dell'ispezione.
+                        </p>
                     </section>
 
                     <section id="alberi">
