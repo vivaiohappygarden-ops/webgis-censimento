@@ -189,13 +189,22 @@ class CamImporter
 
         $tenantId = $area->tenant_id;
         $typesByCode = CatalogObjectType::query()->get()->keyBy('code');
+        // Definizioni dei campi personalizzati per tipo (anche le eliminate:
+        // un campo standard MD cancellato viene ripristinato al vero import)
+        $fieldDefs = \App\Models\CustomField::query()
+            ->withoutGlobalScope(\App\Models\Scopes\TenantScope::class)
+            ->withTrashed()
+            ->where('tenant_id', $tenantId)
+            ->whereIn('object_type_id', $typesByCode->pluck('id'))
+            ->get()
+            ->groupBy('object_type_id')
+            ->map(fn ($group) => $group->keyBy('key'));
 
         $errors = [];
         $warnings = [];
         $assetRows = [];
         $treeRows = [];
         $censusInFile = [];
-        $customFieldNeeds = [];
 
         foreach ($features as $index => $feature) {
             $label = 'feature #'.($index + 1);
@@ -273,10 +282,12 @@ class CamImporter
                 continue;
             }
 
-            $attributes = $this->layerAttributes($type->cam_layer, $props, $label, $warnings);
-            foreach (array_keys($attributes) as $key) {
-                $customFieldNeeds["{$type->id}|{$key}"] = ['object_type_id' => $type->id, 'key' => $key];
-            }
+            $attributes = $this->conformAttributes(
+                $this->layerAttributes($type->cam_layer, $props, $label, $warnings),
+                $fieldDefs->get($type->id) ?? collect(),
+                $label,
+                $warnings,
+            );
 
             $assetId = (string) Str::uuid7();
             $assetRows[] = [
@@ -288,10 +299,10 @@ class CamImporter
                 'status' => self::STATO_MAP[strtolower(trim((string) ($props['STATO'] ?? '')))] ?? 'active',
                 'geom' => $ewkb,
                 'survey_method' => 'shapefile_import',
-                'surveyed_at' => $this->fromCamDate($props['DATA_RIL'] ?? null),
+                'surveyed_at' => $this->surveyDate($props['DATA_RIL'] ?? null, $label, $warnings),
                 'valid_from' => $validFrom,
                 'valid_to' => $validTo,
-                'attributes' => $attributes === [] ? '{}' : json_encode($attributes),
+                'attributes' => $attributes === [] ? '{}' : (json_encode($attributes) ?: '{}'),
                 'notes' => ($n = trim((string) ($props['NOTE'] ?? ''))) !== '' ? $n : null,
                 'created_by' => Auth::id(),
                 'updated_by' => Auth::id(),
@@ -331,14 +342,40 @@ class CamImporter
             }
         }
 
+        // I campi standard MD servono solo per le righe che verranno davvero
+        // importate: una riga scartata non deve mutare il catalogo
+        $customFieldNeeds = [];
+        foreach ($assetRows as $row) {
+            foreach (array_keys(json_decode($row['attributes'], true) ?: []) as $key) {
+                if (isset(self::MD_CUSTOM_FIELDS[$key])) {
+                    $customFieldNeeds["{$row['object_type_id']}|{$key}"] = ['object_type_id' => $row['object_type_id'], 'key' => $key];
+                }
+            }
+        }
+
         $imported = 0;
         if (! $dryRun && $assetRows !== []) {
             DB::transaction(function () use ($assetRows, $treeRows, $customFieldNeeds, $tenantId, &$imported) {
                 foreach ($customFieldNeeds as $need) {
-                    \App\Models\CustomField::query()->withoutGlobalScopes()->firstOrCreate(
-                        ['tenant_id' => $tenantId, 'object_type_id' => $need['object_type_id'], 'key' => $need['key']],
-                        [...self::MD_CUSTOM_FIELDS[$need['key']], 'required' => false, 'sort_order' => 90],
-                    );
+                    $field = \App\Models\CustomField::query()
+                        ->withoutGlobalScope(\App\Models\Scopes\TenantScope::class)
+                        ->withTrashed()
+                        ->where('tenant_id', $tenantId)
+                        ->where('object_type_id', $need['object_type_id'])
+                        ->where('key', $need['key'])
+                        ->first();
+                    if ($field !== null && $field->trashed()) {
+                        // Un campo eliminato torna in vita: la scheda deve
+                        // mostrare e accettare il valore appena importato
+                        $field->restore();
+                    } elseif ($field === null) {
+                        \App\Models\CustomField::create([
+                            'tenant_id' => $tenantId,
+                            'object_type_id' => $need['object_type_id'],
+                            'key' => $need['key'],
+                            ...self::MD_CUSTOM_FIELDS[$need['key']], 'required' => false, 'sort_order' => 90,
+                        ]);
+                    }
                 }
                 foreach (array_chunk($assetRows, 200) as $chunk) {
                     Asset::insert($chunk);
@@ -375,7 +412,9 @@ class CamImporter
 
         if (in_array($layer, ['L1', 'S1'], true)) {
             foreach (['GENERE' => 'genere', 'SPECIE' => 'specie', 'VARIETA' => 'varieta'] as $field => $key) {
-                $value = trim((string) ($props[$field] ?? ''));
+                // I byte NUL non sono rappresentabili in jsonb: scoprirlo
+                // all'insert romperebbe il contratto dry-run/import
+                $value = trim(str_replace("\0", '', (string) ($props[$field] ?? '')));
                 if ($value !== '') {
                     $attributes[$key] = $value;
                 }
@@ -389,6 +428,70 @@ class CamImporter
         }
 
         return array_filter($attributes, fn ($v) => $v !== null);
+    }
+
+    /**
+     * I valori importati devono rispettare la definizione del campo
+     * (esistente, anche se eliminata e in via di ripristino, o quella
+     * standard MD che verrà creata): un elemento non deve nascere in uno
+     * stato che la sua stessa scheda rifiuterebbe al salvataggio.
+     */
+    private function conformAttributes(array $attributes, \Illuminate\Support\Collection $definitions, string $label, array &$warnings): array
+    {
+        foreach ($attributes as $key => $value) {
+            $definition = $definitions->get($key);
+            $fieldType = $definition->field_type ?? self::MD_CUSTOM_FIELDS[$key]['field_type'];
+
+            if (in_array($fieldType, ['number', 'integer'], true)) {
+                if ($value < 0) {
+                    $warnings[] = "{$label}: {$key} negativo ({$value}), ignorato.";
+                    unset($attributes[$key]);
+                } elseif ($fieldType === 'integer') {
+                    $attributes[$key] = (int) round($value);
+                }
+            } elseif ($fieldType === 'select') {
+                if (! in_array($value, $definition->options ?? [], true)) {
+                    $shown = mb_substr((string) $value, 0, 50);
+                    $warnings[] = "{$label}: '{$shown}' non è tra le opzioni del campo {$key}, ignorato.";
+                    unset($attributes[$key]);
+                }
+            } elseif (in_array($fieldType, ['text', 'textarea'], true)) {
+                if (mb_strlen((string) $value) > 2000) {
+                    $warnings[] = "{$label}: {$key} oltre 2000 caratteri, troncato.";
+                    $attributes[$key] = mb_substr((string) $value, 0, 2000);
+                }
+            } else {
+                $warnings[] = "{$label}: il campo {$key} è di tipo '{$fieldType}' e non si importa dal tracciato, ignorato.";
+                unset($attributes[$key]);
+            }
+        }
+
+        return $attributes;
+    }
+
+    /**
+     * DATA_RIL: oltre al GGMMAAAA dei tracciati si accettano le rese comuni
+     * dei campi data DBF nei GeoJSON (ogr2ogr usa AAAA/MM/GG); un valore
+     * non riconosciuto viene segnalato, non perso in silenzio.
+     */
+    private function surveyDate(mixed $value, string $label, array &$warnings): ?string
+    {
+        $raw = trim((string) ($value ?? ''));
+        if ($raw === '') {
+            return null;
+        }
+        if (($cam = $this->fromCamDate($raw)) !== null) {
+            return $cam;
+        }
+        foreach (['Y/m/d', 'Y-m-d', 'd/m/Y'] as $format) {
+            $parsed = \DateTimeImmutable::createFromFormat('!'.$format, $raw);
+            if ($parsed !== false && $parsed->format($format) === $raw) {
+                return $parsed->format('Y-m-d');
+            }
+        }
+        $warnings[] = "{$label}: DATA_RIL '{$raw}' non riconosciuta (atteso GGMMAAAA), ignorata.";
+
+        return null;
     }
 
     /** Campi vegetazione delle Master P1/L1/S1 -> scheda albero. */
@@ -429,7 +532,9 @@ class CamImporter
             return null;
         }
         $normalized = str_replace(',', '.', (string) $value);
-        if (! is_numeric($normalized)) {
+        // is_finite: '1e999' passa is_numeric ma diventa INF, che jsonb
+        // non sa rappresentare (json_encode fallirebbe silenziosamente)
+        if (! is_numeric($normalized) || ! is_finite((float) $normalized)) {
             $warnings[] = "{$context}: valore '{$value}' non numerico, ignorato.";
 
             return null;

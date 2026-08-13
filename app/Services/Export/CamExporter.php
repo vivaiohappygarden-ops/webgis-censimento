@@ -23,8 +23,8 @@ class CamExporter
         // Il layer S3 (fruizione e gestione) porta sia gli elementi censiti
         // (aree gioco, aree cani, ...) sia i perimetri delle aree di gestione
         $features = $layer === 'S3'
-            ? [...$this->assetFeatures($layer), ...$this->areaFeatures()]
-            : $this->assetFeatures($layer);
+            ? [...$this->assetFeatures($layer, $tenantMetricSrid), ...$this->areaFeatures($tenantMetricSrid)]
+            : $this->assetFeatures($layer, $tenantMetricSrid);
 
         // PROG: progressivo di consegna per layer, generato dal writer
         foreach ($features as $i => $feature) {
@@ -98,7 +98,7 @@ class CamExporter
         }
     }
 
-    private function assetFeatures(string $layer): array
+    private function assetFeatures(string $layer, int $srid): array
     {
         $rows = Asset::query()
             ->join('catalog_object_types AS t', 't.id', '=', 'assets.object_type_id')
@@ -108,15 +108,25 @@ class CamExporter
             ->leftJoin('trees', 'trees.asset_id', '=', 'assets.id')
             ->leftJoin('users AS editor', 'editor.id', '=', 'assets.updated_by')
             ->where('t.cam_layer', $layer)
+            // I limiti delle aree di gestione escono da areaFeatures: un
+            // elemento censito con quel codice duplicherebbe il CODICE nella
+            // consegna e sparirebbe al re-import (che li salta)
+            ->where('t.code', '!=', 'S325500')
             ->whereNull('assets.deleted_at')
             ->orderBy('assets.census_code')
+            // Le misure sono ricalcolate nel CRS di consegna del tenant
+            // (GIS-DATA-MODEL §6.3.1), non copiate dalle colonne generate
+            // che sono fisse sul fuso Ovest EPSG:7791
             ->selectRaw(<<<'SQL'
                 ST_AsGeoJSON(assets.geom)::json AS geometry,
                 sites.istat_code, localities.code AS zona, localities.survey_zone_code,
                 areas.code AS area_code,
+                assets.object_type_id,
                 assets.census_code, assets.valid_from, assets.valid_to, assets.updated_at,
                 assets.notes, assets.status, assets.surveyed_at, assets.attributes,
-                assets.computed_area_sqm, assets.computed_length_m, assets.computed_perimeter_m,
+                round(ST_Area(ST_Transform(assets.geom, (?)::int))::numeric, 2) AS export_area_sqm,
+                round(ST_Length(ST_Transform(assets.geom, (?)::int))::numeric, 2) AS export_length_m,
+                round(ST_Perimeter(ST_Transform(assets.geom, (?)::int))::numeric, 2) AS export_perimeter_m,
                 t.code AS codice, substring(t.code, 2, 1) AS tp, substring(t.code, 3, 2) AS ts,
                 COALESCE(editor.username, editor.name) AS modif_da,
                 trees.plant_number, trees.genus, trees.species, trees.cultivar,
@@ -124,10 +134,18 @@ class CamExporter
                 (SELECT p.original_filename FROM photos p
                   WHERE p.asset_id = assets.id AND p.deleted_at IS NULL
                   ORDER BY p.created_at LIMIT 1) AS foto
-                SQL)
+                SQL, [$srid, $srid, $srid])
             ->get();
 
-        return $rows->map(function ($row, $i) use ($layer) {
+        // Mapping dichiarato nel Catalog Manager: un campo personalizzato con
+        // cam_field alimenta il campo del tracciato senza cablarlo qui
+        // (GIS-DATA-MODEL §6.3.4); vince sul mapping standard
+        $camFields = \App\Models\CustomField::query()
+            ->whereNotNull('cam_field')
+            ->get()
+            ->groupBy('object_type_id');
+
+        return $rows->map(function ($row, $i) use ($layer, $camFields) {
             // Il cast del modello può aver già trasformato il JSON in array
             $attrs = is_array($row->attributes)
                 ? $row->attributes
@@ -176,15 +194,24 @@ class CamExporter
             if (in_array($layer, ['L1', 'L2', 'L3'], true)) {
                 $props += [
                     'LARG_m' => $this->number($attrs, 'larghezza_m'),
-                    'LUNG_m' => $row->computed_length_m !== null ? (float) $row->computed_length_m : null,
+                    'LUNG_m' => $row->export_length_m !== null ? (float) $row->export_length_m : null,
                 ];
             }
-            // Superfici: misure calcolate dalle colonne generate
+            // Superfici: misure ricalcolate nel CRS di consegna
             if (in_array($layer, ['S1', 'S2', 'S3', 'S4'], true)) {
                 $props += [
-                    'AREA_mq' => $row->computed_area_sqm !== null ? (float) $row->computed_area_sqm : null,
-                    'PERIM_m' => $row->computed_perimeter_m !== null ? (float) $row->computed_perimeter_m : null,
+                    'AREA_mq' => $row->export_area_sqm !== null ? (float) $row->export_area_sqm : null,
+                    'PERIM_m' => $row->export_perimeter_m !== null ? (float) $row->export_perimeter_m : null,
                 ];
+            }
+
+            foreach ($camFields->get($row->object_type_id, collect()) as $definition) {
+                $value = in_array($definition->field_type, ['number', 'integer'], true)
+                    ? $this->number($attrs, $definition->key)
+                    : $this->text($attrs, $definition->key);
+                if ($value !== null) {
+                    $props[$definition->cam_field] = $value;
+                }
             }
 
             return [
@@ -210,7 +237,7 @@ class CamExporter
     }
 
     /** Layer S3: perimetri delle aree di gestione (Master shapefile S3). */
-    private function areaFeatures(): array
+    private function areaFeatures(int $srid): array
     {
         $rows = Area::query()
             ->join('localities', 'localities.id', '=', 'areas.locality_id')
@@ -223,9 +250,11 @@ class CamExporter
                 sites.istat_code, localities.code AS zona, localities.survey_zone_code,
                 areas.code AS area_code, areas.name AS nome_area, areas.manager,
                 areas.street_code, areas.valid_from, areas.valid_to, areas.updated_at,
-                areas.notes, areas.computed_area_sqm, areas.computed_perimeter_m,
+                areas.notes,
+                round(ST_Area(ST_Transform(areas.geom, (?)::int))::numeric, 2) AS export_area_sqm,
+                round(ST_Perimeter(ST_Transform(areas.geom, (?)::int))::numeric, 2) AS export_perimeter_m,
                 COALESCE(editor.username, editor.name) AS modif_da
-                SQL)
+                SQL, [$srid, $srid])
             ->get();
 
         return $rows->map(function ($row, $i) {
@@ -250,8 +279,8 @@ class CamExporter
                     'NOME_AREA' => $row->nome_area,
                     'CODE_VIA' => $row->street_code,
                     'GESTORE' => $row->manager,
-                    'AREA_mq' => (float) $row->computed_area_sqm,
-                    'PERIM_m' => (float) $row->computed_perimeter_m,
+                    'AREA_mq' => (float) $row->export_area_sqm,
+                    'PERIM_m' => (float) $row->export_perimeter_m,
                 ],
             ];
         })->values()->all();

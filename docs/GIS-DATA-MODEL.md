@@ -1345,7 +1345,7 @@ L'applicazione imposta `SET LOCAL app.change_source = 'pwa'|'sync'|'import'|...`
 
 ## 6. Mapping conformità CAM / Modello Dati v2.1
 
-L'export CAM produce **uno shapefile per layer** secondo la codifica del Modello Dati: `P`/`L`/`S` = geometria punto/linea/superficie, cifra = macro-categoria (`1` verde, `2` arredi/manufatti, `3` impianti) + `S4` (perimetri complessivi delle aree verdi). Il layer di destinazione di ogni asset è `catalog_object_types.cam_layer`.
+L'export CAM produce **uno shapefile per layer** secondo la codifica del Modello Dati: `P`/`L`/`S` = geometria punto/linea/superficie, cifra = macro-categoria del catalogo v2.1 (`1` vegetazione, `2` arredo urbano, `3` fruizione e gestione, `4` fattori ambientali). Il layer di destinazione di ogni asset è `catalog_object_types.cam_layer`. I **perimetri delle aree di gestione** escono nel layer `S3` con `CODICE S325500` ("limite area di gestione", macro-categoria 3 del catalogo) insieme agli eventuali elementi censiti della stessa macro-categoria; il codice `S325500` è riservato ai perimetri generati dall'export (un elemento censito con quel codice non viene esportato né importato). *(Aggiornamento 12/08/2026: le prime stesure collocavano i perimetri in un layer "S4" dedicato; la codifica del catalogo v2.1 assegna S4 ai fattori ambientali, quindi i perimetri stanno in S3 come da codice `S325500` del catalogo.)*
 
 > **Da verificare in Fase 0 contro il tracciato ufficiale v2.1 del committente**: nomi esatti, tipo/lunghezza DBF dei campi e obbligatorietà per layer. La tabella sotto fissa il mapping applicativo; i tracciati record definitivi andranno congelati in un fixture di collaudo (CSV di riferimento) usato dai test automatici dell'export.
 
@@ -1382,12 +1382,12 @@ L'export CAM produce **uno shapefile per layer** secondo la codifica del Modello
 | `STATO` | tutti (ove previsto) | `assets.status` (decodifica per tipo) / `trees.vegetative_state` per P1 | la decodifica applicativo→dominio MD è tabellata in `settings` del tenant |
 | `LARG_m` | L1, L2, L3 | `assets.attributes->>'larghezza_m'` | larghezza elementi lineari (siepi, cordoli...) |
 | `LUNG_m` | L1, L2, L3 | `assets.computed_length_m` | calcolata (EPSG del tenant all'export, v. §4.2) |
-| `AREA_mq` | S1, S2, S3, S4 | `assets.computed_area_sqm` / `areas.computed_area_sqm` (S4) | calcolata |
-| `PERIM_m` | S1, S2, S3, S4 | `assets.computed_perimeter_m` / `areas.computed_perimeter_m` (S4) | calcolata |
-| `CODE_VIA` | S4 (e ove previsto) | `areas.street_code` | codice via/toponimo comunale |
-| `NOME_AREA` | S4 | `areas.name` | denominazione area verde |
+| `AREA_mq` | S1, S2, S3, S4 | `assets.geom` / `areas.geom` (perimetri S325500), ricalcolata nel CRS di export | calcolata |
+| `PERIM_m` | S1, S2, S3, S4 | `assets.geom` / `areas.geom` (perimetri S325500), ricalcolata nel CRS di export | calcolata |
+| `CODE_VIA` | S3 perimetri S325500 (e ove previsto) | `areas.street_code` | codice via/toponimo comunale |
+| `NOME_AREA` | S3 perimetri S325500 | `areas.name` | denominazione area verde |
 | `DATA_RIL` | tutti (ove previsto) | `assets.surveyed_at` | data del rilievo in campo |
-| `GESTORE` | S4 (e ove previsto) | `areas.manager` | soggetto gestore |
+| `GESTORE` | S3 perimetri S325500 (e ove previsto) | `areas.manager` | soggetto gestore |
 | `PROG` | tutti | progressivo di export | numeratore sequenziale generato dal writer per consegna/layer, non persistito |
 
 ### 6.3 Regole del writer di export

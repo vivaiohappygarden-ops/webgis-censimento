@@ -166,6 +166,16 @@ class CamExportTest extends TestCase
             'geometry' => $this->squarePolygon(),
         ])->assertCreated();
 
+        // Un elemento censito col codice riservato ai perimetri (S325500)
+        // non esce: duplicherebbe il CODICE e sparirebbe al re-import
+        $limitType = $this->makeObjectType($this->organization, 'S', 'S325500', ['cam_layer' => 'S3']);
+        $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $limitType->id,
+            'census_code' => 'LIMITE-FINTO',
+            'geometry' => $this->squarePolygon(),
+        ])->assertCreated();
+
         $response = $this->get('/api/v1/exports/cam?layer=S3&format=geojson')->assertOk();
         $features = json_decode($response->streamedContent(), true)['features'];
 
@@ -176,6 +186,53 @@ class CamExportTest extends TestCase
         $this->assertGreaterThan(0, $byCode['S327552']['properties']['PERIM_m']);
         $this->assertSame('Parco CAM', $byCode['S325500']['properties']['NOME_AREA']);
         $this->assertEqualsCanonicalizing([1, 2], collect($features)->pluck('properties.PROG')->all());
+    }
+
+    public function test_measures_are_recomputed_in_tenant_export_srid(): void
+    {
+        $hedgeType = $this->makeObjectType($this->organization, 'L', 'L103105');
+        $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $hedgeType->id,
+            'census_code' => 'SIEPE-EST',
+            'geometry' => ['type' => 'LineString', 'coordinates' => [[9.1900, 45.4650], [9.1910, 45.4650]]],
+        ])->assertCreated();
+        $stored = (float) \App\Models\Asset::query()
+            ->where('census_code', 'SIEPE-EST')->firstOrFail()->computed_length_m;
+
+        // Tenant sul fuso Est: la lunghezza va ricalcolata in EPSG:7793,
+        // non copiata dalla colonna generata (fissa sul fuso Ovest 7791)
+        $this->organization->update(['metric_srid' => 7793]);
+        $response = $this->get('/api/v1/exports/cam?layer=L1&format=geojson')->assertOk();
+        $exported = json_decode($response->streamedContent(), true)['features'][0]['properties']['LUNG_m'];
+
+        $this->assertGreaterThan(50, $exported);
+        $this->assertGreaterThan(0.05, abs($exported - $stored),
+            'La misura esportata deve differire da quella in EPSG:7791');
+    }
+
+    public function test_declared_cam_field_mapping_feeds_the_tracciato(): void
+    {
+        // Il Catalog Manager può dichiarare che un campo custom alimenta un
+        // campo del tracciato (GIS-DATA-MODEL §6.3.4), senza cablarlo nel writer
+        $hedgeType = $this->makeObjectType($this->organization, 'L', 'L103106');
+        \App\Models\CustomField::create([
+            'tenant_id' => $this->organization->id,
+            'object_type_id' => $hedgeType->id,
+            'key' => 'largh_media', 'label' => 'Larghezza media (m)',
+            'field_type' => 'number', 'required' => false, 'cam_field' => 'LARG_m',
+        ]);
+        $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $hedgeType->id,
+            'census_code' => 'SIEPE-CF',
+            'geometry' => ['type' => 'LineString', 'coordinates' => [[9.1900, 45.4650], [9.1905, 45.4650]]],
+            'attributes' => ['largh_media' => 2.5],
+        ])->assertCreated();
+
+        $response = $this->get('/api/v1/exports/cam?layer=L1&format=geojson')->assertOk();
+        $props = json_decode($response->streamedContent(), true)['features'][0]['properties'];
+        $this->assertEquals(2.5, $props['LARG_m']);
     }
 
     public function test_cam_s3_export_contains_management_areas(): void

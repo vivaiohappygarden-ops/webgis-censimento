@@ -198,6 +198,124 @@ class CamImportTest extends TestCase
         ])->assertOk();
     }
 
+    private function importFeatures(array $features, \App\Models\Area $area, string $dryRun = '0')
+    {
+        return $this->post('/api/v1/imports/cam', [
+            'file' => UploadedFile::fake()->createWithContent('import.geojson', json_encode([
+                'type' => 'FeatureCollection', 'features' => $features,
+            ])),
+            'area_id' => $area->id,
+            'dry_run' => $dryRun,
+        ], ['Accept' => 'application/json']);
+    }
+
+    private function lineFeature(array $props): array
+    {
+        return [
+            'type' => 'Feature',
+            'geometry' => ['type' => 'LineString', 'coordinates' => [[9.1900, 45.4650], [9.1910, 45.4650]]],
+            'properties' => ['CODICE' => 'L103104', ...$props],
+        ];
+    }
+
+    public function test_trashed_md_custom_field_is_restored_on_import(): void
+    {
+        [, $destUser, $destArea] = $this->makeDestinationTenant();
+        $destOrg = \App\Models\Organization::findOrFail($destArea->tenant_id);
+        $hedge = $this->makeObjectType($destOrg, 'L', 'L103104');
+        \App\Models\CustomField::create([
+            'tenant_id' => $destOrg->id, 'object_type_id' => $hedge->id,
+            'key' => 'genere', 'label' => 'Genere', 'field_type' => 'text', 'required' => false,
+        ])->delete();
+        $this->actingAsTenantUser($destUser);
+
+        $this->importFeatures([$this->lineFeature(['OBJ_ID' => 'SIEPE-R1', 'GENERE' => 'Ligustrum'])], $destArea)
+            ->assertOk()->assertJsonPath('data.imported', 1);
+
+        // Il campo eliminato è tornato attivo: la scheda accetta il valore
+        $field = \App\Models\CustomField::query()->withoutGlobalScopes()
+            ->where('object_type_id', $hedge->id)->where('key', 'genere')->firstOrFail();
+        $this->assertNull($field->deleted_at);
+        $asset = Asset::query()->where('census_code', 'SIEPE-R1')->firstOrFail();
+        $this->patchJson("/api/v1/assets/{$asset->id}", [
+            'attributes' => ['genere' => 'Ligustrum'], 'version' => $asset->version,
+        ])->assertOk();
+    }
+
+    public function test_imported_values_conform_to_field_definitions(): void
+    {
+        [, $destUser, $destArea] = $this->makeDestinationTenant();
+        $destOrg = \App\Models\Organization::findOrFail($destArea->tenant_id);
+        $hedge = $this->makeObjectType($destOrg, 'L', 'L103104');
+        \App\Models\CustomField::create([
+            'tenant_id' => $destOrg->id, 'object_type_id' => $hedge->id,
+            'key' => 'genere', 'label' => 'Genere', 'field_type' => 'select',
+            'required' => false, 'options' => ['Buxus', 'Photinia'],
+        ]);
+        $this->actingAsTenantUser($destUser);
+
+        // Valore fuori opzioni, numero non rappresentabile e byte NUL:
+        // l'elemento nasce comunque, ma in uno stato che la scheda accetta
+        $report = $this->importFeatures([$this->lineFeature([
+            'OBJ_ID' => 'SIEPE-V1',
+            'GENERE' => 'Ligustrum',
+            'SPECIE' => "Ligustrum\0 vulgare",
+            'H_m' => '1e999',
+            'LARG_m' => '-2',
+        ])], $destArea)->assertOk()->assertJsonPath('data.imported', 1)->json('data');
+
+        $this->assertGreaterThanOrEqual(3, $report['warnings_total']);
+        $asset = Asset::query()->where('census_code', 'SIEPE-V1')->firstOrFail();
+        $this->assertArrayNotHasKey('genere', $asset->attributes);
+        $this->assertSame('Ligustrum vulgare', $asset->attributes['specie']);
+        $this->assertArrayNotHasKey('altezza_m', $asset->attributes);
+        $this->assertArrayNotHasKey('larghezza_m', $asset->attributes);
+        $this->patchJson("/api/v1/assets/{$asset->id}", [
+            'attributes' => $asset->attributes, 'version' => $asset->version,
+        ])->assertOk();
+    }
+
+    public function test_data_ril_accepts_common_formats_and_warns_on_garbage(): void
+    {
+        [, $destUser, $destArea] = $this->makeDestinationTenant();
+        $this->makeObjectType(\App\Models\Organization::findOrFail($destArea->tenant_id), 'L', 'L103104');
+        $this->actingAsTenantUser($destUser);
+
+        // ogr2ogr rende i campi data DBF come AAAA/MM/GG nei GeoJSON
+        $report = $this->importFeatures([
+            $this->lineFeature(['OBJ_ID' => 'D1', 'DATA_RIL' => '2026/08/05']),
+            $this->lineFeature(['OBJ_ID' => 'D2', 'DATA_RIL' => 'boh']),
+        ], $destArea)->assertOk()->assertJsonPath('data.imported', 2)->json('data');
+
+        $this->assertSame('2026-08-05', Asset::query()->where('census_code', 'D1')->firstOrFail()->surveyed_at->toDateString());
+        $this->assertNull(Asset::query()->where('census_code', 'D2')->firstOrFail()->surveyed_at);
+        $this->assertSame(1, $report['warnings_total']);
+        $this->assertStringContainsString('DATA_RIL', $report['warnings'][0]);
+    }
+
+    public function test_rejected_rows_do_not_touch_the_catalog(): void
+    {
+        [, $destUser, $destArea] = $this->makeDestinationTenant();
+        $destOrg = \App\Models\Organization::findOrFail($destArea->tenant_id);
+        $hedge = $this->makeObjectType($destOrg, 'L', 'L103104');
+        $this->actingAsTenantUser($destUser);
+
+        $this->postJson('/api/v1/assets', [
+            'area_id' => $destArea->id,
+            'object_type_id' => $hedge->id,
+            'census_code' => 'DUP-1',
+            'geometry' => ['type' => 'LineString', 'coordinates' => [[9.19, 45.465], [9.1905, 45.465]]],
+        ])->assertCreated();
+
+        // La siepe duplicata viene scartata: il suo GENERE non deve definire
+        // campi custom sul tipo (l'import non muta il catalogo per nulla)
+        $this->importFeatures([$this->lineFeature(['OBJ_ID' => 'DUP-1', 'GENERE' => 'Ligustrum'])], $destArea)
+            ->assertOk()->assertJsonPath('data.imported', 0)->assertJsonPath('data.errors_total', 1);
+
+        $this->assertSame(0, \App\Models\CustomField::query()->withoutGlobalScopes()
+            ->where('object_type_id', $hedge->id)->count());
+    }
+
     public function test_area_perimeter_features_are_skipped_on_import(): void
     {
         [, $destUser, $destArea] = $this->makeDestinationTenant();

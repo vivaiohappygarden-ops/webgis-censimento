@@ -30,6 +30,39 @@ const CAM_LAYERS = {
     S4: 'S4 Fattori ambientali (superfici)',
 };
 const exportLayer = ref('P1');
+const camExport = reactive({ busy: false, error: '' });
+
+// Non un semplice link: l'errore del server (es. GDAL non installato per lo
+// shapefile) deve arrivare a video in italiano, non come pagina bianca
+async function exportCam(format) {
+    camExport.busy = true;
+    camExport.error = '';
+    try {
+        const r = await fetch(`/api/v1/exports/cam?layer=${exportLayer.value}&format=${format}`, {
+            headers: { Accept: 'application/json' },
+        });
+        if (! r.ok) {
+            let message = 'Export non riuscito.';
+            try {
+                const body = await r.json();
+                message = Object.values(body.errors ?? {})[0]?.[0] ?? body.message ?? message;
+            } catch { /* risposta non JSON: resta il messaggio generico */ }
+            camExport.error = message;
+            return;
+        }
+        const blob = await r.blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        const stamp = new Date().toISOString().slice(0, 10).replaceAll('-', '');
+        link.download = `cam_${exportLayer.value}_${stamp}.${format === 'shapefile' ? 'zip' : 'geojson'}`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    } catch {
+        camExport.error = 'Export non riuscito: problema di rete.';
+    } finally {
+        camExport.busy = false;
+    }
+}
 
 async function openImporter() {
     importer.open = true;
@@ -122,16 +155,18 @@ const measure = (row) => {
                     <select v-model="exportLayer" data-test="cam-export-layer" class="rounded-lg border border-gray-300 px-2 py-2 text-sm">
                         <option v-for="(label, value) in CAM_LAYERS" :key="value" :value="value">{{ label }}</option>
                     </select>
-                    <a
-                        :href="`/api/v1/exports/cam?layer=${exportLayer}&format=geojson`"
-                        class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
+                    <button
+                        class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+                        :disabled="camExport.busy"
                         data-test="cam-export-geojson"
-                    >Esporta GeoJSON</a>
-                    <a
-                        :href="`/api/v1/exports/cam?layer=${exportLayer}&format=shapefile`"
-                        class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
+                        @click="exportCam('geojson')"
+                    >Esporta GeoJSON</button>
+                    <button
+                        class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+                        :disabled="camExport.busy"
                         data-test="cam-export-shapefile"
-                    >Esporta Shapefile</a>
+                        @click="exportCam('shapefile')"
+                    >Esporta Shapefile</button>
                     <button
                         v-if="canCreate"
                         class="rounded-lg bg-green-700 px-3 py-2 text-sm font-medium text-white hover:bg-green-800"
@@ -139,6 +174,10 @@ const measure = (row) => {
                     >Importa GeoJSON</button>
                 </div>
             </div>
+
+            <p v-if="camExport.error" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="cam-export-error">
+                {{ camExport.error }}
+            </p>
 
             <div class="mb-4 flex gap-3">
                 <input
