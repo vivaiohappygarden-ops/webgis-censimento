@@ -18,10 +18,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // La radice smista per permesso (mappa, portale o guida)
         $middleware->redirectUsersTo('/');
         $middleware->web(append: [
+            \App\Http\Middleware\EnsureUserIsActive::class,
             \App\Http\Middleware\SetPermissionsTeam::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
         ]);
         $middleware->api(append: [
+            \App\Http\Middleware\EnsureUserIsActive::class,
             \App\Http\Middleware\SetPermissionsTeam::class,
         ]);
     })

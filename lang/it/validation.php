@@ -137,6 +137,7 @@ return [
         'unit' => 'unità di misura',
         'unit_price' => 'prezzo unitario',
         'version' => 'versione',
+        'role' => 'ruolo',
         'area_id' => 'area',
         'client_id' => 'cliente',
         'locality_id' => 'località',

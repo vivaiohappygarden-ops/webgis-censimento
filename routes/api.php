@@ -64,6 +64,11 @@ Route::prefix('v1')->group(function () {
         Route::get('vta/tutelati', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'tutelati']);
         Route::get('vta/bilancio', [\App\Http\Controllers\Api\V1\TreeBalanceController::class, 'index']);
 
+        Route::get('users', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'index']);
+        Route::post('users', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'store']);
+        Route::patch('users/{id}', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'update'])->whereUuid('id');
+        Route::post('users/{id}/reset-password', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'resetPassword'])->whereUuid('id');
+
         Route::get('teams', [\App\Http\Controllers\Api\V1\TeamController::class, 'index']);
         Route::post('teams', [\App\Http\Controllers\Api\V1\TeamController::class, 'store']);
         Route::patch('teams/{id}', [\App\Http\Controllers\Api\V1\TeamController::class, 'update'])->whereUuid('id');

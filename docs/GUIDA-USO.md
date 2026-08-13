@@ -119,6 +119,15 @@ cartella FOTO con le immagini e un riepilogo dei conteggi. L'import fa il
 percorso inverso e accetta i file di altri sistemi nello stesso formato, con una prova a
 vuoto (analisi) prima di scrivere qualunque cosa.
 
+## Gli utenti
+
+Dalla pagina **Utenti** l'amministratore crea gli account per squadra e clienti: si
+sceglie il ruolo (amministratore, tecnico, operatore o cliente del portale, quest'ultimo
+collegato a un cliente in anagrafica) e il sistema genera una **password provvisoria**,
+mostrata una sola volta, da comunicare all'interessato. Un utente che non deve più
+accedere si **disattiva** (la sua storia resta); "Nuova password" rimedia a una password
+dimenticata. Non è possibile disattivare sé stessi né l'ultimo amministratore attivo.
+
 ## Domande frequenti
 
 **Il telefono era offline e ho censito 50 elementi: che succede?**

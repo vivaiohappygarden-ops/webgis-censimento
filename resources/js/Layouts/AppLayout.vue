@@ -22,6 +22,7 @@ const nav = computed(() =>
         { label: 'Territorio', href: '/territorio', show: can('clients.view') },
         { label: 'Irrigazione', href: '/irrigazione', show: can('areas.view') },
         { label: 'Catalogo', href: '/catalogo', show: can('catalog.view') },
+        { label: 'Utenti', href: '/utenti', show: can('users.manage') },
         { label: 'Campo (operatore)', href: '/operatore', show: can('assets.create') },
         { label: 'Portale', href: '/portale', show: can('portal.view') },
         { label: 'Guida', href: '/guida', show: true },

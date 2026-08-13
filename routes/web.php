@@ -65,6 +65,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/catalogo', fn () => Inertia::render('Catalogo'))
         ->middleware('can:catalog.view')->name('catalogo');
 
+    Route::get('/utenti', fn () => Inertia::render('Utenti'))
+        ->middleware('can:users.manage')->name('utenti');
+
     // La guida è per tutti gli utenti autenticati, senza permessi dedicati
     Route::get('/guida', fn () => Inertia::render('Guida'))->name('guida');
 
