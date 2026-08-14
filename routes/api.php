@@ -99,6 +99,13 @@ Route::prefix('v1')->group(function () {
         Route::post('estimates/{id}/work-order', [\App\Http\Controllers\Api\V1\EstimateController::class, 'createWorkOrder'])->whereUuid('id');
         Route::get('estimates/{id}/pdf', [\App\Http\Controllers\Api\V1\EstimateController::class, 'pdf'])->whereUuid('id');
 
+        Route::get('gestionale/settings', [\App\Http\Controllers\Api\V1\GestionaleController::class, 'settings']);
+        Route::put('gestionale/settings', [\App\Http\Controllers\Api\V1\GestionaleController::class, 'updateSettings']);
+        Route::post('gestionale/test', [\App\Http\Controllers\Api\V1\GestionaleController::class, 'test']);
+        Route::get('gestionale/dispatches', [\App\Http\Controllers\Api\V1\GestionaleController::class, 'index']);
+        Route::post('gestionale/dispatches/{id}/retry', [\App\Http\Controllers\Api\V1\GestionaleController::class, 'retry'])->whereUuid('id');
+        Route::post('assets/{id}/gestionale', [\App\Http\Controllers\Api\V1\GestionaleController::class, 'dispatchAsset'])->whereUuid('id');
+
         Route::apiResource('certificates', \App\Http\Controllers\Api\V1\CertificateController::class)
             ->only(['index', 'store', 'update', 'destroy'])->whereUuid('certificate');
 

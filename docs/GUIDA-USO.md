@@ -136,6 +136,21 @@ per quelle di gravità bassa) ed entro quando va **risolta** (da 3 a 30 giorni).
 filtri mostrano subito che cosa è fuori tempo massimo. Da una segnalazione si genera
 l'ordine di lavoro con un solo pulsante.
 
+## Il gestionale giardini (WordPress)
+
+Se nella stessa area segui sia il censimento sia la manutenzione, dalla scheda di un
+elemento puoi **inviare al gestionale WordPress** un "intervento da fare" o "da
+preventivare": titolo del problema, descrizione, priorità e fino a 5 fotografie. La
+scheda arriva al gestionale come segnalazione, con codice, specie, comune, area e
+posizione dell'elemento (e il collegamento alla pagina pubblica, se attiva).
+
+L'invio passa da una coda con ritentativi automatici: se il sito non risponde si
+riprova da solo, e un doppio invio non crea doppioni. Lo stato (in coda, consegnato,
+non riuscito) si vede nella scheda dell'elemento, con il collegamento per aprire la
+segnalazione nel gestionale. Indirizzo e gettone segreto del collegamento si
+impostano una sola volta nella pagina **Utenti** (solo amministratore), con il
+pulsante "Prova collegamento" per verificare che tutto risponda.
+
 ## L'app di campo (pagina Campo)
 
 Pensata per il telefono, funziona **anche senza connessione**: prima di uscire conviene

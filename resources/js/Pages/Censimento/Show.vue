@@ -5,6 +5,7 @@ import * as maplibregl from 'maplibre-gl';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AssetEditPanel from '@/Components/AssetEditPanel.vue';
+import GestionalePanel from '@/Components/GestionalePanel.vue';
 import PlantingSitePanel from '@/Components/PlantingSitePanel.vue';
 import TreeVtaPanel from '@/Components/TreeVtaPanel.vue';
 import { fetchPdf } from '@/pdf';
@@ -339,6 +340,8 @@ onBeforeUnmount(() => map?.remove());
                         </div>
                         <p v-else class="mt-3 text-sm text-gray-400">Nessuna fotografia caricata.</p>
                     </div>
+
+                    <GestionalePanel :asset="asset" class="mt-6" />
                 </div>
 
                 <!-- Mini mappa -->

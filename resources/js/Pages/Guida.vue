@@ -14,6 +14,7 @@ const sections = [
     { id: 'statistiche', label: 'Statistiche' },
     { id: 'qualita', label: 'Qualità e ispezioni' },
     { id: 'segnalazioni', label: 'Le segnalazioni' },
+    { id: 'gestionale', label: 'Il gestionale giardini' },
     { id: 'campo', label: 'L\'app di campo' },
     { id: 'territorio', label: 'Territorio e catalogo' },
     { id: 'consegna', label: 'La consegna CAM' },
@@ -228,6 +229,20 @@ function goTo(id) {
                             a 10 per quelle di gravità bassa) ed entro quando va <strong>risolta</strong> (da 3 a 30 giorni).
                             La colonna Tempi e i filtri mostrano subito che cosa è fuori tempo massimo.
                             Da una segnalazione si genera l'ordine di lavoro con un solo pulsante.
+                        </p>
+                    </section>
+
+                    <section id="gestionale">
+                        <h2>Il gestionale giardini (WordPress)</h2>
+                        <p class="mt-2">
+                            Se nella stessa area segui sia il censimento sia la manutenzione, dalla scheda di un
+                            elemento puoi <strong>inviare al gestionale WordPress</strong> un "intervento da fare"
+                            o "da preventivare": titolo del problema, descrizione, priorità e fino a 5 fotografie.
+                            La scheda arriva al gestionale come segnalazione, con codice, specie, comune, area e
+                            posizione dell'elemento. L'invio passa da una coda con ritentativi automatici e un
+                            doppio invio non crea doppioni; lo stato si vede nella scheda dell'elemento.
+                            Indirizzo e gettone del collegamento si impostano nella pagina
+                            <strong>Utenti</strong> (solo amministratore), con il pulsante "Prova collegamento".
                         </p>
                     </section>
 

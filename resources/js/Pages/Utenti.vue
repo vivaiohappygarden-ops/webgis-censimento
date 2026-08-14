@@ -164,7 +164,68 @@ async function resetPassword(user) {
     }
 }
 
-onMounted(load);
+// Collegamento al gestionale WordPress (impostazioni di organizzazione)
+const gest = reactive({
+    form: { endpoint: '', token: '' },
+    tokenHint: null,
+    configured: false,
+    busy: false,
+    message: '',
+    messageOk: false,
+});
+
+async function loadGestionale() {
+    try {
+        const { data } = await axios.get('/api/v1/gestionale/settings');
+        gest.form.endpoint = data.data.endpoint ?? '';
+        gest.form.token = '';
+        gest.tokenHint = data.data.token_hint;
+        gest.configured = data.data.configured;
+    } catch {
+        // La scheda resta compilabile anche se la lettura fallisce
+    }
+}
+
+async function saveGestionale() {
+    gest.busy = true;
+    gest.message = '';
+    try {
+        await axios.put('/api/v1/gestionale/settings', {
+            endpoint: gest.form.endpoint.trim() || null,
+            token: gest.form.token.trim() || null,
+        });
+        await loadGestionale();
+        gest.message = gest.configured
+            ? 'Collegamento salvato: usa "Prova collegamento" per verificarlo.'
+            : 'Impostazioni salvate (collegamento non attivo: servono indirizzo e gettone).';
+        gest.messageOk = true;
+    } catch (err) {
+        gest.message = firstError(err, 'Salvataggio non riuscito');
+        gest.messageOk = false;
+    } finally {
+        gest.busy = false;
+    }
+}
+
+async function testGestionale() {
+    gest.busy = true;
+    gest.message = '';
+    try {
+        const { data } = await axios.post('/api/v1/gestionale/test');
+        gest.message = data.data.message;
+        gest.messageOk = data.data.ok;
+    } catch (err) {
+        gest.message = firstError(err, 'Prova non riuscita');
+        gest.messageOk = false;
+    } finally {
+        gest.busy = false;
+    }
+}
+
+onMounted(() => {
+    load();
+    loadGestionale();
+});
 </script>
 
 <template>
@@ -241,6 +302,31 @@ onMounted(load);
                     </tbody>
                 </table>
             </div>
+
+            <!-- Collegamento al gestionale WordPress -->
+            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" data-test="gest-settings">
+                <h2 class="text-sm font-semibold">Collegamento al gestionale giardini (WordPress)</h2>
+                <p class="mt-1 text-xs text-gray-500">
+                    Dalla scheda di un elemento si può inviare al gestionale un intervento da fare o da
+                    preventivare. Indirizzo e gettone li fornisce il gestionale all'attivazione; il gettone
+                    resta solo sul server e qui se ne vede solo un accenno.
+                </p>
+                <div class="mt-3 grid gap-3 md:grid-cols-2">
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Indirizzo dell'endpoint (https)</span>
+                        <input v-model="gest.form.endpoint" data-test="gest-endpoint" placeholder="https://giardini.esempio.it/?rest_route=/yourgarden/v1/sopralluoghi" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Gettone segreto {{ gest.tokenHint ? `(salvato: ${gest.tokenHint} - lascia vuoto per conservarlo)` : '' }}</span>
+                        <input v-model="gest.form.token" type="password" data-test="gest-token" autocomplete="off" placeholder="ygw_…" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                </div>
+                <p v-if="gest.message" class="mt-3 rounded-lg px-3 py-2 text-sm" :class="gest.messageOk ? 'bg-green-100 text-green-900' : 'bg-red-50 text-red-700'" data-test="gest-msg">{{ gest.message }}</p>
+                <div class="mt-3 flex items-center gap-2">
+                    <button class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50" :disabled="gest.busy" data-test="gest-save" @click="saveGestionale">Salva collegamento</button>
+                    <button class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50" :disabled="gest.busy || ! gest.configured" data-test="gest-test" @click="testGestionale">Prova collegamento</button>
+                </div>
+            </section>
 
             <!-- Creazione -->
             <Teleport to="body">
