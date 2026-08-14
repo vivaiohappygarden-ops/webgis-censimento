@@ -68,14 +68,18 @@
     </table>
 
     <p class="nota">
-        Registro dei trattamenti ai sensi del DM 22 gennaio 2014 (PAN). Le annotazioni vanno
-        completate entro trenta giorni dal trattamento; il registro va conservato almeno tre anni.
+        Registro dei trattamenti ai sensi dell'art. 42 del DPR 290/2001 e del DM 22 gennaio 2014
+        (PAN): registro unico per azienda, compilato dal titolare o da un suo delegato con delega
+        scritta. Gli interventi eseguiti da contoterzisti vanno controfirmati per singolo
+        trattamento (o annotati dal titolare sulla base del modulo del contoterzista). Le
+        annotazioni vanno completate entro trenta giorni dal trattamento; il registro va
+        conservato almeno tre anni. L'esecutore di ogni intervento risulta nella colonna Operatore.
     </p>
 
     <table class="firma">
         <tr>
             <td></td>
-            <td class="linea">Firma del titolare o dell'utilizzatore</td>
+            <td class="linea">Firma del titolare dell'azienda o del suo delegato</td>
         </tr>
     </table>
 </body>

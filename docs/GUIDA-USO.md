@@ -85,6 +85,12 @@ registro dell'anno scelto (anche di una sola area), pronto da esibire a un contr
 le annotazioni vanno completate entro trenta giorni dal trattamento e il registro va
 conservato almeno tre anni.
 
+Il registro è **unico per azienda**, non per singola persona: anche se i trattamenti li
+fanno più operatori, in fondo firma solo il titolare dell'azienda (o un suo delegato con
+delega scritta); chi ha eseguito ogni singolo intervento risulta comunque riga per riga
+nel campo "Eseguito da". Se un trattamento lo esegue un contoterzista, il singolo
+intervento va controfirmato da lui (o annotato dal titolare sulla base del suo modulo).
+
 ## Qualità e ispezioni
 
 Il verbale di controllo di fine lavoro si compila dal dettaglio dell'ordine, nella

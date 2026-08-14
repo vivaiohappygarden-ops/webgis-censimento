@@ -158,6 +158,13 @@ function goTo(id) {
                             area), pronto da esibire a un controllo: le annotazioni vanno completate entro trenta
                             giorni dal trattamento e il registro va conservato almeno tre anni.
                         </p>
+                        <p class="mt-2">
+                            Il registro è <strong>unico per azienda</strong>, non per singola persona: anche se i
+                            trattamenti li fanno più operatori, in fondo firma solo il titolare dell'azienda (o un
+                            suo delegato con delega scritta); chi ha eseguito ogni intervento risulta comunque riga
+                            per riga nel campo "Eseguito da". Un trattamento eseguito da un contoterzista va
+                            controfirmato da lui per singolo intervento.
+                        </p>
                     </section>
 
                     <section id="qualita">
