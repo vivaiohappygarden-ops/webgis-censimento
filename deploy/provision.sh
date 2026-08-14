@@ -165,6 +165,11 @@ cat > /etc/cron.d/webgis-backup <<CRON
 30 3 * * * root /usr/local/bin/webgis-backup >> /var/log/webgis-backup.log 2>&1
 CRON
 
+log "Scheduler Laravel (riepilogo email e attivita' pianificate)"
+cat > /etc/cron.d/webgis-scheduler <<CRON
+* * * * * www-data cd ${APP_DIR} && php artisan schedule:run >> /dev/null 2>&1
+CRON
+
 log "Fatto."
 echo
 echo "Prossimi passi:"

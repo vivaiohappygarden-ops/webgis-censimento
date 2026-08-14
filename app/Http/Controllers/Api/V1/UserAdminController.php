@@ -46,6 +46,7 @@ class UserAdminController extends Controller implements HasMiddleware
                 'role' => $user->getRoleNames()->first(),
                 'client' => $user->client?->only(['id', 'name']),
                 'last_login_at' => $user->last_login_at,
+                'notify_email' => $user->notify_email,
             ]);
 
         return response()->json(['data' => $users]);
@@ -104,6 +105,7 @@ class UserAdminController extends Controller implements HasMiddleware
             'role' => ['sometimes', Rule::in(array_keys(TenantProvisioner::ROLES))],
             'client_id' => ['nullable', 'uuid'],
             'is_active' => ['sometimes', 'boolean'],
+            'notify_email' => ['sometimes', 'boolean'],
         ]);
 
         $user = DB::transaction(function () use ($id, $me, $data) {
@@ -142,6 +144,7 @@ class UserAdminController extends Controller implements HasMiddleware
             $user->fill([
                 'name' => $data['name'] ?? $user->name,
                 'is_active' => $data['is_active'] ?? $user->is_active,
+                'notify_email' => $data['notify_email'] ?? $user->notify_email,
                 'user_type' => $newRole === 'cliente' ? 'client_portal' : 'internal',
                 'client_id' => $newRole === 'cliente' ? $data['client_id'] : null,
             ])->save();
@@ -214,6 +217,7 @@ class UserAdminController extends Controller implements HasMiddleware
             'role' => $user->getRoleNames()->first(),
             'client' => $user->client?->only(['id', 'name']),
             'last_login_at' => $user->last_login_at,
+            'notify_email' => $user->notify_email,
         ];
     }
 

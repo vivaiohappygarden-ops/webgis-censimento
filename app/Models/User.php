@@ -19,7 +19,7 @@ class User extends Authenticatable
 
     protected $fillable = [
         'tenant_id', 'name', 'email', 'username', 'password', 'phone',
-        'user_type', 'locale', 'is_active', 'client_id',
+        'user_type', 'locale', 'is_active', 'client_id', 'notify_email',
     ];
 
     /** Il cliente a cui l'utente del portale è agganciato. */
@@ -40,6 +40,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_active' => 'boolean',
             'mfa_enabled' => 'boolean',
+            'notify_email' => 'boolean',
         ];
     }
 }

@@ -112,6 +112,7 @@ function openEditor(user) {
         name: user.name,
         role: user.role ?? 'operatore',
         client_id: user.client?.id ?? '',
+        notify_email: user.notify_email ?? true,
     };
     editor.open = true;
 }
@@ -124,6 +125,7 @@ async function saveEditor() {
             name: editor.form.name.trim(),
             role: editor.form.role,
             client_id: editor.form.role === 'cliente' ? editor.form.client_id || null : null,
+            notify_email: editor.form.notify_email,
         });
         editor.open = false;
         await load();
@@ -311,6 +313,10 @@ onMounted(load);
                                     <option value="" disabled>Seleziona…</option>
                                     <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
                                 </select>
+                            </label>
+                            <label v-if="editor.form.role !== 'cliente'" class="flex items-center gap-1.5 text-xs text-gray-600">
+                                <input v-model="editor.form.notify_email" type="checkbox" data-test="usr-notify">
+                                Riceve il riepilogo email delle scadenze (solo amministratori e tecnici)
                             </label>
                         </div>
                         <p v-if="editor.error" class="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="usr-edit-error">{{ editor.error }}</p>

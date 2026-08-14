@@ -127,8 +127,31 @@ completo dei 387 tipi.
 |---|---|
 | **Aggiornare l'applicazione** | `bash /var/www/webgis/deploy/update.sh` (30 secondi di manutenzione) |
 | **Backup** | automatico ogni notte alle 03:30 in `/var/backups/webgis` (14 giorni conservati); in più, dal pannello Aruba si può attivare lo **snapshot** del server |
-| **Nuovi utenti** | dall'interfaccia (in arrivo) o chiedere a Claude |
+| **Nuovi utenti** | dalla pagina **Utenti** dell'applicazione |
 | **Spegnere tutto** | eliminare il server dal pannello Aruba: l'addebito si ferma |
+
+### 6.1 Riepilogo email delle scadenze
+
+Ogni mattina alle 6:30 l'applicazione può inviare ad amministratori e tecnici
+un'email con le scadenze da attenzionare (patentini, ricontrolli VTA, controlli
+ricorrenti, segnalazioni fuori tempo, lavori in ritardo). Se non c'è nulla da
+segnalare, non parte nessuna email.
+
+Per attivarla serve una casella di posta da cui spedire. Con una **casella
+email Aruba** (inclusa se si è acquistato il dominio con la posta):
+
+1. Aprire sul server il file `/var/www/webgis/.env` e completare le righe
+   `MAIL_`: cambiare `MAIL_MAILER=log` in `MAIL_MAILER=smtp` e inserire
+   indirizzo e password della casella in `MAIL_USERNAME`, `MAIL_PASSWORD`
+   e `MAIL_FROM_ADDRESS` (host `smtps.aruba.it`, porta `465` sono già
+   precompilati).
+2. Ricaricare la configurazione: `cd /var/www/webgis && sudo -u www-data php artisan config:cache`.
+3. Prova immediata: `sudo -u www-data php artisan notifications:daily` e
+   controllare che l'email arrivi.
+
+Finché `MAIL_MAILER` resta `log`, le email non partono: finiscono solo nel
+registro dell'applicazione (utile in prova). Chi non vuole ricevere il
+riepilogo si spegne dalla pagina **Utenti** (interruttore "riepilogo email").
 
 ## 7. Se qualcosa non va
 
