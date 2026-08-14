@@ -98,6 +98,10 @@ Route::prefix('v1')->group(function () {
         Route::post('estimates/{id}/work-order', [\App\Http\Controllers\Api\V1\EstimateController::class, 'createWorkOrder'])->whereUuid('id');
         Route::get('estimates/{id}/pdf', [\App\Http\Controllers\Api\V1\EstimateController::class, 'pdf'])->whereUuid('id');
 
+        Route::get('phyto-treatments/register-pdf', [\App\Http\Controllers\Api\V1\PhytoTreatmentController::class, 'registerPdf']);
+        Route::apiResource('phyto-treatments', \App\Http\Controllers\Api\V1\PhytoTreatmentController::class)
+            ->only(['index', 'store', 'update', 'destroy'])->whereUuid('phyto_treatment');
+
         Route::apiResource('work-orders', \App\Http\Controllers\Api\V1\WorkOrderController::class)
             ->whereUuid('work_order');
         Route::post('work-orders/{id}/transition', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'transition'])->whereUuid('id');

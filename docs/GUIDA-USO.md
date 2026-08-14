@@ -75,6 +75,16 @@ totale con IVA e **PDF pronto da inviare**.
 Il flusso è bozza, inviato, accettato o rifiutato: un preventivo accettato
 diventa un ordine di lavoro con un clic, e ogni documento resta agli atti.
 
+## Registro dei trattamenti fitosanitari
+
+La pagina **Fitosanitari** è il quaderno di campagna: ogni trattamento si registra con
+data, area (ed eventualmente il singolo albero, per esempio in endoterapia), prodotto
+con numero di registrazione, principio attivo, avversità combattuta, metodo, quantità,
+acqua, superficie, tempo di rientro e operatore. Il pulsante **Registro PDF** stampa il
+registro dell'anno scelto (anche di una sola area), pronto da esibire a un controllo:
+le annotazioni vanno completate entro trenta giorni dal trattamento e il registro va
+conservato almeno tre anni.
+
 ## Qualità e ispezioni
 
 Il verbale di controllo di fine lavoro si compila dal dettaglio dell'ordine, nella

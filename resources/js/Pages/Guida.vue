@@ -145,6 +145,19 @@ function goTo(id) {
                         </p>
                     </section>
 
+                    <section id="fitosanitari">
+                        <h2>Registro dei trattamenti fitosanitari</h2>
+                        <p class="mt-2">
+                            La pagina <strong>Fitosanitari</strong> è il quaderno di campagna: ogni trattamento si
+                            registra con data, area (ed eventualmente il singolo albero, per esempio in endoterapia),
+                            prodotto con numero di registrazione, principio attivo, avversità combattuta, metodo,
+                            quantità, acqua, superficie, tempo di rientro e operatore. Il pulsante
+                            <strong>Registro PDF</strong> stampa il registro dell'anno scelto (anche di una sola
+                            area), pronto da esibire a un controllo: le annotazioni vanno completate entro trenta
+                            giorni dal trattamento e il registro va conservato almeno tre anni.
+                        </p>
+                    </section>
+
                     <section id="qualita">
                         <h2>Qualità e ispezioni</h2>
                         <p class="mt-2">
