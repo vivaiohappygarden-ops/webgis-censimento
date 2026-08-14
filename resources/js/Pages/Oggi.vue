@@ -181,6 +181,34 @@ onMounted(load);
                     </div>
                 </section>
 
+                <!-- Patentini e certificati -->
+                <section v-if="data.certificates" class="rounded-xl border border-gray-200 bg-white" data-test="oggi-patentini">
+                    <div class="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
+                        <h2 class="text-sm font-semibold">Patentini e certificati</h2>
+                        <Link href="/patentini" class="text-xs font-medium text-green-800 hover:underline">Vai ai patentini →</Link>
+                    </div>
+                    <div class="px-4 py-3">
+                        <p v-if="data.certificates.expired_count || data.certificates.due_soon_count" class="mb-2 text-xs font-medium">
+                            <span v-if="data.certificates.expired_count" class="text-red-700">{{ data.certificates.expired_count }} scaduti</span>
+                            <span v-if="data.certificates.expired_count && data.certificates.due_soon_count" class="text-gray-400"> · </span>
+                            <span v-if="data.certificates.due_soon_count" class="text-gray-600">{{ data.certificates.due_soon_count }} in scadenza entro 60 giorni</span>
+                        </p>
+                        <table v-if="data.certificates.rows.length" class="w-full text-sm">
+                            <tbody class="divide-y divide-gray-50">
+                                <tr v-for="cert in data.certificates.rows" :key="cert.id">
+                                    <td class="py-1.5 pr-2 font-medium">{{ cert.holder_name }}</td>
+                                    <td class="py-1.5 pr-2">{{ cert.title }}</td>
+                                    <td class="py-1.5 text-right" :class="cert.state === 'expired' ? 'text-red-700' : 'text-gray-600'">
+                                        <template v-if="cert.state === 'expired'">scaduto il {{ formatDate(cert.expires_on) }}</template>
+                                        <template v-else>scade il {{ formatDate(cert.expires_on) }}</template>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p v-else class="text-sm text-gray-400">Nessun patentino o certificato scaduto o in scadenza entro 60 giorni.</p>
+                    </div>
+                </section>
+
                 <!-- Irrigazione (solo per chi può aprire la pagina dedicata) -->
                 <section v-if="data.irrigation" class="rounded-xl border border-gray-200 bg-white" data-test="oggi-irrigazione">
                     <div class="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">

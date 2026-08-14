@@ -10,6 +10,7 @@ const sections = [
     { id: 'alberi', label: 'Alberi e VTA' },
     { id: 'lavori', label: 'I lavori' },
     { id: 'fitosanitari', label: 'Registro fitosanitari' },
+    { id: 'patentini', label: 'Patentini e certificati' },
     { id: 'qualita', label: 'Qualità e ispezioni' },
     { id: 'segnalazioni', label: 'Le segnalazioni' },
     { id: 'campo', label: 'L\'app di campo' },
@@ -164,6 +165,19 @@ function goTo(id) {
                             suo delegato con delega scritta); chi ha eseguito ogni intervento risulta comunque riga
                             per riga nel campo "Eseguito da". Un trattamento eseguito da un contoterzista va
                             controfirmato da lui per singolo intervento.
+                        </p>
+                    </section>
+
+                    <section id="patentini">
+                        <h2>Patentini e certificati</h2>
+                        <p class="mt-2">
+                            La pagina <strong>Patentini</strong> è lo scadenzario di abilitazioni e documenti:
+                            patentino fitosanitario, abilitazione al trattore, corsi sicurezza, taratura
+                            dell'irroratrice, assicurazioni. Ogni riga ha intestatario (una persona dell'app o un
+                            nome libero, anche "Azienda"), numero, ente di rilascio e date; lo stato dice subito
+                            cosa è <strong>scaduto</strong> (rosso) o <strong>in scadenza</strong> entro 60 giorni
+                            (ambra). Le scadenze più vicine compaiono anche nel cruscotto <strong>Oggi</strong>.
+                            Al rinnovo basta aggiornare la data di scadenza.
                         </p>
                     </section>
 

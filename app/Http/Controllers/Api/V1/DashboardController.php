@@ -41,6 +41,7 @@ class DashboardController extends Controller implements HasMiddleware
             'inspections' => $this->inspections($deadlines),
             'issues' => $this->issues(),
             'non_conformities' => $this->nonConformities(),
+            'certificates' => $this->certificates($today),
             // La pagina e le API dell'irrigazione richiedono areas.view: chi
             // non le può aprire non deve vederne i dati nel cruscotto
             'irrigation' => $request->user()->can('areas.view') ? $this->irrigation($today) : null,
@@ -146,6 +147,31 @@ class DashboardController extends Controller implements HasMiddleware
                     'description' => mb_strimwidth((string) $nc->description, 0, 90, '…'),
                     'due_on' => $nc->due_on?->toDateString(),
                 ]),
+        ];
+    }
+
+    /** Patentini e certificati scaduti o in scadenza (entro 60 giorni). */
+    private function certificates(Carbon $today): array
+    {
+        $horizon = $today->copy()->addDays(\App\Models\Certificate::DUE_SOON_DAYS)->toDateString();
+
+        $query = \App\Models\Certificate::query()
+            ->whereNotNull('expires_on')
+            ->whereDate('expires_on', '<=', $horizon);
+
+        $rows = (clone $query)->orderBy('expires_on')->limit(self::LIMIT)->get()
+            ->map(fn (\App\Models\Certificate $c) => [
+                'id' => $c->id,
+                'holder_name' => $c->holder_name,
+                'title' => $c->title,
+                'expires_on' => $c->expires_on->toDateString(),
+                'state' => $c->state(),
+            ]);
+
+        return [
+            'expired_count' => (clone $query)->whereDate('expires_on', '<', $today->toDateString())->count(),
+            'due_soon_count' => (clone $query)->whereDate('expires_on', '>=', $today->toDateString())->count(),
+            'rows' => $rows,
         ];
     }
 

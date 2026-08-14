@@ -21,6 +21,7 @@ const nav = computed(() =>
         { label: 'Ispezioni', href: '/ispezioni', show: can('works.view') },
         { label: 'Listini', href: '/listini', show: can('works.view') },
         { label: 'Fitosanitari', href: '/fitosanitari', show: can('works.view') },
+        { label: 'Patentini', href: '/patentini', show: can('works.view') },
         { label: 'Territorio', href: '/territorio', show: can('clients.view') },
         { label: 'Irrigazione', href: '/irrigazione', show: can('areas.view') },
         { label: 'Catalogo', href: '/catalogo', show: can('catalog.view') },

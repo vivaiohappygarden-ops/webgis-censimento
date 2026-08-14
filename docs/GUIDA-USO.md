@@ -91,6 +91,15 @@ delega scritta); chi ha eseguito ogni singolo intervento risulta comunque riga p
 nel campo "Eseguito da". Se un trattamento lo esegue un contoterzista, il singolo
 intervento va controfirmato da lui (o annotato dal titolare sulla base del suo modulo).
 
+## Patentini e certificati
+
+La pagina **Patentini** è lo scadenzario di abilitazioni e documenti: patentino
+fitosanitario, abilitazione al trattore, corsi sicurezza, taratura dell'irroratrice,
+assicurazioni. Ogni riga ha intestatario (una persona dell'app o un nome libero, anche
+"Azienda"), numero, ente di rilascio e date; lo stato dice subito cosa è **scaduto**
+(rosso) o **in scadenza** entro 60 giorni (ambra). Le scadenze più vicine compaiono
+anche nel cruscotto **Oggi**. Al rinnovo basta aggiornare la data di scadenza.
+
 ## Qualità e ispezioni
 
 Il verbale di controllo di fine lavoro si compila dal dettaglio dell'ordine, nella
