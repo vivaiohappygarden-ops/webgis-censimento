@@ -130,6 +130,18 @@ async function load() {
     }
 }
 
+// L'anagrafica clienti è paginata (massimo 100 per pagina): si scorrono
+// tutte le pagine, o i clienti oltre il centesimo non sarebbero selezionabili
+async function fetchAllClients() {
+    const all = [];
+    for (let p = 1; p <= 20; p++) {
+        const { data } = await axios.get('/api/v1/clients', { params: { per_page: 100, page: p } });
+        all.push(...(data.data ?? []));
+        if (! data.next_page_url) break;
+    }
+    return all;
+}
+
 async function loadLookups() {
     const requests = [
         axios.get('/api/v1/teams'),
@@ -138,7 +150,7 @@ async function loadLookups() {
     ];
     if (canManage.value) {
         requests.push(axios.get('/api/v1/personnel'));
-        requests.push(axios.get('/api/v1/clients', { params: { per_page: 100 } }));
+        requests.push(fetchAllClients());
         requests.push(axios.get('/api/v1/areas', { params: { per_page: 100 } }));
     }
     const [t, wt, pl, p, c, a] = await Promise.all(requests);
@@ -146,7 +158,7 @@ async function loadLookups() {
     workTypes.value = wt.data.data;
     priceLists.value = pl.data.data;
     if (p) personnel.value = p.data.data;
-    if (c) clients.value = c.data.data;
+    if (c) clients.value = c;
     if (a) areas.value = a.data.data;
 }
 
@@ -371,6 +383,7 @@ onMounted(async () => {
                 :clients="clients"
                 :work-types="workTypes"
                 :can-manage="canManage"
+                @created-order="load"
             />
 
             <div v-if="view === 'elenco'" class="mb-3 flex flex-wrap gap-2">

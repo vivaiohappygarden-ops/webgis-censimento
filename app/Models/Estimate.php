@@ -55,7 +55,9 @@ class Estimate extends Model
         DB::statement(
             'SELECT pg_advisory_xact_lock(hashtextextended(?, 42))', ["est:{$tenantId}"],
         );
-        $year = now()->year;
+        // Fuso di riferimento del committente: a cavallo di Capodanno il
+        // progressivo riparte quando riparte l'anno in Italia, non in UTC
+        $year = now('Europe/Rome')->year;
         $next = (int) DB::selectOne(
             "SELECT COALESCE(MAX((substring(code FROM '\\d+$'))::int), 0) + 1 AS n
              FROM estimates WHERE tenant_id = ? AND code LIKE ?",

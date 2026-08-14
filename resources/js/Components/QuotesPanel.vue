@@ -9,6 +9,8 @@ const props = defineProps({
     canManage: { type: Boolean, default: false },
 });
 
+const emit = defineEmits(['created-order']);
+
 const STATUS = {
     draft: { label: 'Bozza', cls: 'bg-gray-200 text-gray-600' },
     sent: { label: 'Inviato', cls: 'bg-amber-100 text-amber-800' },
@@ -54,6 +56,16 @@ function firstError(err, fallback) {
 function markDirty() {
     editorDirty.value = true;
     detailSaved.value = false;
+}
+
+// Con voci modificate e non salvate, stati e PDF lavorerebbero sui dati
+// vecchi del server: meglio fermarsi e chiedere di salvare prima.
+function blockIfDirty() {
+    if (editorDirty.value && detail.value?.status === 'draft') {
+        detailError.value = 'Ci sono voci modificate e non salvate: salva prima le voci.';
+        return true;
+    }
+    return false;
 }
 
 function closeDetail() {
@@ -176,24 +188,37 @@ async function saveItems() {
 
 async function doTransition(status) {
     detailError.value = '';
+    if (blockIfDirty()) return;
     workOrderMessage.value = '';
+    detailBusy.value = true;
     try {
-        const { data } = await axios.post(`/api/v1/estimates/${detail.value.id}/transition`, { status });
+        const { data } = await axios.post(`/api/v1/estimates/${detail.value.id}/transition`, {
+            status,
+            version: detail.value.version,
+        });
         openDetailData(data.data);
         await load();
     } catch (err) {
-        detailError.value = firstError(err, 'Cambio di stato non riuscito');
+        detailError.value = err.response?.status === 409
+            ? 'Un altro utente ha modificato questo preventivo: chiudi e riapri il dettaglio.'
+            : firstError(err, 'Cambio di stato non riuscito');
+    } finally {
+        detailBusy.value = false;
     }
 }
 
 async function generateWorkOrder() {
     if (! window.confirm(`Creare l'ordine di lavoro dal preventivo ${detail.value.code}?`)) return;
     detailError.value = '';
+    detailBusy.value = true;
     try {
         const { data } = await axios.post(`/api/v1/estimates/${detail.value.id}/work-order`);
         workOrderMessage.value = `Ordine ${data.data.code} creato in bozza: lo trovi nella vista Elenco.`;
+        emit('created-order');
     } catch (err) {
         detailError.value = firstError(err, 'Creazione non riuscita');
+    } finally {
+        detailBusy.value = false;
     }
 }
 
@@ -211,8 +236,9 @@ async function deleteEstimate() {
 
 async function openPdf() {
     detailError.value = '';
-    const ok = await fetchPdf(`/api/v1/estimates/${detail.value.id}/pdf`, `preventivo_${detail.value.code}.pdf`);
-    if (! ok) detailError.value = 'Apertura del PDF non riuscita.';
+    if (blockIfDirty()) return;
+    const res = await fetchPdf(`/api/v1/estimates/${detail.value.id}/pdf`);
+    if (res?.error) detailError.value = res.error;
 }
 
 onMounted(load);
@@ -223,7 +249,7 @@ defineExpose({ load });
 <template>
     <div>
         <div class="mb-3 flex items-center justify-between">
-            <p class="text-sm text-gray-500">Offerte al cliente con voci dai listini; l'accettazione diventa un ordine di lavoro</p>
+            <p class="text-sm text-gray-500">Offerte al cliente con lavorazioni dal catalogo o voci libere; l'accettazione diventa un ordine di lavoro</p>
             <button
                 v-if="canManage"
                 class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800"
@@ -396,14 +422,16 @@ defineExpose({ load });
                             <button
                                 v-for="target in detail.allowed_transitions"
                                 :key="target"
-                                class="text-sm font-medium hover:underline"
+                                class="text-sm font-medium hover:underline disabled:opacity-50"
                                 :class="target === 'rejected' ? 'text-red-600' : 'text-green-800'"
+                                :disabled="detailBusy"
                                 :data-test="`est-to-${target}`"
                                 @click="doTransition(target)"
                             >{{ TRANSITION_LABELS[target] }}</button>
                             <button
                                 v-if="detail.status === 'accepted'"
-                                class="text-sm font-medium text-green-800 hover:underline"
+                                class="text-sm font-medium text-green-800 hover:underline disabled:opacity-50"
+                                :disabled="detailBusy"
                                 data-test="est-workorder"
                                 @click="generateWorkOrder"
                             >Genera ordine di lavoro</button>

@@ -158,6 +158,41 @@ class EstimateTest extends TestCase
         ])->assertNotFound();
     }
 
+    public function test_decimal_precision_rounding_convention_and_transition_conflict(): void
+    {
+        $estimate = $this->makeEstimate();
+
+        // Piu' di due decimali: rifiutato dalla validazione, non dal DB
+        $this->putJson("/api/v1/estimates/{$estimate['id']}/items", ['items' => [
+            ['description' => 'Voce', 'unit' => 'cad', 'quantity' => 0.004, 'unit_price' => 10],
+        ]])->assertUnprocessable();
+        $this->putJson("/api/v1/estimates/{$estimate['id']}/items", ['items' => [
+            ['description' => 'Voce', 'unit' => 'cad', 'quantity' => 1, 'unit_price' => 1.005],
+        ]])->assertUnprocessable();
+
+        // Convenzione di fattura: ogni riga arrotondata a 2 decimali e IVA
+        // sull'imponibile stampato. 3 righe da 0,33 x 1,01 (= 0,3333 -> 0,33
+        // l'una): imponibile 0,99, non 1,00 come verrebbe sommando esatto
+        $body = $this->putJson("/api/v1/estimates/{$estimate['id']}/items", ['items' => [
+            ['description' => 'Riga A', 'unit' => 'cad', 'quantity' => 0.33, 'unit_price' => 1.01],
+            ['description' => 'Riga B', 'unit' => 'cad', 'quantity' => 0.33, 'unit_price' => 1.01],
+            ['description' => 'Riga C', 'unit' => 'cad', 'quantity' => 0.33, 'unit_price' => 1.01],
+        ]])->assertOk()->json('data');
+        $this->assertEquals(0.99, $body['subtotal']);
+        $this->assertEquals(0.22, $body['vat']);
+        $this->assertEquals(1.21, $body['total']);
+
+        // Cambio di stato con versione superata: 409 e lo stato non cambia
+        $this->postJson("/api/v1/estimates/{$estimate['id']}/transition", [
+            'status' => 'sent', 'version' => 1,
+        ])->assertStatus(409);
+        $this->assertSame('draft', Estimate::query()->find($estimate['id'])->status);
+
+        $this->postJson("/api/v1/estimates/{$estimate['id']}/transition", [
+            'status' => 'sent', 'version' => $body['version'],
+        ])->assertOk();
+    }
+
     public function test_permissions_and_tenant_isolation(): void
     {
         $estimate = $this->makeEstimate();

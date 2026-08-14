@@ -22,7 +22,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Preventivi: voci dai listini o libere, intestate a un cliente; il flusso
+ * Preventivi: lavorazioni dal catalogo o voci libere, intestate a un cliente; il flusso
  * bozza -> inviato -> accettato/rifiutato chiude il cerchio commerciale e
  * l'accettazione può diventare un ordine di lavoro con un gesto.
  */
@@ -69,7 +69,7 @@ class EstimateController extends Controller implements HasMiddleware
             'client_id' => ['required', 'uuid'],
             'area_id' => ['nullable', 'uuid'],
             'title' => ['required', 'string', 'max:200'],
-            'vat_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'vat_percent' => ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:100'],
             'valid_until' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -100,7 +100,7 @@ class EstimateController extends Controller implements HasMiddleware
             'client_id' => ['sometimes', 'uuid'],
             'area_id' => ['nullable', 'uuid'],
             'title' => ['sometimes', 'string', 'max:200'],
-            'vat_percent' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'vat_percent' => ['sometimes', 'numeric', 'decimal:0,2', 'min:0', 'max:100'],
             'valid_until' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -157,8 +157,8 @@ class EstimateController extends Controller implements HasMiddleware
             'items.*.work_type_id' => ['nullable', 'uuid'],
             'items.*.description' => ['required', 'string', 'max:300'],
             'items.*.unit' => ['required', 'string', 'max:20'],
-            'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:999999'],
-            'items.*.unit_price' => ['required', 'numeric', 'min:0', 'max:9999999'],
+            'items.*.quantity' => ['required', 'numeric', 'decimal:0,2', 'gt:0', 'max:999999'],
+            'items.*.unit_price' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999'],
         ]);
 
         DB::transaction(function () use ($request, $id, $data) {
@@ -201,11 +201,13 @@ class EstimateController extends Controller implements HasMiddleware
     public function transition(Request $request, string $id): JsonResponse
     {
         $data = $request->validate([
+            'version' => ['nullable', 'integer'],
             'status' => ['required', Rule::in(Estimate::STATUSES)],
         ]);
 
         DB::transaction(function () use ($request, $id, $data) {
             $estimate = Estimate::query()->lockForUpdate()->findOrFail($id);
+            $this->guardVersion($request, $estimate);
             $allowed = Estimate::TRANSITIONS[$estimate->status] ?? [];
             if (! in_array($data['status'], $allowed, true)) {
                 throw ValidationException::withMessages([
@@ -228,36 +230,48 @@ class EstimateController extends Controller implements HasMiddleware
         return response()->json(['data' => $this->presented($id)]);
     }
 
-    /** L'accettazione diventa un ordine di lavoro in bozza. */
+    /** L'accettazione diventa un ordine di lavoro in bozza (uno solo). */
     public function createWorkOrder(Request $request, string $id): JsonResponse
     {
-        $estimate = Estimate::query()->with('client:id,name')->findOrFail($id);
-        if ($estimate->status !== 'accepted') {
-            throw ValidationException::withMessages([
-                'estimate' => 'Solo un preventivo accettato diventa un ordine di lavoro.',
-            ]);
-        }
-
-        $existing = WorkOrder::query()->where('origin', 'estimate')->where('origin_id', $estimate->id)->first();
-        if ($existing) {
-            throw ValidationException::withMessages([
-                'estimate' => "Questo preventivo ha già generato l'ordine {$existing->code}.",
-            ]);
-        }
-
         $user = $request->user();
-        $workOrder = DB::transaction(fn () => WorkOrder::create([
-            'tenant_id' => $user->tenant_id,
-            'code' => WorkOrder::nextCode($user->tenant_id),
-            'title' => $estimate->title,
-            'status' => 'draft',
-            'origin' => 'estimate',
-            'origin_id' => $estimate->id,
-            'client_id' => $estimate->client_id,
-            'area_id' => $estimate->area_id,
-            'created_by' => $user->id,
-            'updated_by' => $user->id,
-        ]));
+
+        try {
+            $workOrder = DB::transaction(function () use ($user, $id) {
+                // Lock e controllo del duplicato DENTRO la transazione: due
+                // richieste simultanee non possono passare entrambe
+                $estimate = Estimate::query()->lockForUpdate()->findOrFail($id);
+                if ($estimate->status !== 'accepted') {
+                    throw ValidationException::withMessages([
+                        'estimate' => 'Solo un preventivo accettato diventa un ordine di lavoro.',
+                    ]);
+                }
+                $existing = WorkOrder::query()
+                    ->where('origin', 'estimate')->where('origin_id', $estimate->id)->first();
+                if ($existing) {
+                    throw ValidationException::withMessages([
+                        'estimate' => "Questo preventivo ha già generato l'ordine {$existing->code}.",
+                    ]);
+                }
+
+                return WorkOrder::create([
+                    'tenant_id' => $user->tenant_id,
+                    'code' => WorkOrder::nextCode($user->tenant_id),
+                    'title' => $estimate->title,
+                    'status' => 'draft',
+                    'origin' => 'estimate',
+                    'origin_id' => $estimate->id,
+                    'client_id' => $estimate->client_id,
+                    'area_id' => $estimate->area_id,
+                    'created_by' => $user->id,
+                    'updated_by' => $user->id,
+                ]);
+            });
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            // Rete di sicurezza dell'indice univoco: stessa risposta del pre-check
+            throw ValidationException::withMessages([
+                'estimate' => 'Questo preventivo ha già generato un ordine di lavoro.',
+            ]);
+        }
 
         Audit::log('work_order.created', $workOrder, ['code' => $workOrder->code, 'origin' => 'estimate']);
 
@@ -272,15 +286,14 @@ class EstimateController extends Controller implements HasMiddleware
             ->findOrFail($id);
         $organization = Organization::query()->find($estimate->tenant_id);
 
-        $subtotal = $estimate->items->sum(fn ($i) => (float) $i->quantity * (float) $i->unit_price);
-        $vat = round($subtotal * (float) $estimate->vat_percent / 100, 2);
+        [$subtotal, $vat] = $this->totals($estimate);
 
         $pdf = $renderer->render('pdf.estimate', [
             'estimate' => $estimate,
             'organization' => $organization,
             'subtotal' => $subtotal,
             'vat' => $vat,
-            'total' => $subtotal + $vat,
+            'total' => round($subtotal + $vat, 2),
         ]);
 
         Audit::log('estimate.pdf', $estimate, ['code' => $estimate->code]);
@@ -313,15 +326,30 @@ class EstimateController extends Controller implements HasMiddleware
             ->with(['client:id,name', 'area:id,name', 'items.workType:id,name'])
             ->findOrFail($id);
 
-        $subtotal = $estimate->items->sum(fn ($i) => (float) $i->quantity * (float) $i->unit_price);
-        $vat = round($subtotal * (float) $estimate->vat_percent / 100, 2);
+        [$subtotal, $vat] = $this->totals($estimate);
 
         return [
             ...$estimate->toArray(),
-            'subtotal' => round($subtotal, 2),
+            'subtotal' => $subtotal,
             'vat' => $vat,
             'total' => round($subtotal + $vat, 2),
             'allowed_transitions' => Estimate::TRANSITIONS[$estimate->status] ?? [],
         ];
+    }
+
+    /**
+     * Convenzione di fatturazione: ogni riga arrotondata a 2 decimali,
+     * l'imponibile è la somma delle righe stampate e l'IVA si calcola su
+     * quell'imponibile. Così la colonna del PDF quadra con la calcolatrice.
+     *
+     * @return array{0: float, 1: float}
+     */
+    private function totals(Estimate $estimate): array
+    {
+        $subtotal = round($estimate->items
+            ->sum(fn ($i) => round((float) $i->quantity * (float) $i->unit_price, 2)), 2);
+        $vat = round($subtotal * (float) $estimate->vat_percent / 100, 2);
+
+        return [$subtotal, $vat];
     }
 }

@@ -137,8 +137,9 @@ function goTo(id) {
                             qualcosa (nessun listino, nessuna voce, quantità mancante).
                         </p>
                         <p class="mt-2">
-                            Nella vista <strong>Preventivi</strong> si prepara un'offerta per un cliente: voci dai
-                            listini (o libere) con quantità e prezzi, totale con IVA e PDF pronto da inviare.
+                            Nella vista <strong>Preventivi</strong> si prepara un'offerta per un cliente: lavorazioni
+                            dal catalogo (o voci libere) con quantità e prezzi indicati a mano, totale con IVA e
+                            PDF pronto da inviare.
                             Il flusso è bozza, inviato, accettato o rifiutato: un preventivo accettato diventa
                             un ordine di lavoro con un clic, e ogni documento resta agli atti.
                         </p>
