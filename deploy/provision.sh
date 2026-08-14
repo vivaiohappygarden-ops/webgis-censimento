@@ -6,14 +6,15 @@
 # Uso (da root sul server):
 #   export WEBGIS_DOMAIN=verde.esempio.it
 #   export WEBGIS_REPO=https://github.com/vivaiohappygarden-ops/webgis-censimento.git
-#   export WEBGIS_BRANCH=main            # facoltativo
+#   export WEBGIS_BRANCH=claude/aruba-hosting-specifics-atsiy4   # facoltativo
 #   bash provision.sh
 #
 set -euo pipefail
 
 WEBGIS_DOMAIN="${WEBGIS_DOMAIN:?Impostare WEBGIS_DOMAIN (es. verde.esempio.it)}"
 WEBGIS_REPO="${WEBGIS_REPO:?Impostare WEBGIS_REPO (URL del repository git)}"
-WEBGIS_BRANCH="${WEBGIS_BRANCH:-main}"
+# Ramo predefinito del repository (il progetto non usa "main")
+WEBGIS_BRANCH="${WEBGIS_BRANCH:-claude/aruba-hosting-specifics-atsiy4}"
 APP_DIR=/var/www/webgis
 PHP_V=8.4
 

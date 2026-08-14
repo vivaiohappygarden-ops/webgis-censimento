@@ -71,10 +71,11 @@ sostituendo il dominio con il proprio:
 ```bash
 export WEBGIS_DOMAIN=verde.tuodominio.it
 export WEBGIS_REPO=https://github.com/vivaiohappygarden-ops/webgis-censimento.git
+export WEBGIS_BRANCH=claude/aruba-hosting-specifics-atsiy4
 ```
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vivaiohappygarden-ops/webgis-censimento/main/deploy/provision.sh -o provision.sh
+curl -fsSL https://raw.githubusercontent.com/vivaiohappygarden-ops/webgis-censimento/claude/aruba-hosting-specifics-atsiy4/deploy/provision.sh -o provision.sh
 ```
 
 ```bash
