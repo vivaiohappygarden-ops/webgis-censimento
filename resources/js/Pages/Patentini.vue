@@ -37,6 +37,13 @@ const filters = reactive({ user_id: '', onlyDue: false });
 const drawer = reactive({ open: false, mode: 'new', id: null, version: null, busy: false, error: '' });
 const form = reactive({});
 let formSnapshot = '';
+// Persona collegata al certificato aperto: se non è più tra il personale
+// (ruolo cambiato), la tendina la mostra comunque invece di apparire vuota
+const loadedPerson = ref(null);
+const missingLoadedPerson = computed(() => loadedPerson.value
+    && form.user_id === loadedPerson.value.id
+    && ! personnel.value.some((p) => p.id === loadedPerson.value.id)
+    ? loadedPerson.value : null);
 
 function blankForm() {
     return {
@@ -124,6 +131,7 @@ function closeDrawer() {
 
 function openCreator() {
     Object.assign(form, blankForm());
+    loadedPerson.value = null;
     drawer.mode = 'new';
     drawer.id = null;
     drawer.version = null;
@@ -133,6 +141,7 @@ function openCreator() {
 }
 
 function openDetail(certificate) {
+    loadedPerson.value = certificate.user ?? null;
     Object.assign(form, blankForm(), {
         user_id: certificate.user_id ?? '',
         holder_name: certificate.holder_name,
@@ -239,7 +248,8 @@ onMounted(() => {
 
             <p v-if="pageError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ pageError }}</p>
             <p v-if="total > certificates.length" class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                Elenco parziale: a video {{ certificates.length }} certificati su {{ total }}. Filtra per intestatario.
+                Elenco parziale: caricati i {{ certificates.length }} certificati con scadenza più vicina
+                su {{ total }}.<template v-if="canManage"> Filtra per intestatario per vedere gli altri.</template>
             </p>
 
             <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
@@ -298,6 +308,7 @@ onMounted(() => {
                                 <span class="text-gray-500">Persona dell'app (facoltativa)</span>
                                 <select v-model="form.user_id" data-test="cert-person" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @change="onPersonChange">
                                     <option value="">— (documento aziendale o persona esterna)</option>
+                                    <option v-if="missingLoadedPerson" :value="missingLoadedPerson.id">{{ missingLoadedPerson.name }} (non più tra il personale)</option>
                                     <option v-for="p in personnel" :key="p.id" :value="p.id">{{ p.name }}</option>
                                 </select>
                             </label>

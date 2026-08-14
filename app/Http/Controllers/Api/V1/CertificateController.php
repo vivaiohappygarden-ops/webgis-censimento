@@ -79,6 +79,20 @@ class CertificateController extends Controller implements HasMiddleware
                 abort(409, "Conflitto di versione: il certificato è stato modificato da altri (versione attuale {$certificate->version}).");
             }
 
+            // La regola after_or_equal vede solo la richiesta: in un PATCH
+            // parziale le date vanno confrontate sullo stato finale, o il
+            // CHECK del DB risponderebbe con un 500 al posto di questo 422
+            $issued = array_key_exists('issued_on', $data)
+                ? $data['issued_on'] : $certificate->issued_on?->toDateString();
+            $expires = array_key_exists('expires_on', $data)
+                ? $data['expires_on'] : $certificate->expires_on?->toDateString();
+            if ($issued !== null && $expires !== null
+                && \Illuminate\Support\Carbon::parse($expires)->lt(\Illuminate\Support\Carbon::parse($issued))) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'expires_on' => 'La data di scadenza non può precedere la data di rilascio.',
+                ]);
+            }
+
             $certificate->fill([...$data, 'updated_by' => $request->user()->id]);
             if ($certificate->isDirty()) {
                 $certificate->version = $certificate->version + 1;

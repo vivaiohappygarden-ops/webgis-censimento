@@ -114,6 +114,32 @@ class CertificateTest extends TestCase
         ]))->assertNotFound();
     }
 
+    public function test_partial_patch_still_checks_date_order(): void
+    {
+        // Rilasciato 4 anni fa, scade tra un anno
+        $created = $this->postJson('/api/v1/certificates', $this->validPayload())
+            ->assertCreated()->json('data');
+
+        // Rinnovo con errore di battitura sull'anno: scadenza prima del
+        // rilascio memorizzato -> 422 in italiano, non 500 dal CHECK del DB
+        $this->patchJson("/api/v1/certificates/{$created['id']}", [
+            'version' => 1,
+            'expires_on' => now('Europe/Rome')->subYears(10)->toDateString(),
+        ])->assertUnprocessable()->assertJsonValidationErrors('expires_on');
+
+        // Speculare: solo il rilascio, spostato oltre la scadenza memorizzata
+        $this->patchJson("/api/v1/certificates/{$created['id']}", [
+            'version' => 1,
+            'issued_on' => now('Europe/Rome')->addYears(2)->toDateString(),
+        ])->assertUnprocessable();
+
+        // Il certificato e' rimasto intatto e ancora aggiornabile
+        $this->patchJson("/api/v1/certificates/{$created['id']}", [
+            'version' => 1,
+            'expires_on' => now('Europe/Rome')->addYears(5)->toDateString(),
+        ])->assertOk()->assertJsonPath('data.state', 'valid');
+    }
+
     public function test_dashboard_today_lists_expiring_certificates(): void
     {
         $this->postJson('/api/v1/certificates', $this->validPayload([

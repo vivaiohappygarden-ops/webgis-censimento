@@ -116,7 +116,7 @@ onMounted(load);
                     </div>
                     <div class="px-4 py-3">
                         <p v-if="data.inspections.overdue_count || data.inspections.due_soon_count" class="mb-2 text-xs font-medium">
-                            <span v-if="data.inspections.overdue_count" class="text-red-700">{{ data.inspections.overdue_count }} scaduti</span>
+                            <span v-if="data.inspections.overdue_count" class="text-red-700">{{ data.inspections.overdue_count }} {{ data.inspections.overdue_count === 1 ? 'scaduto' : 'scaduti' }}</span>
                             <span v-if="data.inspections.overdue_count && data.inspections.due_soon_count" class="text-gray-400"> · </span>
                             <span v-if="data.inspections.due_soon_count" class="text-gray-600">{{ data.inspections.due_soon_count }} in scadenza entro 14 giorni</span>
                         </p>
@@ -189,7 +189,7 @@ onMounted(load);
                     </div>
                     <div class="px-4 py-3">
                         <p v-if="data.certificates.expired_count || data.certificates.due_soon_count" class="mb-2 text-xs font-medium">
-                            <span v-if="data.certificates.expired_count" class="text-red-700">{{ data.certificates.expired_count }} scaduti</span>
+                            <span v-if="data.certificates.expired_count" class="text-red-700">{{ data.certificates.expired_count }} {{ data.certificates.expired_count === 1 ? 'scaduto' : 'scaduti' }}</span>
                             <span v-if="data.certificates.expired_count && data.certificates.due_soon_count" class="text-gray-400"> · </span>
                             <span v-if="data.certificates.due_soon_count" class="text-gray-600">{{ data.certificates.due_soon_count }} in scadenza entro 60 giorni</span>
                         </p>
