@@ -28,6 +28,13 @@ Tempo previsto: 30-45 minuti (in gran parte attese).
 
 ### 1.2 Il nome del sito (consigliato)
 
+Si può partire anche **senza dominio**, usando l'indirizzo IP: l'applicazione
+funziona, ma niente lucchetto HTTPS e l'app di campo non si installa sul
+telefono (resta comunque utilizzabile dal browser). Aggiungere il dominio in
+seguito è semplice: creare il record DNS, rilanciare `provision.sh` con il
+nuovo `WEBGIS_DOMAIN` e aggiornare `APP_URL` e `SESSION_SECURE_COOKIE` in
+`/var/www/webgis/.env`.
+
 Serve un indirizzo tipo `verde.tuodominio.it`. Due strade:
 
 - **Dominio già posseduto su Aruba**: nel pannello DNS del dominio creare un
@@ -69,6 +76,9 @@ Copiare e incollare nel terminale del server, **un blocco alla volta**,
 sostituendo il dominio con il proprio:
 
 ```bash
+# Con un nome di dominio (consigliato: lucchetto HTTPS e app di campo sul
+# telefono). Senza dominio, mettere qui l'indirizzo IP del server: si parte
+# in HTTP, senza lucchetto, e l'app di campo non si installa sul telefono.
 export WEBGIS_DOMAIN=verde.tuodominio.it
 export WEBGIS_REPO=https://github.com/vivaiohappygarden-ops/webgis-censimento.git
 export WEBGIS_BRANCH=claude/aruba-hosting-specifics-atsiy4
@@ -115,6 +125,7 @@ completo dei 387 tipi.
 
 1. Aprire `https://verde.tuodominio.it` dal browser (il lucchetto può
    richiedere qualche minuto la prima volta: sta emettendo il certificato).
+   Se l'installazione è su indirizzo IP, aprire `http://IP_DEL_SERVER`.
 2. Accedere con le credenziali del passo 4.
 3. Dal telefono, aprire lo stesso indirizzo e andare su **Campo (operatore)**:
    il browser proporrà di "Aggiungere alla schermata Home" — così l'app di

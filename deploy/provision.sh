@@ -18,6 +18,19 @@ WEBGIS_BRANCH="${WEBGIS_BRANCH:-claude/aruba-hosting-specifics-atsiy4}"
 APP_DIR=/var/www/webgis
 PHP_V=8.4
 
+# Un indirizzo IP non può avere un certificato pubblico: in quel caso si
+# serve in HTTP e il cookie di sessione non va marcato "solo HTTPS", o il
+# login girerebbe a vuoto. Con un nome di dominio, invece, HTTPS automatico.
+if [[ "${WEBGIS_DOMAIN}" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
+  SITE_ADDRESS="http://${WEBGIS_DOMAIN}"
+  APP_SCHEME="http"
+  SECURE_COOKIE="false"
+else
+  SITE_ADDRESS="${WEBGIS_DOMAIN}"
+  APP_SCHEME="https"
+  SECURE_COOKIE="true"
+fi
+
 log() { echo -e "\n==> $*"; }
 
 [ "$(id -u)" -eq 0 ] || { echo "Eseguire come root."; exit 1; }
@@ -113,11 +126,18 @@ npm run build --silent
 log "Configurazione .env"
 if [ ! -f .env ]; then
   cp deploy/.env.production.example .env
-  sed -i "s|^APP_URL=.*|APP_URL=https://${WEBGIS_DOMAIN}|" .env
+  sed -i "s|^APP_URL=.*|APP_URL=${APP_SCHEME}://${WEBGIS_DOMAIN}|" .env
+  sed -i "s|^SESSION_SECURE_COOKIE=.*|SESSION_SECURE_COOKIE=${SECURE_COOKIE}|" .env
   sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASS}|" .env
   php artisan key:generate --force
 else
   echo ".env già presente: non modificato."
+  # Cambiando indirizzo (es. dall'IP a un dominio) queste due righe vanno
+  # aggiornate a mano, o il login e i collegamenti resterebbero sul vecchio
+  if ! grep -q "^APP_URL=${APP_SCHEME}://${WEBGIS_DOMAIN}$" .env; then
+    echo "  ATTENZIONE: in .env aggiornare APP_URL=${APP_SCHEME}://${WEBGIS_DOMAIN}"
+    echo "  e SESSION_SECURE_COOKIE=${SECURE_COOKIE}, poi: php artisan config:cache"
+  fi
 fi
 
 log "Migrazioni e cache"
@@ -153,7 +173,7 @@ systemctl daemon-reload
 systemctl enable --now webgis-queue
 
 log "Caddy"
-sed "s|SOSTITUIRE.esempio.it|${WEBGIS_DOMAIN}|" deploy/Caddyfile > /etc/caddy/Caddyfile
+sed "s|SOSTITUIRE.esempio.it|${SITE_ADDRESS}|" deploy/Caddyfile > /etc/caddy/Caddyfile
 # La directory dei log deve appartenere a caddy, altrimenti il caricamento
 # della configurazione fallisce
 install -d -o caddy -g caddy /var/log/caddy
@@ -174,6 +194,12 @@ CRON
 log "Fatto."
 echo
 echo "Prossimi passi:"
-echo "  1. Puntare il DNS di ${WEBGIS_DOMAIN} all'IP di questo server (se non già fatto)."
+if [ "${APP_SCHEME}" = "https" ]; then
+  echo "  1. Puntare il DNS di ${WEBGIS_DOMAIN} all'IP di questo server (se non già fatto)."
+else
+  echo "  1. Installazione su indirizzo IP: niente lucchetto HTTPS e app di campo"
+  echo "     non installabile sul telefono. Per averli serve un nome di dominio:"
+  echo "     creare il record DNS e rilanciare provision.sh con WEBGIS_DOMAIN=nome.dominio.it"
+fi
 echo "  2. Creare l'organizzazione:  cd ${APP_DIR} && sudo -u www-data php artisan tenant:create \"Nome Azienda\" nome-azienda admin@esempio.it"
-echo "  3. Aprire https://${WEBGIS_DOMAIN} e accedere con le credenziali mostrate."
+echo "  3. Aprire ${APP_SCHEME}://${WEBGIS_DOMAIN} e accedere con le credenziali mostrate."
