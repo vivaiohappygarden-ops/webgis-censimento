@@ -9,6 +9,7 @@ const sections = [
     { id: 'censimento', label: 'Il censimento' },
     { id: 'alberi', label: 'Alberi e VTA' },
     { id: 'lavori', label: 'I lavori' },
+    { id: 'fitosanitari', label: 'Registro fitosanitari' },
     { id: 'qualita', label: 'Qualità e ispezioni' },
     { id: 'segnalazioni', label: 'Le segnalazioni' },
     { id: 'campo', label: 'L\'app di campo' },
@@ -150,8 +151,9 @@ function goTo(id) {
                         <p class="mt-2">
                             La pagina <strong>Fitosanitari</strong> è il quaderno di campagna: ogni trattamento si
                             registra con data, area (ed eventualmente il singolo albero, per esempio in endoterapia),
-                            prodotto con numero di registrazione, principio attivo, avversità combattuta, metodo,
-                            quantità, acqua, superficie, tempo di rientro e operatore. Il pulsante
+                            coltura o vegetazione trattata, prodotto con numero di registrazione, principio attivo,
+                            avversità combattuta, metodo, quantità, acqua, superficie, tempo di rientro e operatore.
+                            Il pulsante
                             <strong>Registro PDF</strong> stampa il registro dell'anno scelto (anche di una sola
                             area), pronto da esibire a un controllo: le annotazioni vanno completate entro trenta
                             giorni dal trattamento e il registro va conservato almeno tre anni.

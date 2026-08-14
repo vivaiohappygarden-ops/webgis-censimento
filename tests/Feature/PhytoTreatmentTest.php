@@ -34,6 +34,7 @@ class PhytoTreatmentTest extends TestCase
             'product_name' => 'Karate Zeon',
             'registration_number' => '12345',
             'active_substance' => 'lambda-cialotrina',
+            'vegetation' => 'tigli in filare',
             'adversity' => 'afidi del tiglio',
             'method' => 'irrorazione',
             'quantity' => 1.5,
@@ -115,6 +116,58 @@ class PhytoTreatmentTest extends TestCase
         $this->postJson('/api/v1/phyto-treatments', $this->validPayload([
             'area_id' => $otherArea->id, 'asset_id' => $asset->id,
         ]))->assertCreated();
+    }
+
+    public function test_review_regressions_soft_deleted_asset_uuid_case_and_totals(): void
+    {
+        // La coltura trattata e' un campo minimo del registro
+        $this->postJson('/api/v1/phyto-treatments', $this->validPayload(['vegetation' => '']))
+            ->assertUnprocessable()->assertJsonValidationErrors('vegetation');
+
+        $asset = \App\Models\Asset::create([
+            'tenant_id' => $this->organization->id,
+            'area_id' => $this->area->id,
+            'object_type_id' => $this->makeObjectType($this->organization, 'P')->id,
+            'census_code' => 'AL-0100',
+            'geom' => \App\Support\Geometry::toEwkb($this->pointGeometry()),
+        ]);
+
+        // Un area_id maiuscolo equivale allo stesso uuid: niente falso 422
+        $created = $this->postJson('/api/v1/phyto-treatments', $this->validPayload([
+            'area_id' => strtoupper($this->area->id), 'asset_id' => $asset->id,
+        ]))->assertCreated()->json('data');
+        $this->assertSame($this->area->id, $created['area_id']);
+
+        // L'albero poi abbattuto (soft delete) non blocca le correzioni
+        // della riga storica e resta leggibile nel registro
+        $asset->delete();
+        $this->patchJson("/api/v1/phyto-treatments/{$created['id']}", [
+            'version' => 1, 'notes' => 'correzione dopo abbattimento',
+        ])->assertOk()->assertJsonPath('data.asset.census_code', 'AL-0100');
+        $row = collect($this->getJson('/api/v1/phyto-treatments')->assertOk()->json('data'))
+            ->firstWhere('id', $created['id']);
+        $this->assertSame('AL-0100', $row['asset']['census_code']);
+
+        // Rimandare lo stesso albero (come fa la pagina) resta valido...
+        $this->patchJson("/api/v1/phyto-treatments/{$created['id']}", [
+            'version' => 2, 'asset_id' => $asset->id, 'notes' => 'ancora lui',
+        ])->assertOk();
+
+        // ...ma passare a un ALTRO elemento gia' abbattuto e' rifiutato
+        $other = \App\Models\Asset::create([
+            'tenant_id' => $this->organization->id,
+            'area_id' => $this->area->id,
+            'object_type_id' => $this->makeObjectType($this->organization, 'P')->id,
+            'census_code' => 'AL-0101',
+            'geom' => \App\Support\Geometry::toEwkb($this->pointGeometry()),
+        ]);
+        $other->delete();
+        $this->patchJson("/api/v1/phyto-treatments/{$created['id']}", [
+            'version' => 3, 'asset_id' => $other->id,
+        ])->assertNotFound();
+
+        // L'elenco dichiara il totale, cosi' la pagina segnala i tagli
+        $this->assertSame(1, $this->getJson('/api/v1/phyto-treatments')->assertOk()->json('total'));
     }
 
     public function test_register_pdf(): void

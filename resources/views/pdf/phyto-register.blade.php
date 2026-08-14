@@ -35,21 +35,23 @@
     <table>
         <tr>
             <th style="width: 7%;">Data</th>
-            <th style="width: 13%;">Area / elemento</th>
-            <th style="width: 15%;">Prodotto (n. reg.)</th>
-            <th style="width: 12%;">Principio attivo</th>
-            <th style="width: 12%;">Avversità</th>
-            <th style="width: 9%;">Metodo</th>
-            <th style="width: 8%;" class="num">Quantità</th>
-            <th style="width: 8%;" class="num">Acqua (l)</th>
-            <th style="width: 8%;" class="num">Sup. (mq)</th>
-            <th style="width: 6%;" class="num">Rientro (h)</th>
-            <th style="width: 12%;">Operatore</th>
+            <th style="width: 12%;">Area / elemento</th>
+            <th style="width: 10%;">Coltura / vegetazione</th>
+            <th style="width: 14%;">Prodotto (n. reg.)</th>
+            <th style="width: 11%;">Principio attivo</th>
+            <th style="width: 11%;">Avversità</th>
+            <th style="width: 8%;">Metodo</th>
+            <th style="width: 7%;" class="num">Quantità</th>
+            <th style="width: 7%;" class="num">Acqua (l)</th>
+            <th style="width: 7%;" class="num">Sup. (mq)</th>
+            <th style="width: 5%;" class="num">Rientro (h)</th>
+            <th style="width: 10%;">Operatore</th>
         </tr>
         @forelse ($treatments as $t)
         <tr>
             <td>{{ $t->treated_on->format('d/m/Y') }}</td>
             <td>{{ $t->area?->name }}@if ($t->asset) - {{ $t->asset->census_code }}@endif</td>
+            <td>{{ $t->vegetation ?: '-' }}</td>
             <td>{{ $t->product_name }}@if ($t->registration_number) ({{ $t->registration_number }})@endif</td>
             <td>{{ $t->active_substance ?: '-' }}</td>
             <td>{{ $t->adversity }}</td>
@@ -61,7 +63,7 @@
             <td>{{ $t->operator?->name ?: '-' }}</td>
         </tr>
         @empty
-        <tr><td colspan="11">Nessun trattamento registrato nell'anno {{ $year }}.</td></tr>
+        <tr><td colspan="12">Nessun trattamento registrato nell'anno {{ $year }}.</td></tr>
         @endforelse
     </table>
 

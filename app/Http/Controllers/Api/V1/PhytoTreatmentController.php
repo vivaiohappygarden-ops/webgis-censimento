@@ -40,11 +40,16 @@ class PhytoTreatmentController extends Controller implements HasMiddleware
         ListQuery::validateUuidFilters($request, ['area_id']);
         $request->validate(['year' => ['nullable', 'integer', 'between:2000,2100']]);
 
+        $rows = $this->filtered($request)
+            ->with(['area:id,name', 'asset:id,census_code', 'operator:id,name'])
+            ->orderByDesc('treated_on')->orderByDesc('created_at')
+            ->limit(500)->get();
+
+        // Il totale permette alla pagina di dire quando l'elenco è parziale
+        // (il PDF del registro invece stampa sempre tutto)
         return response()->json([
-            'data' => $this->filtered($request)
-                ->with(['area:id,name', 'asset:id,census_code', 'operator:id,name'])
-                ->orderByDesc('treated_on')->orderByDesc('created_at')
-                ->limit(500)->get(),
+            'data' => $rows,
+            'total' => $rows->count() === 500 ? $this->filtered($request)->count() : $rows->count(),
         ]);
     }
 
@@ -80,10 +85,14 @@ class PhytoTreatmentController extends Controller implements HasMiddleware
             }
 
             // La coerenza si valuta sullo stato finale: anche un cambio di
-            // area senza toccare l'albero non deve lasciarli scollegati
+            // area senza toccare l'albero non deve lasciarli scollegati.
+            // Un albero nel frattempo abbattuto (soft delete) resta valido
+            // finché non cambia: correggere le note non deve dare 404
+            $finalAsset = array_key_exists('asset_id', $data) ? $data['asset_id'] : $treatment->asset_id;
             $this->assertAssetInArea(
-                array_key_exists('asset_id', $data) ? $data['asset_id'] : $treatment->asset_id,
+                $finalAsset,
                 $data['area_id'] ?? $treatment->area_id,
+                allowTrashed: $finalAsset !== null && $finalAsset === $treatment->asset_id,
             );
 
             $treatment->fill([...$data, 'updated_by' => $request->user()->id]);
@@ -164,6 +173,7 @@ class PhytoTreatmentController extends Controller implements HasMiddleware
             'product_name' => [$req, 'string', 'max:200'],
             'registration_number' => ['nullable', 'string', 'max:50'],
             'active_substance' => ['nullable', 'string', 'max:200'],
+            'vegetation' => [$req, 'string', 'max:200'],
             'adversity' => [$req, 'string', 'max:200'],
             'method' => [$req, Rule::in(PhytoTreatment::METHODS)],
             'quantity' => [$req, 'numeric', 'decimal:0,3', 'gt:0', 'max:99999'],
@@ -176,12 +186,19 @@ class PhytoTreatmentController extends Controller implements HasMiddleware
         ]);
         unset($data['version']);
 
-        // I riferimenti devono esistere nel tenant
+        // La regola 'uuid' accetta anche l'esadecimale maiuscolo mentre il
+        // DB restituisce la forma minuscola: si normalizza subito, o i
+        // confronti stretti tra id fallirebbero su dati equivalenti
+        foreach (['area_id', 'asset_id', 'operator_id'] as $field) {
+            if (! empty($data[$field])) {
+                $data[$field] = strtolower($data[$field]);
+            }
+        }
+
+        // I riferimenti devono esistere nel tenant (l'albero si controlla
+        // in assertAssetInArea, che sa quando ammettere un soft delete)
         if (array_key_exists('area_id', $data)) {
             Area::query()->findOrFail($data['area_id']);
-        }
-        if (! empty($data['asset_id'])) {
-            Asset::query()->findOrFail($data['asset_id']);
         }
         if (! empty($data['operator_id'])) {
             User::query()->findOrFail($data['operator_id']);
@@ -191,12 +208,13 @@ class PhytoTreatmentController extends Controller implements HasMiddleware
     }
 
     /** L'albero deve stare nell'area dichiarata, o il registro racconterebbe il falso. */
-    private function assertAssetInArea(?string $assetId, string $areaId): void
+    private function assertAssetInArea(?string $assetId, string $areaId, bool $allowTrashed = false): void
     {
         if ($assetId === null || $assetId === '') {
             return;
         }
-        $asset = Asset::query()->findOrFail($assetId);
+        $query = $allowTrashed ? Asset::withTrashed() : Asset::query();
+        $asset = $query->findOrFail($assetId);
         if ($asset->area_id !== $areaId) {
             throw ValidationException::withMessages([
                 'asset_id' => "L'elemento indicato non appartiene all'area del trattamento.",

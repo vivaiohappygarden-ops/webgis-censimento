@@ -19,6 +19,7 @@ const METHOD_LABELS = {
 const UNITS = ['l', 'ml', 'kg', 'g'];
 
 const treatments = ref([]);
+const total = ref(0);
 const areas = ref([]);
 const personnel = ref([]);
 const loading = ref(false);
@@ -53,11 +54,15 @@ function closeDrawer() {
 function blankForm() {
     return {
         area_id: '', asset_id: '', treated_on: todayLocal(), product_name: '',
-        registration_number: '', active_substance: '', adversity: '',
+        registration_number: '', active_substance: '', vegetation: '', adversity: '',
         method: 'irrorazione', quantity: null, unit: 'l', water_volume_l: null,
         surface_sqm: null, reentry_hours: null, operator_id: '', notes: '',
     };
 }
+
+// Riferimenti del trattamento aperto: servono per mostrare l'albero anche
+// se non è più in censimento e il nome dell'operatore in sola lettura
+const loaded = reactive({ areaId: '', asset: null, operatorName: '' });
 
 function firstError(err, fallback) {
     return Object.values(err.response?.data?.errors ?? {})[0]?.[0]
@@ -79,18 +84,26 @@ const fmtQty = (t) => {
     return `${n.toLocaleString('it-IT', { maximumFractionDigits: 3 })} ${t.unit}`;
 };
 
+// Con i filtri cambiati in rapida successione le risposte possono arrivare
+// fuori ordine: si tiene solo quella dell'ultima richiesta partita
+let loadSeq = 0;
+
 async function load() {
+    const seq = ++loadSeq;
     loading.value = true;
     pageError.value = '';
     try {
         const { data } = await axios.get('/api/v1/phyto-treatments', {
             params: { year: filters.year, area_id: filters.area_id || undefined },
         });
+        if (seq !== loadSeq) return;
         treatments.value = data.data;
+        total.value = data.total ?? data.data.length;
     } catch {
+        if (seq !== loadSeq) return;
         pageError.value = 'Caricamento non riuscito: ricarica la pagina.';
     } finally {
-        loading.value = false;
+        if (seq === loadSeq) loading.value = false;
     }
 }
 
@@ -118,25 +131,41 @@ async function loadLookups() {
     }
 }
 
-// Gli alberi selezionabili seguono l'area scelta nel modulo
+// Gli alberi selezionabili seguono l'area scelta nel modulo. Il contatore
+// scarta le risposte in ritardo di un'area cambiata nel frattempo; l'albero
+// del trattamento aperto non si azzera mai da solo (potrebbe non comparire
+// nella lista solo perché nel frattempo è uscito dal censimento)
+let assetSeq = 0;
+
 watch(() => form.area_id, async (areaId) => {
+    const seq = ++assetSeq;
     formAssets.value = [];
     if (! areaId) {
         form.asset_id = '';
         return;
     }
     try {
-        formAssets.value = await fetchAllPages('/api/v1/assets', { area_id: areaId });
-        if (form.asset_id && ! formAssets.value.some((a) => a.id === form.asset_id)) {
+        const list = await fetchAllPages('/api/v1/assets', { area_id: areaId });
+        if (seq !== assetSeq) return;
+        formAssets.value = list;
+        const isLoadedAsset = form.asset_id === loaded.asset?.id && areaId === loaded.areaId;
+        if (form.asset_id && ! isLoadedAsset && ! list.some((a) => a.id === form.asset_id)) {
             form.asset_id = '';
         }
     } catch {
-        formAssets.value = [];
+        if (seq === assetSeq) formAssets.value = [];
     }
 });
 
+// Opzione di riserva: l'albero registrato ma assente dall'elenco corrente
+const missingLoadedAsset = computed(() => loaded.asset
+    && form.area_id === loaded.areaId
+    && ! formAssets.value.some((a) => a.id === loaded.asset.id)
+    ? loaded.asset : null);
+
 function openCreator() {
     Object.assign(form, blankForm());
+    Object.assign(loaded, { areaId: '', asset: null, operatorName: '' });
     drawer.mode = 'new';
     drawer.id = null;
     drawer.version = null;
@@ -146,6 +175,11 @@ function openCreator() {
 }
 
 function openDetail(treatment) {
+    Object.assign(loaded, {
+        areaId: treatment.area_id,
+        asset: treatment.asset ?? null,
+        operatorName: treatment.operator?.name ?? '',
+    });
     Object.assign(form, blankForm(), {
         area_id: treatment.area_id,
         asset_id: treatment.asset_id ?? '',
@@ -153,6 +187,7 @@ function openDetail(treatment) {
         product_name: treatment.product_name,
         registration_number: treatment.registration_number ?? '',
         active_substance: treatment.active_substance ?? '',
+        vegetation: treatment.vegetation ?? '',
         adversity: treatment.adversity,
         method: treatment.method,
         quantity: Number(treatment.quantity),
@@ -179,6 +214,7 @@ function payload() {
         product_name: form.product_name.trim(),
         registration_number: form.registration_number.trim() || null,
         active_substance: form.active_substance.trim() || null,
+        vegetation: form.vegetation.trim(),
         adversity: form.adversity.trim(),
         method: form.method,
         quantity: form.quantity,
@@ -237,7 +273,8 @@ async function openRegisterPdf() {
 }
 
 const formValid = computed(() => form.area_id && form.treated_on
-    && form.product_name?.trim() && form.adversity?.trim() && form.quantity > 0);
+    && form.product_name?.trim() && form.vegetation?.trim()
+    && form.adversity?.trim() && form.quantity > 0);
 
 watch(() => [filters.year, filters.area_id], load);
 
@@ -282,6 +319,10 @@ onMounted(() => {
             </div>
 
             <p v-if="pageError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ pageError }}</p>
+            <p v-if="total > treatments.length" class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800" data-test="fito-parziale">
+                Elenco parziale: a video i {{ treatments.length }} trattamenti più recenti su {{ total }}.
+                Restringi i filtri; il Registro PDF contiene comunque tutto.
+            </p>
 
             <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
                 <table class="w-full text-sm">
@@ -306,7 +347,10 @@ onMounted(() => {
                             @click="openDetail(t)"
                         >
                             <td class="px-4 py-2">{{ formatDate(t.treated_on) }}</td>
-                            <td class="px-4 py-2">{{ t.area?.name }}<template v-if="t.asset"> - {{ t.asset.census_code }}</template></td>
+                            <td class="px-4 py-2">
+                                {{ t.area?.name }}<template v-if="t.asset"> - {{ t.asset.census_code }}</template>
+                                <span v-if="t.vegetation" class="block text-xs text-gray-500">{{ t.vegetation }}</span>
+                            </td>
                             <td class="px-4 py-2">
                                 {{ t.product_name }}
                                 <span v-if="t.active_substance" class="text-xs text-gray-500">({{ t.active_substance }})</span>
@@ -348,6 +392,7 @@ onMounted(() => {
                                 <span class="text-gray-500">Elemento censito (facoltativo, es. albero in endoterapia)</span>
                                 <select v-model="form.asset_id" data-test="fito-asset" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" :disabled="! canManage || ! form.area_id">
                                     <option value="">Tutta l'area</option>
+                                    <option v-if="missingLoadedAsset" :value="missingLoadedAsset.id">{{ missingLoadedAsset.census_code }} (non più in censimento)</option>
                                     <option v-for="a in formAssets" :key="a.id" :value="a.id">{{ a.census_code }}</option>
                                 </select>
                             </label>
@@ -372,6 +417,10 @@ onMounted(() => {
                             <label class="block text-xs">
                                 <span class="text-gray-500">Principio attivo</span>
                                 <input v-model="form.active_substance" maxlength="200" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" :disabled="! canManage">
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Coltura / vegetazione trattata *</span>
+                                <input v-model="form.vegetation" maxlength="200" data-test="fito-vegetazione" placeholder="es. tappeto erboso, tigli in filare" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" :disabled="! canManage">
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Avversità *</span>
@@ -400,10 +449,13 @@ onMounted(() => {
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Eseguito da</span>
-                                <select v-model="form.operator_id" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" :disabled="! canManage">
+                                <!-- L'elenco del personale richiede works.manage: chi consulta
+                                     in sola lettura vede il nome, non una tendina vuota -->
+                                <select v-if="canManage" v-model="form.operator_id" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
                                     <option value="">—</option>
                                     <option v-for="p in personnel" :key="p.id" :value="p.id">{{ p.name }}</option>
                                 </select>
+                                <input v-else :value="loaded.operatorName || '—'" disabled class="mt-1 w-full rounded-lg border border-gray-300 bg-gray-50 px-2.5 py-2 text-sm">
                             </label>
                             <label class="col-span-2 block text-xs">
                                 <span class="text-gray-500">Note (condizioni meteo, attrezzatura, prescrizioni)</span>

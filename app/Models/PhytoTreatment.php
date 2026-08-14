@@ -17,9 +17,9 @@ class PhytoTreatment extends Model
 
     protected $fillable = [
         'tenant_id', 'area_id', 'asset_id', 'treated_on', 'product_name',
-        'registration_number', 'active_substance', 'adversity', 'method',
-        'quantity', 'unit', 'water_volume_l', 'surface_sqm', 'reentry_hours',
-        'operator_id', 'notes', 'created_by', 'updated_by',
+        'registration_number', 'active_substance', 'adversity', 'vegetation',
+        'method', 'quantity', 'unit', 'water_volume_l', 'surface_sqm',
+        'reentry_hours', 'operator_id', 'notes', 'created_by', 'updated_by',
     ];
 
     protected function casts(): array
@@ -31,18 +31,20 @@ class PhytoTreatment extends Model
         ];
     }
 
+    // Il registro è un documento storico (si conserva almeno tre anni):
+    // area, albero e operatore restano leggibili anche dopo un soft delete
     public function area()
     {
-        return $this->belongsTo(Area::class);
+        return $this->belongsTo(Area::class)->withTrashed();
     }
 
     public function asset()
     {
-        return $this->belongsTo(Asset::class);
+        return $this->belongsTo(Asset::class)->withTrashed();
     }
 
     public function operator()
     {
-        return $this->belongsTo(User::class, 'operator_id');
+        return $this->belongsTo(User::class, 'operator_id')->withTrashed();
     }
 }
