@@ -65,7 +65,9 @@ function goTo(id) {
                             <strong>Operatore</strong>: lavora dal telefono con l'app di campo; vede i lavori assegnati
                             alla sua squadra e registra rilievi, foto, consuntivi, ispezioni e segnalazioni.
                             <strong>Cliente</strong>: dal suo portale vede solo il proprio territorio —
-                            aree, elementi censiti, lavori completati e segnalazioni, senza dati economici.
+                            aree, elementi censiti, lavori completati e segnalazioni, senza dati economici —
+                            e può inviare una richiesta (descrizione, urgenza e fino a 3 foto) che arriva
+                            subito tra le segnalazioni da gestire, seguendone poi lo stato e l'esito.
                         </p>
                     </section>
 

@@ -44,6 +44,8 @@ Route::prefix('v1')->group(function () {
         Route::post('imports/geojson', [ImportController::class, 'geojson']);
         Route::post('imports/cam', [ImportController::class, 'cam']);
         Route::get('portal/overview', [\App\Http\Controllers\Api\V1\PortalController::class, 'overview']);
+        Route::get('portal/requests', [\App\Http\Controllers\Api\V1\PortalController::class, 'requests']);
+        Route::post('portal/requests', [\App\Http\Controllers\Api\V1\PortalController::class, 'storeRequest'])->middleware('throttle:30,1');
         Route::apiResource('irrigation-systems', \App\Http\Controllers\Api\V1\IrrigationController::class)
             ->whereUuid('irrigation_system');
         Route::put('irrigation-systems/{id}/sectors', [\App\Http\Controllers\Api\V1\IrrigationController::class, 'syncSectors'])->whereUuid('id');

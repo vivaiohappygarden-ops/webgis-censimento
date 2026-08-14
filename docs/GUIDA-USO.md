@@ -18,7 +18,9 @@ senza connessione e si allinea da solo appena torna la rete.
 - **Operatore**: lavora dal telefono con l'app di campo; vede i lavori assegnati alla sua
   squadra e registra rilievi, foto, consuntivi, ispezioni e segnalazioni.
 - **Cliente**: dal suo portale vede solo il proprio territorio — aree, elementi censiti,
-  lavori completati e segnalazioni, senza dati economici.
+  lavori completati e segnalazioni, senza dati economici — e può **inviare una richiesta**
+  (descrizione, urgenza e fino a 3 foto) che arriva subito tra le segnalazioni da gestire;
+  lo stato della richiesta e l'esito restano visibili nel suo portale.
 
 ## Il cruscotto Oggi
 

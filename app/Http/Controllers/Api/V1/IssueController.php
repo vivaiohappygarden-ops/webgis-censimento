@@ -46,6 +46,7 @@ class IssueController extends Controller implements HasMiddleware
             ->with([
                 'asset:id,census_code', 'area:id,name',
                 'reporter:id,name', 'workOrder:id,code,status',
+                'photos:id,subject_id,original_filename',
             ]);
 
         if ($request->filled('status')) {

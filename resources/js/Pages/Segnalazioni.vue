@@ -412,6 +412,18 @@ onMounted(async () => {
 
                         <p class="mt-3 whitespace-pre-line rounded-lg bg-gray-50 p-3 text-sm text-gray-700">{{ detail.description }}</p>
 
+                        <div v-if="detail.photos?.length" class="mt-2 text-sm" data-test="issue-photos">
+                            <span class="text-gray-500">Foto allegate:</span>
+                            <a
+                                v-for="(photo, index) in detail.photos"
+                                :key="photo.id"
+                                :href="photo.url"
+                                target="_blank"
+                                rel="noopener"
+                                class="ml-2 font-medium text-green-800 hover:underline"
+                            >foto {{ index + 1 }}</a>
+                        </div>
+
                         <dl class="mt-4 space-y-1.5 text-sm">
                             <div class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Segnalante</dt><dd>{{ detail.reporter_name || detail.reporter?.name || '—' }}<template v-if="detail.reporter_contact"> · {{ detail.reporter_contact }}</template></dd></div>
                             <div class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Elemento</dt><dd>{{ detail.asset?.census_code ?? '—' }}</dd></div>

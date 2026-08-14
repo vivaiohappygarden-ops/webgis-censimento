@@ -131,4 +131,125 @@ class PortalController extends Controller implements HasMiddleware
             ]),
         ]);
     }
+
+    /** Le aree del cliente collegato, o niente se il collegamento manca. */
+    private function linkedAreas(Request $request): array
+    {
+        $user = $request->user();
+        $client = $user->client_id ? \App\Models\Client::query()->find($user->client_id) : null;
+        if ($client === null) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'client' => 'Questo utente non è collegato a un cliente: chiedere all\'amministratore.',
+            ]);
+        }
+
+        $areaIds = Area::query()
+            ->whereHas('locality.site', fn ($q) => $q->where('client_id', $user->client_id))
+            ->pluck('id');
+
+        return [$client, $areaIds];
+    }
+
+    /** Il cliente segnala un problema: diventa una segnalazione con i suoi tempi. */
+    public function storeRequest(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        [$client, $areaIds] = $this->linkedAreas($request);
+
+        $data = $request->validate([
+            'description' => ['required', 'string', 'max:2000'],
+            'area_id' => ['nullable', 'uuid'],
+            // Il cliente indica l'urgenza percepita; "critica" resta una
+            // valutazione dello staff
+            'severity' => ['nullable', \Illuminate\Validation\Rule::in(['low', 'medium', 'high'])],
+            'photos' => ['nullable', 'array', 'max:3'],
+            'photos.*' => ['file', 'image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
+        ]);
+
+        if (! empty($data['area_id']) && ! $areaIds->contains($data['area_id'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'area_id' => 'L\'area indicata non appartiene al tuo territorio.',
+            ]);
+        }
+
+        $severity = $data['severity'] ?? 'medium';
+        $issue = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $user, $client, $data, $severity) {
+            $issue = Issue::create([
+                'tenant_id' => $user->tenant_id,
+                'code' => Issue::nextCode($user->tenant_id),
+                'reporter_type' => 'client',
+                'reporter_user_id' => $user->id,
+                'reporter_name' => $client->name,
+                'channel' => 'client_portal',
+                'severity' => $severity,
+                'status' => 'open',
+                'area_id' => $data['area_id'] ?? null,
+                'description' => $data['description'],
+                'sla_due_at' => \App\Support\IssueSla::resolveDueAt(now(), $severity),
+                'taken_charge_due_at' => \App\Support\IssueSla::takeChargeDueAt(now(), $severity),
+            ]);
+
+            foreach ($request->file('photos') ?? [] as $file) {
+                $path = $file->store("photos/{$user->tenant_id}/issues/{$issue->id}");
+                \App\Models\Photo::create([
+                    'tenant_id' => $user->tenant_id,
+                    'subject_type' => 'issue',
+                    'subject_id' => $issue->id,
+                    'category' => 'issue',
+                    's3_key' => $path,
+                    'original_filename' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getMimeType() ?: 'image/jpeg',
+                    'size_bytes' => $file->getSize(),
+                    'hash_sha256' => hash_file('sha256', $file->getRealPath()),
+                    'taken_by' => $user->id,
+                ]);
+            }
+
+            return $issue;
+        });
+
+        \App\Support\Audit::log('issue.created', $issue, ['code' => $issue->code, 'channel' => 'client_portal']);
+
+        return response()->json(['data' => $this->presentRequest($issue->load('area:id,name')->loadCount('photos'))], 201);
+    }
+
+    /** Le richieste inviate dal portale dal proprio cliente (tutti i suoi utenti). */
+    public function requests(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        [, $areaIds] = $this->linkedAreas($request);
+
+        $peerIds = \App\Models\User::query()
+            ->where('client_id', $user->client_id)->pluck('id');
+
+        $issues = Issue::query()
+            ->with('area:id,name')
+            ->withCount('photos')
+            ->where('channel', 'client_portal')
+            ->whereIn('reporter_user_id', $peerIds)
+            ->orderByDesc('created_at')
+            ->limit(100)
+            ->get();
+
+        return response()->json([
+            'data' => $issues->map(fn (Issue $issue) => $this->presentRequest($issue, $areaIds)),
+        ]);
+    }
+
+    private function presentRequest(Issue $issue, $areaIds = null): array
+    {
+        return [
+            'id' => $issue->id,
+            'code' => $issue->code,
+            'severity' => $issue->severity,
+            'status' => $issue->status,
+            'description' => $issue->description,
+            'area' => $areaIds === null || $areaIds->contains($issue->area_id) ? $issue->area?->name : null,
+            'photos_count' => $issue->photos_count ?? 0,
+            'created_at' => $issue->created_at?->toIso8601String(),
+            'resolved_at' => $issue->resolved_at?->toIso8601String(),
+            // Il cliente vede come è andata a finire, non le note interne
+            'resolution_notes' => $issue->status === 'resolved' ? $issue->resolution_notes : null,
+        ];
+    }
 }

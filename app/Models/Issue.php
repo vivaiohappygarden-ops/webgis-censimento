@@ -54,6 +54,12 @@ class Issue extends Model
         return $this->belongsTo(User::class, 'reporter_user_id');
     }
 
+    /** Foto allegate alla segnalazione (es. dal portale cliente). */
+    public function photos()
+    {
+        return $this->hasMany(Photo::class, 'subject_id')->where('subject_type', 'issue');
+    }
+
     public function workOrder()
     {
         return $this->belongsTo(WorkOrder::class);
