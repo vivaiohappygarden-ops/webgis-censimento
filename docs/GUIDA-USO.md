@@ -100,6 +100,15 @@ assicurazioni. Ogni riga ha intestatario (una persona dell'app o un nome libero,
 (rosso) o **in scadenza** entro 60 giorni (ambra). Le scadenze più vicine compaiono
 anche nel cruscotto **Oggi**. Al rinnovo basta aggiornare la data di scadenza.
 
+## Statistiche
+
+La pagina **Statistiche** riunisce i numeri d'insieme: consistenze del censimento per
+tipologia e per specie, alberi per classe di stabilità e valutazioni per anno, ordini di
+lavoro per stato e completati mese per mese, segnalazioni aperte e risolte con il tempo
+medio di risoluzione, trattamenti fitosanitari per anno e per prodotto. Sono grafici
+semplici (barre e colonne) pensati per leggere l'andamento, non per sostituire le pagine
+di dettaglio.
+
 ## Qualità e ispezioni
 
 Il verbale di controllo di fine lavoro si compila dal dettaglio dell'ordine, nella

@@ -65,6 +65,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/patentini', fn () => Inertia::render('Patentini'))
         ->middleware('can:works.view')->name('patentini');
 
+    Route::get('/statistiche', fn () => Inertia::render('Statistiche'))
+        ->middleware('can:works.view')->name('statistiche');
+
     Route::get('/territorio', fn () => Inertia::render('Territorio'))
         ->middleware('can:clients.view')->name('territorio');
 

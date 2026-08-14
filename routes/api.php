@@ -86,6 +86,7 @@ Route::prefix('v1')->group(function () {
 
         Route::get('reports/lavori', [\App\Http\Controllers\Api\V1\WorkReportController::class, 'lavori']);
         Route::get('dashboard/today', [\App\Http\Controllers\Api\V1\DashboardController::class, 'today']);
+        Route::get('stats/overview', [\App\Http\Controllers\Api\V1\StatsController::class, 'overview']);
 
         Route::apiResource('price-lists', \App\Http\Controllers\Api\V1\PriceListController::class)
             ->whereUuid('price_list');

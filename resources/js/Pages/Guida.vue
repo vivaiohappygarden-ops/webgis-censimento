@@ -11,6 +11,7 @@ const sections = [
     { id: 'lavori', label: 'I lavori' },
     { id: 'fitosanitari', label: 'Registro fitosanitari' },
     { id: 'patentini', label: 'Patentini e certificati' },
+    { id: 'statistiche', label: 'Statistiche' },
     { id: 'qualita', label: 'Qualità e ispezioni' },
     { id: 'segnalazioni', label: 'Le segnalazioni' },
     { id: 'campo', label: 'L\'app di campo' },
@@ -178,6 +179,18 @@ function goTo(id) {
                             cosa è <strong>scaduto</strong> (rosso) o <strong>in scadenza</strong> entro 60 giorni
                             (ambra). Le scadenze più vicine compaiono anche nel cruscotto <strong>Oggi</strong>.
                             Al rinnovo basta aggiornare la data di scadenza.
+                        </p>
+                    </section>
+
+                    <section id="statistiche">
+                        <h2>Statistiche</h2>
+                        <p class="mt-2">
+                            La pagina <strong>Statistiche</strong> riunisce i numeri d'insieme: consistenze del
+                            censimento per tipologia e per specie, alberi per classe di stabilità e valutazioni per
+                            anno, ordini di lavoro per stato e completati mese per mese, segnalazioni aperte e
+                            risolte con il tempo medio di risoluzione, trattamenti fitosanitari per anno e per
+                            prodotto. Sono grafici semplici (barre e colonne) pensati per leggere l'andamento,
+                            non per sostituire le pagine di dettaglio.
                         </p>
                     </section>
 
