@@ -180,6 +180,18 @@ install -d -o caddy -g caddy /var/log/caddy
 systemctl enable --now caddy
 systemctl restart caddy
 
+log "Firewall: apertura delle porte del web"
+# Su alcune immagini Ubuntu ufw è attivo e lascia passare solo l'SSH:
+# senza queste regole il sito risponde solo dall'interno del server
+if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
+  ufw allow 22/tcp >/dev/null || true
+  ufw allow 80/tcp >/dev/null || true
+  ufw allow 443/tcp >/dev/null || true
+  echo "  ufw: aperte le porte 22, 80 e 443."
+else
+  echo "  ufw non attivo: nessuna regola da aggiungere."
+fi
+
 log "Backup giornaliero (03:30)"
 install -m 750 deploy/backup.sh /usr/local/bin/webgis-backup
 cat > /etc/cron.d/webgis-backup <<CRON
