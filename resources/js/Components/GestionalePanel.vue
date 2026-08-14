@@ -34,8 +34,18 @@ function firstError(err, fallback) {
         ?? err.response?.data?.message ?? fallback;
 }
 
+// Un invio fermo in coda da più di dieci minuti si può sbloccare a mano
+// (servizio delle code spento): il ritento è sicuro, non crea doppioni
+function stuck(dispatch) {
+    return dispatch.status === 'pending'
+        && Date.now() - new Date(dispatch.updated_at ?? dispatch.created_at).getTime() > 10 * 60 * 1000;
+}
+
 async function load() {
     listError.value = '';
+    // Il messaggio dell'ultimo invio non deve sopravvivere all'aggiornamento
+    // dell'elenco: lo stato vero è quello della tabella
+    modal.ok = '';
     try {
         const { data } = await axios.get('/api/v1/gestionale/dispatches', {
             params: { asset_id: props.asset.id },
@@ -56,15 +66,28 @@ function openModal() {
     });
     modal.error = '';
     modal.ok = '';
+    photoLimit.value = '';
     modal.open = true;
 }
+
+// A invio partito la finestra non si chiude: l'esito (o l'errore) va letto
+function closeModal() {
+    if (! modal.busy) modal.open = false;
+}
+
+const photoLimit = ref('');
 
 function togglePhoto(id) {
     const index = form.photo_ids.indexOf(id);
     if (index >= 0) {
         form.photo_ids.splice(index, 1);
+        photoLimit.value = '';
     } else if (form.photo_ids.length < 5) {
         form.photo_ids.push(id);
+        photoLimit.value = '';
+    } else {
+        // Un clic che non produce nulla va spiegato, o sembra un guasto
+        photoLimit.value = 'Massimo 5 fotografie per scheda: togline una per sceglierne un\'altra.';
     }
 }
 
@@ -137,11 +160,12 @@ onMounted(load);
                             {{ STATUS[d.status]?.label ?? d.status }}
                         </span>
                         <span v-if="d.is_duplicate" class="ml-1 text-xs text-gray-500">(già presente)</span>
+                        <span v-else-if="stuck(d)" class="ml-1 text-xs text-amber-700">(fermo da un po')</span>
                     </td>
                     <td class="py-1.5 text-right">
                         <a v-if="d.remote_url" :href="d.remote_url" target="_blank" class="text-xs font-medium text-green-800 hover:underline">Apri nel gestionale</a>
                         <button
-                            v-else-if="d.status === 'failed' && canSend"
+                            v-else-if="(d.status === 'failed' || stuck(d)) && canSend"
                             class="text-xs font-medium text-green-800 hover:underline"
                             data-test="gest-retry"
                             @click="retry(d)"
@@ -157,11 +181,11 @@ onMounted(load);
         </p>
 
         <Teleport to="body">
-            <div v-if="modal.open" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" @click.self="modal.open = false">
+            <div v-if="modal.open" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" @click.self="closeModal">
                 <div class="max-h-full w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" data-test="gest-modal">
                     <div class="flex items-start justify-between">
                         <h2 class="font-semibold">Invia al gestionale</h2>
-                        <button class="text-gray-400 hover:text-gray-600" @click="modal.open = false">✕</button>
+                        <button class="text-gray-400 hover:text-gray-600 disabled:opacity-40" :disabled="modal.busy" @click="closeModal">✕</button>
                     </div>
 
                     <p v-if="modal.error" class="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="gest-error">{{ modal.error }}</p>
@@ -204,9 +228,10 @@ onMounted(load);
                                     @click="togglePhoto(photo.id)"
                                 >
                                     <img :src="photo.url" :alt="photo.original_filename" class="h-16 w-full object-cover" loading="lazy">
-                                    <span v-if="form.photo_ids.includes(photo.id)" class="absolute right-1 top-1 rounded bg-green-700 px-1 text-[10px] font-bold text-white">✓</span>
+                                    <span v-if="form.photo_ids.includes(photo.id)" class="absolute inset-x-0 bottom-0 bg-green-700 text-[10px] font-medium text-white">scelta</span>
                                 </button>
                             </div>
+                            <p v-if="photoLimit" class="mt-1 text-amber-700" data-test="gest-foto-limite">{{ photoLimit }}</p>
                         </div>
                     </div>
 

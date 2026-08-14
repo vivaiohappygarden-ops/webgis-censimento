@@ -177,13 +177,22 @@ class GestionaleController extends Controller implements HasMiddleware
         ]);
     }
 
-    /** Rimette in coda un invio fallito (l'idempotenza rende sicuro il ritento). */
+    /**
+     * Rimette in coda un invio: oltre a quelli non riusciti si sbloccano
+     * quelli fermi in coda da più di dieci minuti (servizio delle code
+     * spento, riavvio a metà strada). L'idempotenza rende sicuro il
+     * ritento: il gestionale riconosce il riferimento e non duplica.
+     */
     public function retry(Request $request, string $id): JsonResponse
     {
         $dispatch = GestionaleDispatch::query()->findOrFail($id);
-        if ($dispatch->status !== 'failed') {
+        $stuck = $dispatch->status === 'pending'
+            && $dispatch->updated_at?->lt(now()->subMinutes(10));
+        if ($dispatch->status !== 'failed' && ! $stuck) {
             throw ValidationException::withMessages([
-                'dispatch' => 'Si ritenta solo un invio non riuscito.',
+                'dispatch' => $dispatch->status === 'sent'
+                    ? 'Questo invio è già stato consegnato.'
+                    : 'Invio in corso: attendi qualche minuto prima di ritentare.',
             ]);
         }
 

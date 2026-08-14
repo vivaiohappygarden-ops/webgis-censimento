@@ -56,15 +56,27 @@ class SendToGestionale implements ShouldQueue
 
         $dispatch->increment('attempts');
 
-        $response = Http::withHeaders(['X-YGC-Token' => $config['token']])
-            ->timeout(90)
-            ->acceptJson()
-            ->post($config['endpoint'], $this->payload($dispatch));
+        try {
+            // Niente inseguimento dei redirect: su un 301/302 Guzzle
+            // trasformerebbe il POST in GET perdendo il corpo
+            $response = Http::withHeaders(['X-YGC-Token' => $config['token']])
+                ->timeout(90)
+                ->acceptJson()
+                ->withoutRedirecting()
+                ->post($config['endpoint'], $this->payload($dispatch));
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            // Rete giù o host irraggiungibile: la coda ritenta, ma la
+            // scheda deve dire intanto cosa sta succedendo
+            $dispatch->forceFill([
+                'last_error' => 'Il gestionale non risponde (problema di rete): nuovo tentativo automatico.',
+            ])->save();
+            throw $e;
+        }
 
         $body = $response->json() ?? [];
 
         // 200 o 201 con ok: consegnato (200 = external_ref già noto: bene così)
-        if (($response->status() === 201 || $response->status() === 200) && ($body['ok'] ?? false)) {
+        if ($response->successful() && ($body['ok'] ?? false)) {
             $dispatch->forceFill([
                 'status' => 'sent',
                 'remote_id' => isset($body['id']) ? (string) $body['id'] : null,
@@ -76,8 +88,32 @@ class SendToGestionale implements ShouldQueue
             return;
         }
 
-        // Errori definitivi: ritentare non cambierebbe nulla
-        if (in_array($response->status(), [400, 401, 403], true)) {
+        // 2xx senza la conferma del gestionale: quasi certamente
+        // l'indirizzo sbagliato (es. la home del sito). Definitivo,
+        // o la riga resterebbe "in coda" per sempre
+        if ($response->successful()) {
+            $dispatch->forceFill([
+                'status' => 'failed',
+                'last_error' => "L'indirizzo risponde ma non come il gestionale: controlla l'endpoint nelle impostazioni (pagina Utenti).",
+            ])->save();
+
+            return;
+        }
+
+        // Reindirizzamento: serve l'indirizzo finale, ritentare non aiuta
+        if ($response->redirect()) {
+            $dispatch->forceFill([
+                'status' => 'failed',
+                'last_error' => "L'indirizzo reindirizza altrove (HTTP {$response->status()}): inserisci nelle impostazioni l'indirizzo finale.",
+            ])->save();
+
+            return;
+        }
+
+        // Solo gli errori del server (e i 408/429) meritano un ritento;
+        // ogni altro rifiuto e' definitivo e resta spiegato nella scheda
+        $retryable = $response->serverError() || in_array($response->status(), [408, 429], true);
+        if (! $retryable) {
             $dispatch->forceFill([
                 'status' => 'failed',
                 'last_error' => $response->status() === 401
@@ -88,7 +124,6 @@ class SendToGestionale implements ShouldQueue
             return;
         }
 
-        // Tutto il resto (5xx, timeout della risposta) si ritenta
         $dispatch->forceFill([
             'last_error' => $body['errore'] ?? "Risposta HTTP {$response->status()} dal gestionale.",
         ])->save();
@@ -157,7 +192,13 @@ class SendToGestionale implements ShouldQueue
         return $payload;
     }
 
-    /** Le foto scelte, in base64 (limiti della specifica: 5 per scheda, 8 MB l'una). */
+    /**
+     * Le foto scelte, in base64. Limiti della specifica: 5 per scheda,
+     * 8 MB l'una, JSON complessivo sotto ~30 MB. Il tetto aggregato di
+     * 20 MB grezzi (~27 in base64) tiene la richiesta dentro il limite
+     * e la memoria del worker al sicuro; le foto oltre il tetto si
+     * saltano, come fa il gestionale stesso con quelle fuori misura.
+     */
     private function photos(GestionaleDispatch $dispatch): array
     {
         $ids = array_slice($dispatch->photo_ids ?? [], 0, 5);
@@ -166,20 +207,28 @@ class SendToGestionale implements ShouldQueue
         }
 
         $disk = Storage::disk();
+        $budget = 20 * 1024 * 1024;
+        $out = [];
 
-        return Photo::withoutGlobalScopes()
+        foreach (Photo::withoutGlobalScopes()
             ->where('tenant_id', $dispatch->tenant_id)
-            ->whereIn('id', $ids)
-            ->get()
-            ->filter(fn (Photo $photo) => in_array($photo->mime_type, ['image/jpeg', 'image/png', 'image/webp'], true)
-                && $disk->exists($photo->s3_key)
-                && $disk->size($photo->s3_key) <= 8 * 1024 * 1024)
-            ->map(fn (Photo $photo) => [
+            ->whereIn('id', $ids)->get() as $photo) {
+            if (! in_array($photo->mime_type, ['image/jpeg', 'image/png', 'image/webp'], true)
+                || ! $disk->exists($photo->s3_key)) {
+                continue;
+            }
+            $size = $disk->size($photo->s3_key);
+            if ($size > 8 * 1024 * 1024 || $size > $budget) {
+                continue;
+            }
+            $budget -= $size;
+            $out[] = [
                 'nome' => $photo->original_filename ?: 'foto.jpg',
                 'mime' => $photo->mime_type,
                 'base64' => base64_encode($disk->get($photo->s3_key)),
-            ])
-            ->values()
-            ->all();
+            ];
+        }
+
+        return $out;
     }
 }

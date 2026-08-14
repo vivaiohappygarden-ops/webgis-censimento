@@ -313,7 +313,7 @@ onMounted(() => {
                 </p>
                 <div class="mt-3 grid gap-3 md:grid-cols-2">
                     <label class="block text-xs">
-                        <span class="text-gray-500">Indirizzo dell'endpoint (https)</span>
+                        <span class="text-gray-500">Indirizzo dell'endpoint (https) - svuotarlo disattiva il collegamento e cancella il gettone</span>
                         <input v-model="gest.form.endpoint" data-test="gest-endpoint" placeholder="https://giardini.esempio.it/?rest_route=/yourgarden/v1/sopralluoghi" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
                     </label>
                     <label class="block text-xs">

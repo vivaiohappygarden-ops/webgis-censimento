@@ -239,6 +239,93 @@ class GestionaleTest extends TestCase
         $this->assertSame('failed', $dispatch->refresh()->status);
     }
 
+    public function test_unexpected_replies_never_leave_the_dispatch_stuck(): void
+    {
+        $asset = $this->createTreeAsset();
+
+        Http::fake([
+            // Indirizzo sbagliato: risponde la home del sito (200 HTML)
+            'home.esempio.it/*' => Http::response('<html>Benvenuto</html>', 200),
+            // 201 conforme ma senza la conferma ok
+            'muto.esempio.it/*' => Http::response(['id' => 5], 201),
+            // Reindirizzamento: il corpo andrebbe perso
+            'redirige.esempio.it/*' => Http::response('', 301, ['Location' => 'https://altro.esempio.it/']),
+        ]);
+
+        foreach (['home', 'muto', 'redirige'] as $host) {
+            $this->configure("https://{$host}.esempio.it/?rest_route=/yourgarden/v1/sopralluoghi");
+            $created = $this->postJson("/api/v1/assets/{$asset}/gestionale", [
+                'request_type' => 'intervento', 'title' => "Prova {$host}", 'priority' => 'media',
+            ])->assertCreated()->json('data');
+
+            $dispatch = GestionaleDispatch::query()->findOrFail($created['id']);
+            // Mai "pending" muto: l'utente deve vedere l'errore e poter ritentare
+            $this->assertSame('failed', $dispatch->status, "host {$host}");
+            $this->assertNotEmpty($dispatch->last_error);
+        }
+    }
+
+    public function test_stuck_pending_dispatch_can_be_unblocked(): void
+    {
+        $this->configure();
+        $asset = $this->createTreeAsset();
+
+        $dispatch = GestionaleDispatch::create([
+            'tenant_id' => $this->organization->id,
+            'asset_id' => $asset,
+            'external_ref' => 'WG-2026-000500',
+            'request_type' => 'intervento',
+            'title' => 'Rimasto in coda',
+            'priority' => 'media',
+            'created_by' => $this->user->id,
+        ]);
+
+        // Appena creato: si aspetta, non si ritenta
+        $this->postJson("/api/v1/gestionale/dispatches/{$dispatch->id}/retry")
+            ->assertUnprocessable();
+
+        // Fermo da mezz'ora (servizio delle code spento): si sblocca
+        $dispatch->forceFill(['updated_at' => now()->subMinutes(30)])->save();
+        Http::fake(['*' => Http::response(['ok' => true, 'id' => 42, 'duplicate' => false], 201)]);
+        $this->postJson("/api/v1/gestionale/dispatches/{$dispatch->id}/retry")->assertOk();
+        $this->assertSame('sent', $dispatch->refresh()->status);
+
+        // Un invio gia' consegnato non si rispedisce
+        $this->postJson("/api/v1/gestionale/dispatches/{$dispatch->id}/retry")
+            ->assertUnprocessable();
+    }
+
+    public function test_photos_over_the_total_budget_are_skipped(): void
+    {
+        Storage::fake('local');
+        $this->configure();
+        $asset = $this->createTreeAsset();
+
+        // Tre foto da 7 MB: la terza sfora il tetto complessivo e si salta,
+        // cosi' il JSON resta sotto il limite della specifica
+        $ids = [];
+        foreach (range(1, 3) as $i) {
+            Storage::disk()->put("photos/test/f{$i}.jpg", str_repeat('x', 7 * 1024 * 1024));
+            $ids[] = Photo::create([
+                'tenant_id' => $this->organization->id,
+                'asset_id' => $asset,
+                's3_key' => "photos/test/f{$i}.jpg",
+                'original_filename' => "f{$i}.jpg",
+                'mime_type' => 'image/jpeg',
+                'size_bytes' => 7 * 1024 * 1024,
+                'category' => 'defect',
+            ])->id;
+        }
+
+        Http::fake(['*' => Http::response(['ok' => true, 'id' => 1, 'duplicate' => false], 201)]);
+        $this->postJson("/api/v1/assets/{$asset}/gestionale", [
+            'request_type' => 'intervento', 'title' => 'Foto pesanti', 'priority' => 'media',
+            'photo_ids' => $ids,
+        ])->assertCreated();
+
+        Http::assertSent(fn ($request) => count($request->data()['foto']) === 2);
+    }
+
     public function test_connection_probe_and_permissions(): void
     {
         Http::fake([
