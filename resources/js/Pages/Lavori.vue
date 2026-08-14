@@ -6,6 +6,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import WorkAgenda from '@/Components/WorkAgenda.vue';
 import WorkReport from '@/Components/WorkReport.vue';
 import QualityBoard from '@/Components/QualityBoard.vue';
+import QuotesPanel from '@/Components/QuotesPanel.vue';
 
 const page = usePage();
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('works.manage'));
@@ -36,7 +37,7 @@ const filters = reactive({ status: '', q: '', page: 1 });
 const loading = ref(false);
 // La vista iniziale può arrivare dall'URL (es. il cruscotto Oggi linka
 // direttamente la Qualità): valori sconosciuti ricadono sull'elenco
-const VIEWS = ['elenco', 'agenda', 'rendiconto', 'qualita'];
+const VIEWS = ['elenco', 'agenda', 'rendiconto', 'qualita', 'preventivi'];
 const requested = new URLSearchParams(window.location.search).get('vista');
 const view = ref(VIEWS.includes(requested) ? requested : 'elenco');
 const agendaRef = ref(null);
@@ -296,6 +297,7 @@ onMounted(async () => {
                     <p v-if="view === 'elenco'" class="text-sm text-gray-500">{{ meta.total }} {{ meta.total === 1 ? 'ordine' : 'ordini' }} · flusso: bozza, pianificato, assegnato, in corso, completato</p>
                     <p v-else-if="view === 'agenda'" class="text-sm text-gray-500">Programmazione settimanale per squadra</p>
                     <p v-else-if="view === 'rendiconto'" class="text-sm text-gray-500">Lavori completati per cliente e periodo, con importi da listino</p>
+                    <p v-else-if="view === 'preventivi'" class="text-sm text-gray-500">Offerte ai clienti: bozza, invio, esito e trasformazione in ordine di lavoro</p>
                     <p v-else class="text-sm text-gray-500">Controlli qualità e non conformità con flusso correttivo</p>
                 </div>
                 <button
@@ -332,6 +334,12 @@ onMounted(async () => {
                     data-test="view-qualita"
                     @click="view = 'qualita'"
                 >Qualità</button>
+                <button
+                    class="border-l border-gray-300 px-4 py-1.5 font-medium"
+                    :class="view === 'preventivi' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    data-test="view-preventivi"
+                    @click="view = 'preventivi'"
+                >Preventivi</button>
             </div>
 
             <WorkAgenda
@@ -356,6 +364,13 @@ onMounted(async () => {
                 :personnel="personnel"
                 :can-manage="canManage"
                 @open-order="openDetail"
+            />
+
+            <QuotesPanel
+                v-if="view === 'preventivi'"
+                :clients="clients"
+                :work-types="workTypes"
+                :can-manage="canManage"
             />
 
             <div v-if="view === 'elenco'" class="mb-3 flex flex-wrap gap-2">

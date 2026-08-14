@@ -69,6 +69,11 @@ generali, oneri di sicurezza). Se all'ordine è collegato un listino, il consunt
 registrato in campo viene valorizzato da solo; il rendiconto segnala i casi in cui manca
 qualcosa (nessun listino, nessuna voce, quantità mancante).
 
+Nella vista **Preventivi** della pagina Lavori si prepara un'offerta per un cliente: voci
+prese dai listini (o scritte libere) con quantità e prezzi, totale con IVA e **PDF pronto
+da inviare**. Il flusso è bozza, inviato, accettato o rifiutato: un preventivo accettato
+diventa un ordine di lavoro con un clic, e ogni documento resta agli atti.
+
 ## Qualità e ispezioni
 
 Il verbale di controllo di fine lavoro si compila dal dettaglio dell'ordine, nella

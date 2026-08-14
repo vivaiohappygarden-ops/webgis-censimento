@@ -91,6 +91,13 @@ Route::prefix('v1')->group(function () {
             ->whereUuid('price_list');
         Route::put('price-lists/{id}/items', [\App\Http\Controllers\Api\V1\PriceListController::class, 'syncItems'])->whereUuid('id');
 
+        Route::apiResource('estimates', \App\Http\Controllers\Api\V1\EstimateController::class)
+            ->whereUuid('estimate');
+        Route::put('estimates/{id}/items', [\App\Http\Controllers\Api\V1\EstimateController::class, 'syncItems'])->whereUuid('id');
+        Route::post('estimates/{id}/transition', [\App\Http\Controllers\Api\V1\EstimateController::class, 'transition'])->whereUuid('id');
+        Route::post('estimates/{id}/work-order', [\App\Http\Controllers\Api\V1\EstimateController::class, 'createWorkOrder'])->whereUuid('id');
+        Route::get('estimates/{id}/pdf', [\App\Http\Controllers\Api\V1\EstimateController::class, 'pdf'])->whereUuid('id');
+
         Route::apiResource('work-orders', \App\Http\Controllers\Api\V1\WorkOrderController::class)
             ->whereUuid('work_order');
         Route::post('work-orders/{id}/transition', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'transition'])->whereUuid('id');
