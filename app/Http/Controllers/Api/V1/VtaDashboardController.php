@@ -22,7 +22,9 @@ class VtaDashboardController extends Controller implements HasMiddleware
     {
         $tenantId = $request->user()->tenant_id;
 
-        // Ultima valutazione per ogni albero (DISTINCT ON)
+        // Ultima valutazione per ogni albero (DISTINCT ON). Il join su trees
+        // esclude gli abbattuti: un albero rimosso non ha ricontrolli da
+        // programmare ne' classi di rischio da esporre
         $latest = collect(DB::select(<<<'SQL'
             SELECT latest.tree_id, latest.assessed_on, latest.failure_class,
                    latest.outcome, latest.next_check_due, a.census_code
@@ -34,6 +36,7 @@ class VtaDashboardController extends Controller implements HasMiddleware
               ORDER BY ta.tree_id, ta.assessed_on DESC, ta.created_at DESC
             ) latest
             JOIN assets a ON a.id = latest.tree_id AND a.deleted_at IS NULL
+            JOIN trees t ON t.asset_id = latest.tree_id AND t.removed_on IS NULL
             SQL, [$tenantId]));
 
         $today = now()->toDateString();
@@ -48,7 +51,11 @@ class VtaDashboardController extends Controller implements HasMiddleware
             ->map->count()
             ->sortKeys();
 
-        $treesTotal = Tree::query()->whereNull('removed_on')->count();
+        // Il join esclude gli alberi il cui asset e' uscito dal censimento
+        $treesTotal = Tree::query()
+            ->join('assets', 'assets.id', '=', 'trees.asset_id')
+            ->whereNull('assets.deleted_at')
+            ->whereNull('trees.removed_on')->count();
 
         return response()->json([
             'data' => [

@@ -147,6 +147,69 @@ class StatsTest extends TestCase
         $this->assertSame(2, $data['phyto']['by_product']['Karate Zeon']);
     }
 
+    public function test_removed_and_deleted_trees_are_excluded_and_statuses_ordered(): void
+    {
+        $standing = $this->createTree('ALB-0001', 'Tilia cordata');
+        $felled = $this->createTree('ALB-0002', 'Tilia cordata');
+        $deleted = $this->createTree('ALB-0003', 'Acer campestre');
+
+        // L'abbattuto era in classe D: non deve restare nel grafico dei rischi
+        $this->postJson("/api/v1/assets/{$felled}/assessments", [
+            'assessment_type' => 'vta_visual',
+            'assessed_on' => now('Europe/Rome')->toDateString(),
+            'failure_class' => 'D',
+            'outcome' => 'fell',
+        ])->assertCreated();
+        $this->postJson("/api/v1/assets/{$standing}/assessments", [
+            'assessment_type' => 'vta_visual',
+            'assessed_on' => now('Europe/Rome')->toDateString(),
+            'failure_class' => 'B',
+            'outcome' => 'monitor',
+        ])->assertCreated();
+
+        $this->patchJson("/api/v1/assets/{$felled}", [
+            'tree' => ['removed_on' => now('Europe/Rome')->toDateString(), 'removal_reason' => 'abbattimento'],
+        ])->assertOk();
+        $this->deleteJson("/api/v1/assets/{$deleted}")->assertNoContent();
+
+        $data = $this->getJson('/api/v1/stats/overview')->assertOk()->json('data');
+
+        // In piedi resta solo il primo; l'eliminato sparisce anche dalle specie
+        $this->assertSame(1, $data['census']['trees_total']);
+        $this->assertArrayNotHasKey('Acer campestre', $data['census']['by_species']);
+
+        // Le classi contano solo gli alberi ancora in piedi
+        $this->assertSame(['B' => 1], $data['vta']['by_class']);
+
+        // Anche il cruscotto VTA esclude abbattuti ed eliminati
+        $vta = $this->getJson('/api/v1/vta/dashboard')->assertOk()->json('data');
+        $this->assertSame(1, $vta['trees_total']);
+        $this->assertSame(1, $vta['assessed']);
+        $this->assertSame(0, $vta['never_assessed']);
+
+        // Gli stati dei lavori escono nell'ordine del flusso
+        WorkOrder::create([
+            'tenant_id' => $this->organization->id,
+            'code' => WorkOrder::nextCode($this->organization->id),
+            'title' => 'Completato',
+            'status' => 'completed',
+            'area_id' => $this->area->id,
+            'created_by' => $this->user->id,
+            'updated_by' => $this->user->id,
+        ]);
+        WorkOrder::create([
+            'tenant_id' => $this->organization->id,
+            'code' => WorkOrder::nextCode($this->organization->id),
+            'title' => 'Bozza',
+            'status' => 'draft',
+            'area_id' => $this->area->id,
+            'created_by' => $this->user->id,
+            'updated_by' => $this->user->id,
+        ]);
+        $statuses = array_keys($this->getJson('/api/v1/stats/overview')->json('data.works.by_status'));
+        $this->assertSame(['draft', 'completed'], $statuses);
+    }
+
     public function test_permissions_and_tenant_isolation(): void
     {
         $this->createTree('ALB-0001', 'Tilia cordata');

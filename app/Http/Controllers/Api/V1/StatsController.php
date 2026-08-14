@@ -82,7 +82,12 @@ class StatsController extends Controller implements HasMiddleware
         return [
             'assets_total' => Asset::query()->count(),
             'areas_total' => Area::query()->count(),
-            'trees_total' => Tree::query()->whereNull('removed_on')->count(),
+            // Anche qui serve il join: un albero il cui asset e' stato
+            // eliminato dal censimento non e' piu' "in piedi" da contare
+            'trees_total' => Tree::query()
+                ->join('assets', 'assets.id', '=', 'trees.asset_id')
+                ->whereNull('assets.deleted_at')
+                ->whereNull('trees.removed_on')->count(),
             'protected_trees' => $protectedCount,
             'by_type' => $byType,
             'by_species' => $bySpecies,
@@ -92,6 +97,8 @@ class StatsController extends Controller implements HasMiddleware
     /** VTA: classi dell'ultima valutazione e valutazioni per anno. */
     private function vta(string $tenantId): array
     {
+        // Il join su trees esclude gli abbattuti: un albero rimosso non e'
+        // piu' un rischio da esporre accanto al contatore "alberi in piedi"
         $byClass = collect(DB::select(<<<'SQL'
             SELECT COALESCE(latest.failure_class, 'n.d.') AS label, COUNT(*) AS n
             FROM (
@@ -101,6 +108,7 @@ class StatsController extends Controller implements HasMiddleware
               ORDER BY ta.tree_id, ta.assessed_on DESC, ta.created_at DESC
             ) latest
             JOIN assets a ON a.id = latest.tree_id AND a.deleted_at IS NULL
+            JOIN trees t ON t.asset_id = latest.tree_id AND t.removed_on IS NULL
             GROUP BY 1 ORDER BY 1
             SQL, [$tenantId]))->pluck('n', 'label')->map(fn ($n) => (int) $n);
 
@@ -122,8 +130,13 @@ class StatsController extends Controller implements HasMiddleware
     /** Lavori: consistenza per stato e completati mese per mese. */
     private function works(): array
     {
-        $byStatus = WorkOrder::query()
+        $counts = WorkOrder::query()
             ->groupBy('status')->selectRaw('status, COUNT(*) AS n')->pluck('n', 'status');
+        // In PostgreSQL un GROUP BY senza ORDER BY non ha ordine garantito:
+        // le barre seguono la sequenza naturale del flusso di lavoro
+        $byStatus = collect(WorkOrder::STATUSES)
+            ->filter(fn ($s) => isset($counts[$s]))
+            ->mapWithKeys(fn ($s) => [$s => (int) $counts[$s]]);
 
         return [
             'by_status' => $byStatus,

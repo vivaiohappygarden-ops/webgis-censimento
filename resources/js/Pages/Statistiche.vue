@@ -32,11 +32,30 @@ function bars(map) {
     return entries.map(([label, n]) => ({ label, n, pct: Math.round(n / max * 100) }));
 }
 
-// Serie mensile per le colonne: altezza percentuale sul massimo
+// Serie per le colonne: altezza percentuale sul massimo. Le chiavi possono
+// essere mesi (AAAA-MM) o anni puri: l'etichetta segue la forma
 function columns(map) {
     const entries = Object.entries(map ?? {});
     const max = Math.max(1, ...entries.map(([, n]) => n));
-    return entries.map(([key, n]) => ({ key, label: monthLabel(key), n, pct: Math.round(n / max * 100) }));
+    return entries.map(([key, n]) => ({
+        key, label: key.includes('-') ? monthLabel(key) : key, n, pct: Math.round(n / max * 100),
+    }));
+}
+
+// Due serie affiancate (es. aperte e risolte): la scala DEVE essere comune,
+// o due valori uguali apparirebbero con altezze diverse
+function dualColumns(mapA, mapB) {
+    const a = Object.entries(mapA ?? {});
+    const b = mapB ?? {};
+    const max = Math.max(1, ...a.map(([, n]) => n), ...Object.values(b));
+    return a.map(([key, n]) => ({
+        key,
+        label: monthLabel(key),
+        a: n,
+        b: b[key] ?? 0,
+        pctA: Math.round(n / max * 100),
+        pctB: Math.round((b[key] ?? 0) / max * 100),
+    }));
 }
 
 const fmt = (n) => (Number(n) || 0).toLocaleString('it-IT');
@@ -169,7 +188,7 @@ onMounted(load);
                             <h3 class="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-400">Completati negli ultimi 12 mesi</h3>
                             <div class="flex h-28 items-end gap-1">
                                 <div v-for="col in columns(data.works.completed_by_month)" :key="col.key" class="flex flex-1 flex-col items-center gap-1">
-                                    <span class="text-[10px] text-gray-600">{{ col.n || '' }}</span>
+                                    <span class="text-[10px] text-gray-600">{{ col.n ? fmt(col.n) : '' }}</span>
                                     <div class="w-full rounded-t-sm bg-green-700/80" :style="{ height: `${Math.max(2, col.pct * 0.8)}px` }" />
                                     <span class="text-[9px] text-gray-500">{{ col.label }}</span>
                                 </div>
@@ -194,10 +213,10 @@ onMounted(load);
                             Aperte (grigio) e risolte (verde) negli ultimi 12 mesi
                         </h3>
                         <div class="flex h-28 items-end gap-1">
-                            <div v-for="(col, i) in columns(data.issues.opened_by_month)" :key="col.key" class="flex flex-1 flex-col items-center gap-1">
+                            <div v-for="col in dualColumns(data.issues.opened_by_month, data.issues.resolved_by_month)" :key="col.key" class="flex flex-1 flex-col items-center gap-1">
                                 <div class="flex w-full items-end justify-center gap-0.5">
-                                    <div class="w-1/2 rounded-t-sm bg-gray-400/70" :style="{ height: `${Math.max(2, col.pct * 0.8)}px` }" :title="`aperte: ${col.n}`" />
-                                    <div class="w-1/2 rounded-t-sm bg-green-700/80" :style="{ height: `${Math.max(2, (columns(data.issues.resolved_by_month)[i]?.pct ?? 0) * 0.8)}px` }" :title="`risolte: ${columns(data.issues.resolved_by_month)[i]?.n ?? 0}`" />
+                                    <div class="w-1/2 rounded-t-sm bg-gray-400/70" :style="{ height: `${Math.max(2, col.pctA * 0.8)}px` }" :title="`aperte: ${col.a}`" />
+                                    <div class="w-1/2 rounded-t-sm bg-green-700/80" :style="{ height: `${Math.max(2, col.pctB * 0.8)}px` }" :title="`risolte: ${col.b}`" />
                                 </div>
                                 <span class="text-[9px] text-gray-500">{{ col.label }}</span>
                             </div>
