@@ -145,7 +145,7 @@ onMounted(load);
                             </select>
                         </label>
                         <label class="block text-xs md:col-span-2">
-                            <span class="text-gray-500">Foto (fino a 3)</span>
+                            <span class="text-gray-500">Foto (fino a 3, massimo 8 MB l'una)</span>
                             <input ref="photoInput" type="file" accept="image/jpeg,image/png,image/webp" multiple data-test="req-photos" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
                         </label>
                     </div>

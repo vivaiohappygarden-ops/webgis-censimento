@@ -268,6 +268,7 @@ class IssueController extends Controller implements HasMiddleware
             ...$issue->load([
                 'asset:id,census_code', 'area:id,name',
                 'reporter:id,name', 'workOrder:id,code,status',
+                'photos:id,subject_id,original_filename',
             ])->toArray(),
             'allowed_transitions' => Issue::TRANSITIONS[$issue->status] ?? [],
         ];

@@ -62,10 +62,15 @@ class PortalController extends Controller implements HasMiddleware
                         ->whereIn('assets.area_id', $areaIds)
                         ->select('work_order_assets.work_order_id')));
         };
-        $issueScope = function ($w) use ($areaIds) {
+        $issueScope = function ($w) use ($areaIds, $user) {
             $w->whereIn('area_id', $areaIds)
                 ->orWhere(fn ($q) => $q->whereNull('area_id')
-                    ->whereIn('asset_id', Asset::query()->whereIn('area_id', $areaIds)->select('id')));
+                    ->whereIn('asset_id', Asset::query()->whereIn('area_id', $areaIds)->select('id')))
+                // Le richieste del cliente contano anche senza area indicata:
+                // "Segnalazioni aperte: 0" sopra la propria richiesta aperta
+                // sarebbe una contraddizione in piena vista
+                ->orWhere(fn ($q) => $q->where('channel', 'client_portal')
+                    ->where('client_id', $user->client_id));
         };
 
         $areas = Area::query()
@@ -163,7 +168,8 @@ class PortalController extends Controller implements HasMiddleware
             // valutazione dello staff
             'severity' => ['nullable', \Illuminate\Validation\Rule::in(['low', 'medium', 'high'])],
             'photos' => ['nullable', 'array', 'max:3'],
-            'photos.*' => ['file', 'image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
+            // 8 MB: oltre, la ricodifica di sicurezza rifiuterebbe comunque
+            'photos.*' => ['file', 'image', 'mimes:jpeg,jpg,png,webp', 'max:8192'],
         ]);
 
         if (! empty($data['area_id']) && ! $areaIds->contains($data['area_id'])) {
@@ -172,41 +178,83 @@ class PortalController extends Controller implements HasMiddleware
             ]);
         }
 
-        $severity = $data['severity'] ?? 'medium';
-        $issue = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $user, $client, $data, $severity) {
-            $issue = Issue::create([
-                'tenant_id' => $user->tenant_id,
-                'code' => Issue::nextCode($user->tenant_id),
-                'reporter_type' => 'client',
-                'reporter_user_id' => $user->id,
-                'reporter_name' => $client->name,
-                'channel' => 'client_portal',
-                'severity' => $severity,
-                'status' => 'open',
-                'area_id' => $data['area_id'] ?? null,
-                'description' => $data['description'],
-                'sla_due_at' => \App\Support\IssueSla::resolveDueAt(now(), $severity),
-                'taken_charge_due_at' => \App\Support\IssueSla::takeChargeDueAt(now(), $severity),
+        // Tetto giornaliero per cliente: il modulo è esposto agli account dei
+        // clienti, un abuso non deve riempire disco ed elenco segnalazioni
+        $todayCount = Issue::query()
+            ->where('channel', 'client_portal')
+            ->where('client_id', $user->client_id)
+            ->where('created_at', '>=', now()->startOfDay())
+            ->count();
+        if ($todayCount >= 20) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'description' => 'Limite giornaliero di richieste raggiunto: riprova domani o contattaci direttamente.',
             ]);
+        }
 
-            foreach ($request->file('photos') ?? [] as $file) {
-                $path = $file->store("photos/{$user->tenant_id}/issues/{$issue->id}");
-                \App\Models\Photo::create([
-                    'tenant_id' => $user->tenant_id,
-                    'subject_type' => 'issue',
-                    'subject_id' => $issue->id,
-                    'category' => 'issue',
-                    's3_key' => $path,
-                    'original_filename' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getMimeType() ?: 'image/jpeg',
-                    'size_bytes' => $file->getSize(),
-                    'hash_sha256' => hash_file('sha256', $file->getRealPath()),
-                    'taken_by' => $user->id,
+        // Ricodifica PRIMA di salvare: elimina EXIF e coordinate GPS del
+        // telefono del cliente (mai promesse allo staff) e normalizza il file
+        $encodedPhotos = [];
+        foreach ($request->file('photos') ?? [] as $index => $file) {
+            $jpeg = \App\Services\Photos\ImageDerivative::jpeg(
+                file_get_contents($file->getRealPath()), maxDimension: 2000, quality: 82,
+            );
+            if ($jpeg === null) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'photos' => 'Una delle foto non è leggibile o è troppo grande: riprova con un altro scatto.',
                 ]);
             }
+            $encodedPhotos[] = ['content' => $jpeg, 'original' => $file->getClientOriginalName()];
+        }
 
-            return $issue;
-        });
+        $severity = $data['severity'] ?? 'medium';
+        $storedPaths = [];
+        try {
+            $issue = \Illuminate\Support\Facades\DB::transaction(function () use ($user, $client, $data, $severity, $encodedPhotos, &$storedPaths) {
+                $issue = Issue::create([
+                    'tenant_id' => $user->tenant_id,
+                    'code' => Issue::nextCode($user->tenant_id),
+                    'reporter_type' => 'client',
+                    'reporter_user_id' => $user->id,
+                    'reporter_name' => $client->name,
+                    'channel' => 'client_portal',
+                    'severity' => $severity,
+                    'status' => 'open',
+                    'area_id' => $data['area_id'] ?? null,
+                    // La richiesta appartiene al cliente di OGGI, per sempre:
+                    // se l'utente cambierà cliente, lo storico non lo segue
+                    'client_id' => $user->client_id,
+                    'description' => $data['description'],
+                    'sla_due_at' => \App\Support\IssueSla::resolveDueAt(now(), $severity),
+                    'taken_charge_due_at' => \App\Support\IssueSla::takeChargeDueAt(now(), $severity),
+                ]);
+
+                foreach ($encodedPhotos as $photo) {
+                    $path = "photos/{$user->tenant_id}/issues/{$issue->id}/".\Illuminate\Support\Str::uuid7().'.jpg';
+                    \Illuminate\Support\Facades\Storage::disk()->put($path, $photo['content']);
+                    $storedPaths[] = $path;
+                    \App\Models\Photo::create([
+                        'tenant_id' => $user->tenant_id,
+                        'subject_type' => 'issue',
+                        'subject_id' => $issue->id,
+                        'category' => 'issue',
+                        's3_key' => $path,
+                        'original_filename' => $photo['original'],
+                        'mime_type' => 'image/jpeg',
+                        'size_bytes' => strlen($photo['content']),
+                        'hash_sha256' => hash('sha256', $photo['content']),
+                        'taken_by' => $user->id,
+                    ]);
+                }
+
+                return $issue;
+            });
+        } catch (\Throwable $e) {
+            // Il filesystem non partecipa al rollback: niente file orfani
+            foreach ($storedPaths as $path) {
+                \Illuminate\Support\Facades\Storage::disk()->delete($path);
+            }
+            throw $e;
+        }
 
         \App\Support\Audit::log('issue.created', $issue, ['code' => $issue->code, 'channel' => 'client_portal']);
 
@@ -219,14 +267,13 @@ class PortalController extends Controller implements HasMiddleware
         $user = $request->user();
         [, $areaIds] = $this->linkedAreas($request);
 
-        $peerIds = \App\Models\User::query()
-            ->where('client_id', $user->client_id)->pluck('id');
-
+        // Le richieste appartengono al CLIENTE registrato alla creazione:
+        // un utente ricollegato a un altro cliente non travasa lo storico
         $issues = Issue::query()
             ->with('area:id,name')
             ->withCount('photos')
             ->where('channel', 'client_portal')
-            ->whereIn('reporter_user_id', $peerIds)
+            ->where('client_id', $user->client_id)
             ->orderByDesc('created_at')
             ->limit(100)
             ->get();

@@ -24,7 +24,7 @@ class Issue extends Model
     protected $fillable = [
         'tenant_id', 'code', 'reporter_type', 'reporter_user_id', 'reporter_name',
         'reporter_contact', 'channel', 'category', 'severity', 'status',
-        'asset_id', 'area_id', 'geom', 'description', 'sla_due_at',
+        'asset_id', 'area_id', 'client_id', 'geom', 'description', 'sla_due_at',
         'taken_charge_due_at', 'taken_charge_at', 'resolved_at',
         'resolution_notes', 'work_order_id',
     ];

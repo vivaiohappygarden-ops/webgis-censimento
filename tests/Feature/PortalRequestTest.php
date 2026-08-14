@@ -168,6 +168,95 @@ class PortalRequestTest extends TestCase
         $this->getJson('/api/v1/portal/requests')->assertForbidden();
     }
 
+    public function test_reassigned_user_does_not_carry_history_to_the_new_client(): void
+    {
+        $this->actingAsTenantUser($this->portalUser);
+        $this->postJson('/api/v1/portal/requests', ['description' => 'Richiesta storica del Comune.'])->assertCreated();
+
+        // L'amministratore ricollega l'utente a un altro cliente
+        $otherClient = Client::create(['tenant_id' => $this->organization->id, 'name' => 'Condominio Nuovo', 'client_type' => 'private']);
+        $this->actingAsTenantUser($this->admin);
+        $this->patchJson("/api/v1/users/{$this->portalUser->id}", [
+            'role' => 'cliente', 'client_id' => $otherClient->id,
+        ])->assertOk();
+
+        // Nel portale del nuovo cliente lo storico del vecchio NON compare
+        $moved = User::withoutGlobalScopes()->findOrFail($this->portalUser->id);
+        $this->actingAsTenantUser($moved);
+        $this->assertCount(0, $this->getJson('/api/v1/portal/requests')->assertOk()->json('data'));
+
+        // Un altro utente del VECCHIO cliente continua a vedere la richiesta
+        $peer = User::factory()->create([
+            'tenant_id' => $this->organization->id,
+            'user_type' => 'client_portal',
+            'client_id' => $this->client->id,
+        ]);
+        app(PermissionRegistrar::class)->setPermissionsTeamId($this->organization->id);
+        $peer->assignRole('cliente');
+        $this->actingAsTenantUser($peer);
+        $this->assertCount(1, $this->getJson('/api/v1/portal/requests')->assertOk()->json('data'));
+    }
+
+    public function test_request_without_area_counts_in_the_overview(): void
+    {
+        $this->actingAsTenantUser($this->portalUser);
+        $this->postJson('/api/v1/portal/requests', ['description' => 'Problema senza area indicata.'])->assertCreated();
+
+        $overview = $this->getJson('/api/v1/portal/overview')->assertOk()->json();
+        $this->assertSame(1, $overview['counts']['open_issues']);
+        $descriptions = array_column($overview['issues'], 'description');
+        $this->assertContains('Problema senza area indicata.', $descriptions);
+    }
+
+    public function test_photos_are_reencoded_and_daily_cap_applies(): void
+    {
+        $this->actingAsTenantUser($this->portalUser);
+
+        // Un PNG entra ma viene riscritto come JPEG (via EXIF e GPS)
+        $body = $this->post('/api/v1/portal/requests', [
+            'description' => 'Con foto png.',
+            'photos' => [UploadedFile::fake()->image('scatto.png', 600, 400)],
+        ], ['Accept' => 'application/json'])->assertCreated()->json('data');
+
+        $photo = Photo::withoutGlobalScopes()
+            ->where('subject_type', 'issue')->where('subject_id', $body['id'])->firstOrFail();
+        $this->assertSame('image/jpeg', $photo->mime_type);
+        $this->assertStringEndsWith('.jpg', $photo->s3_key);
+
+        // Tetto giornaliero per cliente: la ventunesima richiesta è respinta
+        for ($i = 2; $i <= 20; $i++) {
+            Issue::create([
+                'tenant_id' => $this->organization->id,
+                'code' => sprintf('SEG-2026-%04d', 100 + $i),
+                'reporter_type' => 'client',
+                'reporter_user_id' => $this->portalUser->id,
+                'reporter_name' => $this->client->name,
+                'channel' => 'client_portal',
+                'client_id' => $this->client->id,
+                'severity' => 'medium',
+                'status' => 'open',
+                'description' => "Riempitivo {$i}",
+            ]);
+        }
+        $this->postJson('/api/v1/portal/requests', ['description' => 'La ventunesima.'])
+            ->assertUnprocessable();
+    }
+
+    public function test_staff_actions_keep_photo_links(): void
+    {
+        $this->actingAsTenantUser($this->portalUser);
+        $id = $this->post('/api/v1/portal/requests', [
+            'description' => 'Con foto da conservare.',
+            'photos' => [UploadedFile::fake()->image('a.jpg', 500, 400)],
+        ], ['Accept' => 'application/json'])->assertCreated()->json('data.id');
+
+        // Dopo la presa in carico la risposta contiene ancora le foto
+        $this->actingAsTenantUser($this->admin);
+        $updated = $this->patchJson("/api/v1/issues/{$id}", ['status' => 'in_charge'])
+            ->assertOk()->json('data');
+        $this->assertCount(1, $updated['photos']);
+    }
+
     public function test_resolution_notes_appear_only_when_resolved(): void
     {
         $this->actingAsTenantUser($this->portalUser);
