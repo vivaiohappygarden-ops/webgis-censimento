@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
 import axios from 'axios';
+import { fetchPdf } from '@/pdf';
 
 const props = defineProps({
     asset: { type: Object, required: true },
@@ -26,6 +27,41 @@ const tree = reactive({
         ...(props.asset.tree?.dedicated_to ?? {}),
     },
 });
+// Scheda estesa della perizia: etichette e struttura vuota
+const CONTESTO = {
+    ambito: 'Ambito',
+    sito_radicazione: 'Sito di radicazione',
+    disposizione: 'Disposizione',
+    accessibilita: 'Accessibilità',
+};
+const GIUDIZIO = {
+    fase_fisiologica: 'Fase fisiologica',
+    stato_vegetativo: 'Stato vegetativo',
+    sintetico: 'Giudizio sintetico',
+};
+const PARTI = {
+    rilevamenti: 'Rilevamenti generali',
+    radici: 'Radici',
+    colletto: 'Colletto',
+    fusto: 'Fusto',
+    castello: 'Castello',
+    branche: 'Branche',
+    chioma: 'Chioma e foglie',
+};
+
+function blankSurvey() {
+    return {
+        contesto: { ambito: '', sito_radicazione: '', disposizione: '', accessibilita: '' },
+        interferenze: '',
+        giudizio: { fase_fisiologica: '', stato_vegetativo: '', sintetico: '', patologie_quarantena: '' },
+        difetti: Object.fromEntries(Object.keys(PARTI).map((k) => [k, ''])),
+        integrazione_vta: '',
+        priorita_intervento: '',
+        conclusioni: '',
+    };
+}
+
+const showSurvey = ref(false);
 const vta = reactive({
     assessment_type: 'vta_visual',
     assessed_on: new Date().toISOString().slice(0, 10),
@@ -33,7 +69,17 @@ const vta = reactive({
     outcome: '',
     prescriptions: '',
     next_check_due: '',
+    survey: blankSurvey(),
 });
+
+// Perizia in PDF di una valutazione
+const periziaError = ref('');
+
+async function openPerizia(assessmentId) {
+    periziaError.value = '';
+    const res = await fetchPdf(`/api/v1/assessments/${assessmentId}/perizia-pdf`);
+    if (res?.error) periziaError.value = res.error;
+}
 
 // Analisi strumentali per valutazione: stato di espansione e form per riga
 const analyses = reactive({});
@@ -176,9 +222,14 @@ async function saveVta() {
             outcome: vta.outcome || null,
             prescriptions: vta.prescriptions || null,
             next_check_due: vta.next_check_due || null,
+            survey: vta.survey,
         });
         showVtaForm.value = false;
-        Object.assign(vta, { failure_class: '', outcome: '', prescriptions: '', next_check_due: '' });
+        showSurvey.value = false;
+        Object.assign(vta, {
+            failure_class: '', outcome: '', prescriptions: '', next_check_due: '',
+            survey: blankSurvey(),
+        });
         await loadAssessments();
     } catch (err) {
         vtaError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0] ?? 'Errore nel salvataggio';
@@ -343,15 +394,69 @@ onMounted(loadAssessments);
                     <span class="text-gray-500">Prescrizioni</span>
                     <textarea v-model="vta.prescriptions" rows="2" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" />
                 </label>
-                <label class="block text-xs md:w-56">
-                    <span class="text-gray-500">Prossimo controllo (vuoto = automatico dalla classe)</span>
-                    <input v-model="vta.next_check_due" type="date" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
-                </label>
+                <div class="grid gap-2 md:grid-cols-2">
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Prossimo controllo (vuoto = automatico dalla classe)</span>
+                        <input v-model="vta.next_check_due" type="date" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Priorità dell'intervento</span>
+                        <input v-model="vta.survey.priorita_intervento" maxlength="100" placeholder="es. entro 30 giorni" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                    </label>
+                </div>
+
+                <!-- Scheda estesa: serve solo a chi redige la perizia -->
+                <button type="button" class="text-xs font-medium text-green-700 hover:underline" data-test="vta-scheda-estesa" @click="showSurvey = ! showSurvey">
+                    {{ showSurvey ? 'Nascondi' : 'Compila' }} la scheda estesa per la perizia
+                </button>
+
+                <div v-if="showSurvey" class="space-y-2 rounded-lg border border-green-200 bg-white p-3">
+                    <p class="text-xs font-medium text-gray-500">Inquadramento del contesto</p>
+                    <div class="grid gap-2 md:grid-cols-4">
+                        <label v-for="(label, key) in CONTESTO" :key="key" class="block text-xs">
+                            <span class="text-gray-500">{{ label }}</span>
+                            <input v-model="vta.survey.contesto[key]" maxlength="150" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                        </label>
+                    </div>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Interferenze (linee aeree, sottoservizi, manufatti)</span>
+                        <input v-model="vta.survey.interferenze" maxlength="1000" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                    </label>
+
+                    <p class="pt-1 text-xs font-medium text-gray-500">Giudizio complessivo</p>
+                    <div class="grid gap-2 md:grid-cols-3">
+                        <label v-for="(label, key) in GIUDIZIO" :key="key" class="block text-xs">
+                            <span class="text-gray-500">{{ label }}</span>
+                            <input v-model="vta.survey.giudizio[key]" maxlength="150" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                        </label>
+                    </div>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Patologie da quarantena</span>
+                        <input v-model="vta.survey.giudizio.patologie_quarantena" maxlength="500" placeholder="vuoto = non rilevate" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                    </label>
+
+                    <p class="pt-1 text-xs font-medium text-gray-500">Difetti riscontrati, parte per parte</p>
+                    <label v-for="(label, key) in PARTI" :key="key" class="block text-xs">
+                        <span class="text-gray-500">{{ label }}</span>
+                        <textarea v-model="vta.survey.difetti[key]" rows="1" maxlength="2000" :data-test="`vta-difetto-${key}`" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" />
+                    </label>
+
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Integrazione o completamento della valutazione</span>
+                        <input v-model="vta.survey.integrazione_vta" maxlength="1000" placeholder="vuoto = valutazione completa" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Conclusioni (vuoto = testo automatico dalla classe)</span>
+                        <textarea v-model="vta.survey.conclusioni" rows="3" maxlength="4000" data-test="vta-conclusioni" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" />
+                    </label>
+                </div>
                 <p v-if="vtaError" class="text-sm text-red-600">{{ vtaError }}</p>
                 <button type="submit" :disabled="savingVta" class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50">
                     {{ savingVta ? 'Salvataggio…' : 'Registra valutazione' }}
                 </button>
             </form>
+
+            <p v-if="periziaError" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="vta-perizia-errore">{{ periziaError }}</p>
 
             <ul class="mt-3 space-y-2">
                 <li
@@ -375,6 +480,11 @@ onMounted(loadAssessments);
                             :class="a.next_check_due ? '' : 'ml-auto'"
                             @click="toggleAnalyses(a.id)"
                         >Analisi strumentali ({{ a.instrumental_analyses_count ?? 0 }})</button>
+                        <button
+                            class="text-xs font-medium text-green-700 hover:underline"
+                            data-test="vta-perizia"
+                            @click="openPerizia(a.id)"
+                        >Perizia PDF</button>
                     </div>
 
                     <div v-if="analyses[a.id]?.open" class="mt-2 border-t border-gray-100 pt-2">

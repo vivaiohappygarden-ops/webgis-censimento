@@ -1,9 +1,8 @@
 <!DOCTYPE html>
-{{-- BOZZA 2 in attesa di approvazione: layout della perizia di valutazione di
-     stabilità, integrato con le sezioni della scheda VTA professionale
-     (inquadramento del contesto, difetti per parte, interferenze, giudizio
-     complessivo, tabelle strumentali di dettaglio, 4 foto). Nessuna rotta la
-     usa ancora: la funzione si attiva dopo l'approvazione del committente. --}}
+{{-- Perizia di valutazione della stabilità (metodo VTA), approvata dal
+     committente il 14/08/2026: identificazione, contesto, dendrometrici,
+     giudizio, difetti per parte, analisi strumentali, classe FRC,
+     prescrizioni, foto, inquadramento cartografico e conclusioni. --}}
 <html lang="it">
 <head>
 <meta charset="utf-8">
@@ -121,7 +120,7 @@
         </tr>
     </table>
     <table>
-        <tr><th>Patologie da quarantena</th><td>{{ $giudizio['patologie_quarantena'] ?: 'Non rilevate' }}</td></tr>
+        <tr><th>Patologie da quarantena</th><td>{{ ($giudizio['patologie_quarantena'] ?? '') ?: 'Non rilevate' }}</td></tr>
     </table>
 
     <h2>5. Analisi visiva: difetti riscontrati per parte</h2>
@@ -137,9 +136,9 @@
     @foreach ($analisi as $a)
     <table class="cols">
         <tr>
-            <th style="width: 40%;">{{ $a->label }}</th>
-            <th>Data: {{ $a->measured_at?->format('d/m/Y') }}</th>
-            <th>Esito: {{ $a->esito }}</th>
+            <th style="width: 40%;">{{ $a->label }}@if ($a->strumento) - {{ $a->strumento }}@endif</th>
+            <th>Data: {{ $a->measured_at?->format('d/m/Y') ?? '-' }}</th>
+            <th>Altezza di misura: {{ $a->altezza !== null ? $a->altezza.' cm' : '-' }}</th>
         </tr>
     </table>
     @if (! empty($a->rows))

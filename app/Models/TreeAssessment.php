@@ -17,10 +17,13 @@ class TreeAssessment extends Model
     /** Mesi di default al ricontrollo per classe di propensione al cedimento. */
     public const DEFAULT_RECHECK_MONTHS = ['A' => 60, 'B' => 36, 'C' => 24, 'C/D' => 12, 'D' => null];
 
+    /** Parti dell'albero esaminate nell'analisi visiva, nell'ordine della scheda. */
+    public const BODY_PARTS = ['rilevamenti', 'radici', 'colletto', 'fusto', 'castello', 'branche', 'chioma'];
+
     protected $fillable = [
         'tenant_id', 'tree_id', 'assessment_type', 'assessed_on', 'assessor_id',
         'assessor_external', 'defects', 'targets', 'failure_class', 'outcome',
-        'prescriptions', 'next_check_due', 'created_by', 'updated_by',
+        'prescriptions', 'next_check_due', 'survey', 'created_by', 'updated_by',
     ];
 
     protected function casts(): array
@@ -30,6 +33,7 @@ class TreeAssessment extends Model
             'next_check_due' => 'date',
             'defects' => 'array',
             'targets' => 'array',
+            'survey' => 'array',
             'version' => 'integer',
         ];
     }

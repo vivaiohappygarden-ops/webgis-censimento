@@ -58,7 +58,33 @@ class TreeAssessmentController extends Controller implements HasMiddleware
             'outcome' => ['nullable', 'in:ok,monitor,prescriptions,fell'],
             'prescriptions' => ['nullable', 'string'],
             'next_check_due' => ['nullable', 'date', 'after:assessed_on'],
+            // Scheda estesa della perizia: tutte voci descrittive facoltative
+            'survey' => ['sometimes', 'array'],
+            'survey.contesto' => ['nullable', 'array'],
+            'survey.contesto.ambito' => ['nullable', 'string', 'max:150'],
+            'survey.contesto.sito_radicazione' => ['nullable', 'string', 'max:150'],
+            'survey.contesto.disposizione' => ['nullable', 'string', 'max:150'],
+            'survey.contesto.accessibilita' => ['nullable', 'string', 'max:150'],
+            'survey.interferenze' => ['nullable', 'string', 'max:1000'],
+            'survey.giudizio' => ['nullable', 'array'],
+            'survey.giudizio.fase_fisiologica' => ['nullable', 'string', 'max:150'],
+            'survey.giudizio.stato_vegetativo' => ['nullable', 'string', 'max:150'],
+            'survey.giudizio.sintetico' => ['nullable', 'string', 'max:150'],
+            'survey.giudizio.patologie_quarantena' => ['nullable', 'string', 'max:500'],
+            'survey.difetti' => ['nullable', 'array'],
+            'survey.difetti.*' => ['nullable', 'string', 'max:2000'],
+            'survey.integrazione_vta' => ['nullable', 'string', 'max:1000'],
+            'survey.priorita_intervento' => ['nullable', 'string', 'max:100'],
+            'survey.conclusioni' => ['nullable', 'string', 'max:4000'],
         ]);
+
+        if (isset($data['survey']['difetti'])) {
+            // Solo le parti previste dalla scheda: niente chiavi arbitrarie
+            $data['survey']['difetti'] = array_intersect_key(
+                $data['survey']['difetti'],
+                array_flip(TreeAssessment::BODY_PARTS),
+            );
+        }
 
         // Scadenzario automatico: se il tecnico non indica il ricontrollo,
         // lo deriva dalla classe di propensione al cedimento (configurabile per tenant)

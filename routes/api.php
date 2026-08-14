@@ -63,6 +63,9 @@ Route::prefix('v1')->group(function () {
         Route::get('assessments/{assessment}/instrumental-analyses', [\App\Http\Controllers\Api\V1\InstrumentalAnalysisController::class, 'index'])->whereUuid('assessment');
         Route::post('assessments/{assessment}/instrumental-analyses', [\App\Http\Controllers\Api\V1\InstrumentalAnalysisController::class, 'store'])->whereUuid('assessment');
         Route::delete('instrumental-analyses/{id}', [\App\Http\Controllers\Api\V1\InstrumentalAnalysisController::class, 'destroy'])->whereUuid('id');
+        Route::get('assessments/{id}/perizia-pdf', [\App\Http\Controllers\Api\V1\PeriziaController::class, 'pdf'])->whereUuid('id');
+        Route::get('perizia/settings', [\App\Http\Controllers\Api\V1\PeriziaController::class, 'settings']);
+        Route::put('perizia/settings', [\App\Http\Controllers\Api\V1\PeriziaController::class, 'updateSettings']);
         Route::get('vta/dashboard', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'index']);
         Route::get('vta/tutelati', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'tutelati']);
         Route::get('vta/bilancio', [\App\Http\Controllers\Api\V1\TreeBalanceController::class, 'index']);

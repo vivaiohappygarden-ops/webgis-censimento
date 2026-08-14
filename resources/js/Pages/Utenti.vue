@@ -222,9 +222,48 @@ async function testGestionale() {
     }
 }
 
+// Intestazione delle perizie di stabilità (dati del professionista)
+const perizia = reactive({
+    form: { nome: '', titolo: '', iscrizione: '', recapiti: '' },
+    busy: false,
+    message: '',
+    messageOk: false,
+});
+
+async function loadPerizia() {
+    try {
+        const { data } = await axios.get('/api/v1/perizia/settings');
+        Object.assign(perizia.form, {
+            nome: data.data.nome ?? '',
+            titolo: data.data.titolo ?? '',
+            iscrizione: data.data.iscrizione ?? '',
+            recapiti: data.data.recapiti ?? '',
+        });
+    } catch {
+        // La scheda resta compilabile anche se la lettura fallisce
+    }
+}
+
+async function savePerizia() {
+    perizia.busy = true;
+    perizia.message = '';
+    try {
+        await axios.put('/api/v1/perizia/settings', perizia.form);
+        await loadPerizia();
+        perizia.message = 'Intestazione salvata: comparirà sulle prossime perizie.';
+        perizia.messageOk = true;
+    } catch (err) {
+        perizia.message = firstError(err, 'Salvataggio non riuscito');
+        perizia.messageOk = false;
+    } finally {
+        perizia.busy = false;
+    }
+}
+
 onMounted(() => {
     load();
     loadGestionale();
+    loadPerizia();
 });
 </script>
 
@@ -302,6 +341,35 @@ onMounted(() => {
                     </tbody>
                 </table>
             </div>
+
+            <!-- Intestazione delle perizie di stabilità -->
+            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" data-test="perizia-settings">
+                <h2 class="text-sm font-semibold">Intestazione delle perizie di stabilità</h2>
+                <p class="mt-1 text-xs text-gray-500">
+                    Chi firma le perizie VTA: nome, titolo professionale, iscrizione all'albo e recapiti.
+                    Compaiono in cima e in calce al documento, sopra la riga della firma.
+                </p>
+                <div class="mt-3 grid gap-3 md:grid-cols-2">
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Nome e cognome</span>
+                        <input v-model="perizia.form.nome" maxlength="150" data-test="perizia-nome" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Titolo professionale</span>
+                        <input v-model="perizia.form.titolo" maxlength="150" placeholder="es. Perito agrario" data-test="perizia-titolo" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Iscrizione all'albo</span>
+                        <input v-model="perizia.form.iscrizione" maxlength="200" placeholder="es. Collegio dei Periti Agrari di Brescia n. 000" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Recapiti</span>
+                        <input v-model="perizia.form.recapiti" maxlength="300" placeholder="indirizzo, telefono, email" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                </div>
+                <p v-if="perizia.message" class="mt-3 rounded-lg px-3 py-2 text-sm" :class="perizia.messageOk ? 'bg-green-100 text-green-900' : 'bg-red-50 text-red-700'" data-test="perizia-msg">{{ perizia.message }}</p>
+                <button class="mt-3 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50" :disabled="perizia.busy" data-test="perizia-save" @click="savePerizia">Salva intestazione</button>
+            </section>
 
             <!-- Collegamento al gestionale WordPress -->
             <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" data-test="gest-settings">
