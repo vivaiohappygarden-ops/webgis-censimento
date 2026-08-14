@@ -9,7 +9,9 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 // Riepilogo scadenze alle 6:30 italiane: in cassetta prima dell'inizio
-// della giornata di lavoro
+// della giornata di lavoro. L'esito resta nei log dell'applicazione:
+// il cron dello scheduler scarta il proprio output
 Schedule::command('notifications:daily')
     ->dailyAt('06:30')
-    ->timezone('Europe/Rome');
+    ->timezone('Europe/Rome')
+    ->appendOutputTo(storage_path('logs/notifications.log'));

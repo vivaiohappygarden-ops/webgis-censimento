@@ -80,9 +80,16 @@ function goTo(id) {
                             La pagina <strong>Oggi</strong> raccoglie in un colpo d'occhio ciò che richiede
                             attenzione: lavori in ritardo o in programma nei prossimi 7 giorni, controlli
                             ricorrenti scaduti o in scadenza, segnalazioni con i tempi di risposta a rischio,
-                            non conformità aperte e impianti di irrigazione da aprire o invernare.
-                            Ogni sezione porta con un clic alla pagina di dettaglio. È la prima pagina da
-                            guardare al mattino.
+                            non conformità aperte, patentini e certificati in scadenza e impianti di
+                            irrigazione da aprire o invernare. Ogni sezione porta con un clic alla pagina di
+                            dettaglio. È la prima pagina da guardare al mattino.
+                        </p>
+                        <p class="mt-2">
+                            Le stesse voci arrivano anche <strong>via email ogni mattina alle 6:30</strong> ad
+                            amministratori e tecnici; se non c'è nulla da segnalare, nessuna email. Chi non
+                            vuole riceverla si esclude dalla pagina <strong>Utenti</strong> (casella "Riceve il
+                            riepilogo email delle scadenze"). L'invio richiede la casella di posta configurata
+                            sul server (si fa alla messa online).
                         </p>
                     </section>
 

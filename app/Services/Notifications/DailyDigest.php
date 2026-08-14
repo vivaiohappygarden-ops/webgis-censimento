@@ -35,7 +35,10 @@ class DailyDigest
     {
         app(PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
 
-        return User::withoutGlobalScopes()
+        // Si toglie SOLO il filtro tenant (qui il tenant è esplicito):
+        // il soft delete deve restare, o un utente eliminato riceverebbe
+        // ancora i dati operativi dell'azienda
+        return User::withoutGlobalScope(\App\Models\Scopes\TenantScope::class)
             ->where('tenant_id', $organization->id)
             ->where('user_type', 'internal')
             ->where('is_active', true)

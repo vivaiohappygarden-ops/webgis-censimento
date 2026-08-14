@@ -26,9 +26,14 @@ senza connessione e si allinea da solo appena torna la rete.
 
 La pagina **Oggi** raccoglie in un colpo d'occhio ciò che richiede attenzione: lavori in
 ritardo o in programma nei prossimi 7 giorni, controlli ricorrenti scaduti o in scadenza,
-segnalazioni con i tempi di risposta a rischio, non conformità aperte e impianti di
-irrigazione da aprire o invernare. Ogni sezione porta con un clic alla pagina di
-dettaglio. È la prima pagina da guardare al mattino.
+segnalazioni con i tempi di risposta a rischio, non conformità aperte, patentini e
+certificati in scadenza e impianti di irrigazione da aprire o invernare. Ogni sezione
+porta con un clic alla pagina di dettaglio. È la prima pagina da guardare al mattino.
+
+Le stesse voci arrivano anche **via email ogni mattina alle 6:30** ad amministratori e
+tecnici; se non c'è nulla da segnalare, nessuna email. Chi non vuole riceverla si
+esclude dalla pagina **Utenti** (casella "Riceve il riepilogo email delle scadenze").
+L'invio richiede la casella di posta configurata sul server (si fa alla messa online).
 
 ## Il censimento
 

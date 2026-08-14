@@ -151,7 +151,8 @@ email Aruba** (inclusa se si è acquistato il dominio con la posta):
 
 Finché `MAIL_MAILER` resta `log`, le email non partono: finiscono solo nel
 registro dell'applicazione (utile in prova). Chi non vuole ricevere il
-riepilogo si spegne dalla pagina **Utenti** (interruttore "riepilogo email").
+riepilogo si esclude dalla pagina **Utenti**: aprire la modifica dell'utente
+e togliere la spunta a "Riceve il riepilogo email delle scadenze".
 
 ## 7. Se qualcosa non va
 

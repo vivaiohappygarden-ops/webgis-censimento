@@ -101,6 +101,27 @@ class DailyDigestTest extends TestCase
         $this->assertStringContainsString('1 scadenza da attenzionare', $mail->envelope()->subject);
     }
 
+    public function test_deleted_users_and_inactive_organizations_get_nothing(): void
+    {
+        Mail::fake();
+        $this->makeExpiredCertificate();
+
+        // Un tecnico eliminato (soft delete) non riceve piu' nulla, anche
+        // se ruolo e preferenza sono rimasti
+        $deleted = $this->makeUser('tecnico');
+        $deleted->delete();
+
+        $this->artisan('notifications:daily')->assertSuccessful();
+        Mail::assertSent(DailyDigestMail::class, 1);
+        Mail::assertNotSent(DailyDigestMail::class, fn ($mail) => $mail->hasTo($deleted->email));
+
+        // Un'organizzazione disattivata non riceve dati: come al login
+        Mail::fake();
+        $this->organization->forceFill(['is_active' => false])->save();
+        $this->artisan('notifications:daily')->assertSuccessful();
+        Mail::assertNothingSent();
+    }
+
     public function test_no_mail_when_nothing_to_report_and_tenants_are_isolated(): void
     {
         Mail::fake();
