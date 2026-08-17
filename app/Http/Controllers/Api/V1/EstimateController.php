@@ -282,7 +282,11 @@ class EstimateController extends Controller implements HasMiddleware
     public function pdf(string $id, PdfRenderer $renderer)
     {
         $estimate = Estimate::query()
-            ->with(['client:id,name', 'area:id,name', 'items.workType:id,name'])
+            ->with([
+                'client:id,name,client_type,vat_number,fiscal_code,pec,address,contacts',
+                'area:id,name,locality_id', 'area.locality:id,name',
+                'items.workType:id,name',
+            ])
             ->findOrFail($id);
         $organization = Organization::query()->find($estimate->tenant_id);
 
@@ -291,6 +295,9 @@ class EstimateController extends Controller implements HasMiddleware
         $pdf = $renderer->render('pdf.estimate', [
             'estimate' => $estimate,
             'organization' => $organization,
+            // Recapiti dell'intestazione: gli stessi impostati per le perizie
+            'recapiti' => $organization?->settings['professionista']['recapiti'] ?? null,
+            'indirizzoCliente' => $this->addressLines($estimate->client?->address ?? []),
             'subtotal' => $subtotal,
             'vat' => $vat,
             'total' => round($subtotal + $vat, 2),
@@ -344,6 +351,29 @@ class EstimateController extends Controller implements HasMiddleware
      *
      * @return array{0: float, 1: float}
      */
+    /**
+     * Indirizzo del cliente in righe da stampare. Le chiavi sono quelle
+     * dell'anagrafica: si prende quello che c'è, senza righe vuote.
+     *
+     * @return list<string>
+     */
+    private function addressLines(array $address): array
+    {
+        $via = trim(implode(' ', array_filter([
+            $address['via'] ?? $address['street'] ?? null,
+            $address['civico'] ?? $address['number'] ?? null,
+        ], fn ($v) => trim((string) $v) !== '')));
+
+        $citta = trim(implode(' ', array_filter([
+            $address['cap'] ?? $address['zip'] ?? null,
+            $address['citta'] ?? $address['city'] ?? null,
+            isset($address['provincia']) && trim((string) $address['provincia']) !== ''
+                ? '('.$address['provincia'].')' : null,
+        ], fn ($v) => trim((string) $v) !== '')));
+
+        return array_values(array_filter([$via, $citta], fn ($v) => $v !== ''));
+    }
+
     private function totals(Estimate $estimate): array
     {
         $subtotal = round($estimate->items
