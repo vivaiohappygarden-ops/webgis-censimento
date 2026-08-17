@@ -71,13 +71,19 @@ async function save() {
                 <span class="text-gray-500">Stato</span>
                 <select v-model="form.status" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
                     <option value="active">Attivo</option>
-                    <option value="dead">Morto</option>
+                    <option value="dead">Morto in piedi</option>
                     <option value="stump">Ceppaia</option>
-                    <option value="removed">Abbattuto/Rimosso</option>
                     <option value="dismissed">Dismesso</option>
+                    <!-- "Abbattuto" non si sceglie qui: serve anche la data, che
+                         va nella scheda albero e nel bilancio arboreo -->
+                    <option v-if="form.status === 'removed'" value="removed" disabled>Abbattuto/Rimosso</option>
                 </select>
             </label>
         </div>
+        <p v-if="form.status !== 'removed'" class="mt-1 text-xs text-gray-500">
+            Per un elemento abbattuto o rimosso usa "Registra abbattimento" in fondo alla scheda:
+            registra anche la data e aggiorna il bilancio arboreo.
+        </p>
 
         <div v-if="fields.length" class="mt-3">
             <h3 class="text-xs font-semibold uppercase text-gray-400">Attributi del tipo</h3>

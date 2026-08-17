@@ -17,6 +17,7 @@ use Illuminate\Http\Response;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class AssetController extends Controller implements HasMiddleware
@@ -26,7 +27,7 @@ class AssetController extends Controller implements HasMiddleware
         return [
             new Middleware('can:assets.view', only: ['index', 'show']),
             new Middleware('can:assets.create', only: ['store']),
-            new Middleware('can:assets.update', only: ['update']),
+            new Middleware('can:assets.update', only: ['update', 'registerRemoval', 'cancelRemoval']),
             new Middleware('can:assets.delete', only: ['destroy']),
         ];
     }
@@ -51,6 +52,12 @@ class AssetController extends Controller implements HasMiddleware
         }
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
+        }
+        // Gli elementi abbattuti restano in archivio ma sporcano l'elenco di
+        // tutti i giorni: chi consulta decide se vederli (default: si vedono,
+        // così le altre pagine che usano questa API non cambiano)
+        if ($request->boolean('hide_removed')) {
+            $query->where('status', '!=', 'removed');
         }
         if ($request->filled('q')) {
             $q = '%'.$request->string('q').'%';
@@ -194,14 +201,167 @@ class AssetController extends Controller implements HasMiddleware
         return $this->show($id);
     }
 
+    /**
+     * Eliminazione della scheda: serve solo a cancellare un rilievo sbagliato.
+     * Se l'elemento è già entrato nel lavoro (ordini, ispezioni, segnalazioni,
+     * trattamenti…) l'eliminazione lascerebbe righe orfane e storia incoerente:
+     * in quel caso si registra l'abbattimento o si dismette la scheda.
+     */
     public function destroy(string $id): Response
     {
         $asset = Asset::findOrFail($id);
-        $asset->delete();
 
-        Audit::log('asset.deleted', $asset);
+        $links = $this->linkedRecords($asset);
+        if ($links !== []) {
+            $elenco = implode(', ', $links);
+            throw ValidationException::withMessages([
+                'asset' => "Non si può eliminare questa scheda: è collegata a {$elenco}. ".
+                    'Se la pianta è stata abbattuta usa "Registra abbattimento", '.
+                    'altrimenti metti la scheda come dismessa.',
+            ]);
+        }
+
+        DB::transaction(function () use ($asset) {
+            // Il codice censimento torna libero solo se la riga sparisce
+            // dall'indice unico: l'indice esclude già le schede eliminate
+            $asset->delete();
+            Audit::log('asset.deleted', $asset, [
+                'census_code' => $asset->census_code,
+                'type' => $asset->objectType?->code,
+            ]);
+        });
 
         return response()->noContent();
+    }
+
+    /**
+     * Registrazione dell'abbattimento/rimozione in un colpo solo: stato della
+     * scheda, data di fine validità, scheda albero (da cui dipende il bilancio
+     * arboreo) e spegnimento della pagina pubblica col QR.
+     */
+    public function registerRemoval(Request $request, string $id): JsonResponse
+    {
+        $data = $request->validate([
+            // Una data futura toglierebbe dal censimento un elemento che c'è
+            // ancora: qui si registra solo quello che è già successo
+            'removed_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'removal_reason' => ['nullable', 'string', 'max:254'],
+            'version' => ['sometimes', 'integer'],
+        ], [
+            'removed_on.before_or_equal' => 'La data di abbattimento non può essere nel futuro.',
+        ], [
+            'removed_on' => 'data di abbattimento',
+            'removal_reason' => 'motivo',
+        ]);
+
+        DB::transaction(function () use ($request, $id, $data) {
+            $asset = Asset::query()->lockForUpdate()->findOrFail($id);
+
+            if (isset($data['version']) && (int) $data['version'] !== $asset->version) {
+                abort(409, "Conflitto di versione: la scheda è stata modificata da altri (versione attuale {$asset->version}).");
+            }
+
+            $publicPageWasOn = $asset->public_token !== null;
+
+            $asset->status = 'removed';
+            $asset->valid_to = $data['removed_on'];
+            $asset->removal_reason = $data['removal_reason'] ?? null;
+            // Rilievo fatto dopo l'abbattimento (censimento di una ceppaia,
+            // recupero di dati storici): la scheda non può finire prima di
+            // cominciare, quindi la validità parte dalla stessa data
+            if ($asset->valid_from && $asset->valid_from->gt($asset->valid_to)) {
+                $asset->valid_from = $asset->valid_to;
+            }
+            // Un QR già stampato non deve più portare alla scheda di una
+            // pianta che non c'è più
+            $asset->public_token = null;
+            $asset->updated_by = $request->user()->id;
+            $this->assertValidityDates($asset);
+            $asset->save();
+
+            if ($asset->tree) {
+                $asset->tree->removed_on = $data['removed_on'];
+                $asset->tree->removal_reason = $data['removal_reason'] ?? null;
+                $this->assertTreeDates($asset->tree);
+                $asset->tree->save();
+            }
+
+            Audit::log('asset.removal_registered', $asset, [
+                'removed_on' => $data['removed_on'],
+                'reason' => $data['removal_reason'] ?? null,
+                'public_page_disabled' => $publicPageWasOn,
+            ]);
+        });
+
+        return $this->show($id);
+    }
+
+    /** Annullamento della registrazione (errore di inserimento): la scheda torna attiva. */
+    public function cancelRemoval(Request $request, string $id): JsonResponse
+    {
+        DB::transaction(function () use ($request, $id) {
+            $asset = Asset::query()->lockForUpdate()->findOrFail($id);
+
+            $asset->status = 'active';
+            $asset->valid_to = null;
+            $asset->removal_reason = null;
+            $asset->updated_by = $request->user()->id;
+            $asset->save();
+
+            if ($asset->tree) {
+                $asset->tree->removed_on = null;
+                $asset->tree->removal_reason = null;
+                $asset->tree->save();
+            }
+
+            Audit::log('asset.removal_cancelled', $asset);
+        });
+
+        return $this->show($id);
+    }
+
+    /**
+     * Righe che dipendono dalla scheda, già scritte come "2 ispezioni" pronte
+     * per il messaggio a video. Le tabelle con cancellazione logica contano
+     * solo le righe ancora vive.
+     *
+     * @return list<string>
+     */
+    private function linkedRecords(Asset $asset): array
+    {
+        // tabella => [colonna, singolare, plurale]
+        $sources = [
+            'work_order_assets' => ['asset_id', 'ordine di lavoro', 'ordini di lavoro'],
+            'work_logs' => ['asset_id', 'rapportino di lavoro', 'rapportini di lavoro'],
+            'inspections' => ['asset_id', 'ispezione', 'ispezioni'],
+            'issues' => ['asset_id', 'segnalazione', 'segnalazioni'],
+            'non_conformities' => ['asset_id', 'non conformità', 'non conformità'],
+            'phyto_treatments' => ['asset_id', 'trattamento fitosanitario', 'trattamenti fitosanitari'],
+            'gestionale_dispatches' => ['asset_id', 'invio al gestionale', 'invii al gestionale'],
+            'tree_assessments' => ['tree_id', 'valutazione di stabilità (VTA)', 'valutazioni di stabilità (VTA)'],
+        ];
+
+        $found = [];
+
+        foreach ($sources as $table => [$column, $singolare, $plurale]) {
+            $query = DB::table($table)->where($column, $asset->id);
+            if (Schema::hasColumn($table, 'deleted_at')) {
+                $query->whereNull('deleted_at');
+            }
+            if (($count = $query->count()) > 0) {
+                $found[] = $count.' '.($count === 1 ? $singolare : $plurale);
+            }
+        }
+
+        $tags = DB::table('asset_tags')
+            ->where('asset_id', $asset->id)
+            ->whereIn('status', ['active', 'unassigned'])
+            ->count();
+        if ($tags > 0) {
+            $found[] = $tags.' '.($tags === 1 ? 'tag fisico ancora associato' : 'tag fisici ancora associati');
+        }
+
+        return $found;
     }
 
     private function assertGeometryMatchesType(string $geometryType, CatalogObjectType $type): void

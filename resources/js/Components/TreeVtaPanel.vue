@@ -331,17 +331,15 @@ onMounted(loadAssessments);
                 <span class="text-gray-500">Data di impianto</span>
                 <input v-model="tree.planted_on" type="date" :disabled="! canUpdate" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
             </label>
-            <label class="block text-xs">
-                <span class="text-gray-500">Data di abbattimento/rimozione</span>
-                <input v-model="tree.removed_on" type="date" :disabled="! canUpdate" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
-            </label>
-            <label v-if="tree.removed_on" class="block text-xs">
-                <span class="text-gray-500">Motivo della rimozione</span>
-                <input v-model="tree.removal_reason" :disabled="! canUpdate" placeholder="es. classe D, schianto, cantiere" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
-            </label>
         </div>
+        <!-- L'abbattimento non si scrive qui: si registra una volta sola in fondo
+             alla scheda, così stato, data e bilancio arboreo restano allineati -->
         <p v-if="tree.removed_on" class="mt-2 text-xs text-amber-700">
-            Con la data di rimozione valorizzata l'albero esce dalla consistenza del bilancio arboreo da quella data.
+            Albero abbattuto il {{ tree.removed_on.split('-').reverse().join('/') }}<template v-if="tree.removal_reason"> — {{ tree.removal_reason }}</template>.
+            Da quella data esce dalla consistenza del bilancio arboreo.
+        </p>
+        <p v-else class="mt-2 text-xs text-gray-500">
+            La data di abbattimento si registra in fondo alla scheda, con "Registra abbattimento".
         </p>
 
         <p v-if="treeError" class="mt-2 text-sm text-red-600">{{ treeError }}</p>

@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { STATUS_LABELS, statusLabel } from '@/assetStatus';
 
 const page = usePage();
 const canCreate = computed(() => (page.props.auth?.user?.permissions ?? []).includes('assets.create'));
@@ -11,6 +12,11 @@ const rows = ref([]);
 const meta = reactive({ total: 0, current_page: 1, last_page: 1 });
 const loading = ref(false);
 const filters = reactive({ q: '', status: '', page: 1 });
+
+// Gli abbattuti restano in archivio ma non nell'elenco di tutti i giorni.
+// Se si chiede proprio lo stato "abbattuto" è ovvio che vanno mostrati
+const showRemoved = ref(false);
+const hideRemoved = computed(() => ! showRemoved.value && filters.status !== 'removed');
 
 // Import GeoJSON / CAM
 const importer = reactive({ open: false, format: 'geojson', areaId: '', file: null, report: null, busy: false, error: '' });
@@ -58,6 +64,7 @@ async function exportCsv() {
     const params = new URLSearchParams();
     if (filters.q) params.set('q', filters.q);
     if (filters.status) params.set('status', filters.status);
+    if (hideRemoved.value) params.set('hide_removed', '1');
     const suffix = params.toString() ? `?${params.toString()}` : '';
     await downloadCam(`/api/v1/exports/assets.csv${suffix}`, 'censimento', 'csv');
 }
@@ -142,6 +149,7 @@ async function load() {
             params: {
                 q: filters.q || undefined,
                 status: filters.status || undefined,
+                hide_removed: hideRemoved.value ? 1 : undefined,
                 page: filters.page,
                 per_page: 25,
             },
@@ -155,7 +163,7 @@ async function load() {
     }
 }
 
-watch(() => [filters.q, filters.status], () => {
+watch(() => [filters.q, filters.status, showRemoved.value], () => {
     clearTimeout(debounce);
     debounce = setTimeout(() => {
         filters.page = 1;
@@ -179,12 +187,12 @@ const measure = (row) => {
 
     <AppLayout>
         <div class="p-6">
-            <div class="mb-4 flex items-center justify-between">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold">Censimento</h1>
                     <p class="text-sm text-gray-500">{{ meta.total.toLocaleString('it-IT') }} elementi censiti</p>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2">
                     <select v-model="exportLayer" data-test="cam-export-layer" class="rounded-lg border border-gray-300 px-2 py-2 text-sm">
                         <option v-for="(label, value) in CAM_LAYERS" :key="value" :value="value">{{ label }}</option>
                     </select>
@@ -239,11 +247,14 @@ const measure = (row) => {
                     placeholder="Cerca per codice o note…"
                     class="w-72 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none"
                 >
-                <select v-model="filters.status" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                <select v-model="filters.status" data-test="filtro-stato" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
                     <option value="">Tutti gli stati</option>
-                    <option value="active">Attivo</option>
-                    <option value="dismissed">Dismesso</option>
+                    <option v-for="(label, value) in STATUS_LABELS" :key="value" :value="value">{{ label }}</option>
                 </select>
+                <label class="flex items-center gap-2 text-sm text-gray-600">
+                    <input v-model="showRemoved" type="checkbox" data-test="mostra-abbattuti" class="rounded border-gray-300">
+                    Mostra anche gli abbattuti
+                </label>
             </div>
 
             <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -274,9 +285,13 @@ const measure = (row) => {
                             <td class="px-4 py-3">
                                 <span
                                     class="rounded-full px-2 py-0.5 text-xs font-medium"
-                                    :class="row.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'"
+                                    :class="{
+                                        'bg-green-100 text-green-800': row.status === 'active',
+                                        'bg-amber-100 text-amber-900': row.status === 'removed',
+                                        'bg-gray-100 text-gray-600': ! ['active', 'removed'].includes(row.status),
+                                    }"
                                 >
-                                    {{ row.status }}
+                                    {{ statusLabel(row.status) }}
                                 </span>
                             </td>
                             <td class="px-4 py-3">{{ measure(row) }}</td>

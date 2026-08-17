@@ -413,8 +413,14 @@ class InspectionTest extends TestCase
         $this->assertSame('overdue', $data[0]['state']);
         $this->assertSame('Elemento '.substr($assetId, 0, 8), $data[0]['target_label']);
 
-        // L'eliminazione dell'elemento invece toglie la scadenza
-        $this->deleteJson("/api/v1/assets/{$assetId}")->assertNoContent();
+        // Un elemento già ispezionato non si elimina dall'interfaccia: la
+        // scheda va conservata insieme al verbale
+        $this->deleteJson("/api/v1/assets/{$assetId}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('asset');
+
+        // Se però l'elemento sparisce (bonifica dei dati), sparisce la scadenza
+        \App\Models\Asset::query()->findOrFail($assetId)->delete();
         $this->assertCount(0, $this->getJson('/api/v1/inspections/deadlines')->json('data'));
     }
 

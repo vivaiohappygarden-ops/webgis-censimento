@@ -108,15 +108,20 @@ class ExportController extends Controller implements HasMiddleware
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
         }
+        // Stessa scelta fatta a video: se l'elenco nasconde gli abbattuti,
+        // il CSV esporta quello che si sta guardando
+        if ($request->boolean('hide_removed')) {
+            $query->where('status', '!=', 'removed');
+        }
         if ($request->filled('q')) {
             $q = '%'.$request->string('q').'%';
             $query->where(fn ($w) => $w->where('census_code', 'ilike', $q)->orWhere('notes', 'ilike', $q));
         }
 
-        Audit::log('export.assets_csv', null, ['filters' => $request->only(['area_id', 'object_type_id', 'type_code', 'status', 'q'])]);
+        Audit::log('export.assets_csv', null, ['filters' => $request->only(['area_id', 'object_type_id', 'type_code', 'status', 'hide_removed', 'q'])]);
 
         // Gli stati usati dall'interfaccia del censimento
-        $statusLabels = ['active' => 'attivo', 'dismissed' => 'dismesso'];
+        $statusLabels = \App\Support\AssetStatus::LABELS;
         // I decimali con la virgola, come li aspetta l'Excel italiano
         $num = fn ($value) => $value === null ? '' : str_replace('.', ',', (string) (float) $value);
         // Testo libero neutralizzato: una cella che inizia con = + - @ ecc.
@@ -135,6 +140,7 @@ class ExportController extends Controller implements HasMiddleware
                 'Codice', 'Tipo', 'Descrizione tipo', 'Categoria', 'Area', 'Località', 'Stato',
                 'Data rilievo', 'Specie', 'Nome comune', 'Altezza (m)', 'Diametro fusto (cm)',
                 'Superficie (m2)', 'Lunghezza (m)', 'Perimetro (m)', 'Note',
+                'Data abbattimento/rimozione', 'Motivo abbattimento/rimozione',
             ], ';', '"', '');
 
             // Solo chunkById, nessun altro orderBy: un ordinamento diverso
@@ -160,6 +166,8 @@ class ExportController extends Controller implements HasMiddleware
                         $num($asset->computed_length_m),
                         $num($asset->computed_perimeter_m),
                         $text($asset->notes),
+                        $asset->status === 'removed' ? $asset->valid_to?->format('d/m/Y') : '',
+                        $asset->status === 'removed' ? $text($asset->removal_reason) : '',
                     ], ';', '"', '');
                 }
             });

@@ -206,4 +206,89 @@ class AssetApiTest extends TestCase
         $this->getJson("/api/v1/assets/{$id}")->assertNotFound();
         $this->assertSoftDeleted('assets', ['id' => $id]);
     }
+
+    public function test_asset_in_use_cannot_be_deleted(): void
+    {
+        $id = $this->createPointAsset();
+
+        $woId = $this->postJson('/api/v1/work-orders', ['title' => 'Potatura'])->json('data.id');
+        $this->postJson("/api/v1/work-orders/{$woId}/assets", ['asset_id' => $id])->assertOk();
+
+        $response = $this->deleteJson("/api/v1/assets/{$id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('asset');
+
+        $this->assertStringContainsString('1 ordine di lavoro', $response->json('errors.asset.0'));
+        $this->assertDatabaseHas('assets', ['id' => $id, 'deleted_at' => null]);
+    }
+
+    public function test_removal_registration_aligns_status_tree_and_public_page(): void
+    {
+        $id = $this->createPointAsset();
+        $this->postJson("/api/v1/assets/{$id}/public-page")->assertOk();
+
+        $response = $this->postJson("/api/v1/assets/{$id}/removal", [
+            'removed_on' => '2026-08-14',
+            'removal_reason' => 'Classe D, schianto',
+        ])->assertOk();
+
+        $this->assertSame('removed', $response->json('data.status'));
+        $this->assertNull($response->json('data.public_token'));
+        $this->assertSame('Classe D, schianto', $response->json('data.removal_reason'));
+        $this->assertStringStartsWith('2026-08-14', $response->json('data.valid_to'));
+        // La data serve anche alla scheda albero: il bilancio arboreo legge quella
+        $this->assertStringStartsWith('2026-08-14', $response->json('data.tree.removed_on'));
+        $this->assertSame('Classe D, schianto', $response->json('data.tree.removal_reason'));
+
+        // Registrato come tale nel giornale delle modifiche
+        $this->assertDatabaseHas('audit_logs', ['action' => 'asset.removal_registered', 'subject_id' => $id]);
+    }
+
+    public function test_removal_can_be_cancelled(): void
+    {
+        $id = $this->createPointAsset();
+        $this->postJson("/api/v1/assets/{$id}/removal", ['removed_on' => '2026-08-14'])->assertOk();
+
+        $response = $this->deleteJson("/api/v1/assets/{$id}/removal")->assertOk();
+
+        $this->assertSame('active', $response->json('data.status'));
+        $this->assertNull($response->json('data.valid_to'));
+        $this->assertNull($response->json('data.tree.removed_on'));
+    }
+
+    public function test_removal_before_planting_date_is_rejected(): void
+    {
+        $id = $this->createPointAsset();
+        $this->patchJson("/api/v1/assets/{$id}", ['tree' => ['planted_on' => '2020-03-01']])->assertOk();
+
+        $this->postJson("/api/v1/assets/{$id}/removal", ['removed_on' => '2019-01-01'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('tree.removed_on');
+
+        $this->assertDatabaseHas('assets', ['id' => $id, 'status' => 'active']);
+    }
+
+    public function test_removed_assets_can_be_hidden_from_the_list(): void
+    {
+        $kept = $this->createPointAsset('ALB-VIVO');
+        $felled = $this->createPointAsset('ALB-ABBATTUTO');
+        $this->postJson("/api/v1/assets/{$felled}/removal", ['removed_on' => '2026-08-14'])->assertOk();
+
+        $all = $this->getJson('/api/v1/assets')->assertOk()->json('data');
+        $this->assertCount(2, $all);
+
+        $visible = $this->getJson('/api/v1/assets?hide_removed=1')->assertOk()->json('data');
+        $this->assertCount(1, $visible);
+        $this->assertSame($kept, $visible[0]['id']);
+    }
+
+    private function createPointAsset(?string $code = null): string
+    {
+        return $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $this->pointType->id,
+            'census_code' => $code,
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated()->json('data.id');
+    }
 }

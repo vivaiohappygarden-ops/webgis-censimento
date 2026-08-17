@@ -130,6 +130,8 @@ Route::prefix('v1')->group(function () {
         Route::post('assets/{id}/public-page', [\App\Http\Controllers\Api\V1\PublicPageController::class, 'enable'])->whereUuid('id');
         Route::delete('assets/{id}/public-page', [\App\Http\Controllers\Api\V1\PublicPageController::class, 'disable'])->whereUuid('id');
         Route::get('assets/{id}/public-tag', [\App\Http\Controllers\Api\V1\PublicPageController::class, 'tag'])->whereUuid('id');
+        Route::post('assets/{id}/removal', [AssetController::class, 'registerRemoval'])->whereUuid('id');
+        Route::delete('assets/{id}/removal', [AssetController::class, 'cancelRemoval'])->whereUuid('id');
         Route::get('inspections', [\App\Http\Controllers\Api\V1\InspectionController::class, 'index']);
         Route::post('inspections', [\App\Http\Controllers\Api\V1\InspectionController::class, 'store']);
         Route::get('inspections/{id}', [\App\Http\Controllers\Api\V1\InspectionController::class, 'show'])->whereUuid('id');

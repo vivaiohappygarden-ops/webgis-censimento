@@ -1,6 +1,6 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { Head, Link, usePage } from '@inertiajs/vue3';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import * as maplibregl from 'maplibre-gl';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
@@ -9,11 +9,14 @@ import GestionalePanel from '@/Components/GestionalePanel.vue';
 import PlantingSitePanel from '@/Components/PlantingSitePanel.vue';
 import TreeVtaPanel from '@/Components/TreeVtaPanel.vue';
 import { fetchPdf } from '@/pdf';
+import { statusLabel } from '@/assetStatus';
 
 const props = defineProps({ assetId: { type: String, required: true } });
 
 const page = usePage();
-const canUpdate = computed(() => (page.props.auth?.user?.permissions ?? []).includes('assets.update'));
+const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
+const canUpdate = computed(() => permissions.value.includes('assets.update'));
+const canDelete = computed(() => permissions.value.includes('assets.delete'));
 
 const asset = ref(null);
 const editing = ref(false);
@@ -65,6 +68,73 @@ async function onSaved() {
     editing.value = false;
     await load();
 }
+
+// Abbattimento/rimozione: una sola registrazione tiene allineati stato della
+// scheda, data di fine validità, scheda albero e pagina pubblica col QR
+const oggi = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const removal = reactive({ open: false, date: oggi(), reason: '', busy: false, error: '' });
+const deletion = reactive({ busy: false, error: '' });
+
+async function saveRemoval() {
+    removal.busy = true;
+    removal.error = '';
+    try {
+        await axios.post(`/api/v1/assets/${props.assetId}/removal`, {
+            removed_on: removal.date,
+            removal_reason: removal.reason || null,
+            version: asset.value.version,
+        });
+        removal.open = false;
+        removal.reason = '';
+        await load();
+    } catch (err) {
+        removal.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Registrazione non riuscita';
+    } finally {
+        removal.busy = false;
+    }
+}
+
+async function cancelRemoval() {
+    if (! window.confirm('Annullare la registrazione dell\'abbattimento? La scheda torna attiva.')) return;
+    removal.busy = true;
+    removal.error = '';
+    try {
+        await axios.delete(`/api/v1/assets/${props.assetId}/removal`);
+        await load();
+    } catch (err) {
+        removal.error = err.response?.data?.message ?? 'Operazione non riuscita';
+    } finally {
+        removal.busy = false;
+    }
+}
+
+async function deleteAsset() {
+    const nome = asset.value.census_code || asset.value.object_type?.name || 'questa scheda';
+    if (! window.confirm(`Eliminare definitivamente ${nome} dal censimento? Da usare solo per un rilievo sbagliato: se la pianta è stata abbattuta registra invece l'abbattimento.`)) return;
+    deletion.busy = true;
+    deletion.error = '';
+    try {
+        await axios.delete(`/api/v1/assets/${props.assetId}`);
+        router.visit('/censimento');
+    } catch (err) {
+        deletion.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Eliminazione non riuscita';
+        deletion.busy = false;
+    }
+}
+
+// Le date arrivano dall'API in formato ISO con l'ora: qui serve solo il giorno
+const removedOn = computed(() => {
+    const iso = String(asset.value?.valid_to ?? '').slice(0, 10);
+    if (! iso) return null;
+    const [y, m, d] = iso.split('-');
+
+    return `${d}/${m}/${y}`;
+});
 const uploading = ref(false);
 const uploadError = ref('');
 const mapEl = ref(null);
@@ -216,14 +286,30 @@ onBeforeUnmount(() => map?.remove());
                                 >Modifica</button>
                                 <span
                                     class="rounded-full px-3 py-1 text-xs font-medium"
-                                    :class="asset.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'"
+                                    data-test="asset-stato"
+                                    :class="{
+                                        'bg-green-100 text-green-800': asset.status === 'active',
+                                        'bg-amber-100 text-amber-900': asset.status === 'removed',
+                                        'bg-gray-100 text-gray-600': ! ['active', 'removed'].includes(asset.status),
+                                    }"
                                 >
-                                    {{ asset.status }}
+                                    {{ statusLabel(asset.status) }}
                                 </span>
                             </div>
                         </div>
 
                         <p v-if="pdfError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ pdfError }}</p>
+
+                        <p
+                            v-if="asset.status === 'removed'"
+                            class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                            data-test="banner-abbattuto"
+                        >
+                            Elemento abbattuto/rimosso<template v-if="removedOn"> il {{ removedOn }}</template>.
+                            <template v-if="asset.removal_reason">Motivo: {{ asset.removal_reason }}.</template>
+                            Resta in archivio, ma non compare più nell'elenco del censimento
+                            né nella consistenza del patrimonio.
+                        </p>
 
                         <p v-if="asset.public_token" class="mb-3 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-900" data-test="public-url">
                             Pagina pubblica attiva:
@@ -342,6 +428,91 @@ onBeforeUnmount(() => map?.remove());
                     </div>
 
                     <GestionalePanel :asset="asset" class="mt-6" />
+
+                    <!-- Fine vita della scheda: abbattimento (si conserva) o eliminazione (rilievo sbagliato) -->
+                    <div v-if="canUpdate || canDelete" class="mt-6 rounded-xl border border-gray-200 bg-white p-6">
+                        <h2 class="text-sm font-semibold">Abbattimento ed eliminazione</h2>
+
+                        <template v-if="canUpdate">
+                            <div v-if="asset.status === 'removed'" class="mt-3 flex flex-wrap items-center gap-3">
+                                <p class="text-sm text-gray-600">
+                                    L'abbattimento è registrato<template v-if="removedOn"> con data {{ removedOn }}</template>.
+                                </p>
+                                <button
+                                    class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                    :disabled="removal.busy"
+                                    data-test="annulla-abbattimento"
+                                    @click="cancelRemoval"
+                                >Annulla abbattimento</button>
+                            </div>
+
+                            <template v-else>
+                                <p class="mt-1 text-sm text-gray-600">
+                                    La pianta è stata abbattuta o l'elemento rimosso? Registralo qui: la scheda
+                                    resta in archivio con la sua storia, esce dal censimento attivo e dal bilancio
+                                    arboreo, e la pagina pubblica col QR viene spenta.
+                                </p>
+                                <button
+                                    v-if="! removal.open"
+                                    class="mt-3 rounded-lg border border-amber-700 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50"
+                                    data-test="registra-abbattimento"
+                                    @click="removal.open = true"
+                                >Registra abbattimento</button>
+
+                                <div v-else class="mt-3 rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+                                    <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                        <label class="block text-xs">
+                                            <span class="text-gray-500">Data dell'abbattimento</span>
+                                            <input
+                                                v-model="removal.date"
+                                                type="date"
+                                                data-test="data-abbattimento"
+                                                class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                                            >
+                                        </label>
+                                        <label class="block text-xs md:col-span-2">
+                                            <span class="text-gray-500">Motivo (facoltativo)</span>
+                                            <input
+                                                v-model="removal.reason"
+                                                placeholder="es. classe di propensione al cedimento D, schianto, cantiere"
+                                                data-test="motivo-abbattimento"
+                                                class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                                            >
+                                        </label>
+                                    </div>
+                                    <div class="mt-3 flex gap-2">
+                                        <button
+                                            class="rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800 disabled:opacity-50"
+                                            :disabled="removal.busy || ! removal.date"
+                                            data-test="conferma-abbattimento"
+                                            @click="saveRemoval"
+                                        >{{ removal.busy ? 'Registrazione…' : 'Conferma abbattimento' }}</button>
+                                        <button
+                                            class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                                            @click="removal.open = false"
+                                        >Annulla</button>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <p v-if="removal.error" class="mt-2 text-sm text-red-600" data-test="errore-abbattimento">{{ removal.error }}</p>
+                        </template>
+
+                        <div v-if="canDelete" class="mt-4 border-t border-gray-100 pt-4">
+                            <p class="text-sm text-gray-600">
+                                Se questa scheda è stata creata per sbaglio (doppione, punto messo nel posto
+                                errato) puoi eliminarla. Non è possibile se l'elemento è già stato usato in
+                                ordini di lavoro, ispezioni, segnalazioni o trattamenti.
+                            </p>
+                            <button
+                                class="mt-3 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                :disabled="deletion.busy"
+                                data-test="elimina-scheda"
+                                @click="deleteAsset"
+                            >{{ deletion.busy ? 'Eliminazione…' : 'Elimina scheda' }}</button>
+                            <p v-if="deletion.error" class="mt-2 text-sm text-red-600" data-test="errore-eliminazione">{{ deletion.error }}</p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Mini mappa -->
