@@ -8,9 +8,13 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 
 - Stile **molto analitico, senza emoji**: nessuna emoji o icona pittografica in etichette,
   pulsanti, titoli, messaggi o placeholder dell'interfaccia.
-- Stile **pulito e minimale**; carattere unico **Courier New** (monospazio di sistema,
-  fallback `Courier, ui-monospace, monospace`), definito in `resources/css/app.css`
+- Stile **pulito e minimale**; carattere dell'interfaccia: **caratteri di sistema**
+  (`system-ui, -apple-system, 'Segoe UI', Roboto, …`, decisione committente 15/08/2026
+  che sostituisce Courier New), definiti in `resources/css/app.css`
   (`--font-sans`/`--font-mono` + `.maplibregl-map`): niente webfont esterni.
+  Cifre tabellari (`font-variant-numeric: tabular-nums`) per tenere incolonnati i numeri.
+- Le **stampe PDF** restano su **DejaVu Sans Mono** (font incorporato in dompdf): non
+  seguono il foglio di stile dell'interfaccia.
 - Ammessi solo simboli tipografici funzionali: frecce di navigazione (← →), "✕" per chiudere.
 - Preferire testo sobrio, dati in evidenza, tabelle dense; l'informazione prevale sulla decorazione.
 - Lingua dell'interfaccia e dei messaggi: italiano.

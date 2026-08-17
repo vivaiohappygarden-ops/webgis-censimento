@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 </head>
-<body style="font-family: 'Courier New', Courier, monospace; font-size: 14px; color: #111; margin: 0; padding: 16px; background: #fff;">
+<body style="font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; color: #111; margin: 0; padding: 16px; background: #fff;">
     @php
         $sections = $digest['sections'];
         $fmtDate = fn ($d) => \Illuminate\Support\Carbon::parse($d)->format('d/m/Y');

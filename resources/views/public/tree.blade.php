@@ -7,7 +7,7 @@
 <title>{{ $asset->tree?->common_name ?: $asset->objectType?->name }} - {{ $organization?->name }}</title>
 <style>
     :root { color-scheme: light; }
-    body { font-family: 'Courier New', Courier, ui-monospace, monospace; margin: 0; background: #f4f6f4; color: #172217; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; background: #f4f6f4; color: #172217; }
     .card { max-width: 640px; margin: 0 auto; padding: 24px 20px 48px; }
     .org { font-size: 12px; color: #4b5a4b; text-transform: uppercase; letter-spacing: 0.08em; }
     h1 { font-size: 26px; margin: 6px 0 2px; }

@@ -3,14 +3,26 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
-/* Carattere unico dell'applicazione (decisione committente 11/08/2026):
-   Courier New, monospazio di sistema — niente webfont, funziona anche offline */
+/* Carattere dell'interfaccia (decisione committente 15/08/2026, sostituisce
+   Courier New): caratteri di sistema, niente webfont esterni, quindi si vede
+   uguale anche senza rete. Il monospazio resta per codici e misure, dove le
+   colonne devono restare allineate. Le stampe PDF non seguono questo foglio
+   di stile: mantengono DejaVu Sans Mono. */
 @theme {
-    --font-sans: 'Courier New', 'Courier', ui-monospace, monospace;
-    --font-mono: 'Courier New', 'Courier', ui-monospace, monospace;
+    --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+        Arial, 'Noto Sans', sans-serif;
+    --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Consolas,
+        'Liberation Mono', monospace;
+}
+
+body {
+    /* Cifre di uguale larghezza: le colonne dei numeri restano incolonnate
+       anche con un carattere proporzionale */
+    font-variant-numeric: tabular-nums;
 }
 
 /* Anche i controlli della mappa (MapLibre usa una propria famiglia) */
 .maplibregl-map {
-    font-family: 'Courier New', 'Courier', ui-monospace, monospace;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+        Arial, 'Noto Sans', sans-serif;
 }
