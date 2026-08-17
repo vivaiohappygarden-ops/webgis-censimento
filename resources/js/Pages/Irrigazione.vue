@@ -402,7 +402,7 @@ onMounted(load);
 
             <p v-if="pageError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ pageError }}</p>
 
-            <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
+            <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">

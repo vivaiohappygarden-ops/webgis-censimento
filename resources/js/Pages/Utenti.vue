@@ -295,7 +295,7 @@ onMounted(() => {
                 <button class="mt-2 text-xs font-medium underline" @click="credentials = null">Ho preso nota, nascondi</button>
             </div>
 
-            <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
+            <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">

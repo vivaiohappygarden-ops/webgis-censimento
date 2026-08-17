@@ -18,6 +18,11 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - Ammessi solo simboli tipografici funzionali: frecce di navigazione (← →), "✕" per chiudere.
 - Preferire testo sobrio, dati in evidenza, tabelle dense; l'informazione prevale sulla decorazione.
 - Lingua dell'interfaccia e dei messaggi: italiano.
+- Le pagine di gestione si usano anche dal telefono: sotto il punto di rottura `md` il menu
+  laterale è a scomparsa (pulsante "Menu" nella barra in alto) e **niente deve uscire dallo
+  schermo a 390 px**. Le tabelle larghe vanno in un contenitore `overflow-x-auto` (mai
+  `overflow-hidden`, che le taglia), le barre di filtri usano `flex-wrap` e i campi larghi
+  `w-full sm:w-auto`. L'app di campo (`/operatore`) resta un'interfaccia mobile a sé.
 
 ## Stack e vincoli
 

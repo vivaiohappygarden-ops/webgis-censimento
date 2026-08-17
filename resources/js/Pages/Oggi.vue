@@ -80,7 +80,7 @@ onMounted(load);
                         <h2 class="text-sm font-semibold">Lavori</h2>
                         <Link href="/lavori" class="text-xs font-medium text-green-800 hover:underline">Vai ai lavori →</Link>
                     </div>
-                    <div class="px-4 py-3">
+                    <div class="overflow-x-auto px-4 py-3">
                         <p v-if="data.work_orders.overdue_count || data.work_orders.week_count" class="mb-2 text-xs font-medium" data-test="oggi-lavori-ritardo">
                             <span v-if="data.work_orders.overdue_count" class="text-red-700">{{ data.work_orders.overdue_count }} in ritardo sulla fine prevista</span>
                             <span v-if="data.work_orders.overdue_count && data.work_orders.week_count" class="text-gray-400"> · </span>
@@ -114,7 +114,7 @@ onMounted(load);
                         <h2 class="text-sm font-semibold">Controlli ricorrenti</h2>
                         <Link href="/ispezioni" class="text-xs font-medium text-green-800 hover:underline">Vai alle ispezioni →</Link>
                     </div>
-                    <div class="px-4 py-3">
+                    <div class="overflow-x-auto px-4 py-3">
                         <p v-if="data.inspections.overdue_count || data.inspections.due_soon_count" class="mb-2 text-xs font-medium">
                             <span v-if="data.inspections.overdue_count" class="text-red-700">{{ data.inspections.overdue_count }} {{ data.inspections.overdue_count === 1 ? 'scaduto' : 'scaduti' }}</span>
                             <span v-if="data.inspections.overdue_count && data.inspections.due_soon_count" class="text-gray-400"> · </span>
@@ -142,7 +142,7 @@ onMounted(load);
                         <h2 class="text-sm font-semibold">Segnalazioni con tempi a rischio</h2>
                         <Link href="/segnalazioni" class="text-xs font-medium text-green-800 hover:underline">Vai alle segnalazioni →</Link>
                     </div>
-                    <div class="px-4 py-3">
+                    <div class="overflow-x-auto px-4 py-3">
                         <table v-if="data.issues.rows.length" class="w-full text-sm">
                             <tbody class="divide-y divide-gray-50">
                                 <tr v-for="issue in data.issues.rows" :key="issue.id">
@@ -165,7 +165,7 @@ onMounted(load);
                         <h2 class="text-sm font-semibold">Non conformità aperte ({{ data.non_conformities.open_count }})</h2>
                         <Link href="/lavori?vista=qualita" class="text-xs font-medium text-green-800 hover:underline">Vai alla qualità →</Link>
                     </div>
-                    <div class="px-4 py-3">
+                    <div class="overflow-x-auto px-4 py-3">
                         <table v-if="data.non_conformities.rows.length" class="w-full text-sm">
                             <tbody class="divide-y divide-gray-50">
                                 <tr v-for="nc in data.non_conformities.rows" :key="nc.id">
@@ -187,7 +187,7 @@ onMounted(load);
                         <h2 class="text-sm font-semibold">Patentini e certificati</h2>
                         <Link href="/patentini" class="text-xs font-medium text-green-800 hover:underline">Vai ai patentini →</Link>
                     </div>
-                    <div class="px-4 py-3">
+                    <div class="overflow-x-auto px-4 py-3">
                         <p v-if="data.certificates.expired_count || data.certificates.due_soon_count" class="mb-2 text-xs font-medium">
                             <span v-if="data.certificates.expired_count" class="text-red-700">{{ data.certificates.expired_count }} {{ data.certificates.expired_count === 1 ? 'scaduto' : 'scaduti' }}</span>
                             <span v-if="data.certificates.expired_count && data.certificates.due_soon_count" class="text-gray-400"> · </span>
@@ -215,7 +215,7 @@ onMounted(load);
                         <h2 class="text-sm font-semibold">Stagione irrigua</h2>
                         <Link href="/irrigazione" class="text-xs font-medium text-green-800 hover:underline">Vai all'irrigazione →</Link>
                     </div>
-                    <div class="px-4 py-3">
+                    <div class="overflow-x-auto px-4 py-3">
                         <table v-if="data.irrigation.rows.length" class="w-full text-sm">
                             <tbody class="divide-y divide-gray-50">
                                 <tr v-for="row in data.irrigation.rows" :key="row.id + row.action">

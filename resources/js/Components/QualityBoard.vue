@@ -164,7 +164,7 @@ onMounted(reload);
             <button class="ml-1 font-medium underline" @click="reload">Riprova</button>
         </p>
 
-        <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
             <table class="w-full text-sm" data-test="nc-list">
                 <thead>
                     <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">

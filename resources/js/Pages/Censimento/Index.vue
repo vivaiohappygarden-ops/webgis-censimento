@@ -228,7 +228,7 @@ const measure = (row) => {
                     <p class="text-sm text-gray-500">{{ meta.total.toLocaleString('it-IT') }} elementi censiti</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
-                    <select v-model="exportLayer" data-test="cam-export-layer" class="rounded-lg border border-gray-300 px-2 py-2 text-sm">
+                    <select v-model="exportLayer" data-test="cam-export-layer" class="w-full max-w-full rounded-lg border border-gray-300 px-2 py-2 text-sm sm:w-auto">
                         <option v-for="(label, value) in CAM_LAYERS" :key="value" :value="value">{{ label }}</option>
                     </select>
                     <button
@@ -280,24 +280,28 @@ const measure = (row) => {
                     v-model="filters.q"
                     type="search"
                     placeholder="Cerca per codice o note…"
-                    class="w-72 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none"
+                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none sm:w-72"
                 >
                 <select
                     v-if="canViewClients"
                     v-model="filters.clientId"
                     data-test="filtro-committente"
-                    class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    class="w-full max-w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-auto"
                 >
                     <option value="">Tutti i committenti</option>
                     <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
-                <select v-model="filters.areaId" data-test="filtro-area" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                <select
+                    v-model="filters.areaId"
+                    data-test="filtro-area"
+                    class="w-full max-w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-auto"
+                >
                     <option value="">Tutte le aree</option>
                     <option v-for="a in areas" :key="a.id" :value="a.id">
                         {{ a.name }}<template v-if="a.locality?.name"> · {{ a.locality.name }}</template>
                     </option>
                 </select>
-                <select v-model="filters.status" data-test="filtro-stato" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                <select v-model="filters.status" data-test="filtro-stato" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-auto">
                     <option value="">Tutti gli stati</option>
                     <option v-for="(label, value) in STATUS_LABELS" :key="value" :value="value">{{ label }}</option>
                 </select>
@@ -307,7 +311,7 @@ const measure = (row) => {
                 </label>
             </div>
 
-            <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
+            <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
                 <table class="w-full text-sm">
                     <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
                         <tr>

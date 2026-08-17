@@ -183,7 +183,7 @@ onMounted(async () => {
                             <h2 class="text-sm font-semibold">Bilancio arboreo (L. 10/2013)</h2>
                             <p class="text-xs text-gray-500">Consistenza del patrimonio arboreo tra due date, con nuovi impianti e abbattimenti</p>
                         </div>
-                        <div class="flex items-end gap-2">
+                        <div class="flex flex-wrap items-end gap-2">
                             <label class="block text-xs">
                                 <span class="text-gray-500">Dal</span>
                                 <input v-model="balance.from" type="date" class="mt-1 block rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">

@@ -339,33 +339,33 @@ onMounted(async () => {
             </div>
 
             <!-- Selettore vista: elenco tabellare o agenda settimanale -->
-            <div class="mb-3 inline-flex overflow-hidden rounded-lg border border-gray-300 text-sm">
+            <div class="mb-3 flex max-w-full overflow-x-auto rounded-lg border border-gray-300 text-sm">
                 <button
-                    class="px-4 py-1.5 font-medium"
+                    class="whitespace-nowrap px-4 py-1.5 font-medium"
                     :class="view === 'elenco' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
                     data-test="view-elenco"
                     @click="view = 'elenco'"
                 >Elenco</button>
                 <button
-                    class="border-l border-gray-300 px-4 py-1.5 font-medium"
+                    class="whitespace-nowrap border-l border-gray-300 px-4 py-1.5 font-medium"
                     :class="view === 'agenda' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
                     data-test="view-agenda"
                     @click="view = 'agenda'"
                 >Agenda</button>
                 <button
-                    class="border-l border-gray-300 px-4 py-1.5 font-medium"
+                    class="whitespace-nowrap border-l border-gray-300 px-4 py-1.5 font-medium"
                     :class="view === 'rendiconto' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
                     data-test="view-rendiconto"
                     @click="view = 'rendiconto'"
                 >Rendiconto</button>
                 <button
-                    class="border-l border-gray-300 px-4 py-1.5 font-medium"
+                    class="whitespace-nowrap border-l border-gray-300 px-4 py-1.5 font-medium"
                     :class="view === 'qualita' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
                     data-test="view-qualita"
                     @click="view = 'qualita'"
                 >Qualità</button>
                 <button
-                    class="border-l border-gray-300 px-4 py-1.5 font-medium"
+                    class="whitespace-nowrap border-l border-gray-300 px-4 py-1.5 font-medium"
                     :class="view === 'preventivi' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
                     data-test="view-preventivi"
                     @click="view = 'preventivi'"
@@ -417,7 +417,7 @@ onMounted(async () => {
                 >
             </div>
 
-            <div v-if="view === 'elenco'" class="overflow-hidden rounded-xl border border-gray-200 bg-white">
+            <div v-if="view === 'elenco'" class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">

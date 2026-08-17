@@ -1,9 +1,13 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import SearchPalette from '@/Components/SearchPalette.vue';
 
 const page = usePage();
+// Sul telefono il menu è a scomparsa: lasciarlo fisso mangerebbe metà schermo
+// e il contenuto verrebbe tagliato. Su schermo grande resta sempre visibile
+const menuAperto = ref(false);
+watch(() => page.url, () => { menuAperto.value = false; });
 const user = computed(() => page.props.auth?.user);
 const permissions = computed(() => user.value?.permissions ?? []);
 const palette = ref(null);
@@ -77,7 +81,36 @@ const logout = async () => {
 
 <template>
     <div class="flex h-screen overflow-hidden">
-        <aside class="flex w-56 shrink-0 flex-col border-r border-gray-200 bg-white">
+        <!-- Barra superiore: solo su schermo piccolo, per aprire il menu -->
+        <div class="fixed inset-x-0 top-0 z-30 flex items-center gap-3 border-b border-gray-200 bg-white px-3 py-2 md:hidden">
+            <button
+                class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700"
+                data-test="apri-menu"
+                @click="menuAperto = true"
+            >Menu</button>
+            <div class="min-w-0">
+                <div class="truncate text-sm font-semibold leading-tight">WebGIS Censimento</div>
+                <div class="truncate text-xs text-gray-500">{{ user?.organization?.name }}</div>
+            </div>
+        </div>
+
+        <!-- Sfondo scuro dietro il menu aperto: toccandolo si chiude -->
+        <div
+            v-if="menuAperto"
+            class="fixed inset-0 z-40 bg-black/30 md:hidden"
+            @click="menuAperto = false"
+        />
+
+        <aside
+            class="fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-gray-200 bg-white transition-transform md:static md:z-auto md:w-56 md:translate-x-0"
+            :class="menuAperto ? 'translate-x-0' : '-translate-x-full'"
+            data-test="menu-laterale"
+        >
+            <button
+                class="absolute right-3 top-3 text-gray-400 md:hidden"
+                data-test="chiudi-menu"
+                @click="menuAperto = false"
+            >✕</button>
             <div class="border-b border-gray-100 px-4 py-4">
                 <div class="text-sm font-semibold leading-tight">WebGIS Censimento</div>
                 <div class="text-xs text-gray-500">{{ user?.organization?.name }}</div>
@@ -131,7 +164,8 @@ const logout = async () => {
             </div>
         </aside>
 
-        <main class="flex-1 overflow-y-auto">
+        <!-- pt-14 sul telefono: lo spazio della barra superiore fissa -->
+        <main class="flex-1 overflow-x-hidden overflow-y-auto pt-14 md:pt-0">
             <slot />
         </main>
 

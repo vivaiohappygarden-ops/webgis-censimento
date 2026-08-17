@@ -353,6 +353,10 @@ class PeriziaTest extends TestCase
 
     public function test_photos_taken_after_the_survey_are_not_presented_as_evidence(): void
     {
+        // Orario fissato: le date si contano in giorni italiani, e vicino a
+        // mezzanotte UTC un test legato all'orologio darebbe risultati diversi
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-08-17 10:00:00', 'Europe/Rome'));
+
         $this->fakeTiles();
         Storage::fake('local');
         $asset = $this->createTreeAsset();
@@ -390,7 +394,9 @@ class PeriziaTest extends TestCase
 
         $this->assertCount(2, $foto);
         // La più recente entro il sopralluogo viene per prima, con la sua data
-        $this->assertSame(now('Europe/Rome')->modify('-2 days')->format('d/m/Y'), $foto[0]['scattata']);
+        $this->assertSame('15/08/2026', $foto[0]['scattata']);
+
+        $this->travelBack();
     }
 
     public function test_permissions_and_tenant_isolation(): void

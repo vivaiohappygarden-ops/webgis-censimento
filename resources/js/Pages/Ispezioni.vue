@@ -386,7 +386,7 @@ onMounted(async () => {
             </p>
 
             <!-- MODELLI -->
-            <div v-if="view === 'modelli'" class="overflow-hidden rounded-xl border border-gray-200 bg-white">
+            <div v-if="view === 'modelli'" class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
                 <table class="w-full text-sm" data-test="template-list">
                     <thead>
                         <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
@@ -439,7 +439,7 @@ onMounted(async () => {
                     Caricamento delle scadenze non riuscito.
                     <button class="ml-1 font-medium underline" @click="loadDeadlines">Riprova</button>
                 </p>
-                <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
                     <table class="w-full text-sm" data-test="deadline-list">
                         <thead>
                             <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
@@ -486,7 +486,7 @@ onMounted(async () => {
                     </select>
                 </div>
 
-                <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
                     <table class="w-full text-sm" data-test="inspection-list">
                         <thead>
                             <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">

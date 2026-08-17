@@ -160,7 +160,7 @@ onMounted(load);
                 </div>
 
                 <h2 class="mb-2 text-sm font-semibold">Le tue richieste</h2>
-                <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <div class="mb-6 overflow-x-auto rounded-xl border border-gray-200 bg-white">
                     <table class="w-full text-sm" data-test="portal-requests">
                         <thead>
                             <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
@@ -193,7 +193,7 @@ onMounted(load);
                 </div>
 
                 <h2 class="mb-2 text-sm font-semibold">Ultimi lavori completati</h2>
-                <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <div class="mb-6 overflow-x-auto rounded-xl border border-gray-200 bg-white">
                     <table class="w-full text-sm" data-test="portal-orders">
                         <thead>
                             <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
@@ -218,7 +218,7 @@ onMounted(load);
                 </div>
 
                 <h2 class="mb-2 text-sm font-semibold">Segnalazioni sul tuo territorio</h2>
-                <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <div class="mb-6 overflow-x-auto rounded-xl border border-gray-200 bg-white">
                     <table class="w-full text-sm" data-test="portal-issues">
                         <thead>
                             <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
@@ -249,7 +249,7 @@ onMounted(load);
                 </div>
 
                 <h2 class="mb-2 text-sm font-semibold">Le tue aree</h2>
-                <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
                     <table class="w-full text-sm" data-test="portal-areas">
                         <thead>
                             <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">

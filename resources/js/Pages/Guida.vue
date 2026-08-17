@@ -40,7 +40,8 @@ function goTo(id) {
             </div>
 
             <div class="flex gap-6">
-                <nav class="w-56 shrink-0">
+                <!-- L'indice laterale su telefono toglierebbe metà schermo al testo -->
+                <nav class="hidden w-56 shrink-0 md:block">
                     <ul class="sticky top-4 space-y-1 text-sm">
                         <li v-for="s in sections" :key="s.id">
                             <button

@@ -108,7 +108,7 @@ const countTypes = (m) => m.sub_types.reduce((acc, s) => acc + s.object_types.le
                 v-model="search"
                 type="search"
                 placeholder="Cerca per codice o descrizione (es. P103108, panchina)…"
-                class="mb-4 w-96 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none"
+                class="mb-4 w-full rounded-lg md:w-96 border border-gray-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none"
             >
 
             <div class="space-y-3">
