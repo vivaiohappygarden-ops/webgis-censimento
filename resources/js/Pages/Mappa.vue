@@ -4,12 +4,16 @@ import { Head, usePage } from '@inertiajs/vue3';
 import * as maplibregl from 'maplibre-gl';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { statusLabel } from '@/assetStatus';
 
 const page = usePage();
-const canCreate = computed(() => (page.props.auth?.user?.permissions ?? []).includes('assets.create'));
+const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
+const canCreate = computed(() => permissions.value.includes('assets.create'));
+const canViewClients = computed(() => permissions.value.includes('clients.view'));
 
 const mapEl = ref(null);
 let map = null;
+let geolocate = null;
 
 const TP = [
     { code: '1', label: 'Vegetazione', color: '#16a34a' },
@@ -27,8 +31,17 @@ const colorExpr = [
 
 const selected = ref(null);
 const areas = ref([]);
+const clients = ref([]);
 const localities = ref([]);
 const pointTypes = ref([]);
+
+// Vista: di chi guardo il verde e dove. Gli abbattuti restano in archivio
+// ma non sulla mappa di tutti i giorni
+const vista = reactive({ clientId: '', areaId: '', showRemoved: false, busy: false });
+// Posizione del dispositivo: il browser la dà solo su siti sicuri (https),
+// quindi il motivo del rifiuto va spiegato, non nascosto
+const posizione = reactive({ error: '', located: false, cercando: false });
+let posizioneTimer = null;
 const creating = reactive({ active: false, typeId: '', areaId: '', saving: false, message: '', ok: false });
 const drawing = reactive({
     active: false, vertices: [], name: '', code: '', localityId: '', saving: false, message: '', ok: false,
@@ -36,7 +49,14 @@ const drawing = reactive({
 const canCreateAreas = computed(() => (page.props.auth?.user?.permissions ?? []).includes('areas.create'));
 const assetLayers = ['assets-fill', 'assets-line', 'assets-point'];
 
-const tilesUrl = () => `${window.location.origin}/api/v1/tiles/assets/{z}/{x}/{y}?v=${Date.now()}`;
+const tilesUrl = () => {
+    const params = new URLSearchParams({ v: String(Date.now()) });
+    if (vista.clientId) params.set('client_id', vista.clientId);
+    if (vista.areaId) params.set('area_id', vista.areaId);
+    if (! vista.showRemoved) params.set('hide_removed', '1');
+
+    return `${window.location.origin}/api/v1/tiles/assets/{z}/{x}/{y}?${params.toString()}`;
+};
 
 function applyVisibility() {
     const active = TP.filter((t) => tpVisible[t.code]).map((t) => t.code);
@@ -101,11 +121,91 @@ async function saveDrawnArea() {
     }
 }
 
+// Le aree disegnate: quelle del committente scelto, o la sola area scelta
+const visibleAreas = computed(() => (vista.areaId
+    ? areas.value.filter((a) => a.id === vista.areaId)
+    : areas.value));
+
 function refreshAreasSource() {
-    const features = areas.value
+    const features = visibleAreas.value
         .filter((a) => a.geom_geojson)
         .map((a) => ({ type: 'Feature', geometry: a.geom_geojson, properties: { id: a.id, name: a.name } }));
     map.getSource('aree')?.setData({ type: 'FeatureCollection', features });
+}
+
+/** Inquadra le aree visibili; restituisce false se non c'è niente da inquadrare. */
+function fitToAreas(maxZoom = 17) {
+    const geoms = visibleAreas.value.map((a) => a.geom_geojson).filter(Boolean);
+    if (! geoms.length || ! map) return false;
+
+    const bounds = new maplibregl.LngLatBounds();
+    const extend = (coords) => {
+        if (typeof coords[0] === 'number') bounds.extend(coords);
+        else coords.forEach(extend);
+    };
+    geoms.forEach((g) => extend(g.coordinates));
+    map.fitBounds(bounds, { padding: 60, maxZoom });
+
+    return true;
+}
+
+async function loadAreas() {
+    const { data } = await axios.get('/api/v1/areas', {
+        params: { client_id: vista.clientId || undefined, per_page: 200 },
+    });
+    areas.value = data.data;
+    // L'area scelta prima può non essere di questo committente
+    const known = (id) => areas.value.some((a) => a.id === id);
+    if (vista.areaId && ! known(vista.areaId)) vista.areaId = '';
+    if (creating.areaId && ! known(creating.areaId)) creating.areaId = '';
+}
+
+/** Cambio di committente/area/abbattuti: nuove tessere, nuove aree, nuova inquadratura. */
+async function applyVista(refit = true) {
+    vista.busy = true;
+    try {
+        await loadAreas();
+        refreshAreasSource();
+        refreshTiles();
+        if (refit) fitToAreas(vista.areaId ? 19 : 17);
+    } finally {
+        vista.busy = false;
+    }
+}
+
+// Il browser dà la posizione solo in contesto sicuro: senza https il rifiuto
+// arriva subito e va spiegato, altrimenti sembra un difetto dell'applicazione
+function messaggioPosizione(error) {
+    if (! window.isSecureContext) {
+        return 'La posizione non è disponibile perché il sito è in http: il browser la fornisce solo sui siti sicuri (https). '
+            + 'Nel frattempo la mappa si apre sulle aree censite.';
+    }
+    if (error?.code === 1) {
+        return 'Posizione negata: consentila al sito nelle impostazioni del browser, poi premi di nuovo "La mia posizione".';
+    }
+
+    return 'Posizione non disponibile in questo momento.';
+}
+
+function vaiAllaPosizione() {
+    posizione.error = '';
+    if (! navigator.geolocation) {
+        posizione.error = 'Questo browser non fornisce la posizione.';
+
+        return;
+    }
+    geolocate?.trigger();
+    // Alcuni browser, quando la posizione è bloccata, non rispondono affatto:
+    // senza questa attesa la mappa resterebbe ferma senza spiegare perché
+    posizione.cercando = true;
+    clearTimeout(posizioneTimer);
+    posizioneTimer = setTimeout(() => {
+        posizione.cercando = false;
+        if (! posizione.located) {
+            posizione.error = messaggioPosizione(null);
+            fitToAreas();
+        }
+    }, 12000);
 }
 
 async function onMapClick(e) {
@@ -169,6 +269,28 @@ onMounted(async () => {
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }));
 
+    // Posizione del dispositivo: il puntino blu con il cerchio di precisione
+    geolocate = new maplibregl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true, timeout: 10000 },
+        showAccuracyCircle: true,
+        showUserLocation: true,
+        fitBoundsOptions: { maxZoom: 18 },
+    });
+    map.addControl(geolocate, 'top-right');
+    geolocate.on('geolocate', () => {
+        clearTimeout(posizioneTimer);
+        posizione.located = true;
+        posizione.cercando = false;
+        posizione.error = '';
+    });
+    geolocate.on('error', (e) => {
+        clearTimeout(posizioneTimer);
+        posizione.cercando = false;
+        posizione.error = messaggioPosizione(e);
+        // Ripiego: se la posizione non arriva, almeno si vede il verde censito
+        if (! posizione.located) fitToAreas();
+    });
+
     map.on('load', () => {
         map.addSource('aree', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addLayer({
@@ -224,31 +346,32 @@ onMounted(async () => {
         map.on('click', onMapClick);
     });
 
-    const [areasRes, catalogRes, localitiesRes] = await Promise.all([
-        axios.get('/api/v1/areas', { params: { per_page: 100 } }),
+    const [areasRes, catalogRes, localitiesRes, clientsRes] = await Promise.all([
+        axios.get('/api/v1/areas', { params: { per_page: 200 } }),
         axios.get('/api/v1/catalog'),
         axios.get('/api/v1/localities', { params: { per_page: 200 } }),
+        canViewClients.value
+            ? axios.get('/api/v1/clients', { params: { per_page: 200 } })
+            : Promise.resolve({ data: { data: [] } }),
     ]);
     localities.value = localitiesRes.data.data;
-
+    clients.value = clientsRes.data.data;
     areas.value = areasRes.data.data;
-    const features = areas.value
-        .filter((a) => a.geom_geojson)
-        .map((a) => ({ type: 'Feature', geometry: a.geom_geojson, properties: { id: a.id, name: a.name } }));
 
-    const setAree = () => map.getSource('aree')?.setData({ type: 'FeatureCollection', features });
+    const setAree = () => {
+        refreshAreasSource();
+        // La posizione del dispositivo ha la precedenza: si inquadrano le
+        // aree solo finché non è arrivata
+        if (! posizione.located) fitToAreas();
+    };
     if (map.loaded()) setAree();
     else map.on('load', setAree);
 
-    if (features.length > 0) {
-        const bounds = new maplibregl.LngLatBounds();
-        const extend = (coords) => {
-            if (typeof coords[0] === 'number') bounds.extend(coords);
-            else coords.forEach(extend);
-        };
-        features.forEach((f) => extend(f.geometry.coordinates));
-        map.fitBounds(bounds, { padding: 60, maxZoom: 17 });
-    }
+    // Si parte da dove si è: se il browser non dà la posizione, la vista
+    // resta sulle aree censite e il motivo si legge nel pannello.
+    // Fuori dall'evento "load" della mappa: quello aspetta il primo disegno
+    // completo, che su una connessione lenta può tardare parecchio
+    vaiAllaPosizione();
 
     pointTypes.value = catalogRes.data.data.flatMap((m) =>
         m.sub_types.flatMap((s) =>
@@ -259,7 +382,10 @@ onMounted(async () => {
     );
 });
 
-onBeforeUnmount(() => map?.remove());
+onBeforeUnmount(() => {
+    clearTimeout(posizioneTimer);
+    map?.remove();
+});
 </script>
 
 <template>
@@ -270,7 +396,47 @@ onBeforeUnmount(() => map?.remove());
             <div ref="mapEl" class="h-full w-full" />
 
             <!-- Pannello layer -->
-            <div class="absolute left-4 top-4 w-60 rounded-xl bg-white/95 p-4 shadow-lg backdrop-blur">
+            <div class="absolute left-4 top-4 max-h-[calc(100%-2rem)] w-60 overflow-y-auto rounded-xl bg-white/95 p-4 shadow-lg backdrop-blur">
+                <h2 class="mb-2 text-sm font-semibold">Vista</h2>
+                <button
+                    class="w-full rounded-lg border border-green-700 px-2 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+                    :disabled="posizione.cercando"
+                    data-test="mia-posizione"
+                    @click="vaiAllaPosizione"
+                >{{ posizione.cercando ? 'Ricerca della posizione…' : 'La mia posizione' }}</button>
+                <p v-if="posizione.error" class="mt-2 text-xs text-amber-700" data-test="errore-posizione">{{ posizione.error }}</p>
+
+                <select
+                    v-if="canViewClients"
+                    v-model="vista.clientId"
+                    data-test="mappa-committente"
+                    class="mt-2 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
+                    @change="applyVista()"
+                >
+                    <option value="">Tutti i committenti</option>
+                    <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
+                <select
+                    v-model="vista.areaId"
+                    data-test="mappa-area"
+                    class="mt-2 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
+                    @change="applyVista()"
+                >
+                    <option value="">Tutte le aree</option>
+                    <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.name }}</option>
+                </select>
+                <label class="mt-2 flex cursor-pointer items-center gap-2 text-xs text-gray-600">
+                    <input
+                        v-model="vista.showRemoved"
+                        type="checkbox"
+                        data-test="mappa-abbattuti"
+                        class="rounded border-gray-300"
+                        @change="applyVista(false)"
+                    >
+                    Mostra anche gli abbattuti
+                </label>
+
+                <hr class="my-3 border-gray-200">
                 <h2 class="mb-2 text-sm font-semibold">Layer</h2>
                 <label
                     v-for="tp in TP"
@@ -348,7 +514,7 @@ onBeforeUnmount(() => map?.remove());
                 </div>
                 <dl class="mt-2 space-y-1 text-sm">
                     <div class="flex justify-between"><dt class="text-gray-500">Codice</dt><dd>{{ selected.census_code || '—' }}</dd></div>
-                    <div class="flex justify-between"><dt class="text-gray-500">Stato</dt><dd>{{ selected.status }}</dd></div>
+                    <div class="flex justify-between"><dt class="text-gray-500">Stato</dt><dd>{{ statusLabel(selected.status) }}</dd></div>
                 </dl>
                 <a
                     :href="`/censimento/${selected.id}`"

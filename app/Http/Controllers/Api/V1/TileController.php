@@ -24,7 +24,7 @@ class TileController extends Controller implements HasMiddleware
         $max = 2 ** $z;
         abort_unless($x >= 0 && $x < $max && $y >= 0 && $y < $max, 404);
 
-        ListQuery::validateUuidFilters($request, ['area_id', 'object_type_id']);
+        ListQuery::validateUuidFilters($request, ['area_id', 'object_type_id', 'client_id']);
 
         $tenantId = $request->user()->tenant_id;
 
@@ -37,6 +37,19 @@ class TileController extends Controller implements HasMiddleware
         if ($request->filled('object_type_id')) {
             $filters .= ' AND a.object_type_id = ?';
             $bindings[] = (string) $request->string('object_type_id');
+        }
+        // Committente: aree -> località -> sedi -> cliente
+        if ($request->filled('client_id')) {
+            $filters .= ' AND a.area_id IN (
+                SELECT ar.id FROM areas ar
+                JOIN localities l ON l.id = ar.locality_id
+                JOIN sites s ON s.id = l.site_id
+                WHERE s.client_id = ? AND ar.tenant_id = a.tenant_id)';
+            $bindings[] = (string) $request->string('client_id');
+        }
+        // Gli abbattuti restano in archivio ma non sulla mappa di tutti i giorni
+        if ($request->boolean('hide_removed')) {
+            $filters .= " AND a.status <> 'removed'";
         }
 
         $sql = <<<SQL

@@ -42,6 +42,52 @@ class TileTest extends TestCase
         $this->get('/api/v1/tiles/assets/15/0/0')->assertNoContent();
     }
 
+    public function test_tiles_can_be_filtered_by_client_and_hide_removed_assets(): void
+    {
+        [$organization, $user] = $this->createTenantUser();
+        $area = $this->createArea($organization);
+        $otherArea = $this->createArea($organization, ['name' => 'Area committente B']);
+        $type = $this->makeObjectType($organization, 'P');
+
+        $lon = 9.1905;
+        $lat = 45.4652;
+        $make = fn (string $code, string $areaId, string $status = 'active') => Asset::create([
+            'tenant_id' => $organization->id,
+            'area_id' => $areaId,
+            'object_type_id' => $type->id,
+            'census_code' => $code,
+            'status' => $status,
+            'geom' => Geometry::toEwkb($this->pointGeometry($lon, $lat)),
+        ]);
+
+        $make('TILE-UNO', $area->id);
+        $make('TILE-DUE', $otherArea->id);
+        $make('TILE-RIMOSSO', $area->id, 'removed');
+
+        $this->actingAsTenantUser($user);
+        [$x, $y] = $this->tileForLonLat($lon, $lat, 15);
+        $base = "/api/v1/tiles/assets/15/{$x}/{$y}";
+
+        // Il MVT è binario ma i valori delle proprietà restano leggibili
+        $tutti = $this->get($base)->assertOk()->getContent();
+        $this->assertStringContainsString('TILE-UNO', $tutti);
+        $this->assertStringContainsString('TILE-DUE', $tutti);
+        $this->assertStringContainsString('TILE-RIMOSSO', $tutti);
+
+        $clientId = $area->locality->site->client_id;
+        $delCommittente = $this->get("{$base}?client_id={$clientId}")->assertOk()->getContent();
+        $this->assertStringContainsString('TILE-UNO', $delCommittente);
+        $this->assertStringNotContainsString('TILE-DUE', $delCommittente);
+
+        $senzaAbbattuti = $this->get("{$base}?hide_removed=1")->assertOk()->getContent();
+        $this->assertStringContainsString('TILE-UNO', $senzaAbbattuti);
+        $this->assertStringNotContainsString('TILE-RIMOSSO', $senzaAbbattuti);
+
+        $solaArea = $this->get("{$base}?area_id={$otherArea->id}")->assertOk()->getContent();
+        $this->assertStringContainsString('TILE-DUE', $solaArea);
+        $this->assertStringNotContainsString('TILE-UNO', $solaArea);
+    }
+
     /** @return array{0: int, 1: int} */
     private function tileForLonLat(float $lon, float $lat, int $zoom): array
     {
