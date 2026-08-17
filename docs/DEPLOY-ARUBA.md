@@ -29,21 +29,25 @@ Tempo previsto: 30-45 minuti (in gran parte attese).
 ### 1.2 Il nome del sito (consigliato)
 
 Si può partire anche **senza dominio**, usando l'indirizzo IP: l'applicazione
-funziona, ma niente lucchetto HTTPS e l'app di campo non si installa sul
-telefono (resta comunque utilizzabile dal browser). Aggiungere il dominio in
-seguito è semplice: creare il record DNS, rilanciare `provision.sh` con il
-nuovo `WEBGIS_DOMAIN` e aggiornare `APP_URL` e `SESSION_SECURE_COOKIE` in
-`/var/www/webgis/.env`.
+funziona, ma senza lucchetto HTTPS restano fuori tre cose — la **posizione del
+dispositivo** sulla mappa e nell'app di campo, l'**installazione dell'app di
+campo** sul telefono e le **pagine pubbliche col QR** senza avvisi del browser.
+Il passaggio si fa in seguito con un comando solo (vedi 6.2).
 
-Serve un indirizzo tipo `verde.tuodominio.it`. Due strade:
+Serve un indirizzo tipo `verde.tuodominio.it`. Tre strade:
 
 - **Dominio già posseduto su Aruba**: nel pannello DNS del dominio creare un
   **record A** con nome `verde` (o quello preferito) che punta all'IP del server.
 - **Nessun dominio**: acquistarne uno su Aruba (~10 €/anno) e poi creare il
   record A come sopra.
+- **Subito e gratis, senza comprare niente**: usare un nome derivato dall'IP,
+  nella forma `80-211-79-223.sslip.io` (i punti dell'IP diventano trattini).
+  È un servizio pubblico che risponde già con l'indirizzo del server: non c'è
+  nulla da registrare e il lucchetto funziona. Il nome è brutto da leggere, ma
+  si può cambiare in qualsiasi momento con un dominio vero.
 
 Il certificato HTTPS (il lucchetto) è **gratuito e automatico**: ci pensa il
-server da solo, nessun acquisto da fare.
+server da solo, nessun acquisto da fare, e si rinnova senza intervento.
 
 ### 1.3 Cosa NON serve
 
@@ -138,6 +142,7 @@ completo dei 387 tipi.
 | Attività | Come |
 |---|---|
 | **Aggiornare l'applicazione** | `bash /var/www/webgis/deploy/update.sh` (30 secondi di manutenzione) |
+| **Cambiare indirizzo / attivare HTTPS** | `bash /var/www/webgis/deploy/set-domain.sh nome.dominio.it` (vedi 6.2) |
 | **Backup** | automatico ogni notte alle 03:30 in `/var/backups/webgis` (14 giorni conservati); in più, dal pannello Aruba si può attivare lo **snapshot** del server |
 | **Nuovi utenti** | dalla pagina **Utenti** dell'applicazione |
 | **Spegnere tutto** | eliminare il server dal pannello Aruba: l'addebito si ferma |
@@ -166,6 +171,35 @@ registro dell'applicazione (utile in prova). Chi non vuole ricevere il
 riepilogo si esclude dalla pagina **Utenti**: aprire la modifica dell'utente
 e togliere la spunta a "Riceve il riepilogo email delle scadenze".
 
+### 6.2 Passare a HTTPS (il lucchetto)
+
+Se l'applicazione è stata installata sull'indirizzo IP, si passa a HTTPS in un
+comando solo, senza reinstallare niente:
+
+```bash
+bash /var/www/webgis/deploy/set-domain.sh nome.dominio.it
+```
+
+Il comando controlla che il nome punti davvero a questo server, apre le porte
+del web, riconfigura il server web e l'applicazione, aspetta l'emissione del
+certificato e verifica che il sito risponda. Dura circa un minuto.
+
+**Senza comprare un dominio** si può usare subito un nome derivato dall'IP:
+
+```bash
+bash /var/www/webgis/deploy/set-domain.sh 80-211-79-223.sslip.io
+```
+
+(i punti dell'indirizzo IP diventano trattini). Funziona come un dominio vero
+per il certificato; quando si comprerà un dominio proprio basterà rilanciare lo
+stesso comando con il nome nuovo.
+
+Con il lucchetto attivo si sbloccano: la **posizione del dispositivo** sulla
+mappa e nell'app di campo, l'**installazione dell'app di campo** sul telefono
+(Aggiungi a schermata Home) e le **pagine pubbliche col QR** senza avvisi.
+
+Per tornare all'indirizzo IP (raro): `bash /var/www/webgis/deploy/set-domain.sh 80.211.79.223`.
+
 ## 7. Se qualcosa non va
 
 - Il sito non risponde: dal pannello Aruba riavviare il server, attendere
@@ -177,5 +211,6 @@ e togliere la spunta a "Riceve il riepilogo email delle scadenze".
 ---
 
 *Questa guida accompagna gli script in `deploy/`: `provision.sh`
-(installazione), `update.sh` (aggiornamenti), `backup.sh` (salvataggi),
+(installazione), `update.sh` (aggiornamenti), `set-domain.sh` (indirizzo del
+sito e HTTPS), `backup.sh` (salvataggi),
 `Caddyfile` (server web) e `.env.production.example` (configurazione).*
