@@ -31,11 +31,32 @@ class TreeAssessment extends Model
         return [
             'assessed_on' => 'date',
             'next_check_due' => 'date',
+            'report_issued_at' => 'datetime',
             'defects' => 'array',
             'targets' => 'array',
             'survey' => 'array',
             'version' => 'integer',
         ];
+    }
+
+    /**
+     * Protocollo della perizia, assegnato alla prima stampa e mai più
+     * cambiato: due copie della stessa perizia devono avere lo stesso
+     * numero e la stessa data di emissione.
+     */
+    public static function nextReportNumber(string $tenantId): string
+    {
+        \Illuminate\Support\Facades\DB::statement(
+            'SELECT pg_advisory_xact_lock(hashtextextended(?, 42))', ["perizia:{$tenantId}"],
+        );
+        $year = now('Europe/Rome')->year;
+        $next = (int) \Illuminate\Support\Facades\DB::selectOne(
+            "SELECT COALESCE(MAX((substring(report_number FROM '\\d+$'))::int), 0) + 1 AS n
+             FROM tree_assessments WHERE tenant_id = ? AND report_number LIKE ?",
+            [$tenantId, "PER-{$year}-%"],
+        )->n;
+
+        return sprintf('PER-%d-%04d', $year, $next);
     }
 
     public function tree()

@@ -143,7 +143,7 @@ class PeriziaTest extends TestCase
             'ALB-0042', 'Pinus pinea', 'Pino domestico', '14.5', '62',
             'parco urbano', 'tappeto erboso', 'Linea elettrica aerea',
             'area giochi; vialetto pedonale', 'maturita', 'esemplare da monitorare',
-            'Non rilevate', 'Radici affioranti sul lato nord', 'Cavita aperta a 1,2 m',
+            'Accertamento non eseguito', 'Radici affioranti sul lato nord', 'Cavita aperta a 1,2 m',
             'Consigliata tomografia sonica', 'entro 30 giorni',
             'Potatura di riduzione della branca sud.', 'Albero monumentale',
             '45.471200, 10.542100',
@@ -153,8 +153,15 @@ class PeriziaTest extends TestCase
         $this->assertStringNotContainsString('da scartare', $html);
         // Senza conclusioni scritte a mano, il testo si compone dalla classe
         $this->assertStringContainsString('classe C (propensione al cedimento moderata)', $html);
-        // Senza mappa raggiungibile resta il riquadro vuoto
-        $this->assertStringContainsString('ESTRATTO DI MAPPA', $html);
+        // Senza mappa raggiungibile il documento lo dichiara
+        $this->assertStringContainsString('Estratto cartografico non disponibile', $html);
+        // Numero di protocollo assegnato alla prima stampa e stampato in testa
+        $numero = \App\Models\TreeAssessment::query()->findOrFail($assessment['id'])->report_number;
+        $this->assertSame('PER-'.now('Europe/Rome')->year.'-0001', $numero);
+        $this->assertStringContainsString($numero, $html);
+        // Esito e tipo di valutazione: non piu' sottintesi
+        $this->assertStringContainsString('interventi prescritti', $html);
+        $this->assertStringContainsString('Analisi visiva (VTA)', $html);
     }
 
     public function test_written_conclusions_replace_the_automatic_text(): void
@@ -186,8 +193,9 @@ class PeriziaTest extends TestCase
         $this->assertStringContainsString('Vivaio Prova', $html);
         $this->assertStringContainsString('Tecnico incaricato', $html);
         $this->assertStringContainsString('piccola ferita al colletto', $html);
-        $this->assertStringContainsString('Nessuna rilevata', $html);
-        $this->assertStringContainsString('FOTO 1 NON DISPONIBILE', $html);
+        // Silenzio del tecnico: mai trasformato in un accertamento negativo
+        $this->assertStringContainsString('Non rilevate in sede di sopralluogo', $html);
+        $this->assertStringContainsString('Nessuna fotografia allegata', $html);
 
         // Il documento vero e proprio esce comunque
         $pdf = $this->get("/api/v1/assessments/{$assessment['id']}/perizia-pdf")->assertOk();
@@ -225,9 +233,11 @@ class PeriziaTest extends TestCase
         ])->assertCreated();
 
         $html = $this->renderedHtml($assessment['id']);
-        $this->assertStringContainsString('data:image/png;base64,'.base64_encode($png), $html);
-        $this->assertStringNotContainsString('FOTO 1 NON DISPONIBILE', $html);
-        $this->assertStringContainsString('FOTO 2 NON DISPONIBILE', $html);
+        // La foto e' ricodificata in JPEG: mai l'originale, mai i suoi metadati
+        $this->assertStringContainsString('data:image/jpeg;base64,', $html);
+        $this->assertStringNotContainsString(base64_encode($png), $html);
+        $this->assertStringContainsString('scattata il', $html);
+        $this->assertStringNotContainsString('Nessuna fotografia allegata', $html);
         foreach (['Tomografo sonico', 'Arbotom', '130 cm', 'residuo sano', '62%',
             'Sezione con perdita di massa'] as $probe) {
             $this->assertStringContainsString($probe, $html, "manca: {$probe}");
@@ -255,9 +265,132 @@ class PeriziaTest extends TestCase
         $html = $this->renderedHtml($assessment['id']);
         $this->assertStringContainsString('data:image/png;base64,', $html);
         $this->assertStringContainsString('OpenStreetMap', $html);
-        $this->assertStringNotContainsString('ESTRATTO DI MAPPA', $html);
-        // Mosaico 3x2 riquadri attorno al punto
-        Http::assertSentCount(6);
+        $this->assertStringNotContainsString('Estratto cartografico non disponibile', $html);
+        // Mosaico 3x3 attorno al punto, scaricato in una volta sola
+        Http::assertSentCount(9);
+
+        // I riquadri restano in cache: la seconda perizia sullo stesso
+        // giardino non richiama OpenStreetMap
+        $secondo = $this->makeAssessment($asset, ['failure_class' => 'A']);
+        $this->renderedHtml($secondo['id']);
+        Http::assertSentCount(9);
+    }
+
+    public function test_perizia_is_refused_without_the_failure_class(): void
+    {
+        $this->fakeTiles();
+        $asset = $this->createTreeAsset();
+        $assessment = $this->makeAssessment($asset, ['failure_class' => null]);
+
+        $this->getJson("/api/v1/assessments/{$assessment['id']}/perizia-pdf")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('failure_class');
+
+        $this->assertNull(
+            \App\Models\TreeAssessment::query()->findOrFail($assessment['id'])->report_number,
+        );
+    }
+
+    public function test_report_number_and_issue_date_do_not_change_between_downloads(): void
+    {
+        $this->fakeTiles();
+        $asset = $this->createTreeAsset();
+        $assessment = $this->makeAssessment($asset);
+
+        $this->get("/api/v1/assessments/{$assessment['id']}/perizia-pdf")->assertOk();
+        $first = \App\Models\TreeAssessment::query()->findOrFail($assessment['id']);
+        $numero = $first->report_number;
+        $emessa = $first->report_issued_at;
+
+        // Il giorno dopo la stessa perizia si ristampa identica
+        $this->travel(1)->days();
+        $html = $this->renderedHtml($assessment['id']);
+        $second = \App\Models\TreeAssessment::query()->findOrFail($assessment['id']);
+
+        $this->assertSame($numero, $second->report_number);
+        $this->assertTrue($emessa->equalTo($second->report_issued_at));
+        $this->assertStringContainsString($emessa->setTimezone('Europe/Rome')->format('d/m/Y'), $html);
+        $this->travelBack();
+    }
+
+    public function test_photo_metadata_never_reaches_the_signed_document(): void
+    {
+        $this->fakeTiles();
+        Storage::fake('local');
+        $asset = $this->createTreeAsset();
+
+        // JPEG con un segmento EXIF riconoscibile, come quello di un telefono
+        $canvas = imagecreatetruecolor(40, 30);
+        ob_start();
+        imagejpeg($canvas);
+        $jpeg = (string) ob_get_clean();
+        imagedestroy($canvas);
+        $exif = "\xFF\xE1".pack('n', 6 + 22)."Exif\x00\x00".'TELEFONO-SERIALE-9971';
+        $conExif = substr($jpeg, 0, 2).$exif.substr($jpeg, 2);
+
+        Storage::disk()->put('photos/test/con-exif.jpg', $conExif);
+        Photo::create([
+            'tenant_id' => $this->organization->id,
+            'asset_id' => $asset,
+            's3_key' => 'photos/test/con-exif.jpg',
+            'original_filename' => 'fusto.jpg',
+            'mime_type' => 'image/jpeg',
+            'size_bytes' => strlen($conExif),
+            'category' => 'defect',
+        ]);
+
+        $assessment = $this->makeAssessment($asset);
+        $html = $this->renderedHtml($assessment['id']);
+
+        $this->assertStringContainsString('data:image/jpeg;base64,', $html);
+        $this->assertStringNotContainsString('TELEFONO-SERIALE-9971', $html);
+        $this->assertStringNotContainsString(base64_encode($conExif), $html);
+        $this->assertStringNotContainsString(
+            'TELEFONO-SERIALE-9971',
+            $this->get("/api/v1/assessments/{$assessment['id']}/perizia-pdf")->getContent(),
+        );
+    }
+
+    public function test_photos_taken_after_the_survey_are_not_presented_as_evidence(): void
+    {
+        $this->fakeTiles();
+        Storage::fake('local');
+        $asset = $this->createTreeAsset();
+
+        $canvas = imagecreatetruecolor(20, 20);
+        ob_start();
+        imagejpeg($canvas);
+        $jpeg = (string) ob_get_clean();
+        imagedestroy($canvas);
+
+        foreach ([['vecchia', '-40 days'], ['recente', '-2 days'], ['successiva', '+3 days']] as [$nome, $quando]) {
+            Storage::disk()->put("photos/test/{$nome}.jpg", $jpeg);
+            Photo::create([
+                'tenant_id' => $this->organization->id,
+                'asset_id' => $asset,
+                's3_key' => "photos/test/{$nome}.jpg",
+                'mime_type' => 'image/jpeg',
+                'category' => 'census',
+                'taken_at' => now('Europe/Rome')->modify($quando),
+            ]);
+        }
+
+        $assessment = $this->makeAssessment($asset);
+        $this->renderedHtml($assessment['id']);
+
+        // Due sole foto: quella scattata dopo il sopralluogo resta fuori
+        $recenti = (new \ReflectionClass(\App\Http\Controllers\Api\V1\PeriziaController::class))
+            ->getMethod('photos');
+        $recenti->setAccessible(true);
+        $foto = $recenti->invoke(
+            app(\App\Http\Controllers\Api\V1\PeriziaController::class),
+            $asset,
+            \App\Models\TreeAssessment::query()->findOrFail($assessment['id']),
+        );
+
+        $this->assertCount(2, $foto);
+        // La più recente entro il sopralluogo viene per prima, con la sua data
+        $this->assertSame(now('Europe/Rome')->modify('-2 days')->format('d/m/Y'), $foto[0]['scattata']);
     }
 
     public function test_permissions_and_tenant_isolation(): void

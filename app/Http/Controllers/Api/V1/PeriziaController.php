@@ -16,6 +16,7 @@ use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Perizia di valutazione della stabilità (metodo VTA): il documento che
@@ -41,6 +42,22 @@ class PeriziaController extends Controller implements HasMiddleware
         'castello' => 'Castello',
         'branche' => 'Branche',
         'chioma' => 'Chioma e foglie',
+    ];
+
+    private const TYPE_LABELS = [
+        'vta_visual' => 'Analisi visiva (VTA)',
+        'vta_instrumental' => 'Analisi visiva con indagini strumentali (VTA)',
+        'vsa' => 'Valutazione visiva speditiva (VSA)',
+        'pull_test' => 'Prova di trazione controllata',
+        'aerial_inspection' => 'Ispezione in quota',
+        'other' => 'Altra valutazione',
+    ];
+
+    private const OUTCOME_LABELS = [
+        'ok' => 'Esemplare idoneo: nessun intervento necessario',
+        'monitor' => 'Esemplare da monitorare',
+        'prescriptions' => 'Esemplare da sottoporre agli interventi prescritti',
+        'fell' => 'Se ne propone l\'abbattimento',
     ];
 
     private const INSTRUMENT_LABELS = [
@@ -77,13 +94,20 @@ class PeriziaController extends Controller implements HasMiddleware
 
         $organization = Organization::query()->findOrFail($request->user()->tenant_id);
         $settings = $organization->settings ?? [];
-        $settings['professionista'] = array_map(
-            fn ($v) => $v !== null && trim($v) !== '' ? trim($v) : null,
-            $data,
+        // Salvataggio parziale: i campi non inviati restano quelli di prima,
+        // non vengono azzerati
+        $settings['professionista'] = array_replace(
+            $settings['professionista'] ?? [],
+            array_map(
+                fn ($v) => $v !== null && trim($v) !== '' ? trim($v) : null,
+                $data,
+            ),
         );
         $organization->forceFill(['settings' => $settings])->save();
 
-        Audit::log('perizia.settings_updated', null, ['nome' => $settings['professionista']['nome']]);
+        Audit::log('perizia.settings_updated', null, [
+            'nome' => $settings['professionista']['nome'] ?? null,
+        ]);
 
         return response()->json(['data' => $this->professionista($organization->id)]);
     }
@@ -101,6 +125,17 @@ class PeriziaController extends Controller implements HasMiddleware
         $tree = $assessment->tree;
         abort_if($tree === null, 404, 'Valutazione senza scheda albero.');
 
+        // Senza classe di propensione al cedimento non c'è perizia: è la
+        // conclusione tecnica che il professionista firma
+        if (! in_array($assessment->failure_class, TreeAssessment::FAILURE_CLASSES, true)) {
+            throw ValidationException::withMessages([
+                'failure_class' => 'La perizia non si può emettere senza la classe di propensione al cedimento: '
+                    .'apri la valutazione, indica la classe (A, B, C, C/D o D) e riprova.',
+            ]);
+        }
+
+        $this->assignReportNumber($assessment);
+
         $survey = $assessment->survey ?? [];
         $point = DB::selectOne(
             'SELECT ST_Y(ST_Centroid(geom)) AS lat, ST_X(ST_Centroid(geom)) AS lon FROM assets WHERE id = ?',
@@ -108,9 +143,12 @@ class PeriziaController extends Controller implements HasMiddleware
         );
 
         $pdf = $renderer->render('pdf.perizia', [
-            'riferimento' => $this->reference($assessment, $asset),
-            'emessaIl' => now('Europe/Rome'),
+            'riferimento' => $assessment->report_number,
+            'emessaIl' => $assessment->report_issued_at->setTimezone('Europe/Rome'),
             'professionista' => $this->professionista($assessment->tenant_id),
+            'rilevatore' => $assessment->assessor_external ?: $assessment->assessor?->name,
+            'tipoValutazione' => self::TYPE_LABELS[$assessment->assessment_type] ?? $assessment->assessment_type,
+            'esito' => self::OUTCOME_LABELS[$assessment->outcome] ?? null,
             'asset' => $asset,
             'tree' => $tree,
             'assessment' => $assessment,
@@ -127,7 +165,7 @@ class PeriziaController extends Controller implements HasMiddleware
             'classiDescrizione' => self::CLASS_DESCRIPTIONS,
             'integrazioneVta' => $survey['integrazione_vta'] ?? null,
             'prioritaIntervento' => $survey['priorita_intervento'] ?? null,
-            'fotoDataUri' => $this->photos($asset->id),
+            'foto' => $this->photos($asset->id, $assessment),
             'mappaDataUri' => $point?->lat !== null
                 ? $map->pngDataUri((float) $point->lat, (float) $point->lon)
                 : null,
@@ -137,12 +175,43 @@ class PeriziaController extends Controller implements HasMiddleware
                 : $this->defaultConclusions($assessment),
         ]);
 
-        Audit::log('perizia.pdf', $assessment, ['asset_id' => $asset->id]);
+        Audit::log('perizia.pdf', $assessment, [
+            'asset_id' => $asset->id,
+            'report_number' => $assessment->report_number,
+        ]);
+
+        // Il codice censimento è testo libero: senza ripulirlo finirebbe
+        // tale e quale nell'intestazione del download
+        $name = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($assessment->report_number ?: 'perizia'));
 
         return response($pdf, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="perizia_'.($asset->census_code ?: 'albero').'.pdf"',
+            'Content-Disposition' => "inline; filename=\"{$name}.pdf\"",
         ]);
+    }
+
+    /**
+     * Numero di protocollo e data di emissione: si assegnano alla prima
+     * stampa e restano quelli. Ristampare la stessa perizia deve dare lo
+     * stesso documento, non un documento nuovo con un'altra data.
+     */
+    private function assignReportNumber(TreeAssessment $assessment): void
+    {
+        if ($assessment->report_number !== null && $assessment->report_issued_at !== null) {
+            return;
+        }
+
+        DB::transaction(function () use ($assessment) {
+            $fresh = TreeAssessment::query()->lockForUpdate()->findOrFail($assessment->id);
+            if ($fresh->report_number === null || $fresh->report_issued_at === null) {
+                $fresh->forceFill([
+                    'report_number' => $fresh->report_number ?: TreeAssessment::nextReportNumber($fresh->tenant_id),
+                    'report_issued_at' => $fresh->report_issued_at ?: now(),
+                ])->save();
+            }
+            $assessment->report_number = $fresh->report_number;
+            $assessment->report_issued_at = $fresh->report_issued_at;
+        });
     }
 
     /** @return array<string, string|null> */
@@ -159,16 +228,6 @@ class PeriziaController extends Controller implements HasMiddleware
             'iscrizione' => $saved['iscrizione'] ?? null,
             'recapiti' => $saved['recapiti'] ?? null,
         ];
-    }
-
-    /** Riferimento leggibile della perizia: codice elemento e data del rilievo. */
-    private function reference(TreeAssessment $assessment, \App\Models\Asset $asset): string
-    {
-        return sprintf(
-            '%s/%s',
-            $asset->census_code ?: substr($asset->id, 0, 8),
-            $assessment->assessed_on?->format('Y-m-d') ?? '',
-        );
     }
 
     /** @return array<string, string> difetti per parte, con le etichette della scheda */
@@ -217,18 +276,55 @@ class PeriziaController extends Controller implements HasMiddleware
             });
     }
 
-    /** Fino a 4 foto dell'elemento, incorporate nel PDF. */
-    private function photos(string $assetId): array
+    /**
+     * Fino a 4 foto per la documentazione fotografica: le più recenti che
+     * non siano successive al sopralluogo (una perizia non documenta con
+     * foto scattate dopo), ciascuna con la sua data.
+     *
+     * Le immagini sono SEMPRE ricodificate e ridotte: la ricodifica elimina
+     * EXIF e coordinate GPS del telefono, che altrimenti resterebbero
+     * leggibili dentro il PDF firmato, e tiene il documento leggero.
+     *
+     * @return list<array{data: string, scattata: ?string, categoria: ?string}>
+     */
+    private function photos(string $assetId, TreeAssessment $assessment): array
     {
         $disk = Storage::disk();
+        $limite = $assessment->assessed_on?->copy()->endOfDay();
 
-        return Photo::query()
+        $query = fn (bool $entroSopralluogo) => Photo::query()
             ->where('asset_id', $assetId)
-            ->orderBy('created_at')
-            ->limit(4)->get()
+            ->when($entroSopralluogo && $limite !== null, fn ($q) => $q->whereRaw(
+                'COALESCE(taken_at, created_at) <= ?', [$limite],
+            ))
+            ->orderByRaw('COALESCE(taken_at, created_at) DESC')
+            ->limit(4)
+            ->get();
+
+        $photos = $query(true);
+        if ($photos->isEmpty()) {
+            // Nessuna foto entro il sopralluogo: si usano comunque quelle
+            // disponibili, ma la data stampata sotto lo dice chiaramente
+            $photos = $query(false);
+        }
+
+        return $photos
             ->filter(fn (Photo $p) => $disk->exists($p->s3_key))
-            ->map(fn (Photo $p) => 'data:'.($p->mime_type ?: 'image/jpeg').';base64,'
-                .base64_encode($disk->get($p->s3_key)))
+            ->map(function (Photo $p) use ($disk) {
+                $jpeg = \App\Services\Photos\ImageDerivative::jpeg(
+                    $disk->get($p->s3_key), maxDimension: 1200, quality: 78,
+                );
+                if ($jpeg === null) {
+                    return null;
+                }
+
+                return [
+                    'data' => 'data:image/jpeg;base64,'.base64_encode($jpeg),
+                    'scattata' => ($p->taken_at ?? $p->created_at)?->setTimezone('Europe/Rome')->format('d/m/Y'),
+                    'categoria' => $p->category,
+                ];
+            })
+            ->filter()
             ->values()
             ->all();
     }
@@ -254,8 +350,11 @@ class PeriziaController extends Controller implements HasMiddleware
             .($assessment->instrumentalAnalyses()->exists() ? ', integrata da indagini strumentali,' : '')
             ." l'esemplare è ascritto alla classe {$class} ({$descrizione}).";
 
+        if (isset(self::OUTCOME_LABELS[$assessment->outcome])) {
+            $testo .= ' '.self::OUTCOME_LABELS[$assessment->outcome].'.';
+        }
         if ($assessment->prescriptions) {
-            $testo .= ' Si prescrivono gli interventi indicati al punto 8.';
+            $testo .= ' Si prescrivono gli interventi indicati nel capitolo delle prescrizioni.';
         }
         if ($assessment->next_check_due) {
             $testo .= ' Il prossimo controllo è previsto entro il '
