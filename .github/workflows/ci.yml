@@ -82,6 +82,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # gitleaks confronta l'intervallo di commit del push: con la copia
+          # superficiale (un solo commit) il commit di partenza non esiste
+          # e la scansione fallisce senza aver trovato nulla
+          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
