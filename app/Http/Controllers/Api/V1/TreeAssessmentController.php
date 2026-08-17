@@ -48,7 +48,7 @@ class TreeAssessmentController extends Controller implements HasMiddleware
             ]);
         }
 
-        $data = $request->validate($this->rules());
+        $data = $request->validate($this->rules(), $this->messages());
 
         if (isset($data['survey']['difetti'])) {
             // Solo le parti previste dalla scheda: niente chiavi arbitrarie
@@ -100,7 +100,7 @@ class TreeAssessmentController extends Controller implements HasMiddleware
         $data = $request->validate([
             ...$this->rules(perTutti: false),
             'version' => ['sometimes', 'integer'],
-        ]);
+        ], $this->messages());
 
         $assessment = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $id, $data) {
             $assessment = TreeAssessment::query()->lockForUpdate()->findOrFail($id);
@@ -119,6 +119,26 @@ class TreeAssessmentController extends Controller implements HasMiddleware
 
             $eraEmessa = $assessment->report_number !== null;
             $assessment->fill($data);
+
+            // Ricontrollo automatico dalla classe, come alla registrazione:
+            // l'etichetta del campo lo promette anche in correzione, e una
+            // classe peggiorata deve accorciare la scadenza
+            // Solo se il campo è stato inviato vuoto: una correzione che non
+            // lo nomina affatto non deve toccare una data messa a mano
+            if (array_key_exists('next_check_due', $data) && empty($data['next_check_due'])) {
+                $mesi = $assessment->failure_class !== null
+                    ? ($this->recheckMonths($request)[$assessment->failure_class] ?? null)
+                    : null;
+                $assessment->next_check_due = $mesi !== null && $assessment->assessed_on
+                    ? $assessment->assessed_on->copy()->addMonths($mesi)
+                    : null;
+            }
+
+            // Il contenuto è cambiato? Va deciso PRIMA di toccare i campi di
+            // servizio: se li scrivessimo ora, un salvataggio senza modifiche
+            // fatto da un altro utente risulterebbe comunque una modifica e
+            // butterebbe via il numero di perizia già consegnato
+            $contenutoCambiato = $assessment->isDirty();
             $assessment->updated_by = $request->user()->id;
 
             if ($assessment->next_check_due && $assessment->assessed_on
@@ -129,11 +149,13 @@ class TreeAssessmentController extends Controller implements HasMiddleware
                 ]);
             }
 
-            if ($eraEmessa && $assessment->isDirty()) {
+            if ($eraEmessa && $contenutoCambiato) {
                 $assessment->report_number = null;
                 $assessment->report_issued_at = null;
             }
-            $assessment->version = $assessment->version + 1;
+            if ($contenutoCambiato) {
+                $assessment->version = $assessment->version + 1;
+            }
             $assessment->save();
 
             Audit::log('vta.updated', $assessment, [
@@ -169,7 +191,9 @@ class TreeAssessmentController extends Controller implements HasMiddleware
 
         return [
             'assessment_type' => [$obbligatorio, 'in:vta_visual,vta_instrumental,vsa,pull_test,aerial_inspection,other'],
-            'assessed_on' => [$obbligatorio, 'date', 'before_or_equal:today'],
+            // Giornata italiana, non quella del server (UTC): dopo mezzanotte
+            // la data proposta a video sarebbe "nel futuro" per il server
+            'assessed_on' => [$obbligatorio, 'date', 'before_or_equal:'.now('Europe/Rome')->toDateString()],
             'assessor_external' => ['nullable', 'string', 'max:254'],
             'defects' => ['sometimes', 'array'],
             'targets' => ['sometimes', 'array'],
@@ -198,6 +222,16 @@ class TreeAssessmentController extends Controller implements HasMiddleware
             'survey.integrazione_vta' => ['nullable', 'string', 'max:1000'],
             'survey.priorita_intervento' => ['nullable', 'string', 'max:100'],
             'survey.conclusioni' => ['nullable', 'string', 'max:4000'],
+        ];
+    }
+
+    /** @return array<string, string> messaggi in italiano per chi compila la scheda */
+    private function messages(): array
+    {
+        return [
+            'assessed_on.before_or_equal' => 'La data del sopralluogo non può essere nel futuro.',
+            'assessed_on.required' => 'Indica la data del sopralluogo.',
+            'assessment_type.required' => 'Indica il tipo di valutazione.',
         ];
     }
 

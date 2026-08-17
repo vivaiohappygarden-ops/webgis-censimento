@@ -151,6 +151,19 @@ class AssetController extends Controller implements HasMiddleware
             }
             unset($data['version']);
 
+            // L'abbattimento non si tocca dalla modifica generica della
+            // scheda: entrare o uscire da "abbattuto" da qui lascerebbe la
+            // data di rimozione, la fine validità e la scheda albero
+            // disallineate rispetto allo stato
+            if (array_key_exists('status', $data) && $data['status'] !== $asset->status
+                && ($data['status'] === 'removed' || $asset->status === 'removed')) {
+                throw ValidationException::withMessages([
+                    'status' => $asset->status === 'removed'
+                        ? 'Questa scheda risulta abbattuta: per rimetterla in vita usa "Annulla abbattimento" in fondo alla scheda.'
+                        : 'Per registrare un abbattimento usa "Registra abbattimento" in fondo alla scheda: serve anche la data.',
+                ]);
+            }
+
             $type = isset($data['object_type_id'])
                 ? CatalogObjectType::findOrFail($data['object_type_id'])
                 : $asset->objectType;
@@ -258,8 +271,15 @@ class AssetController extends Controller implements HasMiddleware
     {
         $data = $request->validate([
             // Una data futura toglierebbe dal censimento un elemento che c'è
-            // ancora: qui si registra solo quello che è già successo
-            'removed_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            // ancora: qui si registra solo quello che è già successo.
+            // Il confronto è sulla giornata italiana, non su quella del
+            // server (UTC): dopo mezzanotte "oggi" per chi lavora in Italia
+            // è ancora "domani" per il server, e la data proposta a video
+            // verrebbe rifiutata
+            'removed_on' => [
+                'required', 'date_format:Y-m-d',
+                'before_or_equal:'.now('Europe/Rome')->toDateString(),
+            ],
             'removal_reason' => ['nullable', 'string', 'max:254'],
             'version' => ['sometimes', 'integer'],
         ], [

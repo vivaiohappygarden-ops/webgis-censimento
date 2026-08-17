@@ -145,6 +145,72 @@ class TreeVtaTest extends TestCase
         ])->assertStatus(409);
     }
 
+    public function test_correcting_the_class_recomputes_the_recheck_date(): void
+    {
+        $id = $this->createTreeAsset();
+        $assessment = $this->postJson("/api/v1/assets/{$id}/assessments", [
+            'assessment_type' => 'vta_visual',
+            'assessed_on' => '2026-06-01',
+            'failure_class' => 'C',
+        ])->assertCreated()->json('data');
+        // Classe C: ricontrollo a 24 mesi
+        $this->assertStringStartsWith('2028-06-01', $assessment['next_check_due']);
+
+        // Classe peggiorata a C/D (12 mesi): la scadenza si accorcia da sola,
+        // come promette l'etichetta "vuoto = automatico dalla classe"
+        $corretta = $this->patchJson("/api/v1/assessments/{$assessment['id']}", [
+            'failure_class' => 'C/D',
+            'next_check_due' => null,
+        ])->assertOk()->json('data');
+        $this->assertStringStartsWith('2027-06-01', $corretta['next_check_due']);
+
+        // Una data messa a mano resta quella
+        $manuale = $this->patchJson("/api/v1/assessments/{$assessment['id']}", [
+            'next_check_due' => '2026-12-31',
+        ])->assertOk()->json('data');
+        $this->assertStringStartsWith('2026-12-31', $manuale['next_check_due']);
+
+        // Una correzione che non nomina il campo non lo tocca
+        $altro = $this->patchJson("/api/v1/assessments/{$assessment['id']}", [
+            'prescriptions' => 'Potatura di rimonda del secco.',
+        ])->assertOk()->json('data');
+        $this->assertStringStartsWith('2026-12-31', $altro['next_check_due']);
+    }
+
+    public function test_a_save_without_changes_keeps_the_issued_protocol(): void
+    {
+        \Illuminate\Support\Facades\Http::fake([
+            'tile.openstreetmap.org/*' => \Illuminate\Support\Facades\Http::response('', 500),
+        ]);
+        $id = $this->createTreeAsset();
+        $assessment = $this->postJson("/api/v1/assets/{$id}/assessments", [
+            'assessment_type' => 'vta_visual',
+            'assessed_on' => '2026-06-01',
+            'failure_class' => 'C',
+        ])->assertCreated()->json('data');
+
+        $this->get("/api/v1/assessments/{$assessment['id']}/perizia-pdf")->assertOk();
+        $numero = \App\Models\TreeAssessment::query()->findOrFail($assessment['id'])->report_number;
+        $this->assertNotNull($numero);
+
+        // Un altro utente riapre la correzione e salva senza cambiare nulla:
+        // il numero già consegnato al committente non si butta via
+        [, $altroUtente] = $this->createTenantUser();
+        $stesso = \App\Models\User::factory()->create(['tenant_id' => $this->organization->id]);
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($this->organization->id);
+        $stesso->assignRole('tecnico');
+        $this->actingAsTenantUser($stesso);
+
+        $this->patchJson("/api/v1/assessments/{$assessment['id']}", [
+            'failure_class' => 'C',
+            'assessed_on' => '2026-06-01',
+        ])->assertOk();
+
+        $dopo = \App\Models\TreeAssessment::query()->findOrFail($assessment['id']);
+        $this->assertSame($numero, $dopo->report_number);
+        $this->assertNotNull($dopo->report_issued_at);
+    }
+
     public function test_correcting_an_issued_perizia_clears_its_protocol(): void
     {
         \Illuminate\Support\Facades\Http::fake([

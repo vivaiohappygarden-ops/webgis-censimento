@@ -69,18 +69,27 @@ async function save() {
             </label>
             <label class="block text-xs">
                 <span class="text-gray-500">Stato</span>
-                <select v-model="form.status" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
+                <!-- Scheda abbattuta: lo stato si cambia solo annullando
+                     l'abbattimento, altrimenti resterebbero la data di
+                     rimozione e la fine validità di un elemento "attivo" -->
+                <select
+                    v-model="form.status"
+                    :disabled="asset.status === 'removed'"
+                    data-test="stato-scheda"
+                    class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                >
                     <option value="active">Attivo</option>
                     <option value="dead">Morto in piedi</option>
                     <option value="stump">Ceppaia</option>
                     <option value="dismissed">Dismesso</option>
-                    <!-- "Abbattuto" non si sceglie qui: serve anche la data, che
-                         va nella scheda albero e nel bilancio arboreo -->
-                    <option v-if="form.status === 'removed'" value="removed" disabled>Abbattuto/Rimosso</option>
+                    <option v-if="form.status === 'removed'" value="removed">Abbattuto/Rimosso</option>
                 </select>
             </label>
         </div>
-        <p v-if="form.status !== 'removed'" class="mt-1 text-xs text-gray-500">
+        <p v-if="asset.status === 'removed'" class="mt-1 text-xs text-amber-700">
+            Elemento abbattuto: per riportarlo in vita usa "Annulla abbattimento" in fondo alla scheda.
+        </p>
+        <p v-else class="mt-1 text-xs text-gray-500">
             Per un elemento abbattuto o rimosso usa "Registra abbattimento" in fondo alla scheda:
             registra anche la data e aggiorna il bilancio arboreo.
         </p>

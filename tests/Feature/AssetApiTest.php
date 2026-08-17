@@ -268,6 +268,52 @@ class AssetApiTest extends TestCase
         $this->assertDatabaseHas('assets', ['id' => $id, 'status' => 'active']);
     }
 
+    public function test_removal_state_cannot_be_changed_from_the_generic_edit(): void
+    {
+        $id = $this->createPointAsset();
+        $this->postJson("/api/v1/assets/{$id}/removal", ['removed_on' => '2026-08-14'])->assertOk();
+        $version = $this->getJson("/api/v1/assets/{$id}")->json('data.version');
+
+        // Uscire da "abbattuto" dalla modifica generica lascerebbe data di
+        // rimozione e fine validità su una scheda che si dichiara attiva
+        $this->patchJson("/api/v1/assets/{$id}", ['status' => 'active', 'version' => $version])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('status');
+
+        // E nemmeno si entra in "abbattuto" senza indicare la data
+        $altro = $this->createPointAsset('ALB-ALTRO');
+        $this->patchJson("/api/v1/assets/{$altro}", ['status' => 'removed'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('status');
+
+        $this->assertDatabaseHas('assets', ['id' => $id, 'status' => 'removed']);
+        $this->assertDatabaseHas('assets', ['id' => $altro, 'status' => 'active']);
+
+        // Gli altri stati restano liberi
+        $this->patchJson("/api/v1/assets/{$altro}", ['status' => 'dead'])->assertOk();
+    }
+
+    public function test_today_in_italy_is_accepted_as_removal_date_after_midnight(): void
+    {
+        // 00:30 in Italia = ancora ieri per il server, che lavora in UTC
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-08-16 22:30:00', 'UTC'));
+
+        $id = $this->createPointAsset();
+        $oggiInItalia = now('Europe/Rome')->toDateString();
+        $this->assertSame('2026-08-17', $oggiInItalia);
+
+        $this->postJson("/api/v1/assets/{$id}/removal", ['removed_on' => $oggiInItalia])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'removed');
+
+        // Il domani italiano resta rifiutato
+        $this->postJson("/api/v1/assets/{$id}/removal", ['removed_on' => '2026-08-18'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('removed_on');
+
+        $this->travelBack();
+    }
+
     public function test_removed_assets_can_be_hidden_from_the_list(): void
     {
         $kept = $this->createPointAsset('ALB-VIVO');
