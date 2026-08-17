@@ -23,7 +23,7 @@ class WorkOrderController extends Controller implements HasMiddleware
     {
         return [
             new Middleware('can:works.view', only: ['index', 'show']),
-            new Middleware('can:works.manage', only: ['store', 'update', 'destroy', 'transition', 'attachAsset', 'detachAsset']),
+            new Middleware('can:works.manage', only: ['store', 'update', 'destroy', 'transition', 'toggleDay', 'attachAsset', 'detachAsset']),
         ];
     }
 
@@ -74,9 +74,11 @@ class WorkOrderController extends Controller implements HasMiddleware
         }
 
         // In agenda l'ordine sensato è quello del calendario, non della creazione
+        // L'id come ultimo criterio: senza un ordinamento univoco, a parita'
+        // di data un ordine potrebbe comparire in due pagine diverse
         $query = $windowed
-            ? $query->orderBy('planned_start')->orderByDesc('created_at')
-            : $query->orderByDesc('created_at');
+            ? $query->orderBy('planned_start')->orderByDesc('created_at')->orderBy('id')
+            : $query->orderByDesc('created_at')->orderBy('id');
 
         return response()->json(
             $query->paginate(ListQuery::perPage($request, 25, 100))
@@ -203,6 +205,70 @@ class WorkOrderController extends Controller implements HasMiddleware
         });
 
         return $this->show($id);
+    }
+
+    /**
+     * Annulla (o ripristina) una singola giornata di un ordine pianificato
+     * su più giorni: l'ordine resta uno solo, cambia il calendario. Per
+     * annullare tutto il lavoro si usa il cambio di stato "annullato".
+     */
+    public function toggleDay(Request $request, string $id): JsonResponse
+    {
+        $data = $request->validate([
+            'day' => ['required', 'date_format:Y-m-d'],
+            'cancelled' => ['required', 'boolean'],
+            'version' => ['sometimes', 'integer', 'min:1'],
+        ]);
+
+        DB::transaction(function () use ($request, $id, $data) {
+            $workOrder = WorkOrder::query()->lockForUpdate()->findOrFail($id);
+            $this->assertVersion($request, $workOrder);
+
+            if (in_array($workOrder->status, ['completed', 'cancelled'], true)) {
+                throw ValidationException::withMessages([
+                    'day' => 'Un ordine completato o annullato non si ripianifica.',
+                ]);
+            }
+            $start = $workOrder->planned_start?->toDateString();
+            $end = $workOrder->planned_end?->toDateString() ?? $start;
+            if ($start === null || $data['day'] < $start || $data['day'] > $end) {
+                throw ValidationException::withMessages([
+                    'day' => 'La giornata indicata non rientra nel periodo previsto del lavoro.',
+                ]);
+            }
+
+            $days = collect($workOrder->cancelled_days ?? [])->filter()->unique();
+            $days = $data['cancelled']
+                ? $days->push($data['day'])->unique()
+                : $days->reject(fn ($d) => $d === $data['day']);
+
+            // Restano solo le giornate dentro il periodo: se il lavoro viene
+            // ripianificato, le esclusioni vecchie non devono sopravvivere
+            $days = $days->filter(fn ($d) => $d >= $start && $d <= $end)->sort()->values();
+
+            if ($days->count() > 0 && $days->count() >= $this->plannedDaysCount($start, $end)) {
+                throw ValidationException::withMessages([
+                    'day' => 'Sarebbero annullate tutte le giornate: usa "Annullato" per chiudere l\'intero ordine.',
+                ]);
+            }
+
+            $workOrder->cancelled_days = $days->all();
+            $workOrder->version += 1;
+            $workOrder->updated_by = $request->user()->id;
+            $workOrder->save();
+
+            Audit::log('work_order.day_toggled', $workOrder, [
+                'day' => $data['day'], 'cancelled' => $data['cancelled'],
+            ]);
+        });
+
+        return $this->show($id);
+    }
+
+    private function plannedDaysCount(string $start, string $end): int
+    {
+        return \Illuminate\Support\Carbon::parse($start)
+            ->diffInDays(\Illuminate\Support\Carbon::parse($end)) + 1;
     }
 
     public function attachAsset(Request $request, string $id): JsonResponse

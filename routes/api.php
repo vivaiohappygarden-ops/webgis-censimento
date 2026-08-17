@@ -119,6 +119,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('work-orders', \App\Http\Controllers\Api\V1\WorkOrderController::class)
             ->whereUuid('work_order');
         Route::post('work-orders/{id}/transition', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'transition'])->whereUuid('id');
+        Route::post('work-orders/{id}/day', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'toggleDay'])->whereUuid('id');
         Route::post('work-orders/{id}/checks', [\App\Http\Controllers\Api\V1\WorkCheckController::class, 'store'])->whereUuid('id');
         Route::apiResource('inspection-templates', \App\Http\Controllers\Api\V1\InspectionTemplateController::class)
             ->whereUuid('inspection_template');

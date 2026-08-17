@@ -202,6 +202,75 @@ class WorkOrderTest extends TestCase
         $this->assertSame([$unplanned], $ids->all());
     }
 
+    public function test_single_day_can_be_cancelled_without_touching_the_order(): void
+    {
+        $order = $this->postJson('/api/v1/work-orders', [
+            'title' => 'Potatura filare',
+            'planned_start' => '2026-08-16',
+            'planned_end' => '2026-08-20',
+        ])->assertCreated()->json('data');
+
+        // Si annulla il solo 18: l'ordine resta vivo e il periodo non cambia
+        $updated = $this->postJson("/api/v1/work-orders/{$order['id']}/day", [
+            'day' => '2026-08-18', 'cancelled' => true, 'version' => $order['version'],
+        ])->assertOk()->json('data');
+        $this->assertSame(['2026-08-18'], $updated['cancelled_days']);
+        $this->assertSame('draft', $updated['status']);
+        $this->assertSame('2026-08-16', substr($updated['planned_start'], 0, 10));
+
+        // Ripristino della giornata
+        $restored = $this->postJson("/api/v1/work-orders/{$order['id']}/day", [
+            'day' => '2026-08-18', 'cancelled' => false, 'version' => $updated['version'],
+        ])->assertOk()->json('data');
+        $this->assertSame([], $restored['cancelled_days']);
+
+        // Fuori dal periodo previsto: rifiutato
+        $this->postJson("/api/v1/work-orders/{$order['id']}/day", [
+            'day' => '2026-08-25', 'cancelled' => true,
+        ])->assertUnprocessable()->assertJsonValidationErrors('day');
+
+        // Annullare tutte le giornate non e' un modo per chiudere l'ordine
+        foreach (['2026-08-16', '2026-08-17', '2026-08-18', '2026-08-19'] as $day) {
+            $this->postJson("/api/v1/work-orders/{$order['id']}/day", [
+                'day' => $day, 'cancelled' => true,
+            ])->assertOk();
+        }
+        $this->postJson("/api/v1/work-orders/{$order['id']}/day", [
+            'day' => '2026-08-20', 'cancelled' => true,
+        ])->assertUnprocessable()->assertJsonValidationErrors('day');
+
+        // Versione superata: conflitto, come per le altre modifiche
+        $this->postJson("/api/v1/work-orders/{$order['id']}/day", [
+            'day' => '2026-08-20', 'cancelled' => true, 'version' => 1,
+        ])->assertStatus(409);
+    }
+
+    public function test_day_cancel_is_refused_on_terminal_orders_and_for_operators(): void
+    {
+        $order = $this->postJson('/api/v1/work-orders', [
+            'title' => 'Lavoro chiuso',
+            'planned_start' => '2026-08-16',
+            'planned_end' => '2026-08-18',
+        ])->assertCreated()->json('data');
+
+        // L'operatore non ripianifica
+        $operator = \App\Models\User::factory()->create(['tenant_id' => $this->organization->id]);
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($this->organization->id);
+        $operator->assignRole('operatore');
+        $this->actingAsTenantUser($operator);
+        $this->postJson("/api/v1/work-orders/{$order['id']}/day", [
+            'day' => '2026-08-17', 'cancelled' => true,
+        ])->assertForbidden();
+
+        // Ordine annullato: niente ripianificazione delle giornate
+        $this->actingAsTenantUser($this->user);
+        $this->postJson("/api/v1/work-orders/{$order['id']}/transition", ['status' => 'cancelled'])
+            ->assertOk();
+        $this->postJson("/api/v1/work-orders/{$order['id']}/day", [
+            'day' => '2026-08-17', 'cancelled' => true,
+        ])->assertUnprocessable();
+    }
+
     public function test_work_orders_are_tenant_isolated(): void
     {
         $id = $this->postJson('/api/v1/work-orders', ['title' => 'Riservato'])->json('data.id');

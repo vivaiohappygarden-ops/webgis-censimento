@@ -123,12 +123,60 @@ const lanes = computed(() => {
     return teamLanes;
 });
 
+// Un ordine che dura piu' giorni e' UNO solo: si disegna come una fascia
+// continua, con codice e titolo scritti una volta sola (il primo giorno
+// visibile). Cosi' e' chiaro che annullandolo si annulla tutto il periodo,
+// non il singolo giorno.
 function ordersOn(lane, dayYmd) {
-    return lane.orders.filter((o) => {
+    const weekFirst = days.value[0]?.ymd;
+
+    return lane.orders.flatMap((o) => {
         const start = (o.planned_start ?? '').slice(0, 10);
         const end = (o.planned_end ?? o.planned_start ?? '').slice(0, 10);
-        return start !== '' && start <= dayYmd && end >= dayYmd;
+        if (start === '' || start > dayYmd || end < dayYmd) return [];
+
+        const cancelledDay = (o.cancelled_days ?? []).includes(dayYmd);
+
+        return [{
+            ...o,
+            head: dayYmd === start || dayYmd === weekFirst,
+            multi: end > start,
+            cancelledDay,
+            spanLabel: end > start ? `${fmtShort(start)} → ${fmtShort(end)}` : fmtShort(start),
+        }];
     });
+}
+
+// Annullare la singola giornata lascia in piedi il resto del lavoro; per
+// chiudere tutto l'ordine si usa "Annullato" nella scheda del lavoro
+async function toggleDay(order, dayYmd, cancelled) {
+    const giorno = fmtShort(dayYmd);
+    const domanda = cancelled
+        ? `Annullare solo la giornata del ${giorno} per l'ordine ${order.code}?\n\nIl resto del lavoro resta in programma.`
+        : `Ripristinare la giornata del ${giorno} per l'ordine ${order.code}?`;
+    if (! window.confirm(domanda)) return;
+
+    dayError.value = '';
+    try {
+        await axios.post(`/api/v1/work-orders/${order.id}/day`, {
+            day: dayYmd,
+            cancelled,
+            version: order.version,
+        });
+        await reload();
+    } catch (err) {
+        dayError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Operazione non riuscita';
+        // Versione stantia (un collega ha appena modificato): si ricarica
+        if (err.response?.status === 409) await reload();
+    }
+}
+
+const dayError = ref('');
+
+function fmtShort(ymd) {
+    const [, m, d] = ymd.split('-');
+    return `${d}/${m}`;
 }
 
 function moveWeek(n) {
@@ -207,6 +255,9 @@ onMounted(reload);
         <p v-if="truncated.grid" class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
             Mostrati {{ rows.length }} ordini su {{ rows.length + truncated.grid }} nel periodo.
         </p>
+        <p v-if="dayError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="agenda-day-error">
+            {{ dayError }}
+        </p>
 
         <!-- Griglia squadre x giorni -->
         <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
@@ -237,18 +288,37 @@ onMounted(reload);
                             class="border-l border-gray-50 px-1.5 py-1.5"
                             :class="d.weekend ? 'bg-gray-50/60' : ''"
                         >
-                            <button
+                            <div
                                 v-for="o in ordersOn(lane, d.ymd)"
                                 :key="o.id"
-                                class="mb-1 block w-full truncate rounded border-l-4 px-1.5 py-1 text-left text-[11px] leading-tight"
-                                :class="CHIP_COLORS[o.status]"
-                                :title="`${o.code} — ${o.title} (${STATUS_LABELS[o.status]})`"
-                                data-test="agenda-chip"
-                                @click="emit('open', o.id)"
+                                class="mb-1 flex items-stretch gap-0.5"
                             >
-                                <span class="font-semibold">{{ o.code.replace(/^ODL-\d+-/, 'n. ') }}</span>
-                                {{ o.title }}
-                            </button>
+                                <button
+                                    class="block w-full truncate rounded px-1.5 text-left text-[11px] leading-tight"
+                                    :class="[
+                                        o.cancelledDay ? 'bg-gray-100 text-gray-400 line-through' : CHIP_COLORS[o.status],
+                                        o.head ? 'border-l-4 py-1' : 'rounded-l-none border-l-0 py-1 opacity-90',
+                                    ]"
+                                    :title="`${o.code} — ${o.title} (${STATUS_LABELS[o.status]})${o.multi ? ` — ordine unico dal ${o.spanLabel}` : ''}${o.cancelledDay ? ' — giornata annullata' : ''}`"
+                                    data-test="agenda-chip"
+                                    @click="emit('open', o.id)"
+                                >
+                                    <template v-if="o.head">
+                                        <span class="font-semibold">{{ o.code.replace(/^ODL-\d+-/, 'n. ') }}</span>
+                                        {{ o.title }}
+                                        <span v-if="o.multi" class="text-[10px] opacity-70">({{ o.spanLabel }})</span>
+                                    </template>
+                                    <!-- Giorni di prosecuzione: nessun testo, la fascia continua -->
+                                    <span v-else class="inline-block">&nbsp;</span>
+                                </button>
+                                <button
+                                    v-if="canManage && o.multi && ! ['completed', 'cancelled'].includes(o.status)"
+                                    class="shrink-0 rounded px-1 text-[10px] leading-none text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                                    :title="o.cancelledDay ? 'Ripristina questa giornata' : 'Annulla solo questa giornata'"
+                                    :data-test="o.cancelledDay ? 'agenda-day-restore' : 'agenda-day-cancel'"
+                                    @click.stop="toggleDay(o, d.ymd, ! o.cancelledDay)"
+                                >{{ o.cancelledDay ? '+' : '✕' }}</button>
+                            </div>
                         </td>
                     </tr>
                     <tr v-if="! lanes.length">

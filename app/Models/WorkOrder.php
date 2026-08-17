@@ -64,6 +64,7 @@ class WorkOrder extends Model
             'due_at' => 'datetime',
             'completed_at' => 'datetime',
             'ppe' => 'array',
+            'cancelled_days' => 'array',
             'version' => 'integer',
         ];
     }

@@ -195,7 +195,25 @@ async function openDetail(id) {
     }
 }
 
+// L'annullamento riguarda l'ordine intero (anche se dura piu' giorni) e non
+// si torna indietro: si chiede conferma dicendo esattamente cosa comporta
+function confirmCancel() {
+    const fmt = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : null);
+    const start = fmt(detail.value.planned_start);
+    const end = fmt(detail.value.planned_end);
+    const periodo = start && end && start !== end
+        ? ` previsto dal ${start} al ${end}`
+        : (start ? ` previsto per il ${start}` : '');
+
+    return window.confirm(
+        `Annullare l'ordine ${detail.value.code} "${detail.value.title}"${periodo}?\n\n`
+        + "L'annullamento riguarda l'intero ordine, non il singolo giorno, e non si può tornare indietro.",
+    );
+}
+
 async function doTransition(status) {
+    if (status === 'cancelled' && ! confirmCancel()) return;
+
     detailBusy.value = true;
     detailError.value = '';
     try {

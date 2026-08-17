@@ -10,27 +10,55 @@ const palette = ref(null);
 
 const can = (permission) => permissions.value.includes(permission);
 
-const nav = computed(() =>
+// Voci raggruppate per come si lavora: prima quello che serve ogni giorno,
+// in fondo le impostazioni. I gruppi senza voci visibili spariscono da soli
+const gruppi = computed(() =>
     [
-        { label: 'Oggi', href: '/oggi', show: can('works.view') },
-        { label: 'Mappa', href: '/mappa', show: can('assets.view') },
-        { label: 'Censimento', href: '/censimento', show: can('assets.view') },
-        { label: 'VTA', href: '/vta', show: can('assets.view') },
-        { label: 'Lavori', href: '/lavori', show: can('works.view') },
-        { label: 'Segnalazioni', href: '/segnalazioni', show: can('works.view') },
-        { label: 'Ispezioni', href: '/ispezioni', show: can('works.view') },
-        { label: 'Listini', href: '/listini', show: can('works.view') },
-        { label: 'Fitosanitari', href: '/fitosanitari', show: can('works.view') },
-        { label: 'Patentini', href: '/patentini', show: can('works.view') },
-        { label: 'Statistiche', href: '/statistiche', show: can('works.view') },
-        { label: 'Territorio', href: '/territorio', show: can('clients.view') },
-        { label: 'Irrigazione', href: '/irrigazione', show: can('areas.view') },
-        { label: 'Catalogo', href: '/catalogo', show: can('catalog.view') },
-        { label: 'Utenti', href: '/utenti', show: can('users.manage') },
-        { label: 'Campo (operatore)', href: '/operatore', show: can('assets.create') },
-        { label: 'Portale', href: '/portale', show: can('portal.view') },
-        { label: 'Guida', href: '/guida', show: true },
-    ].filter((item) => item.show)
+        {
+            titolo: 'Campo',
+            voci: [
+                { label: 'Oggi', href: '/oggi', show: can('works.view') },
+                { label: 'Mappa', href: '/mappa', show: can('assets.view') },
+                { label: 'Campo (operatore)', href: '/operatore', show: can('assets.create') },
+            ],
+        },
+        {
+            titolo: 'Patrimonio',
+            voci: [
+                { label: 'Censimento', href: '/censimento', show: can('assets.view') },
+                { label: 'VTA', href: '/vta', show: can('assets.view') },
+                { label: 'Irrigazione', href: '/irrigazione', show: can('areas.view') },
+            ],
+        },
+        {
+            titolo: 'Lavori',
+            voci: [
+                { label: 'Lavori', href: '/lavori', show: can('works.view') },
+                { label: 'Segnalazioni', href: '/segnalazioni', show: can('works.view') },
+                { label: 'Ispezioni', href: '/ispezioni', show: can('works.view') },
+                { label: 'Listini', href: '/listini', show: can('works.view') },
+            ],
+        },
+        {
+            titolo: 'Registri',
+            voci: [
+                { label: 'Fitosanitari', href: '/fitosanitari', show: can('works.view') },
+                { label: 'Patentini', href: '/patentini', show: can('works.view') },
+                { label: 'Statistiche', href: '/statistiche', show: can('works.view') },
+            ],
+        },
+        {
+            titolo: 'Configurazione',
+            voci: [
+                { label: 'Territorio', href: '/territorio', show: can('clients.view') },
+                { label: 'Catalogo', href: '/catalogo', show: can('catalog.view') },
+                { label: 'Utenti', href: '/utenti', show: can('users.manage') },
+                { label: 'Portale', href: '/portale', show: can('portal.view') },
+            ],
+        },
+    ]
+        .map((g) => ({ ...g, voci: g.voci.filter((v) => v.show) }))
+        .filter((g) => g.voci.length > 0)
 );
 
 const isActive = (href) => page.url === href || page.url.startsWith(`${href}/`);
@@ -65,16 +93,28 @@ const logout = async () => {
                 </button>
             </div>
 
-            <nav class="flex-1 space-y-1 p-3">
+            <nav class="flex-1 overflow-y-auto p-3">
+                <div v-for="gruppo in gruppi" :key="gruppo.titolo" class="mb-3">
+                    <div class="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                        {{ gruppo.titolo }}
+                    </div>
+                    <Link
+                        v-for="item in gruppo.voci"
+                        :key="item.href"
+                        :href="item.href"
+                        class="block rounded-lg px-3 py-1.5 text-sm font-medium transition"
+                        :class="isActive(item.href)
+                            ? 'bg-green-50 text-green-800'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+                    >{{ item.label }}</Link>
+                </div>
                 <Link
-                    v-for="item in nav"
-                    :key="item.href"
-                    :href="item.href"
-                    class="block rounded-lg px-3 py-2 text-sm font-medium transition"
-                    :class="isActive(item.href)
-                        ? 'bg-green-50 text-green-800'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
-                >{{ item.label }}</Link>
+                    href="/guida"
+                    class="mt-1 block rounded-lg border-t border-gray-100 px-3 pb-1.5 pt-3 text-sm font-medium transition"
+                    :class="isActive('/guida')
+                        ? 'text-green-800'
+                        : 'text-gray-600 hover:text-gray-900'"
+                >Guida</Link>
             </nav>
 
             <div class="border-t border-gray-100 p-3">
