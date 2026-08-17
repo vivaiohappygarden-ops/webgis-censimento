@@ -6,12 +6,36 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import { STATUS_LABELS, statusLabel } from '@/assetStatus';
 
 const page = usePage();
-const canCreate = computed(() => (page.props.auth?.user?.permissions ?? []).includes('assets.create'));
+const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
+const canCreate = computed(() => permissions.value.includes('assets.create'));
+// L'operatore non vede l'anagrafica committenti: per lui resta il filtro area
+const canViewClients = computed(() => permissions.value.includes('clients.view'));
 
 const rows = ref([]);
 const meta = reactive({ total: 0, current_page: 1, last_page: 1 });
 const loading = ref(false);
-const filters = reactive({ q: '', status: '', page: 1 });
+const filters = reactive({ q: '', status: '', clientId: '', areaId: '', page: 1 });
+
+// Committente e area: l'elenco delle aree segue il committente scelto
+const clients = ref([]);
+const areas = ref([]);
+
+async function loadClients() {
+    if (! canViewClients.value) return;
+    const { data } = await axios.get('/api/v1/clients', { params: { per_page: 200 } });
+    clients.value = data.data;
+}
+
+async function loadAreas() {
+    const { data } = await axios.get('/api/v1/areas', {
+        params: { client_id: filters.clientId || undefined, per_page: 200 },
+    });
+    areas.value = data.data;
+    // L'area scelta prima può non appartenere al nuovo committente
+    if (filters.areaId && ! areas.value.some((a) => a.id === filters.areaId)) {
+        filters.areaId = '';
+    }
+}
 
 // Gli abbattuti restano in archivio ma non nell'elenco di tutti i giorni.
 // Se si chiede proprio lo stato "abbattuto" è ovvio che vanno mostrati
@@ -64,6 +88,8 @@ async function exportCsv() {
     const params = new URLSearchParams();
     if (filters.q) params.set('q', filters.q);
     if (filters.status) params.set('status', filters.status);
+    if (filters.clientId) params.set('client_id', filters.clientId);
+    if (filters.areaId) params.set('area_id', filters.areaId);
     if (hideRemoved.value) params.set('hide_removed', '1');
     const suffix = params.toString() ? `?${params.toString()}` : '';
     await downloadCam(`/api/v1/exports/assets.csv${suffix}`, 'censimento', 'csv');
@@ -149,6 +175,8 @@ async function load() {
             params: {
                 q: filters.q || undefined,
                 status: filters.status || undefined,
+                client_id: filters.clientId || undefined,
+                area_id: filters.areaId || undefined,
                 hide_removed: hideRemoved.value ? 1 : undefined,
                 page: filters.page,
                 per_page: 25,
@@ -163,7 +191,7 @@ async function load() {
     }
 }
 
-watch(() => [filters.q, filters.status, showRemoved.value], () => {
+watch(() => [filters.q, filters.status, filters.clientId, filters.areaId, showRemoved.value], () => {
     clearTimeout(debounce);
     debounce = setTimeout(() => {
         filters.page = 1;
@@ -171,9 +199,16 @@ watch(() => [filters.q, filters.status, showRemoved.value], () => {
     }, 300);
 });
 
+// Cambiando committente cambia l'elenco delle aree selezionabili
+watch(() => filters.clientId, loadAreas);
+
 watch(() => filters.page, load);
 
-onMounted(load);
+onMounted(() => {
+    load();
+    loadClients();
+    loadAreas();
+});
 
 const measure = (row) => {
     if (row.computed_area_sqm) return `${Number(row.computed_area_sqm).toLocaleString('it-IT')} m²`;
@@ -240,13 +275,28 @@ const measure = (row) => {
                 >Scarica la consegna in GeoJSON</button>
             </p>
 
-            <div class="mb-4 flex gap-3">
+            <div class="mb-4 flex flex-wrap items-center gap-3">
                 <input
                     v-model="filters.q"
                     type="search"
                     placeholder="Cerca per codice o note…"
                     class="w-72 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none"
                 >
+                <select
+                    v-if="canViewClients"
+                    v-model="filters.clientId"
+                    data-test="filtro-committente"
+                    class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                >
+                    <option value="">Tutti i committenti</option>
+                    <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
+                <select v-model="filters.areaId" data-test="filtro-area" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                    <option value="">Tutte le aree</option>
+                    <option v-for="a in areas" :key="a.id" :value="a.id">
+                        {{ a.name }}<template v-if="a.locality?.name"> · {{ a.locality.name }}</template>
+                    </option>
+                </select>
                 <select v-model="filters.status" data-test="filtro-stato" class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
                     <option value="">Tutti gli stati</option>
                     <option v-for="(label, value) in STATUS_LABELS" :key="value" :value="value">{{ label }}</option>
@@ -263,6 +313,8 @@ const measure = (row) => {
                         <tr>
                             <th class="px-4 py-3">Codice</th>
                             <th class="px-4 py-3">Tipo</th>
+                            <th class="px-4 py-3">Committente</th>
+                            <th class="px-4 py-3">Area</th>
                             <th class="px-4 py-3">Stato</th>
                             <th class="px-4 py-3">Misura</th>
                             <th class="px-4 py-3">Aggiornato</th>
@@ -271,16 +323,21 @@ const measure = (row) => {
                     </thead>
                     <tbody class="divide-y divide-gray-100">
                         <tr v-if="loading">
-                            <td colspan="6" class="px-4 py-8 text-center text-gray-400">Caricamento…</td>
+                            <td colspan="8" class="px-4 py-8 text-center text-gray-400">Caricamento…</td>
                         </tr>
                         <tr v-else-if="rows.length === 0">
-                            <td colspan="6" class="px-4 py-8 text-center text-gray-400">Nessun elemento trovato.</td>
+                            <td colspan="8" class="px-4 py-8 text-center text-gray-400">Nessun elemento trovato.</td>
                         </tr>
                         <tr v-for="row in rows" v-else :key="row.id" class="hover:bg-green-50/40">
                             <td class="px-4 py-3 font-medium">{{ row.census_code || '—' }}</td>
                             <td class="px-4 py-3">
                                 <span class="text-xs text-gray-400">{{ row.object_type?.code }}</span>
                                 {{ row.object_type?.name }}
+                            </td>
+                            <td class="px-4 py-3">{{ row.area?.locality?.site?.client?.name || '—' }}</td>
+                            <td class="px-4 py-3">
+                                {{ row.area?.name || '—' }}
+                                <span v-if="row.area?.locality?.name" class="text-xs text-gray-400">· {{ row.area.locality.name }}</span>
                             </td>
                             <td class="px-4 py-3">
                                 <span

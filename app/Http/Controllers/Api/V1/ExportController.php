@@ -84,7 +84,7 @@ class ExportController extends Controller implements HasMiddleware
      */
     public function assetsCsv(Request $request)
     {
-        \App\Support\ListQuery::validateUuidFilters($request, ['area_id', 'object_type_id']);
+        \App\Support\ListQuery::validateUuidFilters($request, ['area_id', 'object_type_id', 'client_id', 'locality_id']);
 
         $query = \App\Models\Asset::query()
             ->with([
@@ -92,12 +92,20 @@ class ExportController extends Controller implements HasMiddleware
                 'objectType.subType:id,name,main_type_id',
                 'objectType.subType.mainType:id,name',
                 'area:id,name,locality_id',
-                'area.locality:id,name',
+                'area.locality:id,name,site_id',
+                'area.locality.site:id,name,client_id',
+                'area.locality.site.client:id,name',
                 'tree:asset_id,genus,species,common_name,height_m,dbh_cm',
             ]);
 
         if ($request->filled('area_id')) {
             $query->where('area_id', $request->string('area_id'));
+        }
+        if ($request->filled('locality_id')) {
+            $query->whereHas('area', fn ($w) => $w->where('locality_id', $request->string('locality_id')));
+        }
+        if ($request->filled('client_id')) {
+            $query->whereHas('area.locality.site', fn ($w) => $w->where('client_id', $request->string('client_id')));
         }
         if ($request->filled('object_type_id')) {
             $query->where('object_type_id', $request->string('object_type_id'));
@@ -118,7 +126,9 @@ class ExportController extends Controller implements HasMiddleware
             $query->where(fn ($w) => $w->where('census_code', 'ilike', $q)->orWhere('notes', 'ilike', $q));
         }
 
-        Audit::log('export.assets_csv', null, ['filters' => $request->only(['area_id', 'object_type_id', 'type_code', 'status', 'hide_removed', 'q'])]);
+        Audit::log('export.assets_csv', null, ['filters' => $request->only([
+            'area_id', 'locality_id', 'client_id', 'object_type_id', 'type_code', 'status', 'hide_removed', 'q',
+        ])]);
 
         // Gli stati usati dall'interfaccia del censimento
         $statusLabels = \App\Support\AssetStatus::LABELS;
@@ -137,7 +147,7 @@ class ExportController extends Controller implements HasMiddleware
             // escape '': niente backslash "magici" (RFC 4180) e niente
             // avviso di deprecazione a ogni riga su PHP 8.4
             fputcsv($out, [
-                'Codice', 'Tipo', 'Descrizione tipo', 'Categoria', 'Area', 'Località', 'Stato',
+                'Codice', 'Tipo', 'Descrizione tipo', 'Categoria', 'Committente', 'Area', 'Località', 'Stato',
                 'Data rilievo', 'Specie', 'Nome comune', 'Altezza (m)', 'Diametro fusto (cm)',
                 'Superficie (m2)', 'Lunghezza (m)', 'Perimetro (m)', 'Note',
                 'Data abbattimento/rimozione', 'Motivo abbattimento/rimozione',
@@ -153,6 +163,7 @@ class ExportController extends Controller implements HasMiddleware
                         $text($asset->objectType?->code),
                         $text($asset->objectType?->name),
                         $text($asset->objectType?->subType?->mainType?->name),
+                        $text($asset->area?->locality?->site?->client?->name),
                         $text($asset->area?->name),
                         $text($asset->area?->locality?->name),
                         $statusLabels[$asset->status] ?? $text($asset->status),

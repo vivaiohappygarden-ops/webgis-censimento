@@ -32,7 +32,7 @@ class AreaController extends Controller implements HasMiddleware
 
     public function index(Request $request): JsonResponse
     {
-        ListQuery::validateUuidFilters($request, ['locality_id']);
+        ListQuery::validateUuidFilters($request, ['locality_id', 'client_id']);
 
         $query = Area::query()
             ->with('locality:id,name,code')
@@ -41,6 +41,10 @@ class AreaController extends Controller implements HasMiddleware
 
         if ($request->filled('locality_id')) {
             $query->where('locality_id', $request->string('locality_id'));
+        }
+        // Aree di un committente: aree -> località -> sedi -> cliente
+        if ($request->filled('client_id')) {
+            $query->whereHas('locality.site', fn ($w) => $w->where('client_id', $request->string('client_id')));
         }
         if ($request->filled('area_type')) {
             $query->where('area_type', $request->string('area_type'));

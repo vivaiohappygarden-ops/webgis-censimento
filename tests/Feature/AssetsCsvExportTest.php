@@ -74,13 +74,14 @@ class AssetsCsvExportTest extends TestCase
         $row = str_getcsv($lines[1], ';', '"', '');
         $this->assertSame('ALB-CSV-1', $row[0]);
         $this->assertSame('P103108', $row[1]);
-        $this->assertSame('Parco Export', $row[4]);
-        $this->assertSame('attivo', $row[6]);
-        $this->assertSame('10/05/2026', $row[7]);
+        $this->assertSame('Cliente Test', $row[4]);
+        $this->assertSame('Parco Export', $row[5]);
+        $this->assertSame('attivo', $row[7]);
+        $this->assertSame('10/05/2026', $row[8]);
         // La specie non raddoppia il genere; i decimali usano la virgola
-        $this->assertSame('Tilia cordata', $row[8]);
-        $this->assertSame('12,5', $row[10]);
-        $this->assertStringContainsString('è accentata', $row[15]);
+        $this->assertSame('Tilia cordata', $row[9]);
+        $this->assertSame('12,5', $row[11]);
+        $this->assertStringContainsString('è accentata', $row[16]);
     }
 
     public function test_cells_starting_like_formulas_are_neutralized_and_quotes_survive(): void
@@ -100,7 +101,7 @@ class AssetsCsvExportTest extends TestCase
         // La cella-formula esce disinnescata con l'apostrofo davanti
         $this->assertStringStartsWith("'=HYPERLINK", $row[0]);
         // Le virgolette con backslash sopravvivono al giro (RFC 4180)
-        $this->assertSame('percorso "C:\\rilievi\\" con virgolette', $row[15]);
+        $this->assertSame('percorso "C:\\rilievi\\" con virgolette', $row[16]);
     }
 
     public function test_export_beyond_one_chunk_loses_nothing(): void

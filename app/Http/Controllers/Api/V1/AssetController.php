@@ -34,15 +34,30 @@ class AssetController extends Controller implements HasMiddleware
 
     public function index(Request $request): JsonResponse
     {
-        ListQuery::validateUuidFilters($request, ['area_id', 'object_type_id']);
+        ListQuery::validateUuidFilters($request, ['area_id', 'object_type_id', 'client_id', 'locality_id']);
 
         $query = Asset::query()
-            ->with('objectType:id,code,name,allowed_geometry')
+            ->with([
+                'objectType:id,code,name,allowed_geometry',
+                // Committente e area: servono a video per capire di chi è
+                // ogni elemento senza aprire la scheda
+                'area:id,name,locality_id',
+                'area.locality:id,name,site_id',
+                'area.locality.site:id,name,client_id',
+                'area.locality.site.client:id,name',
+            ])
             ->selectRaw('assets.*, ST_AsGeoJSON(geom)::json AS geom_geojson')
             ->withCasts(['geom_geojson' => 'array']);
 
         if ($request->filled('area_id')) {
             $query->where('area_id', $request->string('area_id'));
+        }
+        if ($request->filled('locality_id')) {
+            $query->whereHas('area', fn ($w) => $w->where('locality_id', $request->string('locality_id')));
+        }
+        // Committente: assets -> aree -> località -> sedi -> cliente
+        if ($request->filled('client_id')) {
+            $query->whereHas('area.locality.site', fn ($w) => $w->where('client_id', $request->string('client_id')));
         }
         if ($request->filled('object_type_id')) {
             $query->where('object_type_id', $request->string('object_type_id'));

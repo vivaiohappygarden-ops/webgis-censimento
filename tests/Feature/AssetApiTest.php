@@ -282,6 +282,47 @@ class AssetApiTest extends TestCase
         $this->assertSame($kept, $visible[0]['id']);
     }
 
+    public function test_assets_can_be_filtered_by_client_and_area(): void
+    {
+        $mine = $this->createPointAsset('ALB-CLIENTE-A');
+
+        // Secondo committente, con la sua catena sede -> località -> area
+        $otherArea = $this->createArea($this->organization, ['name' => 'Area committente B']);
+        $otherId = $this->postJson('/api/v1/assets', [
+            'area_id' => $otherArea->id,
+            'object_type_id' => $this->pointType->id,
+            'census_code' => 'ALB-CLIENTE-B',
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated()->json('data.id');
+
+        $clientId = $this->area->locality->site->client_id;
+
+        $byClient = $this->getJson("/api/v1/assets?client_id={$clientId}")->assertOk()->json('data');
+        $this->assertCount(1, $byClient);
+        $this->assertSame($mine, $byClient[0]['id']);
+        // Il committente arriva già nell'elenco: si legge senza aprire la scheda
+        $this->assertSame('Cliente Test', $byClient[0]['area']['locality']['site']['client']['name']);
+
+        $byArea = $this->getJson("/api/v1/assets?area_id={$otherArea->id}")->assertOk()->json('data');
+        $this->assertCount(1, $byArea);
+        $this->assertSame($otherId, $byArea[0]['id']);
+
+        // Committente e area incoerenti tra loro: nessun risultato, non un errore
+        $this->getJson("/api/v1/assets?client_id={$clientId}&area_id={$otherArea->id}")
+            ->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_areas_can_be_filtered_by_client(): void
+    {
+        $otherArea = $this->createArea($this->organization, ['name' => 'Area committente B']);
+        $clientId = $otherArea->locality->site->client_id;
+
+        $areas = $this->getJson("/api/v1/areas?client_id={$clientId}")->assertOk()->json('data');
+
+        $this->assertCount(1, $areas);
+        $this->assertSame($otherArea->id, $areas[0]['id']);
+    }
+
     private function createPointAsset(?string $code = null): string
     {
         return $this->postJson('/api/v1/assets', [
