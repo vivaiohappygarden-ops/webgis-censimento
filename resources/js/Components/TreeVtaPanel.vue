@@ -18,6 +18,14 @@ const showVtaForm = ref(false);
 
 const dateOnly = (d) => (d ? String(d).slice(0, 10) : '');
 
+// Data odierna locale in formato ISO: un ricontrollo che scade oggi non è scaduto
+const pad = (n) => String(n).padStart(2, '0');
+const todayIso = () => {
+    const d = new Date();
+
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 const tree = reactive({
     ...(props.asset.tree ?? {}),
     planted_on: dateOnly(props.asset.tree?.planted_on),
@@ -62,23 +70,66 @@ function blankSurvey() {
 }
 
 const showSurvey = ref(false);
-const vta = reactive({
+// I bersagli si scrivono uno per riga: nel documento diventano l'elenco
+// delle presenze che l'eventuale cedimento metterebbe a rischio
+const blankVta = () => ({
+    id: null,
+    version: null,
     assessment_type: 'vta_visual',
-    assessed_on: new Date().toISOString().slice(0, 10),
+    assessed_on: todayIso(),
     failure_class: '',
     outcome: '',
     prescriptions: '',
     next_check_due: '',
+    assessor_external: '',
+    bersagli: '',
     survey: blankSurvey(),
 });
+const vta = reactive(blankVta());
 
-// Perizia in PDF di una valutazione
+/** Riapre una valutazione già registrata per correggerla. */
+function editAssessment(a) {
+    Object.assign(vta, blankVta(), {
+        id: a.id,
+        version: a.version,
+        assessment_type: a.assessment_type,
+        assessed_on: dateOnly(a.assessed_on),
+        failure_class: a.failure_class ?? '',
+        outcome: a.outcome ?? '',
+        prescriptions: a.prescriptions ?? '',
+        next_check_due: dateOnly(a.next_check_due),
+        assessor_external: a.assessor_external ?? '',
+        bersagli: (Array.isArray(a.targets) ? a.targets : Object.values(a.targets ?? {})).join('\n'),
+        survey: { ...blankSurvey(), ...(a.survey ?? {}),
+            contesto: { ...blankSurvey().contesto, ...(a.survey?.contesto ?? {}) },
+            giudizio: { ...blankSurvey().giudizio, ...(a.survey?.giudizio ?? {}) },
+            difetti: { ...blankSurvey().difetti, ...(a.survey?.difetti ?? {}) } },
+    });
+    showVtaForm.value = true;
+    showSurvey.value = true;
+    vtaError.value = '';
+}
+
+// Perizia in PDF di una valutazione: comporre il documento richiede
+// qualche secondo (foto e mappa), quindi il pulsante lo dice
 const periziaError = ref('');
+const periziaBusy = ref('');
 
 async function openPerizia(assessmentId) {
     periziaError.value = '';
-    const res = await fetchPdf(`/api/v1/assessments/${assessmentId}/perizia-pdf`);
-    if (res?.error) periziaError.value = res.error;
+    periziaBusy.value = assessmentId;
+    try {
+        const res = await fetchPdf(`/api/v1/assessments/${assessmentId}/perizia-pdf`);
+        if (res?.error) {
+            periziaError.value = res.error;
+        } else {
+            // Alla prima stampa la perizia riceve il numero di protocollo:
+            // si ricarica l'elenco perché compaia accanto alla valutazione
+            await loadAssessments();
+        }
+    } finally {
+        periziaBusy.value = '';
+    }
 }
 
 // Analisi strumentali per valutazione: stato di espansione e form per riga
@@ -97,7 +148,12 @@ function analysisState(assessmentId) {
     if (! analyses[assessmentId]) {
         analyses[assessmentId] = {
             open: false, loading: false, items: [], showForm: false, saving: false, error: '',
-            form: { instrument_type: 'resistograph', instrument_model: '', measured_at: '', measurement_height_cm: null, notes: '', report: null },
+            form: {
+                instrument_type: 'resistograph', instrument_model: '', measured_at: '',
+                measurement_height_cm: null, notes: '', report: null,
+                // Misure: coppie voce/valore, come si leggono sul referto
+                measures: [{ voce: '', valore: '' }],
+            },
         };
     }
     return analyses[assessmentId];
@@ -136,11 +192,20 @@ async function saveAnalysis(assessmentId) {
             form.append('measurement_height_cm', st.form.measurement_height_cm);
         }
         if (st.form.notes) form.append('notes', st.form.notes);
+        for (const m of st.form.measures) {
+            if (m.voce.trim() !== '' && m.valore.trim() !== '') {
+                form.append(`measures[${m.voce.trim()}]`, m.valore.trim());
+            }
+        }
         if (st.form.report) form.append('report', st.form.report);
 
         await axios.post(`/api/v1/assessments/${assessmentId}/instrumental-analyses`, form);
         st.showForm = false;
-        st.form = { instrument_type: 'resistograph', instrument_model: '', measured_at: '', measurement_height_cm: null, notes: '', report: null };
+        st.form = {
+            instrument_type: 'resistograph', instrument_model: '', measured_at: '',
+            measurement_height_cm: null, notes: '', report: null,
+            measures: [{ voce: '', valore: '' }],
+        };
         await Promise.all([loadAnalyses(assessmentId), loadAssessments()]);
     } catch (err) {
         st.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0] ?? 'Errore nel salvataggio';
@@ -181,6 +246,8 @@ async function saveTree() {
                 dbh_cm: tree.dbh_cm || null,
                 trunk_circumference_cm: tree.trunk_circumference_cm || null,
                 crown_diameter_m: tree.crown_diameter_m || null,
+                crown_insertion_m: tree.crown_insertion_m || null,
+                age_class: tree.age_class || null,
                 trunk_count: tree.trunk_count || 1,
                 vegetative_state: tree.vegetative_state || null,
                 is_monumental: !! tree.is_monumental,
@@ -215,37 +282,37 @@ async function saveVta() {
     savingVta.value = true;
     vtaError.value = '';
     try {
-        await axios.post(`/api/v1/assets/${props.asset.id}/assessments`, {
+        const payload = {
             assessment_type: vta.assessment_type,
             assessed_on: vta.assessed_on,
             failure_class: vta.failure_class || null,
             outcome: vta.outcome || null,
             prescriptions: vta.prescriptions || null,
             next_check_due: vta.next_check_due || null,
+            assessor_external: vta.assessor_external || null,
+            targets: vta.bersagli.split('\n').map((r) => r.trim()).filter(Boolean),
             survey: vta.survey,
-        });
+        };
+        if (vta.id) {
+            await axios.patch(`/api/v1/assessments/${vta.id}`, { ...payload, version: vta.version });
+        } else {
+            await axios.post(`/api/v1/assets/${props.asset.id}/assessments`, payload);
+        }
         showVtaForm.value = false;
         showSurvey.value = false;
-        Object.assign(vta, {
-            failure_class: '', outcome: '', prescriptions: '', next_check_due: '',
-            survey: blankSurvey(),
-        });
+        Object.assign(vta, blankVta());
         await loadAssessments();
     } catch (err) {
-        vtaError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0] ?? 'Errore nel salvataggio';
+        vtaError.value = err.response?.status === 409
+            ? 'La valutazione è stata modificata da qualcun altro: ricarica la pagina.'
+            : (Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+                ?? err.response?.data?.message ?? 'Errore nel salvataggio');
     } finally {
         savingVta.value = false;
     }
 }
 
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '—');
-
-// Data odierna locale in formato ISO: un ricontrollo che scade oggi non è scaduto
-const pad = (n) => String(n).padStart(2, '0');
-const todayIso = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
 
 onMounted(loadAssessments);
 </script>
@@ -290,7 +357,25 @@ onMounted(loadAssessments);
                 <span class="text-gray-500">Ø chioma (m)</span>
                 <input v-model.number="tree.crown_diameter_m" type="number" step="0.5" :disabled="! canUpdate" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
             </label>
+            <label class="block text-xs">
+                <span class="text-gray-500">Altezza primo palco (m)</span>
+                <input v-model.number="tree.crown_insertion_m" type="number" step="0.1" :disabled="! canUpdate" data-test="crown-insertion" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+            </label>
+            <label class="block text-xs">
+                <span class="text-gray-500">Classe di età</span>
+                <select v-model="tree.age_class" :disabled="! canUpdate" data-test="age-class" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
+                    <option :value="null">—</option>
+                    <option>giovane</option><option>adulto</option><option>maturo</option><option>senescente</option>
+                </select>
+            </label>
+            <label class="block text-xs">
+                <span class="text-gray-500">Numero di fusti</span>
+                <input v-model.number="tree.trunk_count" type="number" step="1" min="1" :disabled="! canUpdate" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+            </label>
         </div>
+        <p class="mt-1 text-xs text-gray-500">
+            Le misure lasciate vuote compaiono nella perizia come "non rilevate", mai come zero.
+        </p>
 
         <div class="mt-3 flex flex-wrap gap-4 text-sm">
             <label class="flex items-center gap-1.5"><input v-model="tree.is_monumental" type="checkbox" :disabled="! canUpdate" class="rounded border-gray-300"> Monumentale</label>
@@ -357,7 +442,8 @@ onMounted(loadAssessments);
                 <button
                     v-if="canUpdate"
                     class="rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-800"
-                    @click="showVtaForm = ! showVtaForm"
+                    data-test="nuova-valutazione"
+                    @click="Object.assign(vta, blankVta()); showVtaForm = ! showVtaForm"
                 >+ Nuova valutazione</button>
             </div>
 
@@ -386,6 +472,26 @@ onMounted(loadAssessments);
                             <option value="">—</option>
                             <option v-for="(label, value) in OUTCOMES" :key="value" :value="value">{{ label }}</option>
                         </select>
+                    </label>
+                </div>
+                <p v-if="vta.id" class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900" data-test="vta-in-correzione">
+                    Stai correggendo una valutazione già registrata. Se la perizia era già stata
+                    emessa, il documento corretto uscirà con un numero e una data nuovi.
+                </p>
+                <div class="grid gap-2 md:grid-cols-2">
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Bersagli (uno per riga: cosa c'è sotto o vicino all'albero)</span>
+                        <textarea
+                            v-model="vta.bersagli"
+                            rows="3"
+                            data-test="vta-bersagli"
+                            placeholder="area giochi&#10;marciapiede&#10;posti auto"
+                            class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                        />
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Rilievo eseguito da (se non sei tu)</span>
+                        <input v-model="vta.assessor_external" maxlength="254" placeholder="nome e cognome del rilevatore" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
                     </label>
                 </div>
                 <label class="block text-xs">
@@ -449,9 +555,16 @@ onMounted(loadAssessments);
                     </label>
                 </div>
                 <p v-if="vtaError" class="text-sm text-red-600">{{ vtaError }}</p>
-                <button type="submit" :disabled="savingVta" class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50">
-                    {{ savingVta ? 'Salvataggio…' : 'Registra valutazione' }}
-                </button>
+                <div class="flex gap-2">
+                    <button type="submit" :disabled="savingVta" class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50">
+                        {{ savingVta ? 'Salvataggio…' : (vta.id ? 'Salva la correzione' : 'Registra valutazione') }}
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                        @click="showVtaForm = false; Object.assign(vta, blankVta())"
+                    >Annulla</button>
+                </div>
             </form>
 
             <p v-if="periziaError" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="vta-perizia-errore">{{ periziaError }}</p>
@@ -479,10 +592,18 @@ onMounted(loadAssessments);
                             @click="toggleAnalyses(a.id)"
                         >Analisi strumentali ({{ a.instrumental_analyses_count ?? 0 }})</button>
                         <button
+                            v-if="canUpdate"
                             class="text-xs font-medium text-green-700 hover:underline"
+                            data-test="vta-correggi"
+                            @click="editAssessment(a)"
+                        >Correggi</button>
+                        <button
+                            class="text-xs font-medium text-green-700 hover:underline disabled:opacity-50"
+                            :disabled="periziaBusy === a.id"
                             data-test="vta-perizia"
                             @click="openPerizia(a.id)"
-                        >Perizia PDF</button>
+                        >{{ periziaBusy === a.id ? 'Preparazione…' : 'Perizia PDF' }}</button>
+                        <span v-if="a.report_number" class="text-xs text-gray-400">perizia {{ a.report_number }}</span>
                     </div>
 
                     <div v-if="analyses[a.id]?.open" class="mt-2 border-t border-gray-100 pt-2">
@@ -509,7 +630,11 @@ onMounted(loadAssessments);
                                         <a v-if="an.document" :href="an.document.url" target="_blank" class="text-green-700 hover:underline">{{ an.document.title }}</a>
                                         <span v-else>—</span>
                                     </td>
-                                    <td class="py-1.5 text-gray-500">{{ an.notes || '—' }}</td>
+                                    <td class="py-1.5 text-gray-500">
+                                        <span v-for="(v, k) in (an.measures ?? {})" :key="k" class="mr-2">{{ k }}: {{ v }}</span>
+                                        {{ an.notes || '' }}
+                                        <span v-if="! an.notes && ! Object.keys(an.measures ?? {}).length">—</span>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -541,6 +666,39 @@ onMounted(loadAssessments);
                                     <span class="text-gray-500">Quota misura (cm)</span>
                                     <input v-model.number="analyses[a.id].form.measurement_height_cm" type="number" min="0" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
                                 </label>
+                            </div>
+                            <div class="text-xs">
+                                <span class="text-gray-500">Misure lette sullo strumento (finiscono nella perizia)</span>
+                                <div
+                                    v-for="(m, i) in analyses[a.id].form.measures"
+                                    :key="i"
+                                    class="mt-1 flex gap-2"
+                                >
+                                    <input
+                                        v-model="m.voce"
+                                        placeholder="voce (es. residuo sano)"
+                                        :data-test="`misura-voce-${i}`"
+                                        class="w-1/2 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                                    >
+                                    <input
+                                        v-model="m.valore"
+                                        placeholder="valore (es. 62%)"
+                                        :data-test="`misura-valore-${i}`"
+                                        class="w-1/2 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                                    >
+                                    <button
+                                        v-if="analyses[a.id].form.measures.length > 1"
+                                        type="button"
+                                        class="px-1 text-gray-400 hover:text-gray-600"
+                                        @click="analyses[a.id].form.measures.splice(i, 1)"
+                                    >✕</button>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="mt-1 text-xs font-medium text-green-700 hover:underline"
+                                    data-test="aggiungi-misura"
+                                    @click="analyses[a.id].form.measures.push({ voce: '', valore: '' })"
+                                >+ Aggiungi misura</button>
                             </div>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Note</span>

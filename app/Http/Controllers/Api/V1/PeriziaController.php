@@ -77,10 +77,17 @@ class PeriziaController extends Controller implements HasMiddleware
         ];
     }
 
-    /** Dati del professionista che firma: intestazione e firma del documento. */
+    /**
+     * Dati del professionista che firma. Qui si restituisce quello che è
+     * stato davvero salvato (anche vuoto): mostrare i ripieghi come se
+     * fossero compilati farebbe credere di aver già configurato l'intestazione.
+     */
     public function settings(Request $request): JsonResponse
     {
-        return response()->json(['data' => $this->professionista($request->user()->tenant_id)]);
+        return response()->json([
+            'data' => $this->professionista($request->user()->tenant_id, withDefaults: false),
+            'defaults' => $this->professionista($request->user()->tenant_id),
+        ]);
     }
 
     public function updateSettings(Request $request): JsonResponse
@@ -109,7 +116,7 @@ class PeriziaController extends Controller implements HasMiddleware
             'nome' => $settings['professionista']['nome'] ?? null,
         ]);
 
-        return response()->json(['data' => $this->professionista($organization->id)]);
+        return response()->json(['data' => $this->professionista($organization->id, withDefaults: false)]);
     }
 
     /** La perizia in PDF per una valutazione. */
@@ -159,7 +166,15 @@ class PeriziaController extends Controller implements HasMiddleware
             'contesto' => $survey['contesto'] ?? [],
             'bersagli' => $this->joinList($assessment->targets),
             'interferenze' => $survey['interferenze'] ?? null,
-            'giudizio' => $survey['giudizio'] ?? [],
+            // Lo stato vegetativo si può indicare nella scheda albero o nella
+            // scheda della perizia: nel documento ne compare uno solo, quello
+            // scritto per la perizia, con la scheda albero come ripiego
+            'giudizio' => [
+                ...($survey['giudizio'] ?? []),
+                'stato_vegetativo' => trim((string) ($survey['giudizio']['stato_vegetativo'] ?? '')) !== ''
+                    ? $survey['giudizio']['stato_vegetativo']
+                    : $tree->vegetative_state,
+            ],
             'difetti' => $this->defectsByPart($assessment),
             'analisi' => $this->analyses($assessment),
             'classiDescrizione' => self::CLASS_DESCRIPTIONS,
@@ -215,16 +230,25 @@ class PeriziaController extends Controller implements HasMiddleware
     }
 
     /** @return array<string, string|null> */
-    private function professionista(string $tenantId): array
+    private function professionista(string $tenantId, bool $withDefaults = true): array
     {
         $organization = Organization::query()->find($tenantId);
         $saved = $organization?->settings['professionista'] ?? [];
 
+        if (! $withDefaults) {
+            return [
+                'nome' => $saved['nome'] ?? null,
+                'titolo' => $saved['titolo'] ?? null,
+                'iscrizione' => $saved['iscrizione'] ?? null,
+                'recapiti' => $saved['recapiti'] ?? null,
+            ];
+        }
+
         return [
             // Senza dati del professionista resta il nome dell'organizzazione:
             // il documento esce comunque, con l'intestazione da completare
-            'nome' => $saved['nome'] ?? $organization?->name ?? '',
-            'titolo' => $saved['titolo'] ?? 'Tecnico incaricato',
+            'nome' => ($saved['nome'] ?? null) ?: ($organization?->name ?? ''),
+            'titolo' => ($saved['titolo'] ?? null) ?: 'Tecnico incaricato',
             'iscrizione' => $saved['iscrizione'] ?? null,
             'recapiti' => $saved['recapiti'] ?? null,
         ];

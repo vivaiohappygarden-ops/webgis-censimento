@@ -109,6 +109,70 @@ class TreeVtaTest extends TestCase
         $this->assertSame('C/D', $response->json('data.overdue.0.failure_class'));
     }
 
+    public function test_assessment_can_be_corrected_without_losing_its_analyses(): void
+    {
+        $id = $this->createTreeAsset();
+
+        $assessment = $this->postJson("/api/v1/assets/{$id}/assessments", [
+            'assessment_type' => 'vta_visual',
+            'assessed_on' => '2026-06-01',
+            'failure_class' => 'C',
+            'targets' => ['area giochi'],
+        ])->assertCreated()->json('data');
+
+        $this->postJson("/api/v1/assessments/{$assessment['id']}/instrumental-analyses", [
+            'instrument_type' => 'resistograph',
+            'measures' => ['residuo sano' => '70%'],
+        ])->assertCreated();
+
+        // Refuso corretto: la classe cambia, le analisi restano attaccate
+        $corretta = $this->patchJson("/api/v1/assessments/{$assessment['id']}", [
+            'failure_class' => 'C/D',
+            'targets' => ['area giochi', 'marciapiede'],
+            'survey' => ['conclusioni' => 'Classe corretta dopo la tomografia.'],
+            'version' => $assessment['version'],
+        ])->assertOk()->json('data');
+
+        $this->assertSame('C/D', $corretta['failure_class']);
+        $this->assertSame(['area giochi', 'marciapiede'], $corretta['targets']);
+        $this->getJson("/api/v1/assessments/{$assessment['id']}/instrumental-analyses")
+            ->assertOk()->assertJsonCount(1, 'data');
+
+        // Versione vecchia: modifica rifiutata
+        $this->patchJson("/api/v1/assessments/{$assessment['id']}", [
+            'failure_class' => 'A',
+            'version' => $assessment['version'],
+        ])->assertStatus(409);
+    }
+
+    public function test_correcting_an_issued_perizia_clears_its_protocol(): void
+    {
+        \Illuminate\Support\Facades\Http::fake([
+            'tile.openstreetmap.org/*' => \Illuminate\Support\Facades\Http::response('', 500),
+        ]);
+        $id = $this->createTreeAsset();
+        $assessment = $this->postJson("/api/v1/assets/{$id}/assessments", [
+            'assessment_type' => 'vta_visual',
+            'assessed_on' => '2026-06-01',
+            'failure_class' => 'C',
+        ])->assertCreated()->json('data');
+
+        $this->get("/api/v1/assessments/{$assessment['id']}/perizia-pdf")->assertOk();
+        $emessa = \App\Models\TreeAssessment::query()->findOrFail($assessment['id']);
+        $this->assertNotNull($emessa->report_number);
+
+        $this->patchJson("/api/v1/assessments/{$assessment['id']}", ['failure_class' => 'D'])->assertOk();
+
+        // Il numero già consegnato non finisce su un contenuto diverso
+        $corretta = \App\Models\TreeAssessment::query()->findOrFail($assessment['id']);
+        $this->assertNull($corretta->report_number);
+        $this->assertNull($corretta->report_issued_at);
+
+        $this->get("/api/v1/assessments/{$assessment['id']}/perizia-pdf")->assertOk();
+        $nuova = \App\Models\TreeAssessment::query()->findOrFail($assessment['id']);
+        $this->assertNotSame($emessa->report_number, $nuova->report_number);
+    }
+
     public function test_assessments_are_rejected_for_non_tree_assets(): void
     {
         $benchType = $this->makeObjectType($this->organization, 'P', 'P219012');

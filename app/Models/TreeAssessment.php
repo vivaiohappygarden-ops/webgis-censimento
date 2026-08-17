@@ -50,11 +50,22 @@ class TreeAssessment extends Model
             'SELECT pg_advisory_xact_lock(hashtextextended(?, 42))', ["perizia:{$tenantId}"],
         );
         $year = now('Europe/Rome')->year;
-        $next = (int) \Illuminate\Support\Facades\DB::selectOne(
-            "SELECT COALESCE(MAX((substring(report_number FROM '\\d+$'))::int), 0) + 1 AS n
+        $daRighe = (int) \Illuminate\Support\Facades\DB::selectOne(
+            "SELECT COALESCE(MAX((substring(report_number FROM '\\d+$'))::int), 0) AS n
              FROM tree_assessments WHERE tenant_id = ? AND report_number LIKE ?",
             [$tenantId, "PER-{$year}-%"],
         )->n;
+
+        // Contatore che non torna mai indietro: se una perizia viene corretta
+        // il suo numero viene liberato, ma non deve essere riassegnato a un
+        // documento diverso da quello già consegnato al committente
+        $organization = Organization::query()->lockForUpdate()->findOrFail($tenantId);
+        $settings = $organization->settings ?? [];
+        $ultimo = (int) ($settings['perizia_last_number'][(string) $year] ?? 0);
+
+        $next = max($daRighe, $ultimo) + 1;
+        $settings['perizia_last_number'][(string) $year] = $next;
+        $organization->forceFill(['settings' => $settings])->save();
 
         return sprintf('PER-%d-%04d', $year, $next);
     }

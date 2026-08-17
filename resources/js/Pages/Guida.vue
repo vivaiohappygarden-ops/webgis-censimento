@@ -129,6 +129,36 @@ function goTo(id) {
                             strumentali con referto, scadenzario delle rivalutazioni, alberi monumentali o dedicati,
                             e il bilancio arboreo (messi a dimora, abbattuti, sostituiti).
                         </p>
+                        <h3>La perizia di stabilità in PDF</h3>
+                        <p>
+                            Da ogni valutazione, con il pulsante <strong>Perizia PDF</strong> nella scheda
+                            dell'albero, esce il documento completo da firmare e consegnare al committente:
+                            identificazione, contesto, dati dendrometrici, difetti parte per parte, analisi
+                            strumentali, classe di propensione al cedimento, prescrizioni, foto e mappa.
+                        </p>
+                        <ul class="mt-2 list-disc space-y-1 pl-5">
+                            <li>
+                                Serve la <strong>classe di propensione al cedimento</strong>: senza, la perizia
+                                non viene emessa, perché è la conclusione tecnica che si firma.
+                            </li>
+                            <li>
+                                I campi lasciati vuoti si stampano come "non rilevato" o "parte non esaminata":
+                                il documento non dichiara mai controlli che non sono stati fatti.
+                            </li>
+                            <li>
+                                Alla prima stampa la perizia riceve un <strong>numero di protocollo</strong>
+                                (PER-anno-numero) e una data di emissione, che non cambiano più: ristampare
+                                dà lo stesso documento.
+                            </li>
+                            <li>
+                                Se correggi una valutazione già stampata, il documento corretto esce con un
+                                numero e una data nuovi, così il numero già consegnato resta legato a quel testo.
+                            </li>
+                            <li>
+                                L'intestazione con nome, titolo e iscrizione all'albo si compila una volta sola
+                                nella pagina <strong>Utenti</strong>.
+                            </li>
+                        </ul>
                     </section>
 
                     <section id="lavori">
