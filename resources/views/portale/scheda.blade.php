@@ -1,8 +1,18 @@
 @php
     $albero = $asset->tree;
-    $binomio = trim(($albero?->genus ?? '').' '.($albero?->species ?? ''));
     $etichetta = $asset->census_code ?: 'senza etichetta';
     $misura = fn ($v, $u) => rtrim(rtrim(number_format((float) $v, 1, ',', ''), '0'), ',').' '.$u;
+
+    // Il campo specie porta di norma il binomio completo ("Tilia cordata"):
+    // anteporre il genere lo raddoppierebbe
+    $genere = trim((string) ($albero?->genus ?? ''));
+    $specie = trim((string) ($albero?->species ?? ''));
+    $binomio = $specie !== '' && $genere !== '' && ! str_starts_with(mb_strtolower($specie), mb_strtolower($genere))
+        ? $genere.' '.$specie
+        : ($specie !== '' ? $specie : $genere);
+    if ($binomio !== '' && $albero?->cultivar) {
+        $binomio .= " '".$albero->cultivar."'";
+    }
 @endphp
 
 <div class="scheda">
@@ -19,8 +29,10 @@
     </div>
 
     @if ($hasFoto)
+        @php $urlFoto = $portale->url('/elemento/'.rawurlencode($asset->census_code ?: $asset->id).'/foto'); @endphp
         <div class="foto">
-            <img src="{{ $portale->url('/elemento/'.rawurlencode($asset->census_code ?: $asset->id).'/foto') }}" alt="Fotografia dell'elemento">
+            <img src="{{ $urlFoto }}" alt="Fotografia dell'elemento">
+            <button type="button" class="lente" data-ingrandisci="{{ $urlFoto }}" aria-label="Ingrandisci la fotografia">+</button>
             @if ($binomio !== '' || $albero?->common_name)
                 <div class="specie">
                     @if ($binomio !== '')<em>{{ $binomio }}</em>@endif
@@ -47,7 +59,13 @@
         @endif
         <div class="riga">
             <dt>Coordinate</dt>
-            <dd>{{ number_format($lat, 6, '.', '') }}, {{ number_format($lon, 6, '.', '') }}</dd>
+            <dd>
+                @if ($urlPosizione)
+                    <a href="{{ $urlPosizione }}" target="_blank" rel="noopener nofollow">{{ number_format($lat, 6, '.', '') }}, {{ number_format($lon, 6, '.', '') }}</a>
+                @else
+                    {{ number_format($lat, 6, '.', '') }}, {{ number_format($lon, 6, '.', '') }}
+                @endif
+            </dd>
         </div>
         @if ($albero?->dbh_cm)
             <div class="riga"><dt>Diametro del tronco</dt><dd>{{ $misura($albero->dbh_cm, 'cm') }}</dd></div>
@@ -60,8 +78,14 @@
         @if ($albero?->crown_diameter_m)
             <div class="riga"><dt>Diametro della chioma</dt><dd>{{ $misura($albero->crown_diameter_m, 'm') }}</dd></div>
         @endif
+        @if ($albero?->age_years_est)
+            <div class="riga"><dt>Età stimata</dt><dd>circa {{ $albero->age_years_est }} anni</dd></div>
+        @endif
         @if ($albero?->planted_on)
             <div class="riga"><dt>Messo a dimora</dt><dd>{{ $albero->planted_on->format('Y') }}</dd></div>
+        @endif
+        @if ($albero?->family)
+            <div class="riga"><dt>Famiglia botanica</dt><dd>{{ $albero->family }}</dd></div>
         @endif
     </dl>
 
@@ -72,6 +96,17 @@
             @endif
             @if ($albero->is_protected)
                 <span class="tutela">{{ 'Soggetto a tutela'.($albero->protection_ref ? ' – '.$albero->protection_ref : '') }}</span>
+            @endif
+        </div>
+    @endif
+
+    @if ($urlNavigazione || $urlSegnalazione)
+        <div class="azioni">
+            @if ($urlNavigazione)
+                <a class="azione" href="{{ $urlNavigazione }}" target="_blank" rel="noopener nofollow">Raggiungi l'elemento</a>
+            @endif
+            @if ($urlSegnalazione)
+                <a class="azione secondaria" href="{{ $urlSegnalazione }}">Segnala un problema a {{ $portale->contactEmail() }}</a>
             @endif
         </div>
     @endif

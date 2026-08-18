@@ -50,13 +50,19 @@ class ElementoController extends Controller
             'area.locality' => fn ($q) => $q->withoutGlobalScopes(),
         ]);
 
+        $lat = (float) $dati->lat;
+        $lon = (float) $dati->lon;
+
         $dativista = [
             'portale' => $portale,
             'asset' => $asset,
             'stato' => $dati->stato,
-            'lat' => (float) $dati->lat,
-            'lon' => (float) $dati->lon,
+            'lat' => $lat,
+            'lon' => $lon,
             'hasFoto' => $this->fotoPubblica($asset) !== null,
+            'urlNavigazione' => $this->conCoordinate(config('portal.navigation_url'), $lat, $lon),
+            'urlPosizione' => $this->conCoordinate(config('portal.position_url'), $lat, $lon),
+            'urlSegnalazione' => $this->urlSegnalazione($portale, $asset),
         ];
 
         // Richiesta dal pannello laterale della mappa: serve solo la scheda,
@@ -86,6 +92,42 @@ class ElementoController extends Controller
             'Content-Disposition' => 'inline; filename="foto.jpg"',
             'Cache-Control' => 'no-store',
         ]);
+    }
+
+    private function conCoordinate(?string $modello, float $lat, float $lon): ?string
+    {
+        if (empty($modello)) {
+            return null;
+        }
+
+        return str_replace(
+            ['{lat}', '{lon}'],
+            [number_format($lat, 6, '.', ''), number_format($lon, 6, '.', '')],
+            $modello,
+        );
+    }
+
+    /**
+     * Segnalazione del cittadino: per ora è una mail all'ente, come sui
+     * portali di riferimento. L'oggetto porta già l'etichetta dell'elemento,
+     * così chi la riceve sa subito di quale albero si parla.
+     */
+    private function urlSegnalazione(PortalContext $portale, Asset $asset): ?string
+    {
+        $mail = $portale->contactEmail();
+        if ($mail === null) {
+            return null;
+        }
+
+        $etichetta = $asset->census_code ?: substr($asset->id, 0, 8);
+        // L'indirizzo della scheda è quello della richiesta in corso: sul
+        // sottodominio del Comune deve restare il sottodominio
+        $indirizzo = url()->current();
+
+        return 'mailto:'.$mail.'?'.http_build_query([
+            'subject' => "Segnalazione su elemento {$etichetta}",
+            'body' => "Segnalo un problema sull'elemento {$etichetta}.\n\nScheda: {$indirizzo}\n\nDescrizione:\n",
+        ], '', '&', PHP_QUERY_RFC3986);
     }
 
     private function fotoPubblica(Asset $asset): ?Photo

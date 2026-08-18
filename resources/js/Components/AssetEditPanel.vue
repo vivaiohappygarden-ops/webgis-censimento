@@ -8,9 +8,14 @@ const emit = defineEmits(['saved', 'close']);
 const fields = ref([]);
 const saving = ref(false);
 const error = ref('');
+// La data arriva dal server come data completa: il campo del modulo vuole
+// solo il giorno
+const soloData = (v) => (v ? String(v).slice(0, 10) : '');
+
 const form = reactive({
     census_code: props.asset.census_code ?? '',
     status: props.asset.status ?? 'active',
+    surveyed_at: soloData(props.asset.surveyed_at),
     notes: props.asset.notes ?? '',
     attributes: { ...(props.asset.attributes ?? {}) },
 });
@@ -37,6 +42,7 @@ async function save() {
         await axios.patch(`/api/v1/assets/${props.asset.id}`, {
             census_code: form.census_code || null,
             status: form.status,
+            surveyed_at: form.surveyed_at || null,
             notes: form.notes || null,
             attributes,
             version: props.asset.version,
@@ -84,6 +90,15 @@ async function save() {
                     <option value="dismissed">Dismesso</option>
                     <option v-if="form.status === 'removed'" value="removed">Abbattuto/Rimosso</option>
                 </select>
+            </label>
+            <label class="block text-xs">
+                <span class="text-gray-500">Data del rilievo</span>
+                <input
+                    v-model="form.surveyed_at"
+                    type="date"
+                    data-test="data-rilievo"
+                    class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                >
             </label>
         </div>
         <p v-if="asset.status === 'removed'" class="mt-1 text-xs text-amber-700">

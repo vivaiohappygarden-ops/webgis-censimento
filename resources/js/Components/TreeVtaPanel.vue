@@ -243,7 +243,10 @@ async function saveTree() {
             tree: {
                 genus: tree.genus || null,
                 species: tree.species || null,
+                cultivar: tree.cultivar || null,
+                family: tree.family || null,
                 common_name: tree.common_name || null,
+                age_years_est: tree.age_years_est || null,
                 height_m: tree.height_m || null,
                 dbh_cm: tree.dbh_cm || null,
                 trunk_circumference_cm: tree.trunk_circumference_cm || null,
@@ -339,6 +342,14 @@ onMounted(async () => {
                 <input v-model="tree.species" :disabled="! canUpdate" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
             </label>
             <label class="block text-xs">
+                <span class="text-gray-500">Cultivar</span>
+                <input v-model="tree.cultivar" :disabled="! canUpdate" data-test="cultivar" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+            </label>
+            <label class="block text-xs">
+                <span class="text-gray-500">Famiglia</span>
+                <input v-model="tree.family" :disabled="! canUpdate" data-test="family" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+            </label>
+            <label class="block text-xs">
                 <span class="text-gray-500">Nome comune</span>
                 <input v-model="tree.common_name" :disabled="! canUpdate" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
             </label>
@@ -368,6 +379,10 @@ onMounted(async () => {
             <label class="block text-xs">
                 <span class="text-gray-500">Altezza primo palco (m)</span>
                 <input v-model.number="tree.crown_insertion_m" type="number" step="0.1" :disabled="! canUpdate" data-test="crown-insertion" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+            </label>
+            <label class="block text-xs">
+                <span class="text-gray-500">Età stimata (anni)</span>
+                <input v-model.number="tree.age_years_est" type="number" step="1" min="0" :disabled="! canUpdate" data-test="age-years" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
             </label>
             <label class="block text-xs">
                 <span class="text-gray-500">Classe di età</span>

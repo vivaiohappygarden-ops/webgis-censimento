@@ -71,6 +71,23 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Collegamenti esterni della scheda
+    |--------------------------------------------------------------------------
+    |
+    | "Raggiungi l'elemento" apre la navigazione stradale, le coordinate
+    | aprono la posizione su una mappa. I segnaposto {lat} e {lon} vengono
+    | sostituiti con le coordinate dell'elemento.
+    |
+    */
+
+    'navigation_url' => env('PORTAL_NAVIGATION_URL',
+        'https://www.google.com/maps/dir/?api=1&destination={lat},{lon}'),
+
+    'position_url' => env('PORTAL_POSITION_URL',
+        'https://www.openstreetmap.org/?mlat={lat}&mlon={lon}#map=19/{lat}/{lon}'),
+
     'reserved_slugs' => [
         'www', 'app', 'api', 'admin', 'mail', 'smtp', 'imap', 'pop', 'ftp',
         'ns', 'ns1', 'ns2', 'mx', 'cdn', 'static', 'assets', 'storage',

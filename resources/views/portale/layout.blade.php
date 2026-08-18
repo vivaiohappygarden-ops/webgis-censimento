@@ -102,6 +102,29 @@
     .scheda dd { margin: 0; text-align: right; }
     .scheda .tutele { padding: 0 16px 16px; }
     .scheda .tutela { display: inline-block; border: 1px solid var(--bordo); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--tenue); margin: 0 6px 6px 0; }
+    .scheda .lente {
+        position: absolute; inset: 0; margin: auto; width: 44px; height: 44px;
+        border-radius: 50%; border: 2px solid rgba(255,255,255,0.9);
+        background: rgba(0,0,0,0.35); color: #fff; font-size: 22px; line-height: 1;
+        cursor: pointer;
+    }
+    .scheda .lente:hover { background: rgba(0,0,0,0.5); }
+    .scheda .azioni { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 16px; }
+    .scheda .azione {
+        display: block; text-align: center; text-decoration: none;
+        background: var(--tinta); color: #fff; border-radius: 8px; padding: 10px 12px;
+        font-size: 14px; font-weight: 600;
+    }
+    .scheda .azione.secondaria { background: transparent; color: var(--tinta); border: 1px solid var(--tinta); font-weight: 500; }
+
+    /* Fotografia a schermo intero */
+    #lente-piena {
+        position: fixed; inset: 0; z-index: 20; border: 0; padding: 0;
+        background: rgba(0,0,0,0.88);
+        display: flex; align-items: center; justify-content: center;
+    }
+    #lente-piena[hidden] { display: none; }
+    #lente-piena img { max-width: 96vw; max-height: 92vh; }
     a.indietro { display: inline-block; margin-bottom: 14px; font-size: 14px; text-decoration: none; }
     p.prossimo { color: var(--tenue); font-size: 13px; margin-top: 16px; max-width: 620px; }
 
@@ -141,6 +164,38 @@
     <main>
         @yield('contenuto')
     </main>
+
+    {{-- Fotografia a schermo intero. La gestione è delegata al documento
+         perché la scheda può anche essere caricata dentro la mappa --}}
+    <button type="button" id="lente-piena" hidden aria-label="Chiudi la fotografia">
+        <img alt="Fotografia dell'elemento">
+    </button>
+    <script>
+        (function () {
+            var lente = document.getElementById('lente-piena');
+            var immagine = lente.querySelector('img');
+
+            document.addEventListener('click', function (evento) {
+                var apri = evento.target.closest('[data-ingrandisci]');
+                if (apri) {
+                    immagine.src = apri.dataset.ingrandisci;
+                    lente.hidden = false;
+                    return;
+                }
+                if (evento.target.closest('#lente-piena')) {
+                    lente.hidden = true;
+                    immagine.removeAttribute('src');
+                }
+            });
+
+            document.addEventListener('keydown', function (evento) {
+                if (evento.key === 'Escape' && ! lente.hidden) {
+                    lente.hidden = true;
+                    immagine.removeAttribute('src');
+                }
+            });
+        })();
+    </script>
 
     <footer class="chiusura">
         <div class="dentro">

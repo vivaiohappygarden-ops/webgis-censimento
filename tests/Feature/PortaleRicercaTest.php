@@ -148,7 +148,9 @@ class PortaleRicercaTest extends TestCase
 
         $risposta->assertOk();
         $risposta->assertSee('MEN-0001');
-        $risposta->assertSee('Cupressus sempervirens');
+        // Il genere non va anteposto a una specie che è già un binomio
+        $risposta->assertSee('<em>Cupressus sempervirens</em>', false);
+        $risposta->assertDontSee('Cupressus Cupressus');
         $risposta->assertSee('Cipresso');
         $risposta->assertSee('12/05/2026');
         $risposta->assertSee('Parco Cinque Pini');
@@ -170,6 +172,62 @@ class PortaleRicercaTest extends TestCase
 
         $this->get('/comune/mentana/elemento/MEN-0001')->assertNotFound();
         $this->get('/comune/mentana/elemento/MEN-0002')->assertNotFound();
+    }
+
+    public function test_la_scheda_offre_navigazione_e_segnalazione(): void
+    {
+        $this->creaAlbero();
+
+        // Senza indirizzo mail dell'ente il pulsante di segnalazione non compare
+        $this->get('/comune/mentana/elemento/MEN-0001')
+            ->assertOk()
+            // L'apostrofo nel testo va confrontato senza rifugio HTML
+            ->assertSee("Raggiungi l'elemento", false)
+            ->assertDontSee('Segnala un problema');
+
+        $this->client->forceFill(['public_profile' => [
+            'display_name' => 'Comune di Mentana',
+            'contact_email' => 'verde@comune.mentana.it',
+        ]])->save();
+
+        $risposta = $this->get('/comune/mentana/elemento/MEN-0001');
+        $risposta->assertOk();
+        $risposta->assertSee('Segnala un problema');
+        $risposta->assertSee('mailto:verde@comune.mentana.it', false);
+        // Le coordinate portano alla posizione su una mappa
+        $risposta->assertSee('45.465200', false);
+        $risposta->assertSee('openstreetmap.org', false);
+    }
+
+    public function test_la_foto_pubblica_si_puo_ingrandire(): void
+    {
+        $id = $this->creaAlbero();
+
+        $this->post("/api/v1/assets/{$id}/photos", [
+            'photo' => \Illuminate\Http\UploadedFile::fake()->image('albero.jpg', 800, 600),
+            'category' => 'census',
+        ])->assertCreated();
+
+        $this->get('/comune/mentana/elemento/MEN-0001')
+            ->assertOk()
+            ->assertSee('data-ingrandisci="', false);
+
+        $foto = $this->get('/comune/mentana/elemento/MEN-0001/foto');
+        $foto->assertOk();
+        $this->assertSame('image/jpeg', $foto->headers->get('Content-Type'));
+    }
+
+    public function test_la_foto_di_un_difetto_non_finisce_in_vetrina(): void
+    {
+        $id = $this->creaAlbero();
+
+        $this->post("/api/v1/assets/{$id}/photos", [
+            'photo' => \Illuminate\Http\UploadedFile::fake()->image('difetto.jpg', 400, 300),
+            'category' => 'defect',
+        ])->assertCreated();
+
+        $this->get('/comune/mentana/elemento/MEN-0001')->assertOk()->assertDontSee('data-ingrandisci="', false);
+        $this->get('/comune/mentana/elemento/MEN-0001/foto')->assertNotFound();
     }
 
     public function test_la_scheda_si_apre_anche_su_aiuole_e_siepi(): void
