@@ -77,6 +77,49 @@ async function toggleNascondi() {
     }
 }
 
+// Vincoli che gravano sull'elemento: quelli geografici arrivano dal
+// perimetro, gli altri si collegano a mano
+const vincoli = ref([]);
+const vincoliDisponibili = ref([]);
+const vincoloDaCollegare = ref('');
+
+async function caricaVincoli() {
+    try {
+        const [collegati, elenco] = await Promise.all([
+            axios.get(`/api/v1/assets/${props.assetId}/constraints`),
+            axios.get('/api/v1/constraints', { params: { per_page: 100 } }),
+        ]);
+        vincoli.value = collegati.data.data;
+        vincoliDisponibili.value = elenco.data.data;
+    } catch {
+        vincoli.value = [];
+        vincoliDisponibili.value = [];
+    }
+}
+
+async function collegaVincolo() {
+    if (! vincoloDaCollegare.value) return;
+    try {
+        const { data } = await axios.post(`/api/v1/assets/${props.assetId}/constraints`, {
+            constraint_id: vincoloDaCollegare.value,
+        });
+        vincoli.value = data.data;
+        vincoloDaCollegare.value = '';
+    } catch (err) {
+        pdfError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Collegamento non riuscito';
+    }
+}
+
+async function scollegaVincolo(id) {
+    try {
+        const { data } = await axios.delete(`/api/v1/assets/${props.assetId}/constraints/${id}`);
+        vincoli.value = data.data;
+    } catch (err) {
+        pdfError.value = err.response?.data?.message ?? 'Operazione non riuscita';
+    }
+}
+
 async function openTag() {
     pdfBusy.value = true;
     pdfError.value = '';
@@ -164,6 +207,7 @@ let map = null;
 async function load() {
     const { data } = await axios.get(`/api/v1/assets/${props.assetId}`);
     asset.value = data.data;
+    await caricaVincoli();
 }
 
 function initMap() {
@@ -467,6 +511,46 @@ onBeforeUnmount(() => map?.remove());
                             </a>
                         </div>
                         <p v-else class="mt-3 text-sm text-gray-400">Nessuna fotografia caricata.</p>
+                    </div>
+
+                    <!-- Vincoli del territorio -->
+                    <div class="mt-6 rounded-xl border border-gray-200 bg-white p-6">
+                        <h2 class="text-sm font-semibold">Vincoli ({{ vincoli.length }})</h2>
+                        <p class="mt-0.5 text-xs text-gray-500">
+                            Compaiono nella scheda pubblica dell'elemento, con il documento scaricabile.
+                            L'anagrafica dei vincoli si gestisce in Territorio.
+                        </p>
+
+                        <ul v-if="vincoli.length" class="mt-3 divide-y divide-gray-50">
+                            <li v-for="v in vincoli" :key="v.id" class="flex flex-wrap items-center gap-2 py-2 text-sm">
+                                <span class="font-medium">{{ v.code }}</span>
+                                <span class="text-gray-500">{{ v.name }}</span>
+                                <span class="rounded bg-gray-100 px-1.5 text-[10px] uppercase text-gray-500">
+                                    {{ v.source === 'spatial' ? 'da perimetro' : 'a mano' }}
+                                </span>
+                                <span v-if="! v.is_public" class="rounded bg-amber-100 px-1.5 text-[10px] uppercase text-amber-800">non pubblico</span>
+                                <button
+                                    v-if="canUpdate && v.source === 'manual'"
+                                    class="ml-auto text-xs text-red-500 hover:underline"
+                                    @click="scollegaVincolo(v.id)"
+                                >scollega</button>
+                            </li>
+                        </ul>
+                        <p v-else class="mt-3 text-sm text-gray-400">Nessun vincolo collegato.</p>
+
+                        <div v-if="canUpdate && vincoliDisponibili.length" class="mt-3 flex flex-wrap gap-2">
+                            <select v-model="vincoloDaCollegare" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm sm:w-auto">
+                                <option value="">Collega un vincolo…</option>
+                                <option v-for="v in vincoliDisponibili" :key="v.id" :value="v.id">
+                                    {{ v.code }}<template v-if="v.name"> — {{ v.name }}</template>
+                                </option>
+                            </select>
+                            <button
+                                class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+                                :disabled="! vincoloDaCollegare"
+                                @click="collegaVincolo"
+                            >Collega</button>
+                        </div>
                     </div>
 
                     <GestionalePanel :asset="asset" class="mt-6" />

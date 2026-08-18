@@ -107,6 +107,28 @@
         </p>
     @endif
 
+    @if (! empty($vincoli))
+        <div class="vincoli">
+            <h2>Descrizione</h2>
+            <div class="vincoli-titolo">Vincoli</div>
+            @foreach ($vincoli as $vincolo)
+                <div class="vincolo">
+                    @if ($vincolo->document_id)
+                        <a href="{{ $portale->url('/vincolo/'.$vincolo->id.'/documento') }}" target="_blank" rel="noopener">{{ $vincolo->code }}</a>
+                    @else
+                        <span class="vincolo-codice">{{ $vincolo->code }}</span>
+                    @endif
+                    @if ($vincolo->name)
+                        <span class="vincolo-nome">{{ $vincolo->name }}</span>
+                    @endif
+                    @if ($vincolo->authority)
+                        <span class="vincolo-ente">{{ $vincolo->authority }}</span>
+                    @endif
+                </div>
+            @endforeach
+        </div>
+    @endif
+
     @if ($albero?->is_monumental || $albero?->is_protected)
         <div class="tutele">
             @if ($albero->is_monumental)

@@ -32,6 +32,9 @@ $rotte = function (): void {
     Route::get('/elemento/{codice}/foto/{foto}', [ElementoController::class, 'fotoEvento'])
         ->whereUuid('foto')->name('elemento.foto.evento');
 
+    Route::get('/vincolo/{vincolo}/documento', [ElementoController::class, 'documentoVincolo'])
+        ->whereUuid('vincolo')->name('vincolo.documento');
+
     Route::get('/mappa', [MappaController::class, 'mappa'])->name('mappa');
     Route::get('/mappa/{z}/{x}/{y}.pbf', [MappaController::class, 'tile'])
         ->whereNumber(['z', 'x', 'y'])->name('mappa.tile');

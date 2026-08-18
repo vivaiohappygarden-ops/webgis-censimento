@@ -101,6 +101,15 @@
     .scheda dt { color: var(--tenue); text-transform: uppercase; font-size: 12px; letter-spacing: 0.05em; }
     .scheda dd { margin: 0; text-align: right; }
     .scheda .stima { margin: -8px 16px 12px; font-size: 12px; color: var(--tenue); }
+    /* Vincoli che gravano sull'elemento */
+    .scheda .vincoli { padding: 4px 16px 12px; border-top: 1px solid var(--bordo); }
+    .scheda .vincoli h2 { font-size: 16px; margin: 12px 0 6px; }
+    .scheda .vincoli-titolo { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--tenue); margin-bottom: 6px; }
+    .scheda .vincolo { font-size: 14px; padding: 5px 0; border-bottom: 1px solid #eef1ee; }
+    .scheda .vincolo:last-child { border-bottom: 0; }
+    .scheda .vincolo-codice { font-weight: 600; }
+    .scheda .vincolo-nome { color: var(--tenue); margin-left: 8px; }
+    .scheda .vincolo-ente { display: block; color: var(--tenue); font-size: 12px; }
     .scheda .tutele { padding: 0 16px 16px; }
     .scheda .tutela { display: inline-block; border: 1px solid var(--bordo); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--tenue); margin: 0 6px 6px 0; }
     .scheda .lente {

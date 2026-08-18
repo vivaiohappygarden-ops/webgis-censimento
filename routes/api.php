@@ -33,6 +33,17 @@ Route::prefix('v1')->group(function () {
 
         Route::apiResource('clients', ClientController::class)->whereUuid('client');
         Route::post('clients/{id}/stemma', [ClientController::class, 'stemma'])->whereUuid('id');
+
+        // Vincoli del territorio e loro collegamento agli elementi
+        Route::get('constraints', [\App\Http\Controllers\Api\V1\LandConstraintController::class, 'index']);
+        Route::post('constraints', [\App\Http\Controllers\Api\V1\LandConstraintController::class, 'store']);
+        Route::patch('constraints/{id}', [\App\Http\Controllers\Api\V1\LandConstraintController::class, 'update'])->whereUuid('id');
+        Route::delete('constraints/{id}', [\App\Http\Controllers\Api\V1\LandConstraintController::class, 'destroy'])->whereUuid('id');
+        Route::post('constraints/{id}/documento', [\App\Http\Controllers\Api\V1\LandConstraintController::class, 'documento'])->whereUuid('id');
+        Route::post('constraints/{id}/ricalcola', [\App\Http\Controllers\Api\V1\LandConstraintController::class, 'ricalcola'])->whereUuid('id');
+        Route::get('assets/{asset}/constraints', [\App\Http\Controllers\Api\V1\LandConstraintController::class, 'perAsset'])->whereUuid('asset');
+        Route::post('assets/{asset}/constraints', [\App\Http\Controllers\Api\V1\LandConstraintController::class, 'collega'])->whereUuid('asset');
+        Route::delete('assets/{asset}/constraints/{constraint}', [\App\Http\Controllers\Api\V1\LandConstraintController::class, 'scollega'])->whereUuid(['asset', 'constraint']);
         Route::delete('clients/{id}/stemma', [ClientController::class, 'rimuoviStemma'])->whereUuid('id');
         Route::apiResource('sites', SiteController::class)
             ->only(['index', 'store', 'update', 'destroy'])->whereUuid('site');

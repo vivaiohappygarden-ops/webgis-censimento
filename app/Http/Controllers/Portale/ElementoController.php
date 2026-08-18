@@ -67,6 +67,7 @@ class ElementoController extends Controller
             'co2' => $portale->mostraCo2()
                 ? \App\Services\Benefits\CarbonEstimate::per($asset->tree)
                 : null,
+            'vincoli' => $this->vincoli($portale, $asset),
         ];
 
         // Richiesta dal pannello laterale della mappa: serve solo la scheda,
@@ -126,6 +127,58 @@ class ElementoController extends Controller
             'Content-Type' => 'image/jpeg',
             'Content-Disposition' => 'inline; filename="foto.jpg"',
             'Cache-Control' => 'no-store',
+        ]);
+    }
+
+    /**
+     * Vincoli che gravano sull'elemento. Escono solo quelli contrassegnati
+     * come pubblicabili e quelli del committente giusto: un vincolo di un
+     * altro Comune non deve comparire qui.
+     */
+    private function vincoli(PortalContext $portale, Asset $asset): array
+    {
+        return DB::table('asset_constraints as ac')
+            ->join('land_constraints as v', 'v.id', '=', 'ac.constraint_id')
+            ->where('ac.asset_id', $asset->id)
+            ->where('v.tenant_id', $portale->client->tenant_id)
+            ->whereNull('v.deleted_at')
+            ->where('v.is_public', true)
+            ->where(fn ($w) => $w->whereNull('v.client_id')->orWhere('v.client_id', $portale->client->id))
+            ->orderBy('v.code')
+            ->get(['v.id', 'v.code', 'v.name', 'v.description', 'v.authority', 'v.document_id'])
+            ->all();
+    }
+
+    /**
+     * Documento del vincolo, scaricabile dal cittadino. È raggiungibile solo
+     * attraverso il portale del committente e solo per i vincoli pubblicati:
+     * il file non ha un indirizzo diretto.
+     */
+    public function documentoVincolo(Request $request, PortalContext $portale)
+    {
+        $vincolo = DB::table('land_constraints as v')
+            ->join('documents as d', 'd.id', '=', 'v.document_id')
+            ->where('v.id', (string) $request->route('vincolo'))
+            ->where('v.tenant_id', $portale->client->tenant_id)
+            ->whereNull('v.deleted_at')
+            ->whereNull('d.deleted_at')
+            ->where('v.is_public', true)
+            ->where(fn ($w) => $w->whereNull('v.client_id')->orWhere('v.client_id', $portale->client->id))
+            ->first(['v.code', 'd.s3_key', 'd.mime_type', 'd.title']);
+
+        abort_if($vincolo === null, 404);
+
+        $disk = Storage::disk();
+        abort_unless($disk->exists($vincolo->s3_key), 404);
+
+        // Il nome del file mostrato al cittadino è quello del vincolo, non
+        // quello con cui è stato caricato dall'ufficio
+        $nome = preg_replace('/[^A-Za-z0-9._-]+/', '-', $vincolo->code).'.pdf';
+
+        return response($disk->get($vincolo->s3_key), 200, [
+            'Content-Type' => $vincolo->mime_type ?: 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$nome.'"',
+            'Cache-Control' => 'public, max-age=3600',
         ]);
     }
 

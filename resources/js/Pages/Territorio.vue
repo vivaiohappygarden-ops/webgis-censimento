@@ -33,6 +33,7 @@ async function selectClient(client) {
     selectedSite.value = null;
     localities.value = [];
     caricaPortale(client);
+    await caricaVincoli();
     const { data } = await axios.get('/api/v1/sites', { params: { client_id: client.id, per_page: 100 } });
     sites.value = data.data;
 }
@@ -123,6 +124,80 @@ async function rimuoviStemma() {
         const { data } = await axios.delete(`/api/v1/clients/${selectedClient.value.id}/stemma`);
         aggiornaClienteInElenco(data.data);
         portale.salvato = 'Stemma rimosso.';
+    } catch (err) {
+        error.value = firstError(err);
+    }
+}
+
+// --- Vincoli del territorio ------------------------------------------------
+
+const vincoli = ref([]);
+const vincoloForm = reactive({ open: false, code: '', name: '', authority: '', description: '' });
+const vincoloBusy = ref('');
+
+async function caricaVincoli() {
+    if (! selectedClient.value) return;
+    const { data } = await axios.get('/api/v1/constraints', {
+        params: { client_id: selectedClient.value.id, per_page: 100 },
+    });
+    vincoli.value = data.data;
+}
+
+async function salvaVincolo() {
+    error.value = '';
+    try {
+        await axios.post('/api/v1/constraints', {
+            client_id: selectedClient.value.id,
+            code: vincoloForm.code,
+            name: vincoloForm.name || null,
+            authority: vincoloForm.authority || null,
+            description: vincoloForm.description || null,
+        });
+        Object.assign(vincoloForm, { open: false, code: '', name: '', authority: '', description: '' });
+        await caricaVincoli();
+    } catch (err) {
+        error.value = firstError(err);
+    }
+}
+
+async function caricaDocumento(vincolo, evento) {
+    const file = evento.target.files?.[0];
+    evento.target.value = '';
+    if (! file) return;
+    error.value = '';
+    vincoloBusy.value = vincolo.id;
+    const modulo = new FormData();
+    modulo.append('documento', file);
+    try {
+        await axios.post(`/api/v1/constraints/${vincolo.id}/documento`, modulo);
+        await caricaVincoli();
+    } catch (err) {
+        error.value = firstError(err);
+    } finally {
+        vincoloBusy.value = '';
+    }
+}
+
+async function ricalcolaVincolo(vincolo) {
+    error.value = '';
+    vincoloBusy.value = vincolo.id;
+    try {
+        const { data } = await axios.post(`/api/v1/constraints/${vincolo.id}/ricalcola`);
+        await caricaVincoli();
+        portale.salvato = `Vincolo collegato a ${data.data.collegati} elementi.`;
+    } catch (err) {
+        error.value = firstError(err);
+    } finally {
+        vincoloBusy.value = '';
+    }
+}
+
+async function eliminaVincolo(vincolo) {
+    if (! window.confirm(`Eliminare il vincolo ${vincolo.code}?`)) return;
+    error.value = '';
+    try {
+        await axios.delete(`/api/v1/constraints/${vincolo.id}`);
+        await caricaVincoli();
     } catch (err) {
         error.value = firstError(err);
     }
@@ -469,6 +544,76 @@ onMounted(loadClients);
                         <span v-if="portale.salvato" class="text-sm text-green-700">{{ portale.salvato }}</span>
                     </div>
                 </form>
+            </section>
+            <!-- Vincoli del territorio -->
+            <section v-if="selectedClient && canManage" class="mt-4 rounded-xl border border-gray-200 bg-white">
+                <header class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3">
+                    <div>
+                        <h2 class="text-sm font-semibold">Vincoli su {{ selectedClient.name }} ({{ vincoli.length }})</h2>
+                        <p class="mt-0.5 text-xs text-gray-500">
+                            Vincoli paesaggistici, archeologici o storici. Compaiono nella scheda pubblica degli
+                            elementi a cui sono collegati, con il documento scaricabile.
+                        </p>
+                    </div>
+                    <button
+                        class="rounded-lg bg-green-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-800"
+                        @click="vincoloForm.open = ! vincoloForm.open"
+                    >+ Nuovo vincolo</button>
+                </header>
+
+                <form v-if="vincoloForm.open" class="space-y-2 border-b border-gray-100 bg-green-50/40 p-3" @submit.prevent="salvaVincolo">
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        <input v-model="vincoloForm.code" required placeholder="Codice breve * (es. art.28 PTPR)" class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                        <input v-model="vincoloForm.name" placeholder="Descrizione breve (es. Aree urbanizzate)" class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                        <input v-model="vincoloForm.authority" placeholder="Ente che lo impone" class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                    </div>
+                    <textarea v-model="vincoloForm.description" rows="2" placeholder="Note estese (facoltative)" class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" />
+                    <button type="submit" class="rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800">Salva vincolo</button>
+                </form>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500">
+                            <tr>
+                                <th class="px-4 py-2">Codice</th>
+                                <th class="px-4 py-2">Descrizione</th>
+                                <th class="px-4 py-2">Ente</th>
+                                <th class="px-4 py-2">Elementi</th>
+                                <th class="px-4 py-2">Documento</th>
+                                <th class="px-4 py-2"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-50">
+                            <tr v-for="v in vincoli" :key="v.id">
+                                <td class="px-4 py-2 font-medium">{{ v.code }}</td>
+                                <td class="px-4 py-2">{{ v.name || '—' }}</td>
+                                <td class="px-4 py-2 text-gray-500">{{ v.authority || '—' }}</td>
+                                <td class="px-4 py-2 text-gray-500">{{ v.assets_count }}</td>
+                                <td class="px-4 py-2">
+                                    <span v-if="v.document" class="text-xs text-gray-600">{{ v.document.title }}</span>
+                                    <label class="ml-2 cursor-pointer text-xs text-green-700 hover:underline">
+                                        {{ v.document ? 'sostituisci' : 'carica PDF' }}
+                                        <input type="file" accept="application/pdf" class="hidden" :disabled="vincoloBusy === v.id" @change="caricaDocumento(v, $event)">
+                                    </label>
+                                </td>
+                                <td class="px-4 py-2 text-right whitespace-nowrap">
+                                    <button
+                                        v-if="v.ha_perimetro"
+                                        class="text-xs text-green-700 hover:underline disabled:opacity-50"
+                                        :disabled="vincoloBusy === v.id"
+                                        @click="ricalcolaVincolo(v)"
+                                    >ricalcola</button>
+                                    <button class="ml-3 text-xs text-red-500 hover:underline" @click="eliminaVincolo(v)">elimina</button>
+                                </td>
+                            </tr>
+                            <tr v-if="! vincoli.length">
+                                <td colspan="6" class="px-4 py-6 text-center text-sm text-gray-400">
+                                    Nessun vincolo registrato per questo committente.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </section>
         </div>
     </AppLayout>
