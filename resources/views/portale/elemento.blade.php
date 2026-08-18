@@ -8,6 +8,6 @@
     @include('portale.scheda')
 
     <p class="prossimo">
-        Cronologia degli interventi, vincoli e stima dell'anidride carbonica assorbita sono in preparazione.
+        Vincoli e stima dell'anidride carbonica assorbita sono in preparazione.
     </p>
 @endsection

@@ -109,6 +109,30 @@
         cursor: pointer;
     }
     .scheda .lente:hover { background: rgba(0,0,0,0.5); }
+    /* Cronologia degli eventi con gli atti collegati */
+    .scheda .cronologia { padding: 4px 16px 16px; border-top: 1px solid var(--bordo); }
+    .scheda .cronologia h2 { font-size: 16px; margin: 12px 0 10px; }
+    .scheda .evento { padding-left: 14px; border-left: 2px solid var(--bordo); margin-bottom: 16px; position: relative; }
+    .scheda .evento::before {
+        content: ''; position: absolute; left: -5px; top: 6px;
+        width: 8px; height: 8px; border-radius: 50%; background: var(--tinta);
+    }
+    .scheda .quando { font-size: 13px; color: var(--tenue); }
+    .scheda .quando strong { color: var(--testo); }
+    .scheda .nota-evento { margin: 4px 0 8px; font-size: 14px; white-space: pre-line; }
+    .scheda .foto-evento { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .scheda .foto-evento img {
+        width: 84px; height: 84px; object-fit: cover; border-radius: 8px;
+        border: 1px solid var(--bordo); cursor: pointer;
+    }
+    .scheda .atti { background: #f0f3f0; border-radius: 8px; padding: 10px 12px; }
+    .scheda .atti-titolo { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--tenue); margin-bottom: 6px; }
+    .scheda .atto { font-size: 13px; padding: 5px 0; border-bottom: 1px solid #e3e8e3; }
+    .scheda .atto:last-child { border-bottom: 0; }
+    .scheda .atto-riga { display: flex; justify-content: space-between; gap: 12px; }
+    .scheda .atto-nome { font-weight: 600; }
+    .scheda .atto-data { color: var(--tenue); white-space: nowrap; }
+    .scheda .atto-ente, .scheda .atto-descrizione { color: var(--tenue); }
     .scheda .azioni { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 16px; }
     .scheda .azione {
         display: block; text-align: center; text-decoration: none;

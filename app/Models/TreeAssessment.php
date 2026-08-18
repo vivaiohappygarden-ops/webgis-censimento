@@ -23,7 +23,7 @@ class TreeAssessment extends Model
     protected $fillable = [
         'tenant_id', 'tree_id', 'assessment_type', 'assessed_on', 'assessor_id',
         'assessor_external', 'defects', 'targets', 'failure_class', 'outcome',
-        'prescriptions', 'next_check_due', 'survey', 'created_by', 'updated_by',
+        'prescriptions', 'next_check_due', 'survey', 'is_public', 'created_by', 'updated_by',
     ];
 
     protected function casts(): array
@@ -35,6 +35,7 @@ class TreeAssessment extends Model
             'defects' => 'array',
             'targets' => 'array',
             'survey' => 'array',
+            'is_public' => 'boolean',
             'version' => 'integer',
         ];
     }

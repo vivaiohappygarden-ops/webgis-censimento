@@ -53,12 +53,13 @@ class WorkOrder extends Model
         'work_type_id', 'title', 'description', 'status', 'priority', 'origin',
         'origin_id', 'planned_start', 'planned_end', 'due_at',
         'estimated_duration_min', 'team_id', 'assigned_to', 'price_list_id',
-        'risks', 'ppe', 'created_by', 'updated_by',
+        'risks', 'ppe', 'is_public', 'created_by', 'updated_by',
     ];
 
     protected function casts(): array
     {
         return [
+            'is_public' => 'boolean',
             'planned_start' => 'date',
             'planned_end' => 'date',
             'due_at' => 'datetime',

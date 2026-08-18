@@ -100,6 +100,53 @@
         </div>
     @endif
 
+    @if (! empty($cronologia))
+        <div class="cronologia">
+            <h2>Cronologia eventi</h2>
+            @foreach ($cronologia as $evento)
+                <div class="evento">
+                    <div class="quando">
+                        {{ $evento['data']->format('d/m/Y') }} &middot; <strong>{{ $evento['titolo'] }}</strong>
+                    </div>
+                    @if ($evento['nota'] !== '')
+                        <p class="nota-evento">{{ $evento['nota'] }}</p>
+                    @endif
+
+                    @if (! empty($evento['foto']))
+                        <div class="foto-evento">
+                            @foreach ($evento['foto'] as $idFoto)
+                                @php $urlFotoEvento = $portale->url('/elemento/'.rawurlencode($asset->census_code ?: $asset->id).'/foto/'.$idFoto); @endphp
+                                <img src="{{ $urlFotoEvento }}" alt="Fotografia dell'intervento" data-ingrandisci="{{ $urlFotoEvento }}">
+                            @endforeach
+                        </div>
+                    @endif
+
+                    @if (! empty($evento['atti']))
+                        <div class="atti">
+                            <div class="atti-titolo">Atti pubblici collegati all'evento</div>
+                            @foreach ($evento['atti'] as $atto)
+                                <div class="atto">
+                                    <div class="atto-riga">
+                                        @if ($atto['url'])
+                                            <a href="{{ $atto['url'] }}">{{ $atto['tipo'] }} N. {{ $atto['numero'] }}</a>
+                                        @else
+                                            <span class="atto-nome">{{ $atto['tipo'] }} N. {{ $atto['numero'] }}</span>
+                                        @endif
+                                        <span class="atto-data">{{ $atto['data']->format('d/m/Y') }}</span>
+                                    </div>
+                                    <div class="atto-ente">{{ $atto['ente'] }}</div>
+                                    @if ($atto['descrizione'])
+                                        <div class="atto-descrizione">{{ $atto['descrizione'] }}</div>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+            @endforeach
+        </div>
+    @endif
+
     @if ($urlNavigazione || $urlSegnalazione)
         <div class="azioni">
             @if ($urlNavigazione)

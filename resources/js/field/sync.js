@@ -394,13 +394,14 @@ export class SyncManager {
     /** Mette in coda una foto compressa scattata in campo.
      *  La ricodifica canvas elimina gli EXIF: data di scatto e posizione
      *  GPS si salvano qui e viaggiano come campi espliciti (§7.1). */
-    async enqueuePhoto({ assetId, blob, category = 'census', takenAt = null, position = null }) {
+    async enqueuePhoto({ assetId, blob, category = 'census', takenAt = null, position = null, workOrderId = null }) {
         const photoId = uuidv7();
         await this.db.transaction('rw', [this.db.photo_blobs, this.db.photo_uploads], async () => {
             await this.db.photo_blobs.put({ photo_id: photoId, blob });
             await this.db.photo_uploads.put({
                 photo_id: photoId,
                 asset_id: assetId,
+                work_order_id: workOrderId,
                 category,
                 status: 'queued',
                 attempts: 0,
@@ -458,6 +459,7 @@ export class SyncManager {
                 form.append('photo', blobRow.blob, `${upload.photo_id}.jpg`);
                 form.append('category', upload.category ?? 'census');
                 form.append('client_id', upload.photo_id);
+                if (upload.work_order_id) form.append('work_order_id', upload.work_order_id);
                 if (upload.taken_at) form.append('taken_at', upload.taken_at);
                 if (upload.lat != null && upload.lon != null) {
                     form.append('lat', upload.lat);

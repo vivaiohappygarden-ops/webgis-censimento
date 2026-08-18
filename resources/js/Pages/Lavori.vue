@@ -289,6 +289,26 @@ const fmtEuro = (v) => (v == null ? '—' : Number(v).toLocaleString('it-IT', { 
 const fmtDateTime = (iso) => (iso ? new Date(iso).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 const fmtQty = (v) => Number(v).toLocaleString('it-IT');
 
+// Pubblicazione dell'ordine come atto sul portale del committente
+async function setPubblico(valore) {
+    detailBusy.value = true;
+    detailError.value = '';
+    try {
+        const { data } = await axios.patch(`/api/v1/work-orders/${detail.value.id}`, {
+            is_public: valore,
+            version: detail.value.version,
+        });
+        detail.value = data.data;
+    } catch (err) {
+        const message = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Errore nel cambio di visibilità';
+        if (err.response?.status === 409) await openDetail(detail.value.id);
+        detailError.value = message;
+    } finally {
+        detailBusy.value = false;
+    }
+}
+
 async function setPriceList(priceListId) {
     detailBusy.value = true;
     detailError.value = '';
@@ -669,6 +689,24 @@ onMounted(async () => {
                         </dl>
 
                         <p v-if="detail.description" class="mt-3 whitespace-pre-line rounded-lg bg-gray-50 p-3 text-sm text-gray-700">{{ detail.description }}</p>
+
+                        <label v-if="canManage" class="mt-3 flex items-start gap-2 rounded-lg border border-gray-200 p-3 text-sm">
+                            <input
+                                type="checkbox"
+                                class="mt-0.5 rounded border-gray-300"
+                                :checked="detail.is_public"
+                                :disabled="detailBusy"
+                                data-test="wo-pubblico"
+                                @change="setPubblico($event.target.checked)"
+                            >
+                            <span>
+                                Pubblica come atto sul portale del committente
+                                <span class="block text-xs text-gray-500">
+                                    A lavoro completato compare nella cronologia degli alberi interessati,
+                                    come "Ordine di servizio N. {{ detail.code }}".
+                                </span>
+                            </span>
+                        </label>
 
                         <h3 class="mt-5 text-sm font-semibold">Elementi ({{ detail.assets.length }})</h3>
                         <ul class="mt-2 divide-y divide-gray-50 rounded-lg border border-gray-100">

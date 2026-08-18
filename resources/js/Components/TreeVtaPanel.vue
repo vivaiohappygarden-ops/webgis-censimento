@@ -83,6 +83,7 @@ const blankVta = () => ({
     outcome: '',
     prescriptions: '',
     next_check_due: '',
+    is_public: false,
     assessor_external: '',
     bersagli: '',
     survey: blankSurvey(),
@@ -100,6 +101,7 @@ function editAssessment(a) {
         outcome: a.outcome ?? '',
         prescriptions: a.prescriptions ?? '',
         next_check_due: dateOnly(a.next_check_due),
+        is_public: !! a.is_public,
         assessor_external: a.assessor_external ?? '',
         bersagli: (Array.isArray(a.targets) ? a.targets : Object.values(a.targets ?? {})).join('\n'),
         survey: { ...blankSurvey(), ...(a.survey ?? {}),
@@ -294,6 +296,7 @@ async function saveVta() {
             outcome: vta.outcome || null,
             prescriptions: vta.prescriptions || null,
             next_check_due: vta.next_check_due || null,
+            is_public: !! vta.is_public,
             assessor_external: vta.assessor_external || null,
             targets: vta.bersagli.split('\n').map((r) => r.trim()).filter(Boolean),
             survey: vta.survey,
@@ -531,6 +534,17 @@ onMounted(async () => {
                         <input v-model="vta.survey.priorita_intervento" maxlength="100" placeholder="es. entro 30 giorni" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
                     </label>
                 </div>
+
+                <label class="flex items-start gap-2 rounded-lg border border-gray-200 bg-white p-3 text-xs">
+                    <input v-model="vta.is_public" type="checkbox" class="mt-0.5 rounded border-gray-300" data-test="vta-pubblica">
+                    <span>
+                        Pubblica come atto sul portale del committente
+                        <span class="block text-gray-500">
+                            Compare nella cronologia pubblica dell'albero come "Relazione tecnica",
+                            con la data e le prescrizioni. Senza spunta resta solo nel gestionale.
+                        </span>
+                    </span>
+                </label>
 
                 <!-- Scheda estesa: serve solo a chi redige la perizia -->
                 <button type="button" class="text-xs font-medium text-green-700 hover:underline" data-test="vta-scheda-estesa" @click="showSurvey = ! showSurvey">

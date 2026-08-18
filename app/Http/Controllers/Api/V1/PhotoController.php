@@ -39,6 +39,9 @@ class PhotoController extends Controller implements HasMiddleware
             'taken_at' => ['nullable', 'date'],
             'lat' => ['nullable', 'numeric', 'between:-90,90'],
             'lon' => ['nullable', 'numeric', 'between:-180,180'],
+            // Foto scattata durante un lavoro: resta agganciata a quell'ordine
+            // e puo' comparire nella cronologia pubblica dell'elemento
+            'work_order_id' => ['nullable', 'uuid'],
         ]);
 
         if (! empty($data['client_id'])) {
@@ -54,12 +57,19 @@ class PhotoController extends Controller implements HasMiddleware
             }
         }
 
+        // L'ordine deve esistere nell'organizzazione: TenantScope filtra da sé
+        $ordine = ! empty($data['work_order_id'])
+            ? \App\Models\WorkOrder::query()->findOrFail($data['work_order_id'])
+            : null;
+
         $file = $data['photo'];
         $path = $file->store("photos/{$asset->tenant_id}/{$asset->id}");
 
         $photo = new Photo([
             'tenant_id' => $asset->tenant_id,
             'asset_id' => $asset->id,
+            'subject_type' => $ordine ? $ordine->getMorphClass() : null,
+            'subject_id' => $ordine?->id,
             'category' => $data['category'] ?? 'census',
             's3_key' => $path,
             'original_filename' => $file->getClientOriginalName(),

@@ -139,10 +139,13 @@ class WorkOrderController extends Controller implements HasMiddleware
             $this->assertVersion($request, $workOrder);
 
             // Gli stati terminali sono immutabili: la storia di un ordine
-            // completato o annullato non si riscrive
-            if (in_array($workOrder->status, ['completed', 'cancelled'], true)) {
+            // completato o annullato non si riscrive. Unica eccezione: la
+            // pubblicazione sul portale del committente, che è una decisione
+            // editoriale e arriva per forza a lavoro concluso
+            $soloPubblicazione = array_keys($data) === ['is_public'];
+            if (in_array($workOrder->status, ['completed', 'cancelled'], true) && ! $soloPubblicazione) {
                 throw ValidationException::withMessages([
-                    'work_order' => 'Un ordine completato o annullato non è modificabile.',
+                    'work_order' => 'Un ordine completato o annullato non è modificabile: si può solo pubblicarlo o toglierlo dal portale.',
                 ]);
             }
 
@@ -375,6 +378,8 @@ class WorkOrderController extends Controller implements HasMiddleware
             'assigned_to' => ['nullable', 'uuid'],
             'price_list_id' => ['nullable', 'uuid'],
             'risks' => ['nullable', 'string'],
+            // Pubblicazione dell'ordine come atto sul portale del committente
+            'is_public' => ['sometimes', 'boolean'],
             'version' => ['sometimes', 'integer', 'min:1'],
         ]);
         unset($data['version']);

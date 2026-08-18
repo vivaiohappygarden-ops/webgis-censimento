@@ -63,6 +63,7 @@ class ElementoController extends Controller
             'urlNavigazione' => $this->conCoordinate(config('portal.navigation_url'), $lat, $lon),
             'urlPosizione' => $this->conCoordinate(config('portal.position_url'), $lat, $lon),
             'urlSegnalazione' => $this->urlSegnalazione($portale, $asset),
+            'cronologia' => \App\Services\Portale\AssetTimeline::per($portale->client, $asset),
         ];
 
         // Richiesta dal pannello laterale della mappa: serve solo la scheda,
@@ -92,6 +93,55 @@ class ElementoController extends Controller
             'Content-Disposition' => 'inline; filename="foto.jpg"',
             'Cache-Control' => 'no-store',
         ]);
+    }
+
+    /**
+     * Foto di un evento della cronologia. Vale solo per le foto collegate a
+     * un atto pubblicabile: una foto non collegata, o collegata a un lavoro
+     * non pubblicato, non è raggiungibile nemmeno conoscendone l'indirizzo.
+     */
+    public function fotoEvento(Request $request, PortalContext $portale)
+    {
+        $asset = PortalSearch::perRiferimento($portale->client, (string) $request->route('codice'));
+        abort_if($asset === null, 404);
+
+        $foto = Photo::query()->withoutGlobalScopes()
+            ->whereNull('deleted_at')
+            ->where('asset_id', $asset->id)
+            ->where('tenant_id', $portale->client->tenant_id)
+            ->whereKey((string) $request->route('foto'))
+            ->first();
+
+        abort_if($foto === null, 404);
+        abort_unless(in_array($foto->category, ['before', 'during', 'after', 'census', 'reference'], true), 404);
+        abort_unless($this->eventoPubblico($foto), 404);
+
+        $jpeg = ImageDerivative::jpeg(Storage::disk()->get($foto->s3_key), maxDimension: 1200, quality: 78);
+        abort_if($jpeg === null, 404);
+
+        return response($jpeg, 200, [
+            'Content-Type' => 'image/jpeg',
+            'Content-Disposition' => 'inline; filename="foto.jpg"',
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
+    /** Vero se la foto è agganciata a un lavoro o a una perizia pubblicati. */
+    private function eventoPubblico(Photo $foto): bool
+    {
+        if ($foto->subject_type === null || $foto->subject_id === null) {
+            return false;
+        }
+
+        return match ($foto->subject_type) {
+            \App\Models\WorkOrder::class => \App\Models\WorkOrder::query()->withoutGlobalScopes()
+                ->whereNull('deleted_at')->whereKey($foto->subject_id)
+                ->where('is_public', true)->where('status', 'completed')->exists(),
+            \App\Models\TreeAssessment::class => \App\Models\TreeAssessment::query()->withoutGlobalScopes()
+                ->whereNull('deleted_at')->whereKey($foto->subject_id)
+                ->where('is_public', true)->exists(),
+            default => false,
+        };
     }
 
     private function conCoordinate(?string $modello, float $lat, float $lon): ?string

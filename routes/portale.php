@@ -29,6 +29,8 @@ $rotte = function (): void {
 
     Route::get('/elemento/{codice}', [ElementoController::class, 'mostra'])->name('elemento');
     Route::get('/elemento/{codice}/foto', [ElementoController::class, 'foto'])->name('elemento.foto');
+    Route::get('/elemento/{codice}/foto/{foto}', [ElementoController::class, 'fotoEvento'])
+        ->whereUuid('foto')->name('elemento.foto.evento');
 
     Route::get('/mappa', [MappaController::class, 'mappa'])->name('mappa');
     Route::get('/mappa/{z}/{x}/{y}.pbf', [MappaController::class, 'tile'])

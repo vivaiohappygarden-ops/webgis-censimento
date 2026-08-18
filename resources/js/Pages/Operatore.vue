@@ -33,6 +33,9 @@ const form = reactive({
 // Scheda elemento aperta (da elenco o da scansione)
 const selected = ref(null);
 
+// Elemento a cui riferire la foto di un lavoro con piu' elementi
+const workPhotoAssetId = ref('');
+
 // I miei lavori: ordini assegnati all'operatore, replicati sul dispositivo
 const localOrders = ref([]);
 const selectedOrder = ref(null);
@@ -361,6 +364,47 @@ function quickPosition() {
     });
     const fallback = new Promise((resolve) => setTimeout(() => resolve(null), 3500));
     return Promise.race([attempt, fallback]);
+}
+
+/**
+ * Foto scattata durante un lavoro: resta agganciata all'ordine, cosi' puo'
+ * comparire nella cronologia pubblica dell'elemento accanto all'intervento.
+ * Va scelto l'elemento a cui riferirla quando l'ordine ne tocca piu' d'uno.
+ */
+async function takeWorkPhoto(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (! file || ! selectedOrder.value) return;
+
+    const elementi = selectedOrder.value.assets ?? [];
+    const assetId = elementi.length === 1 ? elementi[0].asset_id : workPhotoAssetId.value;
+    if (! assetId) {
+        setMessage('Scegli prima a quale elemento si riferisce la foto.', false);
+
+        return;
+    }
+
+    busy.value = true;
+    try {
+        const takenAt = new Date().toISOString();
+        const [blob, position] = await Promise.all([compressImage(file), quickPosition()]);
+        await sync.enqueuePhoto({
+            assetId,
+            blob,
+            takenAt,
+            position,
+            category: 'after',
+            workOrderId: selectedOrder.value.id,
+        });
+        setMessage(state.online
+            ? 'Foto del lavoro registrata: invio in corso.'
+            : "Foto del lavoro registrata: verrà inviata quando torna la rete.");
+        if (state.online) await runSync();
+    } catch (err) {
+        setMessage(err?.message ?? 'Foto non registrata.', false);
+    } finally {
+        busy.value = false;
+    }
 }
 
 async function takePhoto(event) {
@@ -1669,6 +1713,24 @@ onBeforeUnmount(() => {
                         data-test="wo-open-consuntivo"
                         @click="openConsuntivo(selectedOrder)"
                     >Completa con consuntivo</button>
+                    <template v-if="selectedOrder.status === 'in_progress'">
+                        <select
+                            v-if="(selectedOrder.assets ?? []).length > 1"
+                            v-model="workPhotoAssetId"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                            data-test="wo-photo-asset"
+                        >
+                            <option value="">Elemento della foto…</option>
+                            <option v-for="row in selectedOrder.assets" :key="row.id" :value="row.asset_id">
+                                {{ row.asset?.census_code || (row.asset_id ?? '').slice(0, 8) }}
+                            </option>
+                        </select>
+                        <label class="block w-full rounded-lg border border-green-700 px-4 py-3 text-center text-sm font-semibold text-green-700">
+                            Foto del lavoro
+                            <input type="file" accept="image/*" capture="environment" class="hidden" :disabled="busy" data-test="wo-photo-input" @change="takeWorkPhoto">
+                        </label>
+                    </template>
+
                     <p v-if="selectedOrder.status === 'planned'" class="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
                         Lavoro pianificato: potrà essere avviato quando il responsabile lo assegna.
                     </p>
