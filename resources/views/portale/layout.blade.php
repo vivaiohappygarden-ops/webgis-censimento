@@ -79,6 +79,32 @@
         color: var(--tenue);
     }
     footer.chiusura .dentro { max-width: 980px; margin: 0 auto; display: flex; gap: 20px; flex-wrap: wrap; justify-content: space-between; }
+    /* Scheda dell'elemento: usata sia come pagina sia dentro il pannello
+       laterale della mappa, quindi lo stile sta qui e non nella pagina */
+    .scheda { background: var(--carta); border: 1px solid var(--bordo); border-radius: 12px; overflow: hidden; max-width: 620px; }
+    .scheda .intestazione { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--bordo); flex-wrap: wrap; }
+    .scheda .badge-etichetta { background: var(--tinta); color: #fff; border-radius: 6px; padding: 2px 8px; font-weight: 600; font-size: 14px; }
+    .scheda .tipo { font-size: 13px; color: var(--tenue); letter-spacing: 0.04em; }
+    .scheda .stato { margin-left: auto; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+    .scheda .foto { position: relative; }
+    .scheda .foto img { display: block; width: 100%; height: auto; }
+    .scheda .foto .specie {
+        position: absolute; left: 12px; bottom: 12px;
+        background: rgba(255,255,255,0.88); border-radius: 8px; padding: 6px 10px; font-size: 14px;
+    }
+    .scheda .specie em { display: block; font-style: italic; }
+    .scheda .specie span { color: var(--tenue); font-size: 13px; }
+    .scheda .specie-senza-foto { padding: 12px 16px 0; font-size: 14px; }
+    .scheda dl { margin: 0; padding: 4px 16px 16px; }
+    .scheda .riga { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid #eef1ee; font-size: 14px; }
+    .scheda .riga:last-child { border-bottom: 0; }
+    .scheda dt { color: var(--tenue); text-transform: uppercase; font-size: 12px; letter-spacing: 0.05em; }
+    .scheda dd { margin: 0; text-align: right; }
+    .scheda .tutele { padding: 0 16px 16px; }
+    .scheda .tutela { display: inline-block; border: 1px solid var(--bordo); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--tenue); margin: 0 6px 6px 0; }
+    a.indietro { display: inline-block; margin-bottom: 14px; font-size: 14px; text-decoration: none; }
+    p.prossimo { color: var(--tenue); font-size: 13px; margin-top: 16px; max-width: 620px; }
+
     @media (max-width: 640px) {
         header.testata form.ricerca { margin-left: 0; width: 100%; }
         header.testata form.ricerca input { flex: 1; width: auto; min-width: 0; }
@@ -97,6 +123,7 @@
         </div>
         <nav>
             <a href="{{ $portale->url('/') }}">Home</a>
+            <a href="{{ $portale->url('/mappa') }}">Mappa</a>
         </nav>
         <form class="ricerca" method="get" action="{{ $portale->url('/cerca') }}" role="search">
             <input

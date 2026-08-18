@@ -50,14 +50,20 @@ class ElementoController extends Controller
             'area.locality' => fn ($q) => $q->withoutGlobalScopes(),
         ]);
 
-        return view('portale.elemento', [
+        $dativista = [
             'portale' => $portale,
             'asset' => $asset,
             'stato' => $dati->stato,
             'lat' => (float) $dati->lat,
             'lon' => (float) $dati->lon,
             'hasFoto' => $this->fotoPubblica($asset) !== null,
-        ]);
+        ];
+
+        // Richiesta dal pannello laterale della mappa: serve solo la scheda,
+        // senza intestazione né piè di pagina
+        return $request->boolean('riquadro')
+            ? view('portale.scheda', $dativista)
+            : view('portale.elemento', $dativista);
     }
 
     /**

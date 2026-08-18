@@ -31,6 +31,46 @@ return [
     | servono al servizio o sono comunemente usati dai browser.
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Sfondi cartografici della mappa pubblica
+    |--------------------------------------------------------------------------
+    |
+    | Tre sfondi come nei portali civici di riferimento. Gli indirizzi sono
+    | configurabili perché la scelta del fornitore è una decisione con
+    | ricadute di licenza e di costo: le tessere standard di OpenStreetMap
+    | sono a uso limitato e la loro politica d'uso esclude i siti pubblici ad
+    | alto traffico, quindi prima della messa in linea vanno sostituite con
+    | un fornitore dedicato. Uno sfondo senza indirizzo non compare nel
+    | selettore.
+    |
+    */
+
+    'basemaps' => [
+        [
+            'id' => 'stradale',
+            'nome' => 'Stradale',
+            'url' => env('PORTAL_TILES_STRADALE', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+            'attribuzione' => env('PORTAL_TILES_STRADALE_ATTR', '© OpenStreetMap contributors'),
+            'scuro' => false,
+        ],
+        [
+            'id' => 'satellite',
+            'nome' => 'Satellite',
+            'url' => env('PORTAL_TILES_SATELLITE',
+                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),
+            'attribuzione' => env('PORTAL_TILES_SATELLITE_ATTR', 'Immagini Esri, Maxar, Earthstar Geographics'),
+            'scuro' => true,
+        ],
+        [
+            'id' => 'scura',
+            'nome' => 'Scura',
+            'url' => env('PORTAL_TILES_SCURA', 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'),
+            'attribuzione' => env('PORTAL_TILES_SCURA_ATTR', '© OpenStreetMap contributors © CARTO'),
+            'scuro' => true,
+        ],
+    ],
+
     'reserved_slugs' => [
         'www', 'app', 'api', 'admin', 'mail', 'smtp', 'imap', 'pop', 'ftp',
         'ns', 'ns1', 'ns2', 'mx', 'cdn', 'static', 'assets', 'storage',

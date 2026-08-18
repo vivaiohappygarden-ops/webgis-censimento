@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Portale\ElementoController;
 use App\Http\Controllers\Portale\HomeController;
+use App\Http\Controllers\Portale\MappaController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -28,6 +29,10 @@ $rotte = function (): void {
 
     Route::get('/elemento/{codice}', [ElementoController::class, 'mostra'])->name('elemento');
     Route::get('/elemento/{codice}/foto', [ElementoController::class, 'foto'])->name('elemento.foto');
+
+    Route::get('/mappa', [MappaController::class, 'mappa'])->name('mappa');
+    Route::get('/mappa/{z}/{x}/{y}.pbf', [MappaController::class, 'tile'])
+        ->whereNumber(['z', 'x', 'y'])->name('mappa.tile');
 };
 
 if ($base = config('portal.base_host')) {

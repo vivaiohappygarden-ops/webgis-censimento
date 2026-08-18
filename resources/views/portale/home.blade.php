@@ -25,6 +25,10 @@
         font-size: 14px;
     }
     .nota { color: var(--tenue); font-size: 13px; }
+    .bottone {
+        display: inline-block; background: var(--tinta); color: #fff; text-decoration: none;
+        border-radius: 10px; padding: 10px 18px; font-size: 15px; font-weight: 600;
+    }
 </style>
 @endpush
 
@@ -67,8 +71,9 @@
         </div>
     </div>
 
+    <p><a class="bottone" href="{{ $portale->url('/mappa') }}">Visualizza la mappa</a></p>
+
     <p class="nota">
         Per aprire la scheda di un albero digita il numero riportato sul cartellino nel campo di ricerca in alto.
-        La mappa consultabile è in preparazione.
     </p>
 @endsection
