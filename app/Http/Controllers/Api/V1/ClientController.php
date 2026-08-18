@@ -201,6 +201,7 @@ class ClientController extends Controller implements HasMiddleware
             'public_profile.contact_email' => ['sometimes', 'nullable', 'email', 'max:254'],
             'public_profile.color' => ['sometimes', 'nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'public_profile.footer_text' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'public_profile.show_co2' => ['sometimes', 'boolean'],
 
             // Prefisso delle etichette: la numerazione riparte da uno per
             // ogni committente (MEN-0001, GUI-0001)

@@ -48,6 +48,7 @@ const portale = reactive({
     contact_email: '',
     welcome_text: '',
     footer_text: '',
+    show_co2: false,
     salvato: '',
 });
 const stemmaInput = ref(null);
@@ -63,6 +64,7 @@ function caricaPortale(client) {
         contact_email: profilo.contact_email ?? '',
         welcome_text: profilo.welcome_text ?? '',
         footer_text: profilo.footer_text ?? '',
+        show_co2: !! profilo.show_co2,
         salvato: '',
     });
 }
@@ -81,6 +83,7 @@ async function salvaPortale() {
                 contact_email: portale.contact_email || null,
                 welcome_text: portale.welcome_text || null,
                 footer_text: portale.footer_text || null,
+                show_co2: portale.show_co2,
             },
         });
         aggiornaClienteInElenco(data.data);
@@ -415,6 +418,17 @@ onMounted(loadClients);
                             class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
                             placeholder="Servizio Ambiente - Comune di Mentana"
                         >
+                    </label>
+
+                    <label class="flex items-start gap-2 border-t border-gray-100 pt-3 text-sm">
+                        <input v-model="portale.show_co2" type="checkbox" class="mt-0.5 rounded border-gray-300">
+                        <span>
+                            Mostra la stima dell'anidride carbonica
+                            <span class="block text-xs text-gray-500">
+                                Calcolata dal diametro del tronco con un modello dichiarato sulla pagina.
+                                Tienila spenta finché il tecnico non ha verificato coefficienti e fonti.
+                            </span>
+                        </span>
                     </label>
 
                     <div class="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">

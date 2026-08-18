@@ -64,6 +64,9 @@ class ElementoController extends Controller
             'urlPosizione' => $this->conCoordinate(config('portal.position_url'), $lat, $lon),
             'urlSegnalazione' => $this->urlSegnalazione($portale, $asset),
             'cronologia' => \App\Services\Portale\AssetTimeline::per($portale->client, $asset),
+            'co2' => $portale->mostraCo2()
+                ? \App\Services\Benefits\CarbonEstimate::per($asset->tree)
+                : null,
         ];
 
         // Richiesta dal pannello laterale della mappa: serve solo la scheda,

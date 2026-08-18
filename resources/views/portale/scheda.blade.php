@@ -87,7 +87,25 @@
         @if ($albero?->family)
             <div class="riga"><dt>Famiglia botanica</dt><dd>{{ $albero->family }}</dd></div>
         @endif
+        @if (! empty($co2))
+            <div class="riga">
+                <dt>Anidride carbonica immagazzinata<sup>*</sup></dt>
+                <dd>{{ number_format($co2['co2_kg'], 0, ',', '.') }} kg</dd>
+            </div>
+            @if ($co2['annuo_kg'] !== null)
+                <div class="riga">
+                    <dt>Assorbimento medio annuo<sup>*</sup></dt>
+                    <dd>{{ number_format($co2['annuo_kg'], 1, ',', '.') }} kg/anno</dd>
+                </div>
+            @endif
+        @endif
     </dl>
+
+    @if (! empty($co2))
+        <p class="stima">
+            <sup>*</sup> Valore stimato, non misurato: {{ $co2['metodo'] }}.
+        </p>
+    @endif
 
     @if ($albero?->is_monumental || $albero?->is_protected)
         <div class="tutele">

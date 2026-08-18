@@ -59,6 +59,16 @@ class PortalContext
         return trim((string) ($this->client->public_profile['footer_text'] ?? ''));
     }
 
+    /**
+     * Vero se il committente ha scelto di pubblicare la stima dell'anidride
+     * carbonica. Spento di proposito finché il tecnico non ha verificato il
+     * modello di calcolo: è un numero che si può contestare.
+     */
+    public function mostraCo2(): bool
+    {
+        return (bool) ($this->client->public_profile['show_co2'] ?? false);
+    }
+
     /** Vero se il committente ha caricato uno stemma. */
     public function hasLogo(): bool
     {

@@ -65,8 +65,45 @@ class PortalStats
             'varieta' => $varieta,
             'curati' => self::conInterventi($client, escludi: self::ABBATTIMENTO),
             'potati' => self::conInterventi($client, includi: self::POTATURA),
+            'co2' => self::co2($client),
             'aggiornato_al' => now('Europe/Rome')->toDateString(),
         ];
+    }
+
+    /**
+     * Anidride carbonica immagazzinata dal patrimonio arboreo.
+     * Si calcola solo dove ci sono diametro e specie: il conteggio degli
+     * alberi effettivamente stimati viaggia insieme al totale, perché un
+     * numero senza il suo denominatore non si può leggere.
+     */
+    private static function co2(Client $client): array
+    {
+        $totale = 0.0;
+        $contati = 0;
+
+        (clone PortalQuery::trees($client))
+            ->select('trees.asset_id', 'trees.genus', 'trees.species',
+                'trees.dbh_cm', 'trees.trunk_circumference_cm', 'trees.age_years_est')
+            ->orderBy('trees.asset_id')
+            ->chunk(1000, function ($righe) use (&$totale, &$contati) {
+                foreach ($righe as $riga) {
+                    $albero = new \App\Models\Tree;
+                    $albero->forceFill([
+                        'genus' => $riga->genus,
+                        'species' => $riga->species,
+                        'dbh_cm' => $riga->dbh_cm,
+                        'trunk_circumference_cm' => $riga->trunk_circumference_cm,
+                    ]);
+
+                    $stima = \App\Services\Benefits\CarbonEstimate::per($albero);
+                    if ($stima !== null) {
+                        $totale += $stima['co2_kg'];
+                        $contati++;
+                    }
+                }
+            });
+
+        return ['kg' => round($totale, 1), 'alberi' => $contati];
     }
 
     /**

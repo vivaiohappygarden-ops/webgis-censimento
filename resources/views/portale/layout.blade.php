@@ -100,6 +100,7 @@
     .scheda .riga:last-child { border-bottom: 0; }
     .scheda dt { color: var(--tenue); text-transform: uppercase; font-size: 12px; letter-spacing: 0.05em; }
     .scheda dd { margin: 0; text-align: right; }
+    .scheda .stima { margin: -8px 16px 12px; font-size: 12px; color: var(--tenue); }
     .scheda .tutele { padding: 0 16px 16px; }
     .scheda .tutela { display: inline-block; border: 1px solid var(--bordo); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--tenue); margin: 0 6px 6px 0; }
     .scheda .lente {

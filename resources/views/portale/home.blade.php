@@ -69,7 +69,25 @@
             <div class="valore">{{ number_format($statistiche['potati'], 0, ',', '.') }}</div>
             <div class="voce">Alberi potati</div>
         </div>
+        @if ($portale->mostraCo2() && ($statistiche['co2']['alberi'] ?? 0) > 0)
+            <div class="numero">
+                <div class="valore">{{ number_format($statistiche['co2']['kg'] / 1000, 1, ',', '.') }} t<sup>*</sup></div>
+                <div class="voce">Anidride carbonica immagazzinata</div>
+            </div>
+        @endif
     </div>
+
+    @if ($portale->mostraCo2() && ($statistiche['co2']['alberi'] ?? 0) > 0)
+        <p class="nota">
+            <sup>*</sup> Valore stimato, non misurato, calcolato
+            @if ($statistiche['co2']['alberi'] === 1)
+                su un albero di cui è noto
+            @else
+                su {{ number_format($statistiche['co2']['alberi'], 0, ',', '.') }} alberi di cui è noto
+            @endif
+            il diametro del tronco: {{ config('co2.modello') }}.
+        </p>
+    @endif
 
     <p><a class="bottone" href="{{ $portale->url('/mappa') }}">Visualizza la mappa</a></p>
 
