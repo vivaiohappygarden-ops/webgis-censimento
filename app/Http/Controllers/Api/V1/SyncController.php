@@ -57,11 +57,9 @@ class SyncController extends Controller implements HasMiddleware
             [$tenantId],
         )->c);
 
-        $areas = Area::query()
-            ->when($areaIds !== [], fn ($q) => $q->whereIn('id', $areaIds))
-            ->selectRaw('areas.*, ST_AsGeoJSON(geom)::json AS geom_geojson')
-            ->withCasts(['geom_geojson' => 'array'])
-            ->orderBy('name')
+        $areas = $this->areaRows()
+            ->when($areaIds !== [], fn ($q) => $q->whereIn('areas.id', $areaIds))
+            ->orderBy('areas.name')
             ->get();
 
         $assets = $this->assetRows($areaIds);
@@ -125,8 +123,12 @@ class SyncController extends Controller implements HasMiddleware
         $changedAreaIds = $byTable->get('areas', []);
         if ($changedAreaIds !== []) {
             $changedAreas = Area::query()->withTrashed()
-                ->whereIn('id', $changedAreaIds)
-                ->selectRaw('areas.*, ST_AsGeoJSON(geom)::json AS geom_geojson')
+                ->whereIn('areas.id', $changedAreaIds)
+                ->selectRaw('areas.*, ST_AsGeoJSON(areas.geom)::json AS geom_geojson,
+                    c.id AS client_id, c.name AS client_name')
+                ->leftJoin('localities as l', 'l.id', '=', 'areas.locality_id')
+                ->leftJoin('sites as s', 's.id', '=', 'l.site_id')
+                ->leftJoin('clients as c', 'c.id', '=', 's.client_id')
                 ->withCasts(['geom_geojson' => 'array'])
                 ->get();
             foreach ($changedAreas as $area) {
@@ -293,6 +295,22 @@ class SyncController extends Controller implements HasMiddleware
                 'message' => 'Errore interno nell\'applicazione del comando: verrà ritentato.',
             ];
         }
+    }
+
+    /**
+     * Aree con il nome del committente: in campo servono per filtrare la
+     * mappa per cliente senza rete. Le aree sono già limitate al tenant dal
+     * TenantScope, quindi la catena località-sede-cliente non può uscirne.
+     */
+    private function areaRows()
+    {
+        return Area::query()
+            ->leftJoin('localities as l', 'l.id', '=', 'areas.locality_id')
+            ->leftJoin('sites as s', 's.id', '=', 'l.site_id')
+            ->leftJoin('clients as c', 'c.id', '=', 's.client_id')
+            ->selectRaw('areas.*, ST_AsGeoJSON(areas.geom)::json AS geom_geojson,
+                c.id AS client_id, c.name AS client_name')
+            ->withCasts(['geom_geojson' => 'array']);
     }
 
     /** Righe asset complete di specializzazioni, nel formato del working set. */

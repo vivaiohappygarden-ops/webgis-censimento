@@ -21,3 +21,24 @@ export function uuidv7() {
     const hex = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
+
+/**
+ * Identificativo casuale che funziona anche su un sito in http.
+ * crypto.randomUUID esiste solo nei contesti sicuri (https o localhost):
+ * senza questo ripiego, su un indirizzo IP in http ogni operazione della
+ * coda offline fallirebbe prima di partire.
+ */
+export function randomUuid() {
+    if (typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // versione 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variante RFC
+
+    const hex = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}

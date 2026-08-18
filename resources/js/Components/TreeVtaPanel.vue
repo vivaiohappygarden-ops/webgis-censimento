@@ -1,11 +1,13 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { nextTick, onMounted, reactive, ref } from 'vue';
 import axios from 'axios';
 import { fetchPdf } from '@/pdf';
 
 const props = defineProps({
     asset: { type: Object, required: true },
     canUpdate: { type: Boolean, default: false },
+    // Arrivando dallo scadenzario VTA il modulo si apre già pronto
+    apriValutazione: { type: Boolean, default: false },
 });
 const emit = defineEmits(['saved']);
 
@@ -314,7 +316,13 @@ async function saveVta() {
 
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '—');
 
-onMounted(loadAssessments);
+onMounted(async () => {
+    await loadAssessments();
+    if (props.apriValutazione && props.canUpdate) {
+        showVtaForm.value = true;
+        nextTick(() => document.querySelector('[data-test=vta-bersagli]')?.scrollIntoView({ block: 'center' }));
+    }
+});
 </script>
 
 <template>

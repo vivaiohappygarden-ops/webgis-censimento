@@ -17,6 +17,8 @@ const page = usePage();
 const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
 const canUpdate = computed(() => permissions.value.includes('assets.update'));
 const canDelete = computed(() => permissions.value.includes('assets.delete'));
+// Arrivo dallo scadenzario VTA con "Valuta": il modulo si apre da solo
+const apriValutazione = new URLSearchParams(window.location.search).get('vta') === '1';
 
 const asset = ref(null);
 const editing = ref(false);
@@ -387,6 +389,7 @@ onBeforeUnmount(() => map?.remove());
                         :key="`tree-${asset.version}`"
                         :asset="asset"
                         :can-update="canUpdate"
+                        :apri-valutazione="apriValutazione"
                         @saved="load"
                     />
 
@@ -396,6 +399,7 @@ onBeforeUnmount(() => map?.remove());
                         :key="`site-${asset.version}`"
                         :asset="asset"
                         :can-update="canUpdate"
+                        :apri-valutazione="apriValutazione"
                         @saved="load"
                     />
 

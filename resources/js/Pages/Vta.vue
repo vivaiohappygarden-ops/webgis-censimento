@@ -7,6 +7,36 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 const data = ref(null);
 const tutelati = ref([]);
 
+// Ricerca di un albero per valutarlo o stamparne la perizia senza passare
+// dal censimento: qui si lavora per albero, non per elenco
+const ricerca = reactive({ q: '', rows: [], loading: false, cercato: false });
+let ricercaTimer = null;
+
+async function cercaAlberi() {
+    const q = ricerca.q.trim();
+    if (q.length < 2) {
+        ricerca.rows = [];
+        ricerca.cercato = false;
+
+        return;
+    }
+    ricerca.loading = true;
+    try {
+        const { data } = await axios.get('/api/v1/assets', {
+            params: { q, type_code: 'P103108', hide_removed: 1, per_page: 15 },
+        });
+        ricerca.rows = data.data;
+        ricerca.cercato = true;
+    } finally {
+        ricerca.loading = false;
+    }
+}
+
+function cercaConAttesa() {
+    clearTimeout(ricercaTimer);
+    ricercaTimer = setTimeout(cercaAlberi, 300);
+}
+
 const CLASS_COLORS = {
     'A': 'bg-green-100 text-green-800',
     'B': 'bg-lime-100 text-lime-800',
@@ -116,6 +146,41 @@ onMounted(async () => {
                     </div>
                 </div>
 
+                <!-- Ricerca per albero: da qui si valuta e si stampa la perizia -->
+                <div class="rounded-xl border border-gray-200 bg-white p-4" data-test="vta-ricerca">
+                    <h2 class="text-sm font-semibold">Valuta un albero</h2>
+                    <p class="text-xs text-gray-500">
+                        Cerca l'albero per codice, specie o note: da qui apri la scheda, registri
+                        una nuova valutazione di stabilità e stampi la perizia.
+                    </p>
+                    <input
+                        v-model="ricerca.q"
+                        type="search"
+                        data-test="vta-cerca-albero"
+                        placeholder="Codice, specie o note dell'albero…"
+                        class="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none sm:w-96"
+                        @input="cercaConAttesa"
+                    >
+                    <p v-if="ricerca.loading" class="mt-2 text-xs text-gray-400">Ricerca…</p>
+                    <p v-else-if="ricerca.cercato && ! ricerca.rows.length" class="mt-2 text-xs text-gray-500">
+                        Nessun albero trovato.
+                    </p>
+                    <ul v-else-if="ricerca.rows.length" class="mt-3 divide-y divide-gray-100 rounded-lg border border-gray-200">
+                        <li v-for="a in ricerca.rows" :key="a.id" class="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+                            <span class="font-medium">{{ a.census_code || a.id.slice(0, 8) }}</span>
+                            <span class="text-gray-500">{{ a.area?.name }}</span>
+                            <span class="ml-auto flex gap-3">
+                                <Link :href="`/censimento/${a.id}?vta=1`" class="font-medium text-green-700 hover:underline">
+                                    Nuova valutazione
+                                </Link>
+                                <Link :href="`/censimento/${a.id}`" class="font-medium text-green-700 hover:underline">
+                                    Apri scheda
+                                </Link>
+                            </span>
+                        </li>
+                    </ul>
+                </div>
+
                 <!-- Classi -->
                 <div class="rounded-xl border border-gray-200 bg-white p-4">
                     <h2 class="text-sm font-semibold">Classi di propensione al cedimento (ultima VTA per albero)</h2>
@@ -145,6 +210,7 @@ onMounted(async () => {
                                 <td class="px-4 py-2 text-gray-500">VTA {{ fmt(row.assessed_on) }}</td>
                                 <td class="px-4 py-2 font-semibold text-red-600">scaduto {{ fmt(row.next_check_due) }}</td>
                                 <td class="px-4 py-2 text-right">
+                                    <Link :href="`/censimento/${row.tree_id}?vta=1`" class="mr-3 font-medium text-green-700 hover:underline">Valuta</Link>
                                     <Link :href="`/censimento/${row.tree_id}`" class="font-medium text-green-700 hover:underline">Apri</Link>
                                 </td>
                             </tr>
@@ -168,6 +234,7 @@ onMounted(async () => {
                                 <td class="px-4 py-2 text-gray-500">VTA {{ fmt(row.assessed_on) }}</td>
                                 <td class="px-4 py-2 font-medium text-amber-700">entro {{ fmt(row.next_check_due) }}</td>
                                 <td class="px-4 py-2 text-right">
+                                    <Link :href="`/censimento/${row.tree_id}?vta=1`" class="mr-3 font-medium text-green-700 hover:underline">Valuta</Link>
                                     <Link :href="`/censimento/${row.tree_id}`" class="font-medium text-green-700 hover:underline">Apri</Link>
                                 </td>
                             </tr>

@@ -172,6 +172,12 @@ const scan = reactive({
 });
 let cameraStream = null;
 const videoEl = ref(null);
+const scanInput = ref(null);
+
+/** Riporta il cursore nel campo del lettore, pronto per la lettura dopo. */
+function focusScanInput() {
+    nextTick(() => scanInput.value?.focus());
+}
 
 let photoUrls = [];
 function revokePhotoUrls() {
@@ -285,6 +291,8 @@ async function doScan() {
         setMessage(`Tag riconosciuto: ${hit.asset.census_code || hit.asset.id.slice(0, 8)}.`);
     } else {
         scan.notFound = true;
+        focusScanInput();
+        nextTick(() => scanInput.value?.select());
     }
 }
 
@@ -324,7 +332,9 @@ async function startCamera() {
         // Lo stream eventualmente già acceso va spento anche in caso di errore
         stream?.getTracks().forEach((t) => t.stop());
         cameraStream = null;
-        scan.cameraError = 'Fotocamera non disponibile: inserisci il codice manualmente.';
+        scan.cameraError = window.isSecureContext
+            ? 'Fotocamera non disponibile: inserisci il codice manualmente o usa il lettore.'
+            : 'La fotocamera funziona solo con il lucchetto (https). Intanto usa il lettore o digita il codice.';
         scan.cameraActive = false;
     }
 }
@@ -411,6 +421,9 @@ function switchTab(key) {
     resetAssetIssue();
     tab.value = key;
     refreshLocal();
+    if (key === 'scansiona') {
+        focusScanInput();
+    }
     if (key === 'mappa') {
         nextTick(initOrRefreshMap);
     } else if (geoWatchId !== null) {
@@ -426,15 +439,46 @@ const mapEl = ref(null);
 let map = null;
 let geoWatchId = null;
 let mapFitted = false;
-const mapState = reactive({ placing: false, located: false });
+const mapState = reactive({ placing: false, located: false, clientId: '', areaId: '' });
+
+// Committenti presenti fra le aree scaricate sul dispositivo: il filtro
+// funziona anche senza rete, perche' legge la replica locale
+const localClients = ref([]);
+const localAreas = ref([]);
+
+async function refreshMapFilters() {
+    const aree = await db.areas.toArray();
+    localAreas.value = aree.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    const visti = new Map();
+    for (const a of aree) {
+        if (a.client_id && ! visti.has(a.client_id)) visti.set(a.client_id, a.client_name || 'Committente');
+    }
+    localClients.value = [...visti].map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    // L'area scelta prima puo' non essere di questo committente
+    if (mapState.areaId && ! aree.some((a) => a.id === mapState.areaId
+        && (! mapState.clientId || a.client_id === mapState.clientId))) {
+        mapState.areaId = '';
+    }
+}
+
+/** Aree che passano il filtro: le usa sia la mappa sia il conteggio. */
+const areeFiltrate = computed(() => localAreas.value.filter((a) => {
+    if (mapState.areaId) return a.id === mapState.areaId;
+    if (mapState.clientId) return a.client_id === mapState.clientId;
+
+    return true;
+}));
 
 const TP_COLORS = { 1: '#16a34a', 2: '#475569', 3: '#d97706', 4: '#dc2626' };
 
 async function localFeatureCollections() {
     const assets = await db.assets.toArray();
-    const areas = await db.areas.toArray();
+    await refreshMapFilters();
+    const areas = areeFiltrate.value;
+    const idAree = new Set(areas.map((a) => a.id));
     const assetFeatures = assets
-        .filter((a) => a.geom_geojson)
+        .filter((a) => a.geom_geojson && idAree.has(a.area_id))
         .map((a) => ({
             type: 'Feature',
             geometry: a.geom_geojson,
@@ -950,14 +994,23 @@ onBeforeUnmount(() => {
     <div class="flex min-h-screen flex-col bg-gray-100">
         <!-- Intestazione con indicatore di sincronizzazione sempre visibile -->
         <header class="sticky top-0 z-10 border-b border-gray-200 bg-white">
-            <div class="flex items-center justify-between px-4 py-3">
-                <div>
-                    <div class="text-sm font-semibold leading-tight">WebGIS Operatore</div>
-                    <div class="text-xs text-gray-500">{{ user.name }}</div>
+            <div class="flex items-center justify-between gap-2 px-4 py-3">
+                <div class="min-w-0">
+                    <div class="truncate text-sm font-semibold leading-tight">WebGIS Operatore</div>
+                    <div class="truncate text-xs text-gray-500">{{ user.name }}</div>
                 </div>
-                <span class="rounded-full px-3 py-1 text-xs font-medium" :class="badge.cls" data-test="sync-badge">
-                    {{ badge.text }}
-                </span>
+                <div class="flex shrink-0 items-center gap-2">
+                    <span class="rounded-full px-3 py-1 text-xs font-medium" :class="badge.cls" data-test="sync-badge">
+                        {{ badge.text }}
+                    </span>
+                    <!-- Ritorno al programma completo: in campo si passa
+                         continuamente dall'app alle pagine di gestione -->
+                    <a
+                        href="/oggi"
+                        class="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700"
+                        data-test="torna-gestione"
+                    >Gestione →</a>
+                </div>
             </div>
         </header>
 
@@ -1119,13 +1172,40 @@ onBeforeUnmount(() => {
             <section v-show="tab === 'mappa'" class="-m-4 h-full">
                 <div class="relative" style="height: calc(100vh - 3.5rem - 3.5rem);">
                     <div ref="mapEl" class="h-full w-full" data-test="field-map" />
-                    <div class="absolute left-3 top-3 flex flex-col gap-2">
+                    <div class="absolute left-3 right-3 top-3 flex flex-col gap-2">
+                        <!-- Filtri: chi guardo e dove. Leggono la copia locale,
+                             quindi funzionano anche senza rete -->
+                        <div class="flex gap-2">
+                            <select
+                                v-if="localClients.length"
+                                v-model="mapState.clientId"
+                                data-test="mappa-campo-committente"
+                                class="min-w-0 flex-1 rounded-lg bg-white px-2 py-2 text-xs shadow"
+                                @change="mapState.areaId = ''; initOrRefreshMap()"
+                            >
+                                <option value="">Tutti i committenti</option>
+                                <option v-for="c in localClients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                            </select>
+                            <select
+                                v-model="mapState.areaId"
+                                data-test="mappa-campo-area"
+                                class="min-w-0 flex-1 rounded-lg bg-white px-2 py-2 text-xs shadow"
+                                @change="initOrRefreshMap()"
+                            >
+                                <option value="">Tutte le aree</option>
+                                <option
+                                    v-for="a in localAreas.filter((x) => ! mapState.clientId || x.client_id === mapState.clientId)"
+                                    :key="a.id"
+                                    :value="a.id"
+                                >{{ a.name }}</option>
+                            </select>
+                        </div>
                         <button
-                            class="rounded-lg bg-white px-3 py-2 text-xs font-medium shadow"
+                            class="self-start rounded-lg bg-white px-3 py-2 text-xs font-medium shadow"
                             @click="locateOnMap"
                         >La mia posizione</button>
                         <button
-                            class="rounded-lg px-3 py-2 text-xs font-medium shadow"
+                            class="self-start rounded-lg px-3 py-2 text-xs font-medium shadow"
                             :class="mapState.placing ? 'bg-green-700 text-white' : 'bg-white'"
                             data-test="map-place"
                             @click="mapState.placing = ! mapState.placing"
@@ -1138,36 +1218,51 @@ onBeforeUnmount(() => {
             <section v-if="tab === 'scansiona'">
                 <h1 class="text-base font-semibold">Scansiona tag</h1>
                 <div class="mt-3 space-y-3 rounded-xl border border-gray-200 bg-white p-4">
+                    <!-- Il lettore a pistola scrive come una tastiera e chiude con
+                         Invio: il campo e' il primo elemento, sempre a fuoco, e la
+                         ricerca parte da sola. La fotocamera resta un'alternativa -->
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Codice del tag (spara con il lettore o digita)</span>
+                        <input
+                            ref="scanInput"
+                            v-model="scan.uid"
+                            data-test="scan-uid"
+                            autofocus
+                            autocomplete="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                            class="mt-1 w-full rounded-lg border-2 border-green-700 px-3 py-3 text-base"
+                            placeholder="es. QR-000123"
+                            @keyup.enter="doScan"
+                        >
+                    </label>
+                    <button
+                        class="w-full rounded-lg bg-green-700 px-4 py-3 text-base font-semibold text-white"
+                        data-test="scan-search"
+                        @click="doScan"
+                    >Cerca elemento</button>
+
+                    <div class="flex items-center gap-2 text-xs">
+                        <label class="flex-1">
+                            <span class="text-gray-500">Tipo tag</span>
+                            <select v-model="scan.tagType" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
+                                <option v-for="(label, value) in TAG_TYPES" :key="value" :value="value">{{ label }}</option>
+                            </select>
+                        </label>
+                        <button
+                            v-if="scan.cameraSupported && ! scan.cameraActive"
+                            class="mt-4 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700"
+                            @click="startCamera"
+                        >Usa la fotocamera</button>
+                    </div>
+
                     <div v-if="scan.cameraActive" class="overflow-hidden rounded-lg bg-black">
                         <video ref="videoEl" class="h-56 w-full object-cover" muted playsinline />
                         <button class="w-full bg-gray-800 py-2 text-sm font-medium text-white" @click="stopCamera">
                             Ferma la fotocamera
                         </button>
                     </div>
-                    <button
-                        v-else-if="scan.cameraSupported"
-                        class="w-full rounded-lg border border-green-700 px-3 py-2.5 text-sm font-medium text-green-700"
-                        @click="startCamera"
-                    >Scansiona con la fotocamera</button>
                     <p v-if="scan.cameraError" class="text-xs text-amber-700">{{ scan.cameraError }}</p>
-
-                    <div class="grid grid-cols-3 gap-2">
-                        <label class="block text-xs">
-                            <span class="text-gray-500">Tipo tag</span>
-                            <select v-model="scan.tagType" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
-                                <option v-for="(label, value) in TAG_TYPES" :key="value" :value="value">{{ label }}</option>
-                            </select>
-                        </label>
-                        <label class="col-span-2 block text-xs">
-                            <span class="text-gray-500">Codice del tag</span>
-                            <input v-model="scan.uid" data-test="scan-uid" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. QR-000123">
-                        </label>
-                    </div>
-                    <button
-                        class="w-full rounded-lg bg-green-700 px-4 py-2.5 text-sm font-semibold text-white"
-                        data-test="scan-search"
-                        @click="doScan"
-                    >Cerca elemento</button>
 
                     <div v-if="scan.notFound" class="rounded-lg bg-amber-50 p-3">
                         <p class="text-sm text-amber-900">Tag non riconosciuto. Puoi associarlo a un elemento:</p>

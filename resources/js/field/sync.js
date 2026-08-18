@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { uuidv7 } from './uuidv7';
+import { randomUuid, uuidv7 } from './uuidv7';
 
 const INSPECTION_OUTCOMES = {
     passed: 'superata',
@@ -111,7 +111,7 @@ export class SyncManager {
     async enqueueAssetCreate({ areaId, objectTypeId, censusCode, notes, geometry, gpsAccuracy, surveyMethod = 'gps' }) {
         const entityId = uuidv7();
         const command = {
-            idempotency_key: crypto.randomUUID(),
+            idempotency_key: randomUuid(),
             device_seq: await this.nextDeviceSeq(),
             type: 'asset.create',
             entity_id: entityId,
@@ -169,7 +169,7 @@ export class SyncManager {
             if (! asset) throw new Error('Elemento non presente sul dispositivo.');
 
             await this.db.sync_queue.add({
-                idempotency_key: crypto.randomUUID(),
+                idempotency_key: randomUuid(),
                 device_seq: await this.nextDeviceSeq(),
                 type: 'asset.update_measures',
                 entity_id: assetId,
@@ -195,7 +195,7 @@ export class SyncManager {
     /** Associazione tag fisico (append-only: non confligge mai). */
     async enqueueTagAssociate({ assetId, uid, tagType }) {
         const command = {
-            idempotency_key: crypto.randomUUID(),
+            idempotency_key: randomUuid(),
             device_seq: await this.nextDeviceSeq(),
             type: 'tag.associate',
             entity_id: assetId,
@@ -233,7 +233,7 @@ export class SyncManager {
             if (! order) throw new Error('Ordine non presente sul dispositivo.');
 
             await this.db.sync_queue.add({
-                idempotency_key: crypto.randomUUID(),
+                idempotency_key: randomUuid(),
                 device_seq: await this.nextDeviceSeq(),
                 type: 'work_order.transition',
                 entity_id: workOrderId,
@@ -272,7 +272,7 @@ export class SyncManager {
             // Prima il consuntivo, poi la chiusura: la coda è FIFO e il server
             // riceve il lavoro svolto mentre l'ordine è ancora "in corso"
             await this.db.sync_queue.add({
-                idempotency_key: crypto.randomUUID(),
+                idempotency_key: randomUuid(),
                 device_seq: await this.nextDeviceSeq(),
                 type: 'work_log.add',
                 entity_id: logId,
@@ -292,7 +292,7 @@ export class SyncManager {
                 last_error: null,
             });
             await this.db.sync_queue.add({
-                idempotency_key: crypto.randomUUID(),
+                idempotency_key: randomUuid(),
                 device_seq: await this.nextDeviceSeq(),
                 type: 'work_order.transition',
                 entity_id: workOrderId,
@@ -316,7 +316,7 @@ export class SyncManager {
     async enqueueInspectionComplete({ templateId, assetId = null, areaId = null, answers }) {
         const inspectionId = uuidv7();
         await this.db.sync_queue.add({
-            idempotency_key: crypto.randomUUID(),
+            idempotency_key: randomUuid(),
             device_seq: await this.nextDeviceSeq(),
             type: 'inspection.complete',
             entity_id: inspectionId,
@@ -341,7 +341,7 @@ export class SyncManager {
     async enqueueIssueCreate({ description, severity = 'medium', assetId = null, areaId = null }) {
         const issueId = uuidv7();
         await this.db.sync_queue.add({
-            idempotency_key: crypto.randomUUID(),
+            idempotency_key: randomUuid(),
             device_seq: await this.nextDeviceSeq(),
             type: 'issue.create',
             entity_id: issueId,
@@ -504,7 +504,7 @@ export class SyncManager {
         if (! pending.length) return;
 
         const batch = {
-            batch_id: crypto.randomUUID(),
+            batch_id: randomUuid(),
             device_id: await this.deviceId(),
             schema: 1,
             app_version: '0.3.0',
@@ -723,7 +723,7 @@ export class SyncManager {
             await this.db.sync_queue.delete(idempotencyKey);
             await this.db.sync_queue.add({
                 ...cmd,
-                idempotency_key: crypto.randomUUID(),
+                idempotency_key: randomUuid(),
                 status: 'PENDING',
                 last_error: null,
             });
