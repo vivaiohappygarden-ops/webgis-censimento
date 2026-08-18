@@ -97,21 +97,33 @@ class AssetController extends Controller implements HasMiddleware
         $data['attributes'] = app(\App\Services\Catalog\AttributeValidator::class)
             ->validate($type, $data['attributes'] ?? []);
 
-        $asset = new Asset([
-            ...collect($data)->except('geometry')->all(),
-            'geom' => Geometry::toEwkb($data['geometry']),
-            'created_by' => $request->user()->id,
-            'updated_by' => $request->user()->id,
-        ]);
-        $this->assertValidityDates($asset);
-        $asset->save();
+        $asset = DB::transaction(function () use ($data, $request, $type) {
+            $asset = new Asset([
+                ...collect($data)->except('geometry')->all(),
+                'geom' => Geometry::toEwkb($data['geometry']),
+                'created_by' => $request->user()->id,
+                'updated_by' => $request->user()->id,
+            ]);
 
-        if ($type->requires_tree_record) {
-            \App\Models\Tree::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id]);
-        }
-        if ($type->is_planting_site) {
-            \App\Models\PlantingSite::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id]);
-        }
+            // Codice etichetta assegnato dal server quando il committente ha
+            // un prefisso (MEN-0042): il lock è di transazione, quindi la
+            // creazione dell'elemento deve stare qui dentro
+            if (empty($asset->census_code)) {
+                $asset->census_code = \App\Support\PortalLabels::nextCode($data['area_id']);
+            }
+
+            $this->assertValidityDates($asset);
+            $asset->save();
+
+            if ($type->requires_tree_record) {
+                \App\Models\Tree::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id]);
+            }
+            if ($type->is_planting_site) {
+                \App\Models\PlantingSite::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id]);
+            }
+
+            return $asset;
+        });
 
         Audit::log('asset.created', $asset, ['type' => $type->code]);
 

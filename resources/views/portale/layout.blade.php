@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="{{ $indicizzabile ?? false ? 'index,follow' : 'noindex' }}">
+<title>@yield('titolo', 'Censimento del verde') - {{ $portale->name() }}</title>
+<style>
+    :root {
+        color-scheme: light;
+        --tinta: {{ $portale->color() }};
+        --fondo: #f5f6f5;
+        --carta: #ffffff;
+        --bordo: #d8ded8;
+        --testo: #16211a;
+        --tenue: #5b6a5f;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+        margin: 0;
+        background: var(--fondo);
+        color: var(--testo);
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.5;
+        /* Il piè di pagina resta in fondo anche quando il contenuto è poco */
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+    main { flex: 1; }
+    a { color: var(--tinta); }
+    header.testata {
+        background: var(--tinta);
+        color: #fff;
+        padding: 12px 20px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+    }
+    header.testata img.stemma { height: 40px; width: auto; display: block; }
+    header.testata .titoli { line-height: 1.2; }
+    header.testata .servizio { font-size: 17px; font-weight: 600; }
+    header.testata .ente { font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; opacity: 0.85; }
+    header.testata nav { margin-left: auto; display: flex; gap: 16px; font-size: 14px; }
+    header.testata nav a { color: #fff; text-decoration: none; border-bottom: 1px solid transparent; }
+    header.testata nav a:hover { border-bottom-color: rgba(255,255,255,0.7); }
+    main { max-width: 980px; margin: 0 auto; padding: 24px 20px 56px; }
+    footer.chiusura {
+        border-top: 1px solid var(--bordo);
+        background: var(--carta);
+        padding: 20px;
+        font-size: 13px;
+        color: var(--tenue);
+    }
+    footer.chiusura .dentro { max-width: 980px; margin: 0 auto; display: flex; gap: 20px; flex-wrap: wrap; justify-content: space-between; }
+    @media (max-width: 520px) {
+        header.testata nav { margin-left: 0; width: 100%; }
+    }
+</style>
+@stack('stile')
+</head>
+<body>
+    <header class="testata">
+        @if ($portale->hasLogo())
+            <img class="stemma" src="{{ $portale->url('/stemma') }}" alt="Stemma di {{ $portale->name() }}">
+        @endif
+        <div class="titoli">
+            <div class="servizio">Censimento del verde</div>
+            <div class="ente">{{ $portale->name() }}</div>
+        </div>
+        <nav>
+            <a href="{{ $portale->url('/') }}">Home</a>
+        </nav>
+    </header>
+
+    <main>
+        @yield('contenuto')
+    </main>
+
+    <footer class="chiusura">
+        <div class="dentro">
+            <div>{{ $portale->footerText() ?: $portale->name() }}</div>
+            @if ($portale->contactEmail())
+                <div>Contatti: <a href="mailto:{{ $portale->contactEmail() }}">{{ $portale->contactEmail() }}</a></div>
+            @endif
+        </div>
+    </footer>
+</body>
+</html>

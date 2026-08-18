@@ -32,8 +32,97 @@ async function selectClient(client) {
     selectedClient.value = client;
     selectedSite.value = null;
     localities.value = [];
+    caricaPortale(client);
     const { data } = await axios.get('/api/v1/sites', { params: { client_id: client.id, per_page: 100 } });
     sites.value = data.data;
+}
+
+// --- Portale pubblico del committente -------------------------------------
+
+const portale = reactive({
+    public_enabled: false,
+    public_slug: '',
+    label_prefix: '',
+    display_name: '',
+    color: '#14532d',
+    contact_email: '',
+    welcome_text: '',
+    footer_text: '',
+    salvato: '',
+});
+const stemmaInput = ref(null);
+
+function caricaPortale(client) {
+    const profilo = client.public_profile ?? {};
+    Object.assign(portale, {
+        public_enabled: !! client.public_enabled,
+        public_slug: client.public_slug ?? '',
+        label_prefix: client.label_prefix ?? '',
+        display_name: profilo.display_name ?? '',
+        color: profilo.color ?? '#14532d',
+        contact_email: profilo.contact_email ?? '',
+        welcome_text: profilo.welcome_text ?? '',
+        footer_text: profilo.footer_text ?? '',
+        salvato: '',
+    });
+}
+
+async function salvaPortale() {
+    error.value = '';
+    portale.salvato = '';
+    try {
+        const { data } = await axios.patch(`/api/v1/clients/${selectedClient.value.id}`, {
+            public_enabled: portale.public_enabled,
+            public_slug: portale.public_slug || null,
+            label_prefix: portale.label_prefix || null,
+            public_profile: {
+                display_name: portale.display_name || null,
+                color: portale.color || null,
+                contact_email: portale.contact_email || null,
+                welcome_text: portale.welcome_text || null,
+                footer_text: portale.footer_text || null,
+            },
+        });
+        aggiornaClienteInElenco(data.data);
+        portale.salvato = 'Impostazioni del portale salvate.';
+    } catch (err) {
+        error.value = firstError(err);
+    }
+}
+
+function aggiornaClienteInElenco(aggiornato) {
+    const indice = clients.value.findIndex((c) => c.id === aggiornato.id);
+    if (indice >= 0) clients.value[indice] = { ...clients.value[indice], ...aggiornato };
+    selectedClient.value = { ...selectedClient.value, ...aggiornato };
+    caricaPortale(selectedClient.value);
+}
+
+async function caricaStemma(evento) {
+    const file = evento.target.files?.[0];
+    if (! file) return;
+    error.value = '';
+    const modulo = new FormData();
+    modulo.append('stemma', file);
+    try {
+        const { data } = await axios.post(`/api/v1/clients/${selectedClient.value.id}/stemma`, modulo);
+        aggiornaClienteInElenco(data.data);
+        portale.salvato = 'Stemma caricato.';
+    } catch (err) {
+        error.value = firstError(err);
+    } finally {
+        if (stemmaInput.value) stemmaInput.value.value = '';
+    }
+}
+
+async function rimuoviStemma() {
+    error.value = '';
+    try {
+        const { data } = await axios.delete(`/api/v1/clients/${selectedClient.value.id}/stemma`);
+        aggiornaClienteInElenco(data.data);
+        portale.salvato = 'Stemma rimosso.';
+    } catch (err) {
+        error.value = firstError(err);
+    }
 }
 
 async function selectSite(site) {
@@ -237,6 +326,136 @@ onMounted(loadClients);
                     </ul>
                 </section>
             </div>
+
+            <!-- Portale pubblico del committente -->
+            <section v-if="selectedClient && canManage" class="mt-4 rounded-xl border border-gray-200 bg-white">
+                <header class="border-b border-gray-100 px-4 py-3">
+                    <h2 class="text-sm font-semibold">Portale pubblico di {{ selectedClient.name }}</h2>
+                    <p class="mt-0.5 text-xs text-gray-500">
+                        Sito consultabile dai cittadini, con lo stemma e i colori dell'ente. Si accende committente per committente.
+                    </p>
+                </header>
+
+                <form class="space-y-4 p-4" @submit.prevent="salvaPortale">
+                    <label class="flex items-start gap-2 text-sm">
+                        <input v-model="portale.public_enabled" type="checkbox" class="mt-0.5 rounded border-gray-300">
+                        <span>
+                            Portale pubblico attivo
+                            <span class="block text-xs text-gray-500">Da spento, l'indirizzo risponde "pagina non trovata".</span>
+                        </span>
+                    </label>
+
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <label class="block text-sm">
+                            <span class="mb-1 block text-xs font-medium text-gray-600">Indirizzo pubblico</span>
+                            <input
+                                v-model="portale.public_slug"
+                                placeholder="mentana"
+                                class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm lowercase"
+                            >
+                            <span class="mt-1 block break-all text-xs text-gray-500">
+                                {{ selectedClient.portal_url || 'Si genera dal nome quando accendi il portale.' }}
+                            </span>
+                        </label>
+
+                        <label class="block text-sm">
+                            <span class="mb-1 block text-xs font-medium text-gray-600">Prefisso etichette</span>
+                            <input
+                                v-model="portale.label_prefix"
+                                maxlength="6"
+                                placeholder="MEN"
+                                class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm uppercase"
+                            >
+                            <span class="mt-1 block text-xs text-gray-500">
+                                I nuovi elementi prendono MEN-0001, MEN-0002 e così via.
+                            </span>
+                        </label>
+
+                        <label class="block text-sm">
+                            <span class="mb-1 block text-xs font-medium text-gray-600">Nome mostrato in pubblico</span>
+                            <input
+                                v-model="portale.display_name"
+                                placeholder="Comune di Mentana"
+                                class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                            >
+                        </label>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <label class="block text-sm">
+                            <span class="mb-1 block text-xs font-medium text-gray-600">Colore dell'intestazione</span>
+                            <input v-model="portale.color" type="color" class="h-9 w-full rounded-lg border border-gray-300">
+                        </label>
+
+                        <label class="block text-sm sm:col-span-2">
+                            <span class="mb-1 block text-xs font-medium text-gray-600">Email per le segnalazioni dei cittadini</span>
+                            <input
+                                v-model="portale.contact_email"
+                                type="email"
+                                placeholder="verde@comune.esempio.it"
+                                class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                            >
+                        </label>
+                    </div>
+
+                    <label class="block text-sm">
+                        <span class="mb-1 block text-xs font-medium text-gray-600">Testo di benvenuto</span>
+                        <textarea
+                            v-model="portale.welcome_text"
+                            rows="3"
+                            class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                            placeholder="Presentazione del censimento del verde, a cura dell'ente."
+                        />
+                    </label>
+
+                    <label class="block text-sm">
+                        <span class="mb-1 block text-xs font-medium text-gray-600">Riga in fondo alla pagina</span>
+                        <input
+                            v-model="portale.footer_text"
+                            class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                            placeholder="Servizio Ambiente - Comune di Mentana"
+                        >
+                    </label>
+
+                    <div class="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
+                        <span class="text-xs font-medium text-gray-600">Stemma</span>
+                        <img
+                            v-if="selectedClient.has_logo"
+                            :src="`${selectedClient.portal_url}/stemma`"
+                            alt="Stemma del committente"
+                            class="h-10 w-auto rounded border border-gray-200 bg-gray-50"
+                        >
+                        <span v-else class="text-xs text-gray-500">Nessuno stemma caricato.</span>
+                        <input
+                            ref="stemmaInput"
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            class="w-full text-xs sm:w-auto"
+                            @change="caricaStemma"
+                        >
+                        <button
+                            v-if="selectedClient.has_logo"
+                            type="button"
+                            class="text-xs text-red-500 hover:underline"
+                            @click="rimuoviStemma"
+                        >rimuovi stemma</button>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button type="submit" class="rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800">
+                            Salva impostazioni del portale
+                        </button>
+                        <a
+                            v-if="selectedClient.portal_url && selectedClient.public_enabled"
+                            :href="selectedClient.portal_url"
+                            target="_blank"
+                            rel="noopener"
+                            class="text-sm text-green-700 hover:underline"
+                        >Apri il portale →</a>
+                        <span v-if="portale.salvato" class="text-sm text-green-700">{{ portale.salvato }}</span>
+                    </div>
+                </form>
+            </section>
         </div>
     </AppLayout>
 </template>

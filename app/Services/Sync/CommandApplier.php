@@ -161,7 +161,10 @@ class CommandApplier
             'tenant_id' => $user->tenant_id,
             'area_id' => $area->id,
             'object_type_id' => $type->id,
-            'census_code' => $payload['census_code'] ?? null,
+            // Se il dispositivo non propone un codice, lo assegna il server con
+            // il prefisso del committente: due operatori che rientrano da
+            // offline nello stesso momento non possono prendere lo stesso numero
+            'census_code' => $payload['census_code'] ?? \App\Support\PortalLabels::nextCode($area->id),
             'status' => $payload['status'] ?? 'active',
             'notes' => $payload['notes'] ?? null,
             'attributes' => $attributes,

@@ -58,6 +58,25 @@ async function togglePublicPage() {
     }
 }
 
+// Esclusione dal portale pubblico del committente: il portale pubblica
+// tutto il patrimonio, questa è l'eccezione decisa caso per caso
+async function toggleNascondi() {
+    publicBusy.value = true;
+    pdfError.value = '';
+    try {
+        await axios.patch(`/api/v1/assets/${props.assetId}`, {
+            public_hidden: ! asset.value.public_hidden,
+            version: asset.value.version,
+        });
+        await load();
+    } catch (err) {
+        pdfError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Operazione non riuscita';
+    } finally {
+        publicBusy.value = false;
+    }
+}
+
 async function openTag() {
     pdfBusy.value = true;
     pdfError.value = '';
@@ -316,6 +335,25 @@ onBeforeUnmount(() => map?.remove());
                         <p v-if="asset.public_token" class="mb-3 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-900" data-test="public-url">
                             Pagina pubblica attiva:
                             <a :href="`/p/${asset.public_token}`" target="_blank" class="font-medium underline">{{ `${origin}/p/${asset.public_token}` }}</a>
+                        </p>
+
+                        <p
+                            v-if="canUpdate"
+                            class="mb-3 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
+                            :class="asset.public_hidden ? 'bg-amber-50 text-amber-900' : 'bg-gray-50 text-gray-600'"
+                            data-test="portale-visibilita"
+                        >
+                            <span>
+                                {{ asset.public_hidden
+                                    ? 'Nascosto dal portale pubblico del committente.'
+                                    : 'Visibile sul portale pubblico del committente, se attivo.' }}
+                            </span>
+                            <button
+                                class="font-medium underline disabled:opacity-50"
+                                :disabled="publicBusy"
+                                data-test="portale-toggle"
+                                @click="toggleNascondi"
+                            >{{ asset.public_hidden ? 'Mostra di nuovo' : 'Nascondi dal portale' }}</button>
                         </p>
 
                         <AssetEditPanel

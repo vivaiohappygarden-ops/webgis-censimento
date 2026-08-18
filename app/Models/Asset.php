@@ -17,6 +17,7 @@ class Asset extends Model
         'tenant_id', 'area_id', 'object_type_id', 'census_code', 'status', 'geom',
         'gps_accuracy_m', 'survey_method', 'surveyed_at', 'surveyed_by',
         'valid_from', 'valid_to', 'attributes', 'notes', 'created_by', 'updated_by',
+        'public_hidden',
     ];
 
     protected function casts(): array
@@ -27,6 +28,7 @@ class Asset extends Model
             'valid_from' => 'date',
             'valid_to' => 'date',
             'gps_accuracy_m' => 'decimal:2',
+            'public_hidden' => 'boolean',
             'computed_area_sqm' => 'decimal:2',
             'computed_length_m' => 'decimal:2',
             'computed_perimeter_m' => 'decimal:2',

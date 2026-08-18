@@ -31,6 +31,8 @@ class UpdateAssetRequest extends FormRequest
             'valid_to' => ['sometimes', 'nullable', 'date'],
             'attributes' => ['sometimes', 'array'],
             'notes' => ['sometimes', 'nullable', 'string'],
+            // Esclusione dell'elemento dal portale pubblico del committente
+            'public_hidden' => ['sometimes', 'boolean'],
             'version' => ['sometimes', 'integer', 'min:1'],
             'geometry' => ['sometimes', 'array'],
             'geometry.type' => ['required_with:geometry', 'string', 'in:'.implode(',', Geometry::GEOJSON_TYPES)],

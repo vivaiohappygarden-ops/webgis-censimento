@@ -11,6 +11,12 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        // Portale pubblico dei committenti: rotte anonime, fuori dal gruppo
+        // "web" perché non devono avviare sessione né lasciare cookie
+        then: function (): void {
+            \Illuminate\Support\Facades\Route::middleware('portale')
+                ->group(base_path('routes/portale.php'));
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->throttleApi();
@@ -26,6 +32,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(append: [
             \App\Http\Middleware\EnsureUserIsActive::class,
             \App\Http\Middleware\SetPermissionsTeam::class,
+        ]);
+        // Gruppo del portale pubblico: niente sessione, niente cookie,
+        // niente Inertia. Solo il riconoscimento del committente e il tetto
+        // di richieste
+        $middleware->group('portale', [
+            'throttle:portale',
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            \App\Http\Middleware\ResolvePublicPortal::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

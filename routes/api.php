@@ -32,6 +32,8 @@ Route::prefix('v1')->group(function () {
         Route::get('search', [SearchController::class, 'index']);
 
         Route::apiResource('clients', ClientController::class)->whereUuid('client');
+        Route::post('clients/{id}/stemma', [ClientController::class, 'stemma'])->whereUuid('id');
+        Route::delete('clients/{id}/stemma', [ClientController::class, 'rimuoviStemma'])->whereUuid('id');
         Route::apiResource('sites', SiteController::class)
             ->only(['index', 'store', 'update', 'destroy'])->whereUuid('site');
         Route::apiResource('localities', LocalityController::class)
