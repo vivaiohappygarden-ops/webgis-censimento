@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Portale\ElementoController;
 use App\Http\Controllers\Portale\HomeController;
 use Illuminate\Support\Facades\Route;
 
@@ -22,7 +23,11 @@ use Illuminate\Support\Facades\Route;
 
 $rotte = function (): void {
     Route::get('/', [HomeController::class, 'home'])->name('home');
+    Route::get('/cerca', [HomeController::class, 'cerca'])->name('cerca');
     Route::get('/stemma', [HomeController::class, 'logo'])->name('stemma');
+
+    Route::get('/elemento/{codice}', [ElementoController::class, 'mostra'])->name('elemento');
+    Route::get('/elemento/{codice}/foto', [ElementoController::class, 'foto'])->name('elemento.foto');
 };
 
 if ($base = config('portal.base_host')) {

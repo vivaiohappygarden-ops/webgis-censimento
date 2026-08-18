@@ -44,9 +44,32 @@
     header.testata .titoli { line-height: 1.2; }
     header.testata .servizio { font-size: 17px; font-weight: 600; }
     header.testata .ente { font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; opacity: 0.85; }
-    header.testata nav { margin-left: auto; display: flex; gap: 16px; font-size: 14px; }
+    header.testata nav { display: flex; gap: 16px; font-size: 14px; }
     header.testata nav a { color: #fff; text-decoration: none; border-bottom: 1px solid transparent; }
     header.testata nav a:hover { border-bottom-color: rgba(255,255,255,0.7); }
+    header.testata form.ricerca { margin-left: auto; display: flex; gap: 8px; }
+    header.testata form.ricerca input {
+        border: 1px solid rgba(255,255,255,0.5);
+        background: rgba(255,255,255,0.12);
+        color: #fff;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font: inherit;
+        font-size: 14px;
+        width: 190px;
+    }
+    header.testata form.ricerca input::placeholder { color: rgba(255,255,255,0.75); }
+    header.testata form.ricerca button {
+        border: 1px solid rgba(255,255,255,0.5);
+        background: rgba(255,255,255,0.12);
+        color: #fff;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font: inherit;
+        font-size: 14px;
+        cursor: pointer;
+    }
+    header.testata form.ricerca button:hover { background: rgba(255,255,255,0.22); }
     main { max-width: 980px; margin: 0 auto; padding: 24px 20px 56px; }
     footer.chiusura {
         border-top: 1px solid var(--bordo);
@@ -56,8 +79,9 @@
         color: var(--tenue);
     }
     footer.chiusura .dentro { max-width: 980px; margin: 0 auto; display: flex; gap: 20px; flex-wrap: wrap; justify-content: space-between; }
-    @media (max-width: 520px) {
-        header.testata nav { margin-left: 0; width: 100%; }
+    @media (max-width: 640px) {
+        header.testata form.ricerca { margin-left: 0; width: 100%; }
+        header.testata form.ricerca input { flex: 1; width: auto; min-width: 0; }
     }
 </style>
 @stack('stile')
@@ -74,6 +98,17 @@
         <nav>
             <a href="{{ $portale->url('/') }}">Home</a>
         </nav>
+        <form class="ricerca" method="get" action="{{ $portale->url('/cerca') }}" role="search">
+            <input
+                type="search"
+                name="etichetta"
+                value="{{ $cercato ?? '' }}"
+                maxlength="80"
+                placeholder="Cerca per etichetta"
+                aria-label="Cerca per numero di etichetta"
+            >
+            <button type="submit">Cerca</button>
+        </form>
     </header>
 
     <main>
