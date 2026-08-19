@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Portale;
 use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use App\Models\Photo;
-use App\Services\Photos\ImageDerivative;
 use App\Services\Portale\PortalSearch;
 use App\Services\Portale\PortalState;
 use App\Support\PortalContext;
@@ -89,7 +88,7 @@ class ElementoController extends Controller
         $foto = $this->fotoPubblica($asset);
         abort_if($foto === null, 404);
 
-        $jpeg = ImageDerivative::jpeg(Storage::disk()->get($foto->s3_key), maxDimension: 1200, quality: 78);
+        $jpeg = \App\Services\Photos\PublicPhotoCache::jpeg($foto);
         abort_if($jpeg === null, 404);
 
         return response($jpeg, 200, [
@@ -120,7 +119,7 @@ class ElementoController extends Controller
         abort_unless(in_array($foto->category, ['before', 'during', 'after', 'census', 'reference'], true), 404);
         abort_unless($this->eventoPubblico($foto), 404);
 
-        $jpeg = ImageDerivative::jpeg(Storage::disk()->get($foto->s3_key), maxDimension: 1200, quality: 78);
+        $jpeg = \App\Services\Photos\PublicPhotoCache::jpeg($foto);
         abort_if($jpeg === null, 404);
 
         return response($jpeg, 200, [

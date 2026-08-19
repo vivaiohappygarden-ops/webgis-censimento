@@ -26,6 +26,7 @@ $rotte = function (): void {
     Route::get('/', [HomeController::class, 'home'])->name('home');
     Route::get('/cerca', [HomeController::class, 'cerca'])->name('cerca');
     Route::get('/stemma', [HomeController::class, 'logo'])->name('stemma');
+    Route::get('/privacy', [HomeController::class, 'informativa'])->name('privacy');
 
     Route::get('/elemento/{codice}', [ElementoController::class, 'mostra'])->name('elemento');
     Route::get('/elemento/{codice}/foto', [ElementoController::class, 'foto'])->name('elemento.foto');

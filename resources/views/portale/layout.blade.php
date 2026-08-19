@@ -237,6 +237,7 @@
             @if ($portale->contactEmail())
                 <div>Contatti: <a href="mailto:{{ $portale->contactEmail() }}">{{ $portale->contactEmail() }}</a></div>
             @endif
+            <div><a href="{{ $portale->url('/privacy') }}">Privacy e note legali</a></div>
         </div>
     </footer>
 </body>

@@ -26,6 +26,39 @@ Route::middleware('throttle:240,1')->group(function () {
         ->where('token', '[A-Za-z0-9]{16,64}')->name('public.tree.photo');
 });
 
+/*
+ * Verifica dei nomi a dominio per il rilascio automatico del certificato.
+ * Caddy interroga questo indirizzo prima di chiedere un certificato per un
+ * sottodominio: senza, chiunque potrebbe far emettere certificati puntando
+ * un proprio nome sul nostro server.
+ */
+Route::get('/interno/tls', function (\Illuminate\Http\Request $request) {
+    $host = strtolower(trim((string) $request->query('domain')));
+    $base = strtolower((string) config('portal.base_host'));
+    $principale = strtolower((string) parse_url((string) config('app.url'), PHP_URL_HOST));
+
+    if ($host !== '' && $host === $principale) {
+        return response('', 200);
+    }
+
+    if ($host === '' || $base === '' || ! str_ends_with($host, '.'.$base)) {
+        return response('', 404);
+    }
+
+    $slug = substr($host, 0, -strlen('.'.$base));
+
+    $esiste = \App\Models\Client::query()->withoutGlobalScopes()
+        ->whereNull('deleted_at')
+        ->where('public_slug', $slug)
+        ->where('public_enabled', true)
+        ->where('is_active', true)
+        ->whereIn('tenant_id', \App\Models\Organization::query()->withoutGlobalScopes()
+            ->where('is_active', true)->whereNull('deleted_at')->select('id'))
+        ->exists();
+
+    return response('', $esiste ? 200 : 404);
+})->middleware('throttle:120,1')->name('interno.tls');
+
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [WebAuthController::class, 'logout'])->name('logout');
 

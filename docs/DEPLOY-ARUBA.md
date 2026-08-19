@@ -200,6 +200,53 @@ mappa e nell'app di campo, l'**installazione dell'app di campo** sul telefono
 
 Per tornare all'indirizzo IP (raro): `bash /var/www/webgis/deploy/set-domain.sh 80.211.79.223`.
 
+### 6.3 Aprire il portale pubblico di un Comune
+
+Il portale pubblico di un committente vive su un proprio indirizzo, per esempio
+`mentana.censimenti.iltuodominio.it`. Serve una configurazione sola, fatta una
+volta, e poi due minuti per ogni nuovo Comune.
+
+**Una volta sola.** Nel file `/var/www/webgis/.env` si indica il dominio di base
+dei portali:
+
+```
+PORTAL_BASE_HOST=censimenti.iltuodominio.it
+```
+
+Poi si copia il modello `deploy/Caddyfile` in `/etc/caddy/Caddyfile`,
+sostituendo i due nomi di esempio con il dominio del gestionale e con quello dei
+portali, e si ricarica il server web:
+
+```bash
+sudo systemctl reload caddy
+php /var/www/webgis/artisan config:cache
+```
+
+**Per ogni Comune.** Dal pannello del gestore del dominio si aggiunge un record
+`A` che punta all'indirizzo IP del server:
+
+| Nome | Tipo | Valore |
+|---|---|---|
+| `mentana.censimenti` | A | indirizzo IP del server |
+
+In alternativa si può creare un solo record jolly `*.censimenti`, e da quel
+momento ogni nuovo Comune è immediato senza toccare più il DNS.
+
+Il certificato non va richiesto a mano: viene emesso da solo alla prima visita.
+Prima di emetterlo il server web chiede all'applicazione se quel nome
+corrisponde a un committente con il portale acceso, e se la risposta è no il
+certificato non viene rilasciato: così nessuno può far emettere certificati
+puntando un proprio nome sul nostro server.
+
+**Prima di dare l'indirizzo a un ente**, dalla pagina Territorio vanno compilati:
+stemma, nome pubblico, colore, indirizzo mail per le segnalazioni, titolare del
+trattamento e, se l'ente ce l'ha, l'indirizzo della dichiarazione di
+accessibilità. Il portale funziona anche senza, ma la pagina "Privacy e note
+legali" dice apertamente che il titolare non è stato indicato.
+
+Finché il DNS non è pronto, il portale è già visitabile all'indirizzo di
+collaudo `https://nome-del-sito/comune/mentana`.
+
 ## 7. Se qualcosa non va
 
 - Il sito non risponde: dal pannello Aruba riavviare il server, attendere

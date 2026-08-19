@@ -126,6 +126,9 @@ class PhotoController extends Controller implements HasMiddleware
         $photo = Photo::findOrFail($id);
         $photo->delete();
 
+        // La copia pubblica ridimensionata non deve sopravvivere all'originale
+        \App\Services\Photos\PublicPhotoCache::dimentica($photo);
+
         Audit::log('photo.deleted', $photo);
 
         return response()->noContent();

@@ -44,6 +44,9 @@ class ResolvePublicPortal
 
         app()->instance(PortalContext::class, $context);
         view()->share('portale', $context);
+        // Le pagine del portale sono fatte per essere trovate dai cittadini:
+        // a differenza della pagina del QR, vanno indicizzate
+        view()->share('indicizzabile', true);
 
         return $next($request);
     }

@@ -3,7 +3,7 @@
     "short_name": "WebGIS",
     "description": "Rilievo in campo del patrimonio verde, anche senza connessione.",
     "start_url": "/operatore",
-    "scope": "/",
+    "scope": "/operatore",
     "display": "standalone",
     "orientation": "portrait",
     "background_color": "#f3f4f6",

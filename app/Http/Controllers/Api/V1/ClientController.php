@@ -202,6 +202,9 @@ class ClientController extends Controller implements HasMiddleware
             'public_profile.color' => ['sometimes', 'nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'public_profile.footer_text' => ['sometimes', 'nullable', 'string', 'max:500'],
             'public_profile.show_co2' => ['sometimes', 'boolean'],
+            'public_profile.legal_owner' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'public_profile.privacy_text' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'public_profile.accessibility_url' => ['sometimes', 'nullable', 'url', 'max:500'],
 
             // Prefisso delle etichette: la numerazione riparte da uno per
             // ogni committente (MEN-0001, GUI-0001)

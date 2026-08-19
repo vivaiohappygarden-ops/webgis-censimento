@@ -50,6 +50,9 @@ const portale = reactive({
     welcome_text: '',
     footer_text: '',
     show_co2: false,
+    legal_owner: '',
+    privacy_text: '',
+    accessibility_url: '',
     salvato: '',
 });
 const stemmaInput = ref(null);
@@ -66,6 +69,9 @@ function caricaPortale(client) {
         welcome_text: profilo.welcome_text ?? '',
         footer_text: profilo.footer_text ?? '',
         show_co2: !! profilo.show_co2,
+        legal_owner: profilo.legal_owner ?? '',
+        privacy_text: profilo.privacy_text ?? '',
+        accessibility_url: profilo.accessibility_url ?? '',
         salvato: '',
     });
 }
@@ -85,6 +91,9 @@ async function salvaPortale() {
                 welcome_text: portale.welcome_text || null,
                 footer_text: portale.footer_text || null,
                 show_co2: portale.show_co2,
+                legal_owner: portale.legal_owner || null,
+                privacy_text: portale.privacy_text || null,
+                accessibility_url: portale.accessibility_url || null,
             },
         });
         aggiornaClienteInElenco(data.data);
@@ -505,6 +514,44 @@ onMounted(loadClients);
                             </span>
                         </span>
                     </label>
+
+                    <div class="border-t border-gray-100 pt-3">
+                        <p class="mb-2 text-xs font-medium text-gray-600">
+                            Privacy e note legali
+                            <span class="block font-normal text-gray-500">
+                                Servono prima di rendere pubblico il portale di un ente. La parte tecnica
+                                (niente cookie, niente statistiche, foto ripulite) è già scritta nella pagina.
+                            </span>
+                        </p>
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label class="block text-sm">
+                                <span class="mb-1 block text-xs text-gray-600">Titolare del trattamento</span>
+                                <input
+                                    v-model="portale.legal_owner"
+                                    placeholder="Comune di Mentana - Piazza ... - PEC ..."
+                                    class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                                >
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block text-xs text-gray-600">Indirizzo della dichiarazione di accessibilità</span>
+                                <input
+                                    v-model="portale.accessibility_url"
+                                    type="url"
+                                    placeholder="https://form.agid.gov.it/view/..."
+                                    class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                                >
+                            </label>
+                        </div>
+                        <label class="mt-3 block text-sm">
+                            <span class="mb-1 block text-xs text-gray-600">Informativa dell'ente (facoltativa)</span>
+                            <textarea
+                                v-model="portale.privacy_text"
+                                rows="3"
+                                class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                                placeholder="Testo fornito dall'ente, che si aggiunge alla parte tecnica già presente."
+                            />
+                        </label>
+                    </div>
 
                     <div class="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
                         <span class="text-xs font-medium text-gray-600">Stemma</span>

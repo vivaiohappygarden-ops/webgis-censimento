@@ -29,11 +29,24 @@ createInertiaApp({
     },
 });
 
-// PWA operatore: il service worker rende /operatore apribile anche offline
+// PWA operatore: il service worker rende /operatore apribile anche offline.
+// L'ambito e' ristretto a /operatore di proposito: sullo stesso indirizzo puo'
+// esserci il portale pubblico di un Comune, e sul telefono di un cittadino non
+// deve finire la cache dell'app di campo.
 if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {
+    window.addEventListener('load', async () => {
+        try {
+            // Installazioni vecchie con ambito su tutto il sito: vanno rimosse,
+            // altrimenti continuerebbero a controllare anche le pagine pubbliche
+            const registrazioni = await navigator.serviceWorker.getRegistrations();
+            const radice = new URL('/', window.location.origin).href;
+            await Promise.all(registrazioni
+                .filter((r) => r.scope === radice)
+                .map((r) => r.unregister()));
+
+            await navigator.serviceWorker.register('/sw.js', { scope: '/operatore' });
+        } catch {
             // Senza service worker l'app resta usabile online (P5: degrado, mai blocco)
-        });
+        }
     });
 }

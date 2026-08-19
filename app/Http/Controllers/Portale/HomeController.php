@@ -47,6 +47,19 @@ class HomeController extends Controller
         ]);
     }
 
+    /** Privacy e note legali: parte fissa scritta qui, parte a cura dell'ente. */
+    public function informativa(PortalContext $portale)
+    {
+        $profilo = $portale->client->public_profile ?? [];
+
+        return view('portale.informativa', [
+            'portale' => $portale,
+            'titolare' => trim((string) ($profilo['legal_owner'] ?? '')) ?: null,
+            'testoEnte' => trim((string) ($profilo['privacy_text'] ?? '')) ?: null,
+            'accessibilita' => filter_var($profilo['accessibility_url'] ?? '', FILTER_VALIDATE_URL) ?: null,
+        ]);
+    }
+
     /**
      * Stemma del Comune. Viene ricodificato come le foto pubbliche: il file
      * caricato può portare metadati che non ha senso pubblicare.
