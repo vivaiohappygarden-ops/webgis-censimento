@@ -41,6 +41,23 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - Export CAM: `CamExporter` (GeoJSON + shapefile via ogr2ogr, riproiezione RDN2008
   EPSG 7791-7794, date GGMMAAAA).
 
+## Portale pubblico dei committenti (dal 18/08/2026)
+
+- Un portale per committente, acceso singolarmente (`clients.public_enabled`), raggiungibile
+  dal sottodominio (`PORTAL_BASE_HOST`) o dal percorso di collaudo `/comune/{slug}`.
+- Le rotte stanno in `routes/portale.php`, fuori dal gruppo `web`: **niente sessione, niente
+  cookie, niente Inertia**. Il pacchetto JavaScript e' `resources/js/portale-mappa.js` e il
+  service worker dell'app di campo ha ambito ristretto a `/operatore`.
+- Senza utente autenticato `TenantScope` non filtra: **ogni query pubblica passa da
+  `PortalQuery`**, che porta con se' le regole di pubblicabilita' (niente nascosti, abbattuti,
+  validita' scaduta, aree previste o dismesse).
+- Lo stato pubblico a quattro voci (sano, in cura, da potare, in verifica) e' scritto una volta
+  sola in SQL in `PortalState::sql()`, perche' serve identico a scheda, mappa e riquadri.
+- Niente esce in pubblico da solo: ordini di lavoro, perizie e vincoli hanno il proprio
+  `is_public`; la stima CO2 si accende per committente.
+- La stima CO2 applica il modello scritto in `config/co2.php` con i suoi riferimenti: il
+  programma non inventa formule e la pagina dichiara sempre il metodo.
+
 ## Flusso di lavoro
 
 - Direttiva committente 11/08/2026: **proseguire sempre** con il blocco successivo della roadmap
