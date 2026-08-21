@@ -14,6 +14,7 @@ const sections = [
     { id: 'statistiche', label: 'Statistiche' },
     { id: 'qualita', label: 'Qualità e ispezioni' },
     { id: 'segnalazioni', label: 'Le segnalazioni' },
+    { id: 'portale-pubblico', label: 'Il portale pubblico' },
     { id: 'gestionale', label: 'Il gestionale giardini' },
     { id: 'campo', label: 'L\'app di campo' },
     { id: 'territorio', label: 'Territorio e catalogo' },
@@ -261,6 +262,121 @@ function goTo(id) {
                             La colonna Tempi e i filtri mostrano subito che cosa è fuori tempo massimo.
                             Da una segnalazione si genera l'ordine di lavoro con un solo pulsante.
                         </p>
+                    </section>
+
+                    <section id="portale-pubblico">
+                        <h2>Il portale pubblico del committente</h2>
+                        <p class="mt-2">
+                            È un sito consultabile da chiunque, con lo stemma e i colori dell'ente, dove il
+                            cittadino trova gli alberi del proprio territorio: una mappa, la ricerca per numero
+                            di cartellino e la scheda del singolo albero. Si accende <strong>un committente alla
+                            volta</strong>: finché non lo accendi, il suo indirizzo risponde "pagina non trovata".
+                        </p>
+
+                        <h3>Accenderlo</h3>
+                        <p class="mt-2">
+                            Tutto si fa dalla pagina <strong>Territorio</strong>: seleziona il committente e
+                            compila il riquadro "Portale pubblico".
+                        </p>
+                        <ol class="mt-2 list-decimal space-y-1 pl-5">
+                            <li>Spunta <strong>Portale pubblico attivo</strong>.</li>
+                            <li>Scegli l'<strong>indirizzo pubblico</strong> (per esempio <em>mentana</em>). Se lo
+                                lasci vuoto viene ricavato dal nome. Sotto al campo compare l'indirizzo completo.</li>
+                            <li>Scrivi il <strong>nome mostrato in pubblico</strong>, scegli il <strong>colore</strong>
+                                dell'intestazione e carica lo <strong>stemma</strong>.</li>
+                            <li>Indica l'<strong>email per le segnalazioni</strong> dei cittadini: senza, il pulsante
+                                "Segnala un problema" non compare.</li>
+                            <li>Scrivi il <strong>testo di benvenuto</strong> e la riga in fondo alla pagina.</li>
+                            <li>Compila <strong>Privacy e note legali</strong>: titolare del trattamento e, se l'ente
+                                ce l'ha, l'indirizzo della dichiarazione di accessibilità.</li>
+                            <li>Salva e usa <strong>"Apri il portale"</strong> per vederlo come lo vede un cittadino.</li>
+                        </ol>
+
+                        <h3>Il prefisso delle etichette</h3>
+                        <p class="mt-2">
+                            Ogni committente ha un prefisso di due-sei lettere (MEN, GUI) e una numerazione che
+                            <strong>riparte da uno</strong>: i suoi elementi prendono MEN-0001, MEN-0002 e così via.
+                            Il codice lo assegna il programma, non l'operatore, anche quando i rilievi rientrano
+                            dall'app di campo dopo essere stati fatti senza rete. Se elimini un elemento il suo
+                            numero non viene riassegnato: il cartellino potrebbe essere già applicato in campo.
+                            Se scrivi tu un codice a mano (per esempio importando dalla Regione), quello vince.
+                        </p>
+
+                        <h3>Che cosa vede il cittadino</h3>
+                        <p class="mt-2">
+                            La <strong>home</strong> con i numeri del patrimonio; la <strong>mappa</strong> a tutto
+                            schermo con tre sfondi (stradale, satellite, scura) e la legenda a quattro stati
+                            (sano, in cura, da potare, in verifica); la <strong>scheda dell'albero</strong> con foto
+                            ingrandibile, specie, data del rilievo, zona, coordinate cliccabili, misure, vincoli,
+                            cronologia degli interventi e i pulsanti "Raggiungi l'elemento" e "Segnala un problema".
+                        </p>
+                        <p class="mt-2">
+                            Gli <strong>alberi abbattuti spariscono</strong> dal portale ma restano nel gestionale,
+                            e il numero degli abbattimenti non compare in pubblico: al suo posto la home mostra
+                            quanti alberi sono stati curati e quanti potati. Le <strong>note interne</strong> e le
+                            <strong>foto dei difetti</strong> non escono mai.
+                        </p>
+
+                        <h3>Nascondere un singolo albero</h3>
+                        <p class="mt-2">
+                            Nella scheda dell'elemento, sotto l'intestazione, c'è una riga che dice se è visibile
+                            sul portale, con il pulsante <strong>"Nascondi dal portale"</strong>. Serve per i casi
+                            particolari: il portale pubblica tutto il resto.
+                        </p>
+
+                        <h3>Pubblicare gli atti nella cronologia</h3>
+                        <p class="mt-2">
+                            La cronologia pubblica di un albero è vuota finché non decidi tu cosa pubblicare.
+                        </p>
+                        <ul class="mt-2 list-disc space-y-1 pl-5">
+                            <li><strong>Ordine di lavoro</strong>: nella pagina Lavori apri l'ordine e spunta
+                                "Pubblica come atto sul portale del committente". A lavoro completato compare nella
+                                cronologia degli alberi interessati come "Ordine di servizio N. ...". La spunta si
+                                può mettere e togliere anche dopo che l'ordine è chiuso.</li>
+                            <li><strong>Perizia di stabilità</strong>: nel modulo della valutazione, spunta
+                                "Pubblica come atto sul portale". Compare come "Relazione tecnica N. ..." con la
+                                data, le prescrizioni e la prossima verifica prevista.</li>
+                        </ul>
+
+                        <h3>Le foto degli interventi</h3>
+                        <p class="mt-2">
+                            Nell'app di campo, dentro un lavoro in corso, c'è il pulsante <strong>"Foto del
+                            lavoro"</strong>: la foto resta agganciata a quell'ordine e compare nella cronologia
+                            pubblica accanto all'intervento. Se l'ordine tocca più elementi, prima si sceglie a
+                            quale albero si riferisce. Una foto agganciata a un lavoro non pubblicato non è
+                            raggiungibile da nessuno.
+                        </p>
+
+                        <h3>I vincoli</h3>
+                        <p class="mt-2">
+                            Sempre in <strong>Territorio</strong>, sotto il riquadro del portale, c'è l'elenco dei
+                            vincoli del committente: codice breve (per esempio <em>art.28 PTPR</em>), descrizione,
+                            ente che lo impone e il <strong>PDF</strong> da caricare. Il vincolo si collega poi agli
+                            alberi in due modi: a mano, dalla scheda dell'elemento (riquadro "Vincoli"), oppure
+                            <strong>per posizione</strong>, se il vincolo ha un perimetro: il pulsante "ricalcola"
+                            trova da solo tutti gli elementi che ci ricadono dentro. Il ricalcolo non tocca mai i
+                            collegamenti fatti a mano.
+                        </p>
+
+                        <h3>La stima dell'anidride carbonica</h3>
+                        <p class="mt-2">
+                            Si accende con la spunta <strong>"Mostra la stima dell'anidride carbonica"</strong> nel
+                            riquadro del portale. Il calcolo parte dal <strong>diametro del tronco</strong>: senza
+                            quel dato la stima non compare. L'<strong>assorbimento medio annuo</strong> richiede
+                            anche l'<strong>età stimata</strong>. Sotto al valore la pagina dichiara sempre con
+                            quale metodo è stato ottenuto. Tienila spenta finché il tecnico non ha verificato
+                            coefficienti e fonti: è l'unico numero del portale che si può contestare.
+                        </p>
+
+                        <h3>Prima di dare l'indirizzo a un ente</h3>
+                        <ul class="mt-2 list-disc space-y-1 pl-5">
+                            <li>Stemma, nome pubblico, colore e testo di benvenuto compilati.</li>
+                            <li>Email per le segnalazioni indicata.</li>
+                            <li>Titolare del trattamento compilato: senza, la pagina della privacy lo dichiara
+                                mancante.</li>
+                            <li>Prefisso delle etichette impostato, se vuoi la numerazione per Comune.</li>
+                            <li>Un giro di prova sul portale: home, ricerca di un'etichetta vera, mappa, scheda.</li>
+                        </ul>
                     </section>
 
                     <section id="gestionale">
