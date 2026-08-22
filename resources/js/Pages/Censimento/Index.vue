@@ -12,6 +12,68 @@ const canCreate = computed(() => permissions.value.includes('assets.create'));
 const canViewClients = computed(() => permissions.value.includes('clients.view'));
 
 const rows = ref([]);
+const canUpdateAssets = computed(() => permissions.value.includes('assets.update'));
+
+// --- Azioni su piu' elementi insieme ---------------------------------------
+const selezionati = ref([]);
+const azioneInCorso = ref(false);
+const esitoMultiplo = ref('');
+const saltatiMultiplo = ref([]);
+const dataRilievoMultipla = ref('');
+const ordini = ref([]);
+const ordineScelto = ref('');
+
+const tuttiSelezionati = computed(() =>
+    rows.value.length > 0 && selezionati.value.length === rows.value.length);
+
+function commutaTutti() {
+    selezionati.value = tuttiSelezionati.value ? [] : rows.value.map((r) => r.id);
+}
+
+async function caricaOrdiniAperti() {
+    try {
+        const { data } = await axios.get('/api/v1/work-orders', { params: { per_page: 100 } });
+        // Su un ordine chiuso non si aggiungono elementi: non va nemmeno offerto
+        ordini.value = (data.data ?? []).filter((o) => ! ['completed', 'cancelled'].includes(o.status));
+    } catch {
+        ordini.value = [];
+    }
+}
+
+async function azioneMultipla(chiamata, riuscita) {
+    azioneInCorso.value = true;
+    esitoMultiplo.value = '';
+    saltatiMultiplo.value = [];
+    try {
+        const { data } = await chiamata();
+        saltatiMultiplo.value = data.data.saltati ?? [];
+        esitoMultiplo.value = riuscita(data.data);
+        selezionati.value = [];
+        await load();
+    } catch (err) {
+        esitoMultiplo.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Errore nell\'operazione.';
+    } finally {
+        azioneInCorso.value = false;
+    }
+}
+
+const nascondiSelezionati = (nascosto) => azioneMultipla(
+    () => axios.post('/api/v1/azioni/modifica-elementi', { ids: selezionati.value, public_hidden: nascosto }),
+    (d) => `${d.modificati.length} element${d.modificati.length === 1 ? 'o' : 'i'} ${nascosto ? 'nascost' : 'rimess'}${d.modificati.length === 1 ? 'o' : 'i'} ${nascosto ? '' : 'in vista '}sul portale.`,
+);
+
+const applicaDataRilievo = () => azioneMultipla(
+    () => axios.post('/api/v1/azioni/modifica-elementi', {
+        ids: selezionati.value, surveyed_at: dataRilievoMultipla.value || null,
+    }),
+    (d) => `Data di rilievo aggiornata su ${d.modificati.length}.`,
+);
+
+const collegaAOrdine = () => azioneMultipla(
+    () => axios.post(`/api/v1/azioni/lavori/${ordineScelto.value}/collega-elementi`, { ids: selezionati.value }),
+    (d) => `${d.collegati.length} collegat${d.collegati.length === 1 ? 'o' : 'i'} all'ordine di lavoro.`,
+);
 const meta = reactive({ total: 0, current_page: 1, last_page: 1 });
 const loading = ref(false);
 const filters = reactive({ q: '', status: '', clientId: '', areaId: '', page: 1 });
@@ -170,6 +232,7 @@ let debounce = null;
 
 async function load() {
     loading.value = true;
+    selezionati.value = [];
     try {
         const { data } = await axios.get('/api/v1/assets', {
             params: {
@@ -311,10 +374,75 @@ const measure = (row) => {
                 </label>
             </div>
 
+            <div
+                v-if="canUpdateAssets && selezionati.length"
+                data-test="censimento-barra-selezione"
+                class="mb-3 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm"
+            >
+                <div class="flex flex-wrap items-center gap-3">
+                    <span class="font-medium">{{ selezionati.length }} selezionati</span>
+
+                    <button
+                        class="rounded-lg bg-green-700 px-3 py-1.5 font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                        :disabled="azioneInCorso"
+                        data-test="multipla-nascondi"
+                        @click="nascondiSelezionati(true)"
+                    >Nascondi dal portale</button>
+                    <button
+                        class="rounded-lg border border-green-700 px-3 py-1.5 font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
+                        :disabled="azioneInCorso"
+                        @click="nascondiSelezionati(false)"
+                    >Rimetti sul portale</button>
+
+                    <label class="flex items-center gap-2">
+                        <span class="text-gray-600">Data di rilievo</span>
+                        <input v-model="dataRilievoMultipla" type="date" class="rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
+                        <button
+                            class="rounded-lg border border-green-700 px-2.5 py-1.5 font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
+                            :disabled="azioneInCorso || ! dataRilievoMultipla"
+                            data-test="multipla-data"
+                            @click="applicaDataRilievo"
+                        >Applica</button>
+                    </label>
+
+                    <label class="flex items-center gap-2">
+                        <span class="text-gray-600">Aggiungi a un lavoro</span>
+                        <select v-model="ordineScelto" class="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" @focus="ordini.length || caricaOrdiniAperti()">
+                            <option value="">Scegli…</option>
+                            <option v-for="o in ordini" :key="o.id" :value="o.id">{{ o.code }} - {{ o.title }}</option>
+                        </select>
+                        <button
+                            class="rounded-lg border border-green-700 px-2.5 py-1.5 font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
+                            :disabled="azioneInCorso || ! ordineScelto"
+                            data-test="multipla-collega"
+                            @click="collegaAOrdine"
+                        >Collega</button>
+                    </label>
+
+                    <button class="text-gray-600 hover:underline" @click="selezionati = []">Annulla selezione</button>
+                </div>
+
+                <p v-if="esitoMultiplo" class="mt-2 text-gray-700">{{ esitoMultiplo }}</p>
+            </div>
+
+            <ul v-if="saltatiMultiplo.length" data-test="censimento-saltati" class="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+                <li class="mb-1 font-medium">Questi sono stati saltati:</li>
+                <li v-for="s in saltatiMultiplo" :key="s.id" class="text-xs">{{ s.codice || s.id }} - {{ s.motivo }}</li>
+            </ul>
+
             <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
                 <table class="w-full text-sm">
                     <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
                         <tr>
+                            <th v-if="canUpdateAssets" class="px-2 py-3">
+                                <input
+                                    type="checkbox"
+                                    class="rounded border-gray-300"
+                                    aria-label="Seleziona tutti"
+                                    :checked="tuttiSelezionati"
+                                    @change="commutaTutti"
+                                >
+                            </th>
                             <th class="px-4 py-3">Codice</th>
                             <th class="px-4 py-3">Tipo</th>
                             <th class="px-4 py-3">Committente</th>
@@ -327,12 +455,22 @@ const measure = (row) => {
                     </thead>
                     <tbody class="divide-y divide-gray-100">
                         <tr v-if="loading">
-                            <td colspan="8" class="px-4 py-8 text-center text-gray-400">Caricamento…</td>
+                            <td colspan="9" class="px-4 py-8 text-center text-gray-400">Caricamento…</td>
                         </tr>
                         <tr v-else-if="rows.length === 0">
-                            <td colspan="8" class="px-4 py-8 text-center text-gray-400">Nessun elemento trovato.</td>
+                            <td colspan="9" class="px-4 py-8 text-center text-gray-400">Nessun elemento trovato.</td>
                         </tr>
                         <tr v-for="row in rows" v-else :key="row.id" class="hover:bg-green-50/40">
+                            <td v-if="canUpdateAssets" class="px-2 py-3">
+                                <input
+                                    v-model="selezionati"
+                                    type="checkbox"
+                                    :value="row.id"
+                                    class="rounded border-gray-300"
+                                    :aria-label="`Seleziona ${row.census_code || 'elemento'}`"
+                                    data-test="elemento-casella"
+                                >
+                            </td>
                             <td class="px-4 py-3 font-medium">{{ row.census_code || '—' }}</td>
                             <td class="px-4 py-3">
                                 <span class="text-xs text-gray-400">{{ row.object_type?.code }}</span>

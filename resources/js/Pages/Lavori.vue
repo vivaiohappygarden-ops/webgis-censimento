@@ -32,6 +32,42 @@ const STATUS_COLORS = {
 const PRIORITY_LABELS = { low: 'Bassa', normal: 'Normale', high: 'Alta', urgent: 'Urgente' };
 
 const rows = ref([]);
+
+// --- Azioni su piu' ordini insieme -----------------------------------------
+const selezionati = ref([]);
+const chiusuraInCorso = ref(false);
+const esitoMultiplo = ref('');
+const saltatiMultiplo = ref([]);
+
+const tuttiSelezionati = computed(() =>
+    rows.value.length > 0 && selezionati.value.length === rows.value.length);
+
+function commutaTutti() {
+    selezionati.value = tuttiSelezionati.value ? [] : rows.value.map((r) => r.id);
+}
+
+/**
+ * Chiude gli ordini selezionati. Quelli che non si possono chiudere non
+ * vengono forzati: si riportano con il motivo, perche' credere di aver
+ * concluso un lavoro rimasto a meta' e' peggio che vedere un errore.
+ */
+async function chiudiSelezionati() {
+    chiusuraInCorso.value = true;
+    esitoMultiplo.value = '';
+    saltatiMultiplo.value = [];
+    try {
+        const { data } = await axios.post('/api/v1/azioni/chiudi-lavori', { ids: selezionati.value });
+        const fatti = data.data.completati.length;
+        saltatiMultiplo.value = data.data.saltati;
+        esitoMultiplo.value = fatti === 1 ? '1 ordine completato.' : `${fatti} ordini completati.`;
+        selezionati.value = [];
+        await load();
+    } catch (err) {
+        esitoMultiplo.value = err.response?.data?.message ?? 'Errore nella chiusura.';
+    } finally {
+        chiusuraInCorso.value = false;
+    }
+}
 const meta = reactive({ total: 0, current_page: 1, last_page: 1 });
 const filters = reactive({ status: '', q: '', page: 1 });
 const loading = ref(false);
@@ -114,6 +150,7 @@ function resetForm() {
 resetForm();
 
 async function load() {
+    selezionati.value = [];
     loading.value = true;
     try {
         const { data } = await axios.get('/api/v1/work-orders', {
@@ -424,6 +461,27 @@ onMounted(async () => {
                 @created-order="load"
             />
 
+            <div
+                v-if="view === 'elenco' && selezionati.length"
+                data-test="lavori-barra-selezione"
+                class="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm"
+            >
+                <span class="font-medium">{{ selezionati.length }} selezionati</span>
+                <button
+                    class="rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                    :disabled="chiusuraInCorso"
+                    data-test="lavori-chiudi-selezionati"
+                    @click="chiudiSelezionati"
+                >{{ chiusuraInCorso ? 'Chiusura…' : 'Segna come completati' }}</button>
+                <button class="text-sm text-gray-600 hover:underline" @click="selezionati = []">Annulla selezione</button>
+                <span v-if="esitoMultiplo" class="text-gray-700">{{ esitoMultiplo }}</span>
+            </div>
+
+            <ul v-if="saltatiMultiplo.length" data-test="lavori-saltati" class="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+                <li class="mb-1 font-medium">Questi non sono stati chiusi:</li>
+                <li v-for="s in saltatiMultiplo" :key="s.id" class="text-xs">{{ s.codice || s.id }} - {{ s.motivo }}</li>
+            </ul>
+
             <div v-if="view === 'elenco'" class="mb-3 flex flex-wrap gap-2">
                 <select v-model="filters.status" class="rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @change="filters.page = 1; load()">
                     <option value="">Tutti gli stati</option>
@@ -441,6 +499,15 @@ onMounted(async () => {
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
+                            <th class="px-2 py-2.5 font-medium">
+                                <input
+                                    type="checkbox"
+                                    class="rounded border-gray-300"
+                                    aria-label="Seleziona tutti"
+                                    :checked="tuttiSelezionati"
+                                    @change="commutaTutti"
+                                >
+                            </th>
                             <th class="px-4 py-2.5 font-medium">Codice</th>
                             <th class="px-4 py-2.5 font-medium">Titolo</th>
                             <th class="px-4 py-2.5 font-medium">Stato</th>
@@ -457,6 +524,16 @@ onMounted(async () => {
                             class="cursor-pointer hover:bg-green-50/40"
                             @click="openDetail(row.id)"
                         >
+                            <td class="px-2 py-2" @click.stop>
+                                <input
+                                    v-model="selezionati"
+                                    type="checkbox"
+                                    :value="row.id"
+                                    class="rounded border-gray-300"
+                                    :aria-label="`Seleziona ${row.code}`"
+                                    data-test="lavoro-casella"
+                                >
+                            </td>
                             <td class="px-4 py-2 font-medium">{{ row.code }}</td>
                             <td class="max-w-xs truncate px-4 py-2">{{ row.title }}</td>
                             <td class="px-4 py-2">
@@ -470,7 +547,7 @@ onMounted(async () => {
                             <td class="px-4 py-2 text-right">{{ row.assets_count }}</td>
                         </tr>
                         <tr v-if="! rows.length && ! loading">
-                            <td colspan="7" class="px-4 py-8 text-center text-gray-400">Nessun ordine di lavoro.</td>
+                            <td colspan="8" class="px-4 py-8 text-center text-gray-400">Nessun ordine di lavoro.</td>
                         </tr>
                     </tbody>
                 </table>

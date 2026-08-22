@@ -318,6 +318,39 @@ function goTo(id) {
                             un ente prima che il suo nome sia pubblicato nel DNS.
                         </p>
 
+                        <h3>Lavorare su tanti elementi insieme</h3>
+                        <p class="mt-2">
+                            Negli elenchi <strong>Censimento</strong> e <strong>Lavori</strong> ogni riga ha
+                            una casella a sinistra, e in cima c'e' quella che le seleziona tutte. Appena
+                            selezioni qualcosa compare una barra verde con le azioni disponibili.
+                        </p>
+                        <p class="mt-2">
+                            Dal <strong>Censimento</strong> puoi, su tutti gli elementi selezionati in una
+                            volta: <strong>nasconderli o rimetterli sul portale</strong> pubblico,
+                            applicare la stessa <strong>data di rilievo</strong> (comodo dopo una giornata
+                            di campagna), e <strong>collegarli a un ordine di lavoro</strong> gia' aperto.
+                            Dai <strong>Lavori</strong> puoi segnare come completati piu' ordini insieme.
+                        </p>
+                        <p class="mt-2">
+                            Prima seleziona con i filtri, poi spunta: la selezione si azzera quando cambi
+                            filtro o pagina, cosi' non ti ritrovi ad agire su righe che non stai piu'
+                            vedendo.
+                        </p>
+                        <p class="mt-2">
+                            <strong>Quello che non riesce te lo dice.</strong> Se fra i venti ordini
+                            selezionati tre non si potevano chiudere, compare un riquadro giallo con
+                            l'elenco di quali e il motivo. Non vengono forzati e non spariscono in
+                            silenzio: un'azione di gruppo che salta righe senza dirlo ti fa credere di aver
+                            finito un lavoro rimasto a meta'.
+                        </p>
+                        <p class="mt-2">
+                            Due cose <strong>non</strong> si fanno in blocco, di proposito: cambiare
+                            <strong>specie e misure</strong>, che sono dati del singolo albero, e registrare
+                            un <strong>abbattimento</strong>, che ha il suo pulsante nella scheda perche'
+                            deve scrivere anche la data. Farli in blocco sarebbe il modo piu' rapido di
+                            rovinare un censimento.
+                        </p>
+
                         <h3>Validare e chiudere una perizia</h3>
                         <p class="mt-2">
                             Finche' non la validi, la perizia e' una <strong>bozza di lavoro</strong>: la

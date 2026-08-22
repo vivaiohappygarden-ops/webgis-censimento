@@ -136,6 +136,11 @@ Route::prefix('v1')->group(function () {
             ->whereUuid('work_order');
         Route::post('work-orders/{id}/transition', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'transition'])->whereUuid('id');
         Route::post('work-orders/{id}/day', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'toggleDay'])->whereUuid('id');
+
+        // Azioni su piu' elementi selezionati in un elenco
+        Route::post('azioni/chiudi-lavori', [\App\Http\Controllers\Api\V1\AzioniMultipleController::class, 'chiudiLavori']);
+        Route::post('azioni/modifica-elementi', [\App\Http\Controllers\Api\V1\AzioniMultipleController::class, 'modificaElementi']);
+        Route::post('azioni/lavori/{id}/collega-elementi', [\App\Http\Controllers\Api\V1\AzioniMultipleController::class, 'collegaElementi'])->whereUuid('id');
         Route::post('work-orders/{id}/checks', [\App\Http\Controllers\Api\V1\WorkCheckController::class, 'store'])->whereUuid('id');
         Route::apiResource('inspection-templates', \App\Http\Controllers\Api\V1\InspectionTemplateController::class)
             ->whereUuid('inspection_template');
