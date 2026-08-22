@@ -141,7 +141,10 @@ COMUNE
     echo
     echo "# Vecchio indirizzo numerico: rimanda al nome"
     echo "http://${IP_SERVER} {"
-    echo -e "\tredir ${APP_URL}{uri} permanent"
+    # Rimando temporaneo, non permanente: quello permanente resta scritto
+    # dentro il browser e continuerebbe a valere anche dopo un ripensamento,
+    # rendendo impossibile tornare all'indirizzo numerico
+    echo -e "\tredir ${APP_URL}{uri} 302"
     echo "}"
   fi
 

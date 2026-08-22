@@ -155,7 +155,9 @@ class PortaleIndirizziTest extends TestCase
         // I cartellini con il QR stampati quando il sito era all'indirizzo
         // numerico devono continuare a funzionare
         $this->assertStringContainsString('http://80.211.79.223 {', $generata);
-        $this->assertStringContainsString('redir https://gestionale.esempio.it{uri} permanent', $generata);
+        // Rimando temporaneo: quello permanente si incastra nel browser e
+        // impedirebbe di tornare indietro sull'indirizzo numerico
+        $this->assertStringContainsString('redir https://gestionale.esempio.it{uri} 302', $generata);
     }
 
     private function generaCaddyfile(string $cartella, string $ip = '80.211.79.223'): string
