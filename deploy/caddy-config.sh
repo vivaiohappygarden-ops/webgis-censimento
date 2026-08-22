@@ -70,10 +70,14 @@ trap 'rm -f "${TEMPORANEO}"' EXIT
 	# Caddy interroga l'applicazione, che risponde "sì" solo per un
 	# committente con il portale acceso: senza questo controllo chiunque
 	# potrebbe far emettere certificati puntando un proprio nome qui.
+	#
+	# Qui c'è solo "ask": le vecchie opzioni "interval" e "burst" sono state
+	# tolte da Caddy 2.8 e farebbero fallire il caricamento. Il freno alle
+	# richieste resta comunque doppio: la domanda passa dall'applicazione,
+	# che risponde no a ogni nome sconosciuto, ed è a sua volta limitata nel
+	# numero di richieste al minuto.
 	on_demand_tls {
 		ask http://127.0.0.1:8081/interno/tls
-		interval 2m
-		burst 5
 	}
 }
 
@@ -157,7 +161,11 @@ COMUNE
 if command -v caddy >/dev/null; then
   if ! ESITO="$(caddy validate --adapter caddyfile --config "${TEMPORANEO}" 2>&1)"; then
     echo "La configurazione generata non è valida: il server web non è stato toccato." >&2
+    echo "Versione del server web: $(caddy version 2>/dev/null | head -1)" >&2
     echo "${ESITO}" >&2
+    # La configurazione respinta resta a disposizione per capire cosa non va
+    cp "${TEMPORANEO}" /tmp/caddyfile-non-valido
+    echo "Configurazione respinta salvata in /tmp/caddyfile-non-valido" >&2
     exit 1
   fi
 fi

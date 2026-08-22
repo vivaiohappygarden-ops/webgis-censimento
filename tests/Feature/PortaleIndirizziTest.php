@@ -123,6 +123,10 @@ class PortaleIndirizziTest extends TestCase
         // Il certificato al volo passa sempre dal controllo dell'applicazione
         $this->assertStringContainsString('ask http://127.0.0.1:8081/interno/tls', $generata);
         $this->assertStringNotContainsString('SOSTITUIRE', $generata);
+        // Opzioni tolte da Caddy 2.8: se tornassero, il server web
+        // rifiuterebbe l'intera configurazione al primo riavvio
+        $this->assertStringNotContainsString('interval ', $generata);
+        $this->assertStringNotContainsString('burst ', $generata);
     }
 
     public function test_senza_dominio_dei_portali_non_si_chiedono_certificati_al_volo(): void
