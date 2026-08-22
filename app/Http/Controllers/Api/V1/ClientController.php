@@ -188,7 +188,10 @@ class ClientController extends Controller implements HasMiddleware
             // Portale pubblico del committente
             'public_slug' => ['sometimes', 'nullable', 'string', 'max:40',
                 'regex:/^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/',
-                Rule::notIn(config('portal.reserved_slugs', [])),
+                // Fra i nomi riservati c'e' anche quello del gestionale, quando
+                // sta sullo stesso dominio dei portali: assegnarlo a un
+                // committente renderebbe irraggiungibile il programma
+                Rule::notIn(\App\Support\PortalLabels::reservedSlugs()),
                 // Unicità su TUTTO l'archivio: un sottodominio deve portare
                 // a un solo committente, anche fra imprese diverse
                 Rule::unique('clients', 'public_slug')

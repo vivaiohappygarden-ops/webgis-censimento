@@ -140,12 +140,70 @@ class PortalLabels
                 ->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))
                 ->exists();
 
-            if (! $preso && ! in_array($candidato, config('portal.reserved_slugs', []), true)) {
+            if (! $preso && ! in_array($candidato, self::reservedSlugs(), true)) {
                 return $candidato;
             }
         }
 
         return $base.'-'.random_int(100, 999);
+    }
+
+    /**
+     * Etichette di sottodominio che nessun committente puo' prendersi: quelle
+     * di servizio piu' il nome del gestionale, quando vive sullo stesso
+     * dominio dei portali.
+     */
+    public static function reservedSlugs(): array
+    {
+        $riservate = config('portal.reserved_slugs', []);
+
+        if ($proprio = self::etichettaDelGestionale((string) config('portal.base_host'))) {
+            $riservate[] = $proprio;
+        }
+
+        return array_values(array_unique($riservate));
+    }
+
+    /**
+     * Espressione che {comune} deve rispettare nelle rotte per sottodominio.
+     * Esclude il nome del gestionale, che altrimenti verrebbe scambiato per
+     * un committente e coprirebbe tutto il programma di gestione.
+     */
+    public static function vincoloSottodominio(string $base): string
+    {
+        $etichetta = '[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?';
+
+        if ($proprio = self::etichettaDelGestionale($base)) {
+            // Il vincolo viene inserito dentro l'espressione dell'intero nome
+            // a dominio, dove "$" e' la fine di tutto il nome e non della sua
+            // prima parte: per escludere solo la prima parte serve guardare al
+            // punto che la chiude. La seconda forma serve quando la stessa
+            // regola viene usata per comporre un indirizzo, dove il valore
+            // arriva da solo e il punto non c'e'
+            return '(?!'.preg_quote($proprio, '#').'(?:\\.|$))'.$etichetta;
+        }
+
+        return $etichetta;
+    }
+
+    /**
+     * Prima parte del nome del gestionale quando sta sotto il dominio dei
+     * portali ("gestionale.censimentoalberature.it" con base
+     * "censimentoalberature.it" da' "gestionale"); altrimenti null.
+     */
+    private static function etichettaDelGestionale(string $base): ?string
+    {
+        $base = strtolower(trim($base));
+        $host = strtolower((string) parse_url((string) config('app.url'), PHP_URL_HOST));
+
+        if ($base === '' || $host === '' || ! str_ends_with($host, '.'.$base)) {
+            return null;
+        }
+
+        $etichetta = substr($host, 0, -strlen('.'.$base));
+
+        // Solo un livello: "a.b.dominio" non sarebbe mai scambiato per un Comune
+        return ($etichetta === '' || str_contains($etichetta, '.')) ? null : $etichetta;
     }
 
     /** Slug proposto per il sottodominio: "Comune di Sant'Angelo" -> "sant-angelo". */

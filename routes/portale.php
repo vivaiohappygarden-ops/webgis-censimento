@@ -42,7 +42,17 @@ $rotte = function (): void {
 };
 
 if ($base = config('portal.base_host')) {
-    Route::domain('{comune}.'.$base)->name('portale.')->group($rotte);
+    /*
+     * Il gestionale puo' vivere sullo stesso dominio dei portali, per esempio
+     * gestionale.censimentoalberature.it con i Comuni su
+     * <comune>.censimentoalberature.it. In quel caso il suo nome combacia con
+     * {comune}: senza questa esclusione le rotte pubbliche gli passerebbero
+     * davanti e l'intero gestionale sparirebbe dietro un "non trovato",
+     * perche' nessun committente si chiama come lui.
+     */
+    Route::domain('{comune}.'.$base)
+        ->where(['comune' => App\Support\PortalLabels::vincoloSottodominio($base)])
+        ->name('portale.')->group($rotte);
 }
 
 if (config('portal.path_fallback')) {

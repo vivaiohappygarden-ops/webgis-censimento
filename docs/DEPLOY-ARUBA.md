@@ -257,8 +257,9 @@ accende dalla pagina Territorio e l'indirizzo funziona subito.
 
 Se il gestionale sta sullo stesso dominio dei portali (per esempio
 `gestionale.censimentoalberature.it` con i Comuni su
-`<comune>.censimentoalberature.it`), il comando se ne accorge da solo e aggiunge
-la riga che serve. Senza, il server web darebbe per scontato che il certificato
+`<comune>.censimentoalberature.it`), va tutto bene: il comando se ne accorge da
+solo, e il programma tiene il nome del gestionale fuori dai nomi assegnabili ai
+Comuni. Il comando aggiunge anche la riga che serve al certificato. Senza, il server web darebbe per scontato che il certificato
 dei Comuni copra anche il gestionale, non gliene chiederebbe uno, e il
 gestionale smetterebbe di rispondere.
 

@@ -46,7 +46,10 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - Un portale per committente, acceso singolarmente (`clients.public_enabled`), raggiungibile
   dal sottodominio (`PORTAL_BASE_HOST`) o dal percorso di collaudo `/comune/{slug}`.
 - Le rotte stanno in `routes/portale.php`, fuori dal gruppo `web`: **niente sessione, niente
-  cookie, niente Inertia**. Il pacchetto JavaScript e' `resources/js/portale-mappa.js` e il
+  cookie, niente Inertia**. Il gestionale puo' vivere sullo stesso dominio dei portali
+  (`gestionale.dominio.it` con i Comuni su `<comune>.dominio.it`): il suo nome e' escluso da
+  `{comune}` con `PortalLabels::vincoloSottodominio()` ed e' fra gli slug riservati, altrimenti
+  le rotte pubbliche coprirebbero l'intero programma di gestione. Il pacchetto JavaScript e' `resources/js/portale-mappa.js` e il
   service worker dell'app di campo ha ambito ristretto a `/operatore`.
 - Senza utente autenticato `TenantScope` non filtra: **ogni query pubblica passa da
   `PortalQuery`**, che porta con se' le regole di pubblicabilita' (niente nascosti, abbattuti,
