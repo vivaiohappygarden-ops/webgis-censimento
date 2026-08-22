@@ -80,6 +80,43 @@ class PortaleRicercaTest extends TestCase
         $risposta->assertSeeInOrder(['3', 'Elementi censiti', '3', 'Alberi', '2', 'Varietà botaniche'], false);
     }
 
+    public function test_i_numeri_a_zero_non_compaiono(): void
+    {
+        $this->creaAlbero(['species' => 'Tilia cordata']);
+
+        $risposta = $this->get('/comune/mentana');
+
+        $risposta->assertOk();
+        // Senza interventi registrati, "0 alberi curati" non informa:
+        // sembra una mancanza dell'ente invece di un dato non ancora raccolto
+        $risposta->assertDontSee('Alberi curati');
+        $risposta->assertDontSee('Albero curato');
+        $risposta->assertDontSee('Alberi potati');
+    }
+
+    public function test_la_home_mette_in_evidenza_la_ricerca_del_cartellino(): void
+    {
+        $this->creaAlbero(['species' => 'Tilia cordata']);
+
+        $this->get('/comune/mentana')
+            ->assertOk()
+            ->assertSee('Numero del cartellino')
+            ->assertSee("Cerca l'albero", false);
+    }
+
+    public function test_la_home_mostra_l_anteprima_della_mappa(): void
+    {
+        $this->creaAlbero(['species' => 'Tilia cordata']);
+
+        $risposta = $this->get('/comune/mentana');
+
+        $risposta->assertOk();
+        $risposta->assertSee('anteprima-mappa', false);
+        $risposta->assertSee('Apri la mappa', false);
+        // L'anteprima si guarda, non si manovra
+        $risposta->assertSee('"anteprima":true', false);
+    }
+
     public function test_l_elemento_nascosto_non_entra_nei_numeri(): void
     {
         $id = $this->creaAlbero(['species' => 'Tilia cordata']);
@@ -87,7 +124,8 @@ class PortaleRicercaTest extends TestCase
 
         $this->patchJson("/api/v1/assets/{$id}", ['public_hidden' => true])->assertOk();
 
-        $this->get('/comune/mentana')->assertOk()->assertSeeInOrder(['1', 'Elementi censiti'], false);
+        // Con un solo elemento l'etichetta va al singolare
+        $this->get('/comune/mentana')->assertOk()->assertSeeInOrder(['1', 'Elemento censito'], false);
     }
 
     public function test_la_ricerca_accetta_il_numero_senza_prefisso(): void

@@ -24,10 +24,8 @@ class MappaController extends Controller
     {
         return view('portale.mappa', [
             'portale' => $portale,
-            'estensione' => $this->estensione($portale),
-            'sfondi' => collect(config('portal.basemaps', []))
-                ->filter(fn ($s) => ! empty($s['url']))
-                ->values(),
+            'estensione' => \App\Services\Portale\PortalExtent::per($portale->client),
+            'sfondi' => \App\Services\Portale\PortalExtent::sfondi(),
             'stati' => collect(PortalState::ETICHETTE)
                 ->map(fn ($etichetta, $codice) => [
                     'codice' => $codice,
@@ -109,22 +107,4 @@ class MappaController extends Controller
     }
 
     /** Riquadro geografico del patrimonio, per aprire la mappa già inquadrata. */
-    private function estensione(PortalContext $portale): ?array
-    {
-        $riga = DB::selectOne(
-            'SELECT ST_XMin(e) AS x1, ST_YMin(e) AS y1, ST_XMax(e) AS x2, ST_YMax(e) AS y2
-             FROM (SELECT ST_Extent(geom::geometry) AS e FROM ('
-            .PortalQuery::assets($portale->client)->select('assets.geom')->toSql().') AS pubblici) AS r',
-            PortalQuery::assets($portale->client)->select('assets.geom')->getBindings(),
-        );
-
-        if ($riga?->x1 === null) {
-            return null;
-        }
-
-        return [
-            'sw' => [(float) $riga->x1, (float) $riga->y1],
-            'ne' => [(float) $riga->x2, (float) $riga->y2],
-        ];
-    }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Portale;
 
 use App\Http\Controllers\Controller;
 use App\Services\Photos\ImageDerivative;
+use App\Services\Portale\PortalExtent;
 use App\Services\Portale\PortalSearch;
 use App\Services\Portale\PortalStats;
 use App\Support\PortalContext;
@@ -21,9 +22,7 @@ class HomeController extends Controller
 {
     public function home(PortalContext $portale)
     {
-        return view('portale.home', [
-            'portale' => $portale,
-            'statistiche' => PortalStats::per($portale->client),
+        return view('portale.home', [...$this->datiHome($portale),
             'cercato' => null,
             'nonTrovato' => false,
         ]);
@@ -39,12 +38,24 @@ class HomeController extends Controller
             return redirect($portale->url('/elemento/'.rawurlencode(PortalSearch::riferimento($asset))));
         }
 
-        return view('portale.home', [
-            'portale' => $portale,
-            'statistiche' => PortalStats::per($portale->client),
+        return view('portale.home', [...$this->datiHome($portale),
             'cercato' => $cercato,
             'nonTrovato' => $cercato !== '',
         ]);
+    }
+
+    /**
+     * Dati comuni alla home e al suo esito di ricerca: i numeri del
+     * patrimonio e l'inquadratura per l'anteprima della mappa.
+     */
+    private function datiHome(PortalContext $portale): array
+    {
+        return [
+            'portale' => $portale,
+            'statistiche' => PortalStats::per($portale->client),
+            'estensione' => PortalExtent::per($portale->client),
+            'sfondi' => PortalExtent::sfondi(),
+        ];
     }
 
     /** Privacy e note legali: parte fissa scritta qui, parte a cura dell'ente. */
