@@ -280,8 +280,9 @@ function goTo(id) {
                         </p>
                         <ol class="mt-2 list-decimal space-y-1 pl-5">
                             <li>Spunta <strong>Portale pubblico attivo</strong>.</li>
-                            <li>Scegli l'<strong>indirizzo pubblico</strong> (per esempio <em>mentana</em>). Se lo
-                                lasci vuoto viene ricavato dal nome. Sotto al campo compare l'indirizzo completo.</li>
+                            <li>Scegli il <strong>nome nell'indirizzo</strong> (per esempio <em>mentana</em>). Se lo
+                                lasci vuoto viene ricavato dal nome del committente. Sotto al campo compare
+                                l'indirizzo completo che avrà il portale, mentre lo scrivi.</li>
                             <li>Scrivi il <strong>nome mostrato in pubblico</strong>, scegli il <strong>colore</strong>
                                 dell'intestazione e carica lo <strong>stemma</strong>.</li>
                             <li>Indica l'<strong>email per le segnalazioni</strong> dei cittadini: senza, il pulsante
@@ -291,6 +292,31 @@ function goTo(id) {
                                 ce l'ha, l'indirizzo della dichiarazione di accessibilità.</li>
                             <li>Salva e usa <strong>"Apri il portale"</strong> per vederlo come lo vede un cittadino.</li>
                         </ol>
+
+                        <h3>L'indirizzo del portale</h3>
+                        <p class="mt-2">
+                            Ci sono due forme di indirizzo, e cambiano solo per come è configurato il server:
+                        </p>
+                        <ul class="mt-2 list-disc space-y-1 pl-5">
+                            <li><strong>Con il dominio dei portali collegato:</strong>
+                                <em>mentana.tuodominio.it</em>, il nome del Comune davanti. È la forma da dare
+                                agli enti.</li>
+                            <li><strong>Senza dominio collegato:</strong> <em>indirizzo-del-gestionale/comune/mentana</em>.
+                                Funziona uguale, ma è un indirizzo di collaudo: si vede che è "dentro" un altro sito.</li>
+                        </ul>
+                        <p class="mt-2">
+                            Il dominio si compra una volta sola e vale per tutti i Comuni: nel pannello del gestore
+                            del dominio serve un solo record jolly che punta al server, poi sul server si lancia
+                            <strong>deploy/set-portal-domain.sh</strong> con il nome del dominio. Da quel momento ogni
+                            Comune nuovo è immediato: lo accendi da qui e l'indirizzo funziona subito, lucchetto
+                            compreso. Se il dominio non è ancora collegato, il riquadro del portale te lo dice e
+                            riporta il comando esatto. I passaggi per esteso sono in
+                            <em>docs/DEPLOY-ARUBA.md</em>, capitolo 6.3.
+                        </p>
+                        <p class="mt-2">
+                            L'indirizzo di collaudo resta valido anche dopo: è comodo per far vedere un portale a
+                            un ente prima che il suo nome sia pubblicato nel DNS.
+                        </p>
 
                         <h3>Il prefisso delle etichette</h3>
                         <p class="mt-2">

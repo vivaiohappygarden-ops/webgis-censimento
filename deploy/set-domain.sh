@@ -35,13 +35,11 @@ cd "${APP_DIR}"
 log() { echo; echo "==> $*"; }
 
 if [[ "${DOMINIO}" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
-  INDIRIZZO_SITO="http://${DOMINIO}"
   SCHEMA="http"
   COOKIE_SICURO="false"
   echo "Indirizzo IP: il sito tornerà in http (niente lucchetto, niente posizione"
   echo "sulla mappa, app di campo non installabile sul telefono)."
 else
-  INDIRIZZO_SITO="${DOMINIO}"
   SCHEMA="https"
   COOKIE_SICURO="true"
 
@@ -71,11 +69,6 @@ else
   echo "  ufw non attivo: nessuna regola da aggiungere."
 fi
 
-log "Configurazione del server web"
-sed "s|SOSTITUIRE.esempio.it|${INDIRIZZO_SITO}|" deploy/Caddyfile > /etc/caddy/Caddyfile
-install -d -o caddy -g caddy /var/log/caddy
-systemctl reload caddy || systemctl restart caddy
-
 log "Configurazione dell'applicazione"
 sed -i "s|^APP_URL=.*|APP_URL=${SCHEMA}://${DOMINIO}|" .env
 if grep -q '^SESSION_SECURE_COOKIE=' .env; then
@@ -87,6 +80,12 @@ sudo -u www-data php artisan config:cache
 sudo -u www-data php artisan route:cache
 sudo -u www-data php artisan view:cache
 systemctl restart webgis-queue || true
+
+# La configurazione del server web si genera dal file .env appena aggiornato,
+# cosi' resta sempre in accordo con l'indirizzo del gestionale e con il
+# dominio dei portali dei Comuni
+log "Configurazione del server web"
+bash deploy/caddy-config.sh
 
 if [[ "${SCHEMA}" = "https" ]]; then
   log "Attesa del certificato (fino a due minuti)"

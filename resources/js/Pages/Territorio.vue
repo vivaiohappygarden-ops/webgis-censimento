@@ -57,6 +57,23 @@ const portale = reactive({
 });
 const stemmaInput = ref(null);
 
+// Dominio dei portali (PORTAL_BASE_HOST sul server). Finché non è collegato,
+// gli indirizzi restano quelli di collaudo con /comune/<nome> nel percorso.
+const dominioPortali = computed(() => page.props.portale?.base_host ?? '');
+
+// Indirizzo che avrà il portale con il nome scritto in questo momento nel
+// campo: si aggiorna mentre si scrive, prima ancora di salvare
+const indirizzoAnteprima = computed(() => {
+    const nome = (portale.public_slug || '').trim().toLowerCase();
+    if (! nome) {
+        return '';
+    }
+
+    return dominioPortali.value
+        ? `https://${nome}.${dominioPortali.value}`
+        : `${window.location.origin}/comune/${nome}`;
+});
+
 function caricaPortale(client) {
     const profilo = client.public_profile ?? {};
     Object.assign(portale, {
@@ -424,6 +441,18 @@ onMounted(loadClients);
                 </header>
 
                 <form class="space-y-4 p-4" @submit.prevent="salvaPortale">
+                    <div
+                        v-if="! dominioPortali"
+                        data-test="portale-dominio-mancante"
+                        class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                    >
+                        <span class="font-medium">Dominio dei portali non ancora collegato.</span>
+                        Per ora ogni Comune si raggiunge con un indirizzo di collaudo, con il nome
+                        dentro il percorso. Per avere indirizzi come <span class="font-medium">mentana.tuodominio.it</span>,
+                        una volta comprato il dominio va lanciato sul server:
+                        <code class="mt-1 block break-all rounded bg-white px-2 py-1">bash /var/www/webgis/deploy/set-portal-domain.sh tuodominio.it</code>
+                    </div>
+
                     <label class="flex items-start gap-2 text-sm">
                         <input v-model="portale.public_enabled" type="checkbox" class="mt-0.5 rounded border-gray-300">
                         <span>
@@ -434,14 +463,14 @@ onMounted(loadClients);
 
                     <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <label class="block text-sm">
-                            <span class="mb-1 block text-xs font-medium text-gray-600">Indirizzo pubblico</span>
+                            <span class="mb-1 block text-xs font-medium text-gray-600">Nome nell'indirizzo</span>
                             <input
                                 v-model="portale.public_slug"
                                 placeholder="mentana"
                                 class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm lowercase"
                             >
-                            <span class="mt-1 block break-all text-xs text-gray-500">
-                                {{ selectedClient.portal_url || 'Si genera dal nome quando accendi il portale.' }}
+                            <span data-test="portale-indirizzo" class="mt-1 block break-all text-xs text-gray-500">
+                                {{ indirizzoAnteprima || 'Si genera dal nome del committente quando accendi il portale.' }}
                             </span>
                         </label>
 
@@ -557,7 +586,7 @@ onMounted(loadClients);
                         <span class="text-xs font-medium text-gray-600">Stemma</span>
                         <img
                             v-if="selectedClient.has_logo"
-                            :src="`${selectedClient.portal_url}/stemma`"
+                            :src="`/comune/${selectedClient.public_slug}/stemma`"
                             alt="Stemma del committente"
                             class="h-10 w-auto rounded border border-gray-200 bg-gray-50"
                         >
@@ -588,6 +617,14 @@ onMounted(loadClients);
                             rel="noopener"
                             class="text-sm text-green-700 hover:underline"
                         >Apri il portale →</a>
+                        <a
+                            v-if="dominioPortali && selectedClient.public_slug && selectedClient.public_enabled"
+                            :href="`/comune/${selectedClient.public_slug}`"
+                            target="_blank"
+                            rel="noopener"
+                            class="text-xs text-gray-500 hover:underline"
+                            title="Stesso portale, raggiunto da qui: utile finché il DNS del Comune non è pronto"
+                        >indirizzo di collaudo</a>
                         <span v-if="portale.salvato" class="text-sm text-green-700">{{ portale.salvato }}</span>
                     </div>
                 </form>

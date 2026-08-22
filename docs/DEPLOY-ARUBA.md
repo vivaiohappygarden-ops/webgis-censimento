@@ -49,6 +49,12 @@ Serve un indirizzo tipo `verde.tuodominio.it`. Tre strade:
 Il certificato HTTPS (il lucchetto) è **gratuito e automatico**: ci pensa il
 server da solo, nessun acquisto da fare, e si rinnova senza intervento.
 
+**Se in futuro servono i portali pubblici dei Comuni** (`mentana.tuodominio.it`),
+conviene scegliere fin da ora un dominio che si legga bene con il nome del
+Comune davanti, per esempio `censimentoalberi.it`. Non è una decisione da
+prendere subito: si può collegare in qualsiasi momento (vedi 6.3), anche un
+dominio diverso da quello del gestionale.
+
 ### 1.3 Cosa NON serve
 
 - Hosting Linux/Windows condiviso: non è adatto (manca PostgreSQL/PostGIS).
@@ -200,52 +206,86 @@ mappa e nell'app di campo, l'**installazione dell'app di campo** sul telefono
 
 Per tornare all'indirizzo IP (raro): `bash /var/www/webgis/deploy/set-domain.sh 80.211.79.223`.
 
-### 6.3 Aprire il portale pubblico di un Comune
+### 6.3 Il dominio dei portali dei Comuni
 
-Il portale pubblico di un committente vive su un proprio indirizzo, per esempio
-`mentana.censimenti.iltuodominio.it`. Serve una configurazione sola, fatta una
-volta, e poi due minuti per ogni nuovo Comune.
-
-**Una volta sola.** Nel file `/var/www/webgis/.env` si indica il dominio di base
-dei portali:
+I portali pubblici stanno ognuno sul proprio indirizzo, con il nome del Comune
+davanti:
 
 ```
-PORTAL_BASE_HOST=censimenti.iltuodominio.it
+https://mentana.censimentoalberi.it
+https://guidoniamontecelio.censimentoalberi.it
 ```
 
-Poi si copia il modello `deploy/Caddyfile` in `/etc/caddy/Caddyfile`,
-sostituendo i due nomi di esempio con il dominio del gestionale e con quello dei
-portali, e si ricarica il server web:
+Serve **un dominio solo**, comprato una volta, e vale per tutti i Comuni.
 
-```bash
-sudo systemctl reload caddy
-php /var/www/webgis/artisan config:cache
-```
+**1) Comprare il dominio.** Va bene qualunque gestore (Aruba, Cloudflare,
+Namecheap): costo indicativo 10-15 euro l'anno per un `.it`. Conviene un nome
+che si legga bene davanti al Comune, per esempio `censimentoalberi.it`. Il
+dominio del gestionale può essere lo stesso (`gestionale.censimentoalberi.it`)
+oppure un altro: non fa differenza.
 
-**Per ogni Comune.** Dal pannello del gestore del dominio si aggiunge un record
-`A` che punta all'indirizzo IP del server:
+**2) Un solo record DNS.** Nel pannello del gestore del dominio si crea un
+record jolly, che copre in un colpo solo tutti i Comuni presenti e futuri:
 
 | Nome | Tipo | Valore |
 |---|---|---|
-| `mentana.censimenti` | A | indirizzo IP del server |
+| `*` | A | indirizzo IP del server |
 
-In alternativa si può creare un solo record jolly `*.censimenti`, e da quel
-momento ogni nuovo Comune è immediato senza toccare più il DNS.
+Chi preferisce tenere il controllo nome per nome crea invece un record `A` per
+ogni Comune (`mentana`, `guidoniamontecelio`, ...): funziona uguale, ma va
+rifatto a ogni Comune nuovo.
 
-Il certificato non va richiesto a mano: viene emesso da solo alla prima visita.
-Prima di emetterlo il server web chiede all'applicazione se quel nome
-corrisponde a un committente con il portale acceso, e se la risposta è no il
-certificato non viene rilasciato: così nessuno può far emettere certificati
-puntando un proprio nome sul nostro server.
+Il record jolly non tocca il dominio senza prefisso: `censimentoalberi.it` resta
+libero per un eventuale sito di presentazione ospitato altrove.
 
-**Prima di dare l'indirizzo a un ente**, dalla pagina Territorio vanno compilati:
-stemma, nome pubblico, colore, indirizzo mail per le segnalazioni, titolare del
-trattamento e, se l'ente ce l'ha, l'indirizzo della dichiarazione di
-accessibilità. Il portale funziona anche senza, ma la pagina "Privacy e note
+**3) Un comando sul server.**
+
+```bash
+sudo bash /var/www/webgis/deploy/set-portal-domain.sh censimentoalberi.it
+```
+
+Il comando controlla il DNS, scrive la configurazione dell'applicazione e del
+server web, e alla fine stampa l'indirizzo di ogni Comune con lo stato del suo
+DNS. Per tornare indietro: `sudo bash .../set-portal-domain.sh --rimuovi`.
+
+Da quel momento **ogni Comune nuovo non richiede più niente sul server**: si
+accende dalla pagina Territorio e l'indirizzo funziona subito.
+
+**Il certificato (il lucchetto) non va richiesto a mano.** Viene emesso da solo
+alla prima visita. Prima di emetterlo il server web chiede all'applicazione se
+quel nome corrisponde a un committente con il portale acceso, e se la risposta è
+no il certificato non viene rilasciato: così nessuno può far emettere
+certificati puntando un proprio nome sul nostro server.
+
+Per rivedere in qualsiasi momento l'elenco degli indirizzi:
+
+```bash
+sudo -u www-data php /var/www/webgis/artisan portale:indirizzi --verifica
+```
+
+### 6.4 Accendere il portale di un Comune
+
+Dalla pagina **Territorio**, scelto il committente:
+
+1. spuntare "Portale pubblico attivo";
+2. controllare il **nome nell'indirizzo** (è la parte davanti al dominio: meglio
+   `mentana` che `comunedimentana`). Sotto al campo compare l'indirizzo esatto
+   che avrà il portale;
+3. caricare lo **stemma**, scegliere il **colore** e il **nome pubblico**;
+4. compilare **titolare del trattamento** e, se l'ente ce l'ha, l'indirizzo
+   della **dichiarazione di accessibilità**;
+5. indicare l'**indirizzo mail per le segnalazioni**.
+
+Il portale funziona anche senza i dati legali, ma la pagina "Privacy e note
 legali" dice apertamente che il titolare non è stato indicato.
 
-Finché il DNS non è pronto, il portale è già visitabile all'indirizzo di
-collaudo `https://nome-del-sito/comune/mentana`.
+Il nome nell'indirizzo si può cambiare, ma cambiandolo il vecchio indirizzo
+smette di rispondere: conviene sceglierlo bene prima di darlo all'ente.
+
+Finché il DNS non è pronto, ogni portale è già visitabile dall'indirizzo di
+collaudo `https://indirizzo-del-gestionale/comune/mentana`, che resta valido
+anche dopo (nella pagina Territorio c'è il collegamento "indirizzo di
+collaudo").
 
 ## 7. Se qualcosa non va
 
@@ -259,5 +299,6 @@ collaudo `https://nome-del-sito/comune/mentana`.
 
 *Questa guida accompagna gli script in `deploy/`: `provision.sh`
 (installazione), `update.sh` (aggiornamenti), `set-domain.sh` (indirizzo del
-sito e HTTPS), `backup.sh` (salvataggi),
-`Caddyfile` (server web) e `.env.production.example` (configurazione).*
+sito e HTTPS), `set-portal-domain.sh` (dominio dei portali dei Comuni),
+`caddy-config.sh` (configurazione del server web, generata dal file `.env`),
+`backup.sh` (salvataggi) e `.env.production.example` (configurazione).*

@@ -22,11 +22,9 @@ PHP_V=8.4
 # serve in HTTP e il cookie di sessione non va marcato "solo HTTPS", o il
 # login girerebbe a vuoto. Con un nome di dominio, invece, HTTPS automatico.
 if [[ "${WEBGIS_DOMAIN}" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
-  SITE_ADDRESS="http://${WEBGIS_DOMAIN}"
   APP_SCHEME="http"
   SECURE_COOKIE="false"
 else
-  SITE_ADDRESS="${WEBGIS_DOMAIN}"
   APP_SCHEME="https"
   SECURE_COOKIE="true"
 fi
@@ -173,12 +171,11 @@ systemctl daemon-reload
 systemctl enable --now webgis-queue
 
 log "Caddy"
-sed "s|SOSTITUIRE.esempio.it|${SITE_ADDRESS}|" deploy/Caddyfile > /etc/caddy/Caddyfile
-# La directory dei log deve appartenere a caddy, altrimenti il caricamento
-# della configurazione fallisce
-install -d -o caddy -g caddy /var/log/caddy
-systemctl enable --now caddy
-systemctl restart caddy
+# La configurazione del server web si genera dal file .env (indirizzo del
+# gestionale e, quando c'e', dominio dei portali dei Comuni): non esiste un
+# modello da modificare a mano
+systemctl enable caddy
+bash deploy/caddy-config.sh
 
 log "Firewall: apertura delle porte del web"
 # Su alcune immagini Ubuntu ufw è attivo e lascia passare solo l'SSH:

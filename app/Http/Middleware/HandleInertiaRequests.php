@@ -30,6 +30,11 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
             ],
+            // Dominio dei portali pubblici: serve alla pagina Territorio per
+            // mostrare l'indirizzo vero di un Comune, o per dire che manca
+            'portale' => [
+                'base_host' => config('portal.base_host'),
+            ],
         ];
     }
 }
