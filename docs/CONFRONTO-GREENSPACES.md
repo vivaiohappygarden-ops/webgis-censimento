@@ -582,3 +582,83 @@ Da segnalare, ma probabilmente voluto: le analisi strumentali non si registrano 
 Nella scheda dell'albero il pannello c'e' ed e' completo: pulsante "Analisi strumentali" con il numero di analisi gia' registrate, tabella delle analisi visibile a tutti, e pulsante "+ Aggiungi analisi" solo per chi puo' modificare. Il modulo permette di scegliere lo strumento, scrivere modello, data e altezza di misura, aggiungere quante coppie voce/valore si vogliono, scrivere le note e allegare il referto.
 
 Ho verificato apposta i due punti in cui una funzione simile di solito si rompe. Primo: il collegamento per scaricare il referto usa un indirizzo calcolato che nella lettura dei dati sembrava mancante, ma il programma lo aggiunge sempre a partire dal codice del documento, quindi il collegamen
+
+
+---
+
+## Aggiornamento dal video di presentazione (trascrizione, 22/08/2026)
+
+Il documento commerciale analizzato sopra e' del 2020. Un video di presentazione
+del prodotto, trascritto, mostra cose che nel documento non c'erano. Va letto
+come piu' recente e piu' attendibile sul "cosa fa oggi".
+
+### Correzione importante: il portale pubblico ce l'hanno
+
+Nel confronto sopra era scritto che il portale per i cittadini non compare nel
+loro documento, e che quindi era un nostro punto esclusivo. **Non e' piu' vero.**
+Nel video si dice espressamente che con il software "e' possibile coinvolgere e
+sensibilizzare i cittadini nella gestione del verde attraverso un portale
+pubblico e un'app cittadino".
+
+Non sappiamo quanto sia profondo: dal video non si vede. Il nostro ha
+personalizzazione per Comune, quattro stati pubblici, ricerca del cartellino,
+QR, cronologia degli atti, vincoli con documento e stima CO2 dichiarata. Ma
+**l'argomento di vendita non puo' piu' essere "loro non ce l'hanno"**: al
+massimo "il nostro fa queste cose", e solo dopo averlo visto.
+
+Hanno anche un'**app per il cittadino**, che noi non abbiamo in nessuna forma.
+
+### Altre cose nuove rispetto al documento del 2020
+
+**Certificato VTA immutabile.** Alla validazione di una scheda VTA il programma
+genera un certificato che non e' piu' modificabile ne' cancellabile. E' una
+garanzia di non manomissione che in una controversia pesa. Da noi la perizia si
+stampa, ma non esiste un momento formale di "chiusura" che blocchi il documento.
+
+**Lavori: quantita' calcolata selezionando sulla mappa.** Nel creare un lavoro si
+preme "inserisci geometria", si selezionano gli oggetti direttamente sulla mappa
+e la quantita' da valorizzare si aggiorna da sola. E' la stessa cosa del punto 4
+della scaletta, ma con il gesto giusto: non un campo da compilare, una selezione
+sulla mappa.
+
+**Lavori: automatismi.** Scegliendo la priorita' vengono proposte date di inizio
+e fine; scegliendo il tipo di lavoro il programma suggerisce su quanti oggetti
+si puo' applicare. Una volta salvato, il lavoro non e' piu' modificabile e
+riceve un numero.
+
+**Chiusura di piu' lavori insieme** e **modifica multipla** su una selezione
+filtrata. Da noi si lavora un elemento alla volta.
+
+**Scheda localita' piu' ricca della nostra.** Superficie totale e superficie
+gestita calcolate automaticamente dagli oggetti censiti dentro; classificazione
+ISTAT; elenco delle imprese assegnate ai lavori; elenco delle piante presenti
+con nome scientifico, nome comune e quantita'; piano di gestione allegato.
+
+**Import shapefile per localita' ed export Excel** direttamente dalla scheda.
+Conferma il punto 2 della scaletta.
+
+**Mappa: ortofoto regionale accendibile.** Nel video la accendono come esempio.
+Conferma il punto 6 della scaletta, ed e' una cosa che mostrano come argomento
+di vendita.
+
+**Mappa: Street View da qualsiasi punto**, layer accendibili uno per uno e
+legenda con la spiegazione dei simboli.
+
+**Tecnologie dichiarate:** sensori ambientali, tag NFC e RFID, e integrazione
+con altri sistemi tramite "standard aperti e interfacce documentate".
+
+### Cosa cambia nella scaletta
+
+Niente di stravolto, ma tre aggiustamenti:
+
+1. **Street View dalla scheda e dalla mappa**: e' un collegamento, si aggiunge in
+   pochi minuti. Abbiamo gia' "Raggiungi l'elemento" che apre la navigazione.
+   Costo quasi nullo, si vede subito in una dimostrazione.
+2. **Chiusura del documento di perizia** (non piu' modificabile dopo la firma):
+   vale piu' di quanto costa, perche' e' un argomento di garanzia.
+3. **Selezione degli oggetti sulla mappa per creare un lavoro**: da tenere
+   insieme al punto 4, perche' e' il gesto che rende utile il calcolo dalla
+   geometria.
+
+Il portale pubblico resta una cosa fatta bene da noi, ma va venduto per quello
+che fa, non per il fatto di esistere.
