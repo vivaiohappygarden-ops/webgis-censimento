@@ -204,6 +204,10 @@ Con il lucchetto attivo si sbloccano: la **posizione del dispositivo** sulla
 mappa e nell'app di campo, l'**installazione dell'app di campo** sul telefono
 (Aggiungi a schermata Home) e le **pagine pubbliche col QR** senza avvisi.
 
+Il vecchio indirizzo numerico non smette di funzionare: chi lo apre viene
+portato al nome nuovo, pagina per pagina. Cosi' i cartellini con il QR gia'
+stampati e i collegamenti salvati continuano a funzionare.
+
 Per tornare all'indirizzo IP (raro): `bash /var/www/webgis/deploy/set-domain.sh 80.211.79.223`.
 
 ### 6.3 Il dominio dei portali dei Comuni

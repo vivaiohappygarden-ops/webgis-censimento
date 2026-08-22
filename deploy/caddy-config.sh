@@ -26,6 +26,10 @@ valore_env() {
 APP_URL="$(valore_env APP_URL)"
 PORTALI="$(valore_env PORTAL_BASE_HOST)"
 
+# Indirizzo numerico di questo server: serve a tenere in vita i collegamenti
+# vecchi dopo il passaggio a un nome a dominio
+IP_SERVER="${WEBGIS_IP_SERVER:-$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i == "src") print $(i+1)}' | head -1)}"
+
 if [[ -z "${APP_URL}" ]]; then
   echo "APP_URL non impostato in ${APP_DIR}/.env" >&2
   exit 1
@@ -124,6 +128,18 @@ COMUNE
     echo -e "\theader Strict-Transport-Security \"max-age=31536000\""
   fi
   echo "}"
+
+  # Passando dall'indirizzo numerico a un nome, i cartellini con il QR gia'
+  # stampati e i collegamenti salvati punterebbero nel vuoto: il vecchio
+  # indirizzo resta acceso e rimanda al nome nuovo, senza perdere la pagina
+  # richiesta
+  if [[ "${SCHEMA}" = "https" && -n "${IP_SERVER}" && "${IP_SERVER}" != "${HOST_GESTIONALE}" ]]; then
+    echo
+    echo "# Vecchio indirizzo numerico: rimanda al nome"
+    echo "http://${IP_SERVER} {"
+    echo -e "\tredir ${APP_URL}{uri} permanent"
+    echo "}"
+  fi
 
   if [[ -n "${PORTALI}" ]]; then
     echo

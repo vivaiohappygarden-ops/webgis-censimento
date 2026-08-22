@@ -140,14 +140,28 @@ class PortaleIndirizziTest extends TestCase
         $this->assertStringNotContainsString('*.', $generata);
     }
 
-    private function generaCaddyfile(string $cartella): string
+    public function test_passando_a_un_nome_il_vecchio_indirizzo_numerico_rimanda_al_nome(): void
+    {
+        $cartella = sys_get_temp_dir().'/webgis-caddy-'.uniqid();
+        mkdir($cartella);
+        file_put_contents($cartella.'/.env', "APP_URL=https://gestionale.esempio.it\n");
+
+        $generata = $this->generaCaddyfile($cartella, '80.211.79.223');
+
+        // I cartellini con il QR stampati quando il sito era all'indirizzo
+        // numerico devono continuare a funzionare
+        $this->assertStringContainsString('http://80.211.79.223 {', $generata);
+        $this->assertStringContainsString('redir https://gestionale.esempio.it{uri} permanent', $generata);
+    }
+
+    private function generaCaddyfile(string $cartella, string $ip = '80.211.79.223'): string
     {
         $script = base_path('deploy/caddy-config.sh');
         $uscita = $cartella.'/Caddyfile';
 
         $comando = sprintf(
-            'WEBGIS_PROVA=1 WEBGIS_APP_DIR=%s WEBGIS_CADDYFILE=%s bash %s 2>&1',
-            escapeshellarg($cartella), escapeshellarg($uscita), escapeshellarg($script),
+            'WEBGIS_PROVA=1 WEBGIS_IP_SERVER=%s WEBGIS_APP_DIR=%s WEBGIS_CADDYFILE=%s bash %s 2>&1',
+            escapeshellarg($ip), escapeshellarg($cartella), escapeshellarg($uscita), escapeshellarg($script),
         );
 
         exec($comando, $righe, $esito);
