@@ -61,6 +61,36 @@ const stemmaInput = ref(null);
 // gli indirizzi restano quelli di collaudo con /comune/<nome> nel percorso.
 const dominioPortali = computed(() => page.props.portale?.base_host ?? '');
 
+// I due campi hanno l'aspetto minuscolo/maiuscolo per foglio di stile, ma
+// quello che conta è il valore salvato: si normalizza mentre si scrive,
+// altrimenti "Guidonia Montecelio" verrebbe rifiutato al salvataggio
+function normalizzaNome() {
+    portale.public_slug = (portale.public_slug || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/-{2,}/g, '-')
+        .slice(0, 40);
+}
+
+// Il trattino iniziale o finale non è ammesso, ma toglierlo mentre si scrive
+// impedirebbe di digitarlo: si toglie quando si lascia il campo
+function rifinisciNome() {
+    portale.public_slug = (portale.public_slug || '').replace(/^-+|-+$/g, '');
+}
+
+function normalizzaPrefisso() {
+    portale.label_prefix = (portale.label_prefix || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '')
+        .slice(0, 6);
+}
+
+// "comunediguidonia" si legge peggio di "guidonia": è solo un consiglio,
+// non un errore, perché qualche ente potrebbe volerlo davvero
+const nomeTroppoLungo = computed(() => /^(citta|comune)-?(di|del|della|delle|dei|degli)?-?[a-z0-9]/.test(portale.public_slug || ''));
+
 // Indirizzo che avrà il portale con il nome scritto in questo momento nel
 // campo: si aggiorna mentre si scrive, prima ancora di salvare
 const indirizzoAnteprima = computed(() => {
@@ -468,9 +498,14 @@ onMounted(loadClients);
                                 v-model="portale.public_slug"
                                 placeholder="mentana"
                                 class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm lowercase"
+                                @input="normalizzaNome"
+                                @blur="rifinisciNome"
                             >
                             <span data-test="portale-indirizzo" class="mt-1 block break-all text-xs text-gray-500">
                                 {{ indirizzoAnteprima || 'Si genera dal nome del committente quando accendi il portale.' }}
+                            </span>
+                            <span v-if="nomeTroppoLungo" data-test="portale-nome-lungo" class="mt-1 block text-xs text-amber-700">
+                                Di solito basta il nome del Comune, senza "comune di".
                             </span>
                         </label>
 
@@ -481,6 +516,7 @@ onMounted(loadClients);
                                 maxlength="6"
                                 placeholder="MEN"
                                 class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm uppercase"
+                                @input="normalizzaPrefisso"
                             >
                             <span class="mt-1 block text-xs text-gray-500">
                                 I nuovi elementi prendono MEN-0001, MEN-0002 e così via.
