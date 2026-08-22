@@ -318,6 +318,29 @@ function goTo(id) {
                             un ente prima che il suo nome sia pubblicato nel DNS.
                         </p>
 
+                        <h3>Il bilancio arboreo da consegnare al Comune</h3>
+                        <p class="mt-2">
+                            La legge 10/2013 chiede al sindaco di rendere noto, prima della fine del
+                            mandato, quanti alberi sono stati piantati e quanti abbattuti. Dalla pagina
+                            <strong>VTA</strong>, nel riquadro "Bilancio arboreo", scegli il
+                            <strong>committente</strong> e il periodo, poi <strong>"Scarica il
+                            documento"</strong>: esce un PDF con la consistenza iniziale e finale, gli
+                            impianti, gli abbattimenti, il dettaglio per specie, i posti d'impianto e
+                            lo spazio per timbro e firma.
+                        </p>
+                        <p class="mt-2">
+                            Scegli sempre un committente prima di scaricarlo: lasciando "Tutti" il
+                            documento somma tutti i Comuni insieme, e un numero cosi' l'ente non lo
+                            puo' usare. Quella forma serve a te, per il quadro d'insieme dell'impresa.
+                        </p>
+                        <p class="mt-2">
+                            In fondo al documento c'e' la <strong>nota sul metodo di calcolo</strong>:
+                            dice come sono stati contati gli alberi (dalla data di messa a dimora, o da
+                            quella di censimento se la prima non e' nota) e avverte che i posti
+                            d'impianto sono una fotografia del giorno di stampa. E' la parte che rende
+                            il documento difendibile davanti a un ufficio tecnico: non toglierla.
+                        </p>
+
                         <h3>Il prefisso delle etichette</h3>
                         <p class="mt-2">
                             Ogni committente ha un prefisso di due-sei lettere (MEN, GUI) e una numerazione che

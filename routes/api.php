@@ -83,6 +83,7 @@ Route::prefix('v1')->group(function () {
         Route::get('vta/dashboard', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'index']);
         Route::get('vta/tutelati', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'tutelati']);
         Route::get('vta/bilancio', [\App\Http\Controllers\Api\V1\TreeBalanceController::class, 'index']);
+        Route::get('vta/bilancio/pdf', [\App\Http\Controllers\Api\V1\TreeBalanceController::class, 'pdf']);
 
         Route::get('users', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'index']);
         Route::post('users', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'store']);

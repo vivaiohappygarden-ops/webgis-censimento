@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
@@ -56,9 +56,31 @@ const todayLocal = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(to
 const balance = reactive({
     from: `${today.getFullYear()}-01-01`,
     to: todayLocal,
+    // Il bilancio di fine mandato riguarda un Comune: sommare piu' enti in un
+    // foglio solo darebbe un numero che nessuno puo' usare. Vuoto = tutti,
+    // che serve all'impresa per il proprio quadro d'insieme
+    client_id: '',
     loading: false,
     error: '',
     result: null,
+});
+const committenti = ref([]);
+
+async function caricaCommittenti() {
+    try {
+        const { data } = await axios.get('/api/v1/clients', { params: { per_page: 100 } });
+        committenti.value = data.data ?? [];
+    } catch {
+        committenti.value = [];
+    }
+}
+
+// Il documento si scarica con i parametri scelti, e per un Comune alla volta
+const urlBilancioPdf = computed(() => {
+    const p = new URLSearchParams({ from: balance.from, to: balance.to });
+    if (balance.client_id) p.set('client_id', balance.client_id);
+
+    return `/api/v1/vta/bilancio/pdf?${p.toString()}`;
 });
 
 async function loadBalance() {
@@ -66,7 +88,11 @@ async function loadBalance() {
     balance.error = '';
     try {
         const { data: res } = await axios.get('/api/v1/vta/bilancio', {
-            params: { from: balance.from, to: balance.to },
+            params: {
+                from: balance.from,
+                to: balance.to,
+                ...(balance.client_id ? { client_id: balance.client_id } : {}),
+            },
         });
         balance.result = res.data;
     } catch (err) {
@@ -94,6 +120,9 @@ onMounted(async () => {
         ]);
         data.value = dashboard.data.data;
         tutelati.value = protectedTrees.data.data;
+        // L'elenco dei committenti non deve far fallire il cruscotto se manca
+        // il permesso: si carica a parte e in silenzio
+        await caricaCommittenti();
         await loadBalance();
     } catch {
         loadError.value = 'Errore nel caricamento del cruscotto. Ricarica la pagina.';
@@ -252,6 +281,17 @@ onMounted(async () => {
                         </div>
                         <div class="flex flex-wrap items-end gap-2">
                             <label class="block text-xs">
+                                <span class="text-gray-500">Committente</span>
+                                <select
+                                    v-model="balance.client_id"
+                                    data-test="bilancio-committente"
+                                    class="mt-1 block w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm sm:w-auto"
+                                >
+                                    <option value="">Tutti</option>
+                                    <option v-for="c in committenti" :key="c.id" :value="c.id">{{ c.name }}</option>
+                                </select>
+                            </label>
+                            <label class="block text-xs">
                                 <span class="text-gray-500">Dal</span>
                                 <input v-model="balance.from" type="date" class="mt-1 block rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
                             </label>
@@ -264,6 +304,12 @@ onMounted(async () => {
                                 :disabled="balance.loading"
                                 @click="loadBalance"
                             >{{ balance.loading ? 'Calcolo…' : 'Calcola' }}</button>
+                            <a
+                                :href="urlBilancioPdf"
+                                data-test="bilancio-pdf"
+                                class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
+                                :title="balance.client_id ? 'Documento da allegare agli atti del Comune' : 'Scegli un committente per il documento da consegnare all\'ente'"
+                            >Scarica il documento</a>
                         </div>
                     </div>
                     <p v-if="balance.error" class="px-4 py-3 text-sm text-red-600">{{ balance.error }}</p>
