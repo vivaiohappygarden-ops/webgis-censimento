@@ -299,6 +299,25 @@ collaudo `https://indirizzo-del-gestionale/comune/mentana`, che resta valido
 anche dopo (nella pagina Territorio c'è il collegamento "indirizzo di
 collaudo").
 
+### 6.5 Gli sfondi della mappa
+
+Il portale offre tre sfondi: **stradale**, **satellite** e **scuro**. Quelli
+predefiniti sono servizi pubblici usati con attribuzione, come fanno i portali
+civici di riferimento, e vanno bene per partire.
+
+Non sono però contratti. Prima di consegnare a un ente che paga conviene
+passare a un fornitore con chiave (CARTO, Esri, MapTiler): si registra un
+account, si ottiene una chiave e si incolla l'indirizzo delle mappe nel file
+`/var/www/webgis/.env`, alle voci `PORTAL_TILES_*`. Il programma non si tocca.
+
+Una regola da ricordare: quelle voci vanno lasciate **commentate** finché non
+si cambia fornitore. Una riga vuota non vale "usa il valore predefinito", vale
+"vuoto", e quello sfondo sparirebbe dal selettore.
+
+Le immagini aeree recenti non sono gratuite da nessun fornitore: le ortofoto
+pubbliche degli enti sono libere ma vecchie di anni, le riprese aggiornate si
+pagano. È un costo da mettere nel preventivo al committente, come il dominio.
+
 ## 7. Se qualcosa non va
 
 - Il sito non risponde: dal pannello Aruba riavviare il server, attendere
