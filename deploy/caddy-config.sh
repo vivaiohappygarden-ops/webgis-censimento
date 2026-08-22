@@ -26,6 +26,27 @@ valore_env() {
 APP_URL="$(valore_env APP_URL)"
 PORTALI="$(valore_env PORTAL_BASE_HOST)"
 
+# Quando esiste il blocco jolly dei Comuni, il nome del gestionale ci finisce
+# dentro. Caddy in quel caso, di suo, smette di procurare un certificato per il
+# nome singolo: dà per scontato che lo copra il certificato jolly. Ma il jolly
+# non ne ha uno (chiede i certificati al volo, uno per Comune), e il gestionale
+# resterebbe senza, rispondendo "connessione non riuscita".
+# La direttiva "tls force_automate" dice a Caddy di procurarglielo lo stesso.
+# Esiste dalla versione 2.7; sulle versioni precedenti non serve, perché non
+# hanno quel comportamento.
+supporta_force_automate() {
+  [[ -n "${WEBGIS_FORCE_AUTOMATE:-}" ]] && { [[ "${WEBGIS_FORCE_AUTOMATE}" = "si" ]]; return; }
+  command -v caddy >/dev/null || return 0
+  local versione principale secondaria
+  versione="$(caddy version 2>/dev/null | head -1 | awk '{print $1}' | sed 's/^v//')"
+  principale="${versione%%.*}"
+  secondaria="$(printf '%s' "${versione}" | cut -d. -f2)"
+  [[ "${principale:-0}" =~ ^[0-9]+$ ]] || return 0
+  [[ "${secondaria:-0}" =~ ^[0-9]+$ ]] || secondaria=0
+  (( principale > 2 )) && return 0
+  (( principale == 2 && secondaria >= 7 ))
+}
+
 # Indirizzo numerico di questo server: serve a tenere in vita i collegamenti
 # vecchi dopo il passaggio a un nome a dominio
 IP_SERVER="${WEBGIS_IP_SERVER:-$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i == "src") print $(i+1)}' | head -1)}"
@@ -125,6 +146,15 @@ COMUNE
   echo "# Gestionale"
   echo "${BLOCCO_GESTIONALE} {"
   echo -e "\timport comune"
+
+  if [[ -n "${PORTALI}" && "${SCHEMA}" = "https" ]] && supporta_force_automate; then
+    echo
+    echo -e "\t# Il nome del gestionale rientra nel blocco jolly dei Comuni qui sotto."
+    echo -e "\t# Senza questa riga Caddy darebbe per scontato che il certificato del"
+    echo -e "\t# jolly lo copra e non ne chiederebbe uno: il gestionale resterebbe"
+    echo -e "\t# senza lucchetto e irraggiungibile."
+    echo -e "\ttls force_automate"
+  fi
   if [[ "${SCHEMA}" = "https" ]]; then
     echo
     echo -e "\t# HSTS solo qui: estenderlo ai sottodomini obbligherebbe ogni nuovo"
@@ -161,7 +191,7 @@ COMUNE
   fi
 } > "${TEMPORANEO}"
 
-if command -v caddy >/dev/null; then
+if command -v caddy >/dev/null && [[ -z "${WEBGIS_FORCE_AUTOMATE:-}" ]]; then
   if ! ESITO="$(caddy validate --adapter caddyfile --config "${TEMPORANEO}" 2>&1)"; then
     echo "La configurazione generata non è valida: il server web non è stato toccato." >&2
     echo "Versione del server web: $(caddy version 2>/dev/null | head -1)" >&2

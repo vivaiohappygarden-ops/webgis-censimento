@@ -160,13 +160,53 @@ class PortaleIndirizziTest extends TestCase
         $this->assertStringContainsString('redir https://gestionale.esempio.it{uri} 302', $generata);
     }
 
-    private function generaCaddyfile(string $cartella, string $ip = '80.211.79.223'): string
+    public function test_il_gestionale_ottiene_il_certificato_anche_col_jolly_dei_comuni(): void
+    {
+        $cartella = sys_get_temp_dir().'/webgis-caddy-'.uniqid();
+        mkdir($cartella);
+        file_put_contents($cartella.'/.env', "APP_URL=https://gestionale.esempio.it\nPORTAL_BASE_HOST=esempio.it\n");
+
+        $generata = $this->generaCaddyfile($cartella, forceAutomate: 'si');
+
+        // Il nome del gestionale rientra nel blocco jolly dei Comuni. Senza
+        // questa riga Caddy dà per scontato che lo copra il certificato del
+        // jolly, che però non esiste, e il gestionale resta irraggiungibile
+        $this->assertStringContainsString('tls force_automate', $generata);
+    }
+
+    public function test_senza_jolly_dei_comuni_la_forzatura_non_serve(): void
+    {
+        $cartella = sys_get_temp_dir().'/webgis-caddy-'.uniqid();
+        mkdir($cartella);
+        file_put_contents($cartella.'/.env', "APP_URL=https://gestionale.esempio.it\n");
+
+        $generata = $this->generaCaddyfile($cartella, forceAutomate: 'si');
+
+        // Senza blocco jolly niente può oscurare il nome del gestionale
+        $this->assertStringNotContainsString('force_automate', $generata);
+    }
+
+    public function test_sulle_versioni_che_non_la_conoscono_la_forzatura_non_si_scrive(): void
+    {
+        $cartella = sys_get_temp_dir().'/webgis-caddy-'.uniqid();
+        mkdir($cartella);
+        file_put_contents($cartella.'/.env', "APP_URL=https://gestionale.esempio.it\nPORTAL_BASE_HOST=esempio.it\n");
+
+        $generata = $this->generaCaddyfile($cartella, forceAutomate: 'no');
+
+        // Prima di Caddy 2.7 la direttiva non esiste e farebbe rifiutare
+        // l'intera configurazione; su quelle versioni non serve nemmeno
+        $this->assertStringNotContainsString('force_automate', $generata);
+    }
+
+    private function generaCaddyfile(string $cartella, string $ip = '80.211.79.223', ?string $forceAutomate = null): string
     {
         $script = base_path('deploy/caddy-config.sh');
         $uscita = $cartella.'/Caddyfile';
 
         $comando = sprintf(
-            'WEBGIS_PROVA=1 WEBGIS_IP_SERVER=%s WEBGIS_APP_DIR=%s WEBGIS_CADDYFILE=%s bash %s 2>&1',
+            '%sWEBGIS_PROVA=1 WEBGIS_IP_SERVER=%s WEBGIS_APP_DIR=%s WEBGIS_CADDYFILE=%s bash %s 2>&1',
+            $forceAutomate === null ? '' : 'WEBGIS_FORCE_AUTOMATE='.escapeshellarg($forceAutomate).' ',
             escapeshellarg($ip), escapeshellarg($cartella), escapeshellarg($uscita), escapeshellarg($script),
         );
 

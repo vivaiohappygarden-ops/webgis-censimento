@@ -255,6 +255,13 @@ DNS. Per tornare indietro: `sudo bash .../set-portal-domain.sh --rimuovi`.
 Da quel momento **ogni Comune nuovo non richiede più niente sul server**: si
 accende dalla pagina Territorio e l'indirizzo funziona subito.
 
+Se il gestionale sta sullo stesso dominio dei portali (per esempio
+`gestionale.censimentoalberature.it` con i Comuni su
+`<comune>.censimentoalberature.it`), il comando se ne accorge da solo e aggiunge
+la riga che serve. Senza, il server web darebbe per scontato che il certificato
+dei Comuni copra anche il gestionale, non gliene chiederebbe uno, e il
+gestionale smetterebbe di rispondere.
+
 **Il certificato (il lucchetto) non va richiesto a mano.** Viene emesso da solo
 alla prima visita. Prima di emetterlo il server web chiede all'applicazione se
 quel nome corrisponde a un committente con il portale acceso, e se la risposta è
