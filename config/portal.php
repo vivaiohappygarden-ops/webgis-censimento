@@ -52,6 +52,13 @@ return [
     | consegnare a un ente che paga va valutato un fornitore con chiave
     | (CARTO, Esri, MapTiler), che si collega cambiando solo queste righe.
     |
+    | "zoom_massimo" e' il livello di ingrandimento oltre il quale quel
+    | fornitore non ha piu' immagini. Va dichiarato, altrimenti la mappa
+    | continua a chiedere riquadri inesistenti e si svuota ingrandendo: con
+    | il valore giusto ingrandisce l'ultima immagine disponibile, che viene
+    | sgranata ma resta leggibile. Il valore prudente e' 19: praticamente
+    | tutti i fornitori ci arrivano, e qualcuno non va oltre.
+    |
     */
 
     'basemaps' => [
@@ -60,6 +67,7 @@ return [
             'nome' => 'Stradale',
             'url' => env('PORTAL_TILES_STRADALE', 'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'),
             'attribuzione' => env('PORTAL_TILES_STRADALE_ATTR', '© OpenStreetMap contributors © CARTO'),
+            'zoom_massimo' => (int) env('PORTAL_TILES_STRADALE_ZOOM', 19),
             'scuro' => false,
         ],
         [
@@ -68,6 +76,7 @@ return [
             'url' => env('PORTAL_TILES_SATELLITE',
                 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),
             'attribuzione' => env('PORTAL_TILES_SATELLITE_ATTR', 'Immagini Esri, Maxar, Earthstar Geographics'),
+            'zoom_massimo' => (int) env('PORTAL_TILES_SATELLITE_ZOOM', 19),
             'scuro' => true,
         ],
         [
@@ -75,6 +84,7 @@ return [
             'nome' => 'Scura',
             'url' => env('PORTAL_TILES_SCURA', 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'),
             'attribuzione' => env('PORTAL_TILES_SCURA_ATTR', '© OpenStreetMap contributors © CARTO'),
+            'zoom_massimo' => (int) env('PORTAL_TILES_SCURA_ZOOM', 19),
             'scuro' => true,
         ],
     ],

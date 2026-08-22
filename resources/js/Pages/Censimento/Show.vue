@@ -225,6 +225,8 @@ function initMap() {
                     type: 'raster',
                     tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
                     tileSize: 256,
+                    // Oltre questo livello lo sfondo non ha immagini
+                    maxzoom: 19,
                 },
             },
             layers: [

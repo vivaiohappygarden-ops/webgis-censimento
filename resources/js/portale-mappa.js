@@ -23,6 +23,11 @@ function stileCon(sfondo, urlTile) {
                 type: 'raster',
                 tiles: [sfondo.url],
                 tileSize: 256,
+                // Oltre questo livello il fornitore non ha immagini. Senza
+                // dichiararlo la mappa chiede riquadri inesistenti e si
+                // svuota ingrandendo; dichiarandolo, ingrandisce l'ultima
+                // immagine disponibile: sgranata, ma c'è
+                maxzoom: sfondo.zoom_massimo ?? 19,
                 attribution: sfondo.attribuzione,
             },
             elementi: { type: 'vector', tiles: [urlTile], minzoom: 5, maxzoom: 22 },

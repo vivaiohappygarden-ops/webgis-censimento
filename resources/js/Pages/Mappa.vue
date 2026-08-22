@@ -256,6 +256,9 @@ onMounted(async () => {
                     type: 'raster',
                     tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
                     tileSize: 256,
+                    // Oltre questo livello lo sfondo non ha immagini: senza
+                    // dichiararlo la mappa si svuota ingrandendo
+                    maxzoom: 19,
                     attribution: '© OpenStreetMap contributors',
                 },
                 assets: { type: 'vector', tiles: [tilesUrl()], minzoom: 5, maxzoom: 22 },

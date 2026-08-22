@@ -580,7 +580,10 @@ async function initOrRefreshMap() {
         style: {
             version: 8,
             sources: {
-                osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256 },
+                // maxzoom: oltre il 19 lo sfondo non ha immagini e la
+                // mappa si svuoterebbe proprio quando l'operatore ingrandisce
+                // per distinguere due alberi vicini
+                osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, maxzoom: 19 },
             },
             layers: [
                 { id: 'sfondo', type: 'background', paint: { 'background-color': '#e8ede9' } },

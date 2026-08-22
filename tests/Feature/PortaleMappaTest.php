@@ -164,4 +164,26 @@ class PortaleMappaTest extends TestCase
         $this->assertCount(1, $sfondi);
         $this->assertSame('stradale', $sfondi[0]['id']);
     }
+
+    public function test_ogni_sfondo_dichiara_fin_dove_ha_immagini(): void
+    {
+        foreach (config('portal.basemaps') as $sfondo) {
+            // Senza questo la mappa, ingrandendo, chiede riquadri che il
+            // fornitore non ha e resta vuota proprio quando serve guardare
+            // da vicino il singolo albero
+            $this->assertArrayHasKey('zoom_massimo', $sfondo, "sfondo {$sfondo['id']}");
+            $this->assertIsInt($sfondo['zoom_massimo']);
+            $this->assertGreaterThanOrEqual(15, $sfondo['zoom_massimo']);
+            $this->assertLessThanOrEqual(22, $sfondo['zoom_massimo']);
+        }
+    }
+
+    public function test_il_limite_di_ingrandimento_arriva_alla_mappa(): void
+    {
+        $this->creaElemento();
+
+        $this->get('/comune/mentana/mappa')
+            ->assertOk()
+            ->assertSee('"zoom_massimo":19', false);
+    }
 }
