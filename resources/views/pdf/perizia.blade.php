@@ -285,6 +285,28 @@
                 <td class="linea">Il tecnico incaricato<br>{{ $professionista['nome'] }}</td>
             </tr>
         </table>
+
+        @if ($assessment->validated_at)
+            {{-- Chiusura dell'atto: da qui il contenuto non e' piu' modificabile,
+                 e l'impronta permette di verificarlo anche a distanza di anni --}}
+            <p class="muted" style="font-size: 8.5px; margin-top: 14px; line-height: 1.45;">
+                <strong>Documento validato e chiuso</strong> il
+                {{ $assessment->validated_at->setTimezone('Europe/Rome')->format('d/m/Y \a\l\l\e H:i') }}
+                @if ($assessment->validator) da {{ $assessment->validator->name }} @endif
+                - da tale momento il contenuto tecnico non e' piu' modificabile.
+                <br>
+                Impronta del contenuto (SHA-256):
+                {{ implode(' ', str_split(strtoupper(substr($assessment->content_hash, 0, 32)), 8)) }}
+                <br>
+                L'impronta si ricalcola dai dati della perizia: se corrisponde, questa copia
+                riporta esattamente il contenuto validato alla data indicata.
+            </p>
+        @else
+            <p class="muted" style="font-size: 8.5px; margin-top: 14px;">
+                <strong>Bozza di lavoro.</strong> Documento non ancora validato: il contenuto
+                puo' ancora essere corretto e questa copia non fa fede.
+            </p>
+        @endif
         <p class="muted" style="font-size: 8.5px; margin-top: 12px; line-height: 1.45;">
             La presente perizia fotografa le condizioni dell'esemplare quali riscontrabili alla data del
             sopralluogo con il metodo VTA (Visual Tree Assessment), fondato sull'analisi visiva dei sintomi

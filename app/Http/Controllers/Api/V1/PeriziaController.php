@@ -158,7 +158,7 @@ class PeriziaController extends Controller implements HasMiddleware
             'esito' => self::OUTCOME_LABELS[$assessment->outcome] ?? null,
             'asset' => $asset,
             'tree' => $tree,
-            'assessment' => $assessment,
+            'assessment' => $assessment->loadMissing('validator:id,name'),
             'committente' => $asset->area?->locality?->site?->client?->name,
             'coordinate' => $point?->lat !== null
                 ? sprintf('%.6f, %.6f', $point->lat, $point->lon)

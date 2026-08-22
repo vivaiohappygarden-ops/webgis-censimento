@@ -32,12 +32,25 @@ class TreeAssessment extends Model
             'assessed_on' => 'date',
             'next_check_due' => 'date',
             'report_issued_at' => 'datetime',
+            'validated_at' => 'datetime',
             'defects' => 'array',
             'targets' => 'array',
             'survey' => 'array',
             'is_public' => 'boolean',
             'version' => 'integer',
         ];
+    }
+
+    /** Chi ha validato la perizia, quando c'e' stata la validazione. */
+    public function validator()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'validated_by');
+    }
+
+    /** Una perizia validata e' un atto chiuso: non si corregge e non si cancella. */
+    public function isValidated(): bool
+    {
+        return $this->validated_at !== null;
     }
 
     /**

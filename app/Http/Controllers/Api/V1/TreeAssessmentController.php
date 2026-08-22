@@ -22,6 +22,7 @@ class TreeAssessmentController extends Controller implements HasMiddleware
             new Middleware('can:assets.view', only: ['index']),
             new Middleware('can:assets.update', only: ['store', 'update']),
             new Middleware('can:assets.delete', only: ['destroy']),
+            new Middleware('can:assets.update', only: ['valida']),
         ];
     }
 
@@ -32,7 +33,7 @@ class TreeAssessmentController extends Controller implements HasMiddleware
 
         return response()->json([
             'data' => $asset->tree->assessments()
-                ->with('assessor:id,name')
+                ->with(['assessor:id,name', 'validator:id,name'])
                 ->withCount('instrumentalAnalyses')
                 ->orderByDesc('assessed_on')
                 ->get(),
@@ -105,6 +106,18 @@ class TreeAssessmentController extends Controller implements HasMiddleware
         $assessment = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $id, $data) {
             $assessment = TreeAssessment::query()->lockForUpdate()->findOrFail($id);
 
+            // Una perizia validata e' un atto chiuso. Il messaggio dice anche
+            // cosa fare al suo posto, perche' il tecnico che arriva qui ha un
+            // errore da correggere e deve sapere come si fa
+            // Non abort_if: il messaggio verrebbe costruito comunque e leggerebbe
+            // una data che sulle perizie non validate non c'è
+            if ($assessment->isValidated()) {
+                abort(409, 'La perizia e\' stata validata il '
+                    .$assessment->validated_at->timezone('Europe/Rome')->format('d/m/Y')
+                    .' e non e\' piu\' modificabile. Per correggerla, registra una nuova '
+                    .'perizia sullo stesso albero: la piu\' recente supera la precedente.');
+            }
+
             if (isset($data['version']) && (int) $data['version'] !== $assessment->version) {
                 abort(409, "Conflitto di versione: la valutazione è stata modificata da altri (versione attuale {$assessment->version}).");
             }
@@ -169,9 +182,28 @@ class TreeAssessmentController extends Controller implements HasMiddleware
         return response()->json(['data' => $assessment->load('assessor:id,name')]);
     }
 
+    /**
+     * Validazione: la perizia diventa un atto e il contenuto tecnico si
+     * blocca. Il blocco vero e' nel database, qui si controlla che ci sia
+     * tutto e si assegna il protocollo.
+     */
+    public function valida(Request $request, string $id): JsonResponse
+    {
+        $assessment = TreeAssessment::findOrFail($id);
+
+        return response()->json([
+            'data' => \App\Services\Trees\PeriziaValidation::valida($assessment, $request->user()),
+        ]);
+    }
+
     public function destroy(string $id): Response
     {
         $assessment = TreeAssessment::findOrFail($id);
+
+        abort_if($assessment->isValidated(), 409,
+            'La perizia e\' stata validata e non e\' piu\' cancellabile: '
+            .'un atto emesso si supera con uno successivo, non si toglie.');
+
         $assessment->delete();
 
         Audit::log('vta.deleted', $assessment);

@@ -318,6 +318,38 @@ function goTo(id) {
                             un ente prima che il suo nome sia pubblicato nel DNS.
                         </p>
 
+                        <h3>Validare e chiudere una perizia</h3>
+                        <p class="mt-2">
+                            Finche' non la validi, la perizia e' una <strong>bozza di lavoro</strong>: la
+                            correggi quante volte vuoi, e il PDF che scarichi porta scritto che non fa fede.
+                            Quando il lavoro e' finito, dalla scheda dell'albero premi
+                            <strong>"Valida e chiudi"</strong>.
+                        </p>
+                        <p class="mt-2">
+                            Da quel momento la perizia diventa un <strong>atto</strong>: prende numero di
+                            protocollo e data, porta il nome di chi l'ha validata, e il contenuto tecnico
+                            <strong>non e' piu' modificabile ne' cancellabile</strong>. Il blocco e' nel
+                            database, non solo nella schermata: non c'e' strada per aggirarlo, ed e'
+                            proprio questo che lo rende una garanzia da poter dichiarare al committente.
+                        </p>
+                        <p class="mt-2">
+                            <strong>Se sbagli, non si torna indietro</strong>, e va bene cosi': una perizia
+                            errata non si cancella, si supera. Registri una nuova perizia sullo stesso
+                            albero e quella recente vale. E' come si fa con qualunque atto tecnico, ed e'
+                            piu' difendibile di una correzione silenziosa.
+                        </p>
+                        <p class="mt-2">
+                            In fondo al documento validato compare l'<strong>impronta del contenuto</strong>,
+                            una sigla calcolata dai dati della perizia. Serve a dimostrare, anche fra anni,
+                            che la copia che qualcuno ha in mano e' esattamente quella validata quel giorno:
+                            se anche una virgola fosse diversa, l'impronta non tornerebbe.
+                        </p>
+                        <p class="mt-2">
+                            Una cosa si puo' ancora cambiare dopo la validazione: se la perizia si vede sul
+                            <strong>portale pubblico</strong>. Non e' contenuto tecnico, e' una scelta del
+                            Comune su cosa mostrare ai cittadini.
+                        </p>
+
                         <h3>Il bilancio arboreo da consegnare al Comune</h3>
                         <p class="mt-2">
                             La legge 10/2013 chiede al sindaco di rendere noto, prima della fine del

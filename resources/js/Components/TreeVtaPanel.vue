@@ -320,7 +320,38 @@ async function saveVta() {
     }
 }
 
+const validando = ref(null);
+
+/**
+ * Validazione: la perizia diventa un atto e non si tocca piu'. Si chiede
+ * conferma perche' non si torna indietro, e la conferma dice anche cosa fare
+ * in caso di errore, che e' la domanda che viene subito dopo.
+ */
+async function validaPerizia(a) {
+    const conferma = window.confirm(
+        'Vuoi validare e chiudere questa perizia?\n\n'
+        + 'Da questo momento il contenuto tecnico non sara\' piu\' modificabile ne\' '
+        + 'cancellabile, e il documento portera\' numero di protocollo, data, il tuo nome '
+        + 'e l\'impronta del contenuto.\n\n'
+        + 'Non si torna indietro: se in seguito serve una correzione, si registra una '
+        + 'nuova perizia sullo stesso albero, che supera questa.'
+    );
+    if (! conferma) return;
+
+    periziaError.value = '';
+    validando.value = a.id;
+    try {
+        await axios.post(`/api/v1/assessments/${a.id}/valida`);
+        await loadAssessments();
+    } catch (err) {
+        periziaError.value = err.response?.data?.message ?? 'Errore nella validazione';
+    } finally {
+        validando.value = null;
+    }
+}
+
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '—');
+const fmtOra = (d) => (d ? new Date(d).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
 onMounted(async () => {
     await loadAssessments();
@@ -629,11 +660,19 @@ onMounted(async () => {
                             @click="toggleAnalyses(a.id)"
                         >Analisi strumentali ({{ a.instrumental_analyses_count ?? 0 }})</button>
                         <button
-                            v-if="canUpdate"
+                            v-if="canUpdate && ! a.validated_at"
                             class="text-xs font-medium text-green-700 hover:underline"
                             data-test="vta-correggi"
                             @click="editAssessment(a)"
                         >Correggi</button>
+                        <button
+                            v-if="canUpdate && ! a.validated_at"
+                            class="text-xs font-medium text-green-700 hover:underline disabled:opacity-50"
+                            :disabled="validando === a.id"
+                            data-test="vta-valida"
+                            title="Chiude la perizia: da qui non e' piu' modificabile"
+                            @click="validaPerizia(a)"
+                        >{{ validando === a.id ? 'Validazione…' : 'Valida e chiudi' }}</button>
                         <button
                             class="text-xs font-medium text-green-700 hover:underline disabled:opacity-50"
                             :disabled="periziaBusy === a.id"
@@ -642,6 +681,16 @@ onMounted(async () => {
                         >{{ periziaBusy === a.id ? 'Preparazione…' : 'Perizia PDF' }}</button>
                         <span v-if="a.report_number" class="text-xs text-gray-400">perizia {{ a.report_number }}</span>
                     </div>
+
+                    <p
+                        v-if="a.validated_at"
+                        data-test="vta-validata"
+                        class="mt-1.5 rounded-lg bg-gray-50 px-2.5 py-1.5 text-xs text-gray-600"
+                    >
+                        Perizia validata e chiusa il {{ fmtOra(a.validated_at) }}<span v-if="a.validator"> da {{ a.validator.name }}</span>.
+                        Il contenuto non e' piu' modificabile: per correggerla registra una nuova perizia su questo albero.
+                        <span v-if="a.content_hash" class="block break-all text-gray-400">Impronta {{ String(a.content_hash).slice(0, 16).toUpperCase() }}</span>
+                    </p>
 
                     <div v-if="analyses[a.id]?.open" class="mt-2 border-t border-gray-100 pt-2">
                         <p v-if="analyses[a.id].error && ! analyses[a.id].showForm" class="text-xs text-red-600">{{ analyses[a.id].error }}</p>

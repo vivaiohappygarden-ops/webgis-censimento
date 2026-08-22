@@ -74,6 +74,7 @@ Route::prefix('v1')->group(function () {
         Route::post('assets/{asset}/assessments', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'store'])->whereUuid('asset');
         Route::patch('assessments/{id}', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'update'])->whereUuid('id');
         Route::delete('assessments/{id}', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'destroy'])->whereUuid('id');
+        Route::post('assessments/{id}/valida', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'valida'])->whereUuid('id');
         Route::get('assessments/{assessment}/instrumental-analyses', [\App\Http\Controllers\Api\V1\InstrumentalAnalysisController::class, 'index'])->whereUuid('assessment');
         Route::post('assessments/{assessment}/instrumental-analyses', [\App\Http\Controllers\Api\V1\InstrumentalAnalysisController::class, 'store'])->whereUuid('assessment');
         Route::delete('instrumental-analyses/{id}', [\App\Http\Controllers\Api\V1\InstrumentalAnalysisController::class, 'destroy'])->whereUuid('id');
