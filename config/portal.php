@@ -38,11 +38,19 @@ return [
     |
     | Tre sfondi come nei portali civici di riferimento. Gli indirizzi sono
     | configurabili perché la scelta del fornitore è una decisione con
-    | ricadute di licenza e di costo: le tessere standard di OpenStreetMap
-    | sono a uso limitato e la loro politica d'uso esclude i siti pubblici ad
-    | alto traffico, quindi prima della messa in linea vanno sostituite con
-    | un fornitore dedicato. Uno sfondo senza indirizzo non compare nel
-    | selettore.
+    | ricadute di licenza e di costo. Uno sfondo senza indirizzo non compare
+    | nel selettore.
+    |
+    | Lo sfondo stradale NON usa le tessere standard di openstreetmap.org: la
+    | loro politica d'uso esclude espressamente i siti pubblici, ed è un
+    | servizio offerto per prova, non per produzione. Si usano invece le
+    | mappe di CARTO, costruite sugli stessi dati ma pensate per essere
+    | incorporate, con attribuzione. È la stessa scelta dei portali civici di
+    | riferimento.
+    |
+    | Restano servizi pubblici a uso corretto, non contratti: prima di
+    | consegnare a un ente che paga va valutato un fornitore con chiave
+    | (CARTO, Esri, MapTiler), che si collega cambiando solo queste righe.
     |
     */
 
@@ -50,8 +58,8 @@ return [
         [
             'id' => 'stradale',
             'nome' => 'Stradale',
-            'url' => env('PORTAL_TILES_STRADALE', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
-            'attribuzione' => env('PORTAL_TILES_STRADALE_ATTR', '© OpenStreetMap contributors'),
+            'url' => env('PORTAL_TILES_STRADALE', 'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'),
+            'attribuzione' => env('PORTAL_TILES_STRADALE_ATTR', '© OpenStreetMap contributors © CARTO'),
             'scuro' => false,
         ],
         [

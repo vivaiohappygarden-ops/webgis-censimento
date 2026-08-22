@@ -139,4 +139,29 @@ class PortaleMappaTest extends TestCase
         $riquadro->assertOk()->assertDontSee('<!DOCTYPE html>', false);
         $riquadro->assertSee('MEN-0001');
     }
+
+    public function test_lo_sfondo_stradale_non_usa_i_server_di_prova_di_openstreetmap(): void
+    {
+        $stradale = collect(config('portal.basemaps'))->firstWhere('id', 'stradale');
+
+        // La politica d'uso di openstreetmap.org esclude i siti pubblici:
+        // quelle tessere sono per provare, non per un portale di un Comune
+        $this->assertStringNotContainsString('tile.openstreetmap.org', (string) $stradale['url']);
+        $this->assertNotEmpty($stradale['url']);
+        // I dati restano di OpenStreetMap e vanno citati comunque
+        $this->assertStringContainsString('OpenStreetMap', (string) $stradale['attribuzione']);
+    }
+
+    public function test_uno_sfondo_senza_indirizzo_sparisce_dal_selettore(): void
+    {
+        config(['portal.basemaps' => [
+            ['id' => 'stradale', 'nome' => 'Stradale', 'url' => 'https://esempio/{z}/{x}/{y}.png', 'attribuzione' => 'x', 'scuro' => false],
+            ['id' => 'satellite', 'nome' => 'Satellite', 'url' => '', 'attribuzione' => 'y', 'scuro' => true],
+        ]]);
+
+        $sfondi = \App\Services\Portale\PortalExtent::sfondi();
+
+        $this->assertCount(1, $sfondi);
+        $this->assertSame('stradale', $sfondi[0]['id']);
+    }
 }
