@@ -1,5 +1,10 @@
 # Sito aziendale: struttura e testi (bozza da rivedere)
 
+> **Decisione del committente, 22/08/2026: rimandato.** Il sito aziendale non
+> e' lavoro di adesso. Questa bozza resta qui pronta per quando servira'.
+> Fino ad allora il dominio senza prefisso (`censimentoalberature.it`) non
+> risponde: agli enti si da' sempre l'indirizzo completo del loro portale.
+
 Bozza dei contenuti per il sito su `censimentoalberature.it`. Serve per non
 partire dal foglio bianco: i testi sono da leggere, correggere e far propri.
 
