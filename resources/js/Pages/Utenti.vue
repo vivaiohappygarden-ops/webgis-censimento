@@ -223,9 +223,9 @@ async function testGestionale() {
     }
 }
 
-// Intestazione delle perizie di stabilità (dati del professionista)
+// Intestazione dei documenti firmati (dati del professionista e luogo di firma)
 const perizia = reactive({
-    form: { nome: '', titolo: '', iscrizione: '', recapiti: '' },
+    form: { nome: '', titolo: '', iscrizione: '', recapiti: '', luogo: '' },
     busy: false,
     message: '',
     messageOk: false,
@@ -239,6 +239,7 @@ async function loadPerizia() {
             titolo: data.data.titolo ?? '',
             iscrizione: data.data.iscrizione ?? '',
             recapiti: data.data.recapiti ?? '',
+            luogo: data.data.luogo ?? '',
         });
     } catch {
         // La scheda resta compilabile anche se la lettura fallisce
@@ -251,7 +252,7 @@ async function savePerizia() {
     try {
         await axios.put('/api/v1/perizia/settings', perizia.form);
         await loadPerizia();
-        perizia.message = 'Intestazione salvata: comparirà sulle prossime perizie.';
+        perizia.message = 'Salvato: vale per i prossimi documenti stampati.';
         perizia.messageOk = true;
     } catch (err) {
         perizia.message = firstError(err, 'Salvataggio non riuscito');
@@ -343,12 +344,13 @@ onMounted(() => {
                 </table>
             </div>
 
-            <!-- Intestazione delle perizie di stabilità -->
+            <!-- Intestazione e firma dei documenti stampati -->
             <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" data-test="perizia-settings">
-                <h2 class="text-sm font-semibold">Intestazione delle perizie di stabilità</h2>
+                <h2 class="text-sm font-semibold">Intestazione e firma dei documenti</h2>
                 <p class="mt-1 text-xs text-gray-500">
-                    Chi firma le perizie VTA: nome, titolo professionale, iscrizione all'albo e recapiti.
-                    Compaiono in cima e in calce al documento, sopra la riga della firma.
+                    Chi firma: nome, titolo professionale, iscrizione all'albo e recapiti. Compaiono in
+                    cima e in calce alla perizia di stabilità. Il luogo di firma vale invece per tutti i
+                    documenti stampati.
                 </p>
                 <div class="mt-3 grid gap-3 md:grid-cols-2">
                     <label class="block text-xs">
@@ -367,9 +369,22 @@ onMounted(() => {
                         <span class="text-gray-500">Recapiti</span>
                         <input v-model="perizia.form.recapiti" maxlength="300" placeholder="indirizzo, telefono, email" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
                     </label>
+                    <label class="block text-xs md:col-span-2">
+                        <span class="text-gray-500">Luogo di firma</span>
+                        <input v-model="perizia.form.luogo" maxlength="120" placeholder="es. Roma" data-test="perizia-luogo" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                        <span class="mt-1 block text-gray-500">
+                            Compare nello spazio della firma di perizie, bilanci arborei, verbali di
+                            ispezione, registro dei fitosanitari e preventivi, seguito dalla data. La data
+                            si scrive da sé ed è quella propria del documento: emissione per la perizia,
+                            offerta per il preventivo, giorno del controllo per il verbale. Dove il
+                            documento non ha una data sua (bilancio arboreo, registro dei fitosanitari) è
+                            la data di stampa. Così su uno stesso foglio non compaiono mai due date
+                            diverse. Lasciando vuoto questo campo resta la sola data.
+                        </span>
+                    </label>
                 </div>
                 <p v-if="perizia.message" class="mt-3 rounded-lg px-3 py-2 text-sm" :class="perizia.messageOk ? 'bg-green-100 text-green-900' : 'bg-red-50 text-red-700'" data-test="perizia-msg">{{ perizia.message }}</p>
-                <button class="mt-3 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50" :disabled="perizia.busy" data-test="perizia-save" @click="savePerizia">Salva intestazione</button>
+                <button class="mt-3 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50" :disabled="perizia.busy" data-test="perizia-save" @click="savePerizia">Salva</button>
             </section>
 
             <!-- Collegamento al gestionale WordPress -->

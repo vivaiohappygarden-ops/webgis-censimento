@@ -28,7 +28,7 @@
         <h1>Registro dei trattamenti fitosanitari - anno {{ $year }}</h1>
         <div class="muted">
             {{ $organization?->name }}@if ($area) - area: {{ $area->name }}@endif
-            - stampato il {{ now('Europe/Rome')->format('d/m/Y') }}
+            - stampato il {{ $stampatoIl->format('d/m/Y') }}
         </div>
     </div>
 
@@ -78,7 +78,7 @@
 
     <table class="firma">
         <tr>
-            <td></td>
+            <td>{{ $luogoData }}</td>
             <td class="linea">Firma del titolare dell'azienda o del suo delegato</td>
         </tr>
     </table>

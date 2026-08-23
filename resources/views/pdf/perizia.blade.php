@@ -281,7 +281,7 @@
 
         <table class="firma">
             <tr>
-                <td style="width: 55%;">Luogo e data: ____________________________</td>
+                <td style="width: 55%;">{{ $luogoData }}</td>
                 <td class="linea">Il tecnico incaricato<br>{{ $professionista['nome'] }}</td>
             </tr>
         </table>

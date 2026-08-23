@@ -36,7 +36,7 @@
             <br>
             Legge 14 gennaio 2013, n. 10 - Norme per lo sviluppo degli spazi verdi urbani
             <br>
-            Redatto da {{ $organization?->name }} - stampato il {{ now('Europe/Rome')->format('d/m/Y') }}
+            Redatto da {{ $organization?->name }} - stampato il {{ $stampatoIl->format('d/m/Y') }}
         </div>
     </div>
 
@@ -126,7 +126,7 @@
 
     <table class="firma">
         <tr>
-            <td style="width: 50%;">Data ____ / ____ / __________</td>
+            <td style="width: 50%;">{{ $luogoData }}</td>
             <td style="width: 50%;">Il tecnico incaricato</td>
         </tr>
         <tr>

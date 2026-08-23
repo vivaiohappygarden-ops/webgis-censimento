@@ -8,6 +8,7 @@ use App\Models\Asset;
 use App\Models\Organization;
 use App\Models\PhytoTreatment;
 use App\Models\User;
+use App\Services\Pdf\LuogoFirma;
 use App\Services\Pdf\PdfRenderer;
 use App\Support\Audit;
 use App\Support\ListQuery;
@@ -132,9 +133,14 @@ class PhytoTreatmentController extends Controller implements HasMiddleware
 
         $area = $request->filled('area_id') ? Area::query()->find($request->string('area_id')) : null;
 
+        // Un solo orologio per tutto il documento: vedi TreeBalanceController
+        $adesso = now('Europe/Rome');
+
         $pdf = $renderer->render('pdf.phyto-register', [
             'treatments' => $treatments,
             'organization' => Organization::query()->find($request->user()->tenant_id),
+            'stampatoIl' => $adesso,
+            'luogoData' => LuogoFirma::riga($request->user()->tenant_id, $adesso),
             'year' => $year,
             'area' => $area,
         ]);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\Organization;
+use App\Services\Pdf\LuogoFirma;
 use App\Services\Pdf\PdfRenderer;
 use App\Services\Trees\TreeBalance;
 use Illuminate\Http\JsonResponse;
@@ -49,10 +50,17 @@ class TreeBalanceController extends Controller implements HasMiddleware
 
         $dati = TreeBalance::per($request->user()->tenant_id, $from, $to, $client?->id);
 
+        // Un solo orologio per tutto il documento: leggendo l'ora due volte,
+        // a cavallo della mezzanotte, "stampato il" e la data della firma
+        // uscirebbero con due giorni diversi
+        $adesso = Carbon::now('Europe/Rome');
+
         $pdf = $renderer->render('pdf.tree-balance', [
             'bilancio' => $dati,
             'client' => $client,
             'organization' => Organization::find($request->user()->tenant_id),
+            'stampatoIl' => $adesso,
+            'luogoData' => LuogoFirma::riga($request->user()->tenant_id, $adesso),
         ]);
 
         $nome = 'bilancio-arboreo-'.$dati['from'].'_'.$dati['to'].'.pdf';

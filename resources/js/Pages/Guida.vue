@@ -158,7 +158,44 @@ function goTo(id) {
                             </li>
                             <li>
                                 L'intestazione con nome, titolo e iscrizione all'albo si compila una volta sola
-                                nella pagina <strong>Utenti</strong>.
+                                nella pagina <strong>Utenti</strong>, insieme al <strong>luogo di firma</strong>.
+                            </li>
+                        </ul>
+
+                        <h3>Luogo e data nello spazio della firma</h3>
+                        <p>
+                            Nella pagina <strong>Utenti</strong>, sezione "Intestazione e firma dei documenti",
+                            si scrive una volta sola il <strong>luogo di firma</strong> (per esempio Roma). Da
+                            quel momento compare nello spazio della firma di perizie, bilanci arborei, verbali
+                            di ispezione, registro dei fitosanitari e preventivi, seguito dalla data: non c'è
+                            più lo spazio da riempire a penna.
+                        </p>
+                        <p>
+                            La data si scrive da sé, ed è quella <strong>propria del documento</strong>, non
+                            quella del giorno in cui lo ristampi. Così su uno stesso foglio non compaiono mai
+                            due date diverse.
+                        </p>
+                        <ul class="mt-2 list-disc space-y-1 pl-5">
+                            <li>
+                                <strong>Perizia di stabilità</strong>: la data di emissione, la stessa scritta
+                                in cima e in fondo al documento. Si fissa alla prima stampa e si azzera se
+                                correggi la valutazione, quindi dice sempre quando è stato emesso quel testo.
+                            </li>
+                            <li>
+                                <strong>Preventivo</strong>: la data dell'offerta, la stessa scritta in testata.
+                                Se qui comparisse la data di stampa, una copia ristampata potrebbe risultare
+                                firmata dopo la scadenza dell'offerta indicata due righe sopra.
+                            </li>
+                            <li>
+                                <strong>Verbale di ispezione</strong>: il giorno del controllo.
+                            </li>
+                            <li>
+                                <strong>Bilancio arboreo</strong> e <strong>registro dei fitosanitari</strong>:
+                                la data di stampa, perché sono fotografie del giorno in cui le chiedi.
+                            </li>
+                            <li>
+                                Il luogo si cambia o si toglie quando vuoi: lasciandolo vuoto resta la sola data.
+                                Vale per i documenti stampati da quel momento in poi.
                             </li>
                         </ul>
                     </section>

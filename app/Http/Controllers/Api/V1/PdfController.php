@@ -8,6 +8,7 @@ use App\Models\ChecklistItem;
 use App\Models\Inspection;
 use App\Models\NonConformity;
 use App\Models\Organization;
+use App\Services\Pdf\LuogoFirma;
 use App\Services\Pdf\PdfRenderer;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -40,6 +41,12 @@ class PdfController extends Controller implements HasMiddleware
 
         $pdf = $renderer->render('pdf.inspection', [
             'organization' => Organization::find($request->user()->tenant_id),
+            // Il verbale e' dell'ispezione, non del giorno in cui lo si
+            // ristampa: nello spazio della firma va la data dell'ispezione,
+            // la stessa che compare nel corpo e nel nome del file
+            'luogoData' => LuogoFirma::riga(
+                $request->user()->tenant_id, $inspection->completed_at ?? now(),
+            ),
             'inspection' => $inspection,
             'rows' => $this->checklistRows($inspection),
             'nonConformities' => NonConformity::query()

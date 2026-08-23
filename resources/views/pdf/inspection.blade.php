@@ -88,7 +88,7 @@
 
     <table class="firma">
         <tr>
-            <td>Data: ____ / ____ / ________</td>
+            <td>{{ $luogoData }}</td>
             <td>
                 <div class="linea"></div>
                 Firma dell'ispettore

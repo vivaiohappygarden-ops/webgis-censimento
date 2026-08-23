@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\Photo;
 use App\Models\TreeAssessment;
 use App\Services\Maps\StaticMap;
+use App\Services\Pdf\LuogoFirma;
 use App\Services\Pdf\PdfRenderer;
 use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
@@ -97,23 +98,37 @@ class PeriziaController extends Controller implements HasMiddleware
             'titolo' => ['nullable', 'string', 'max:150'],
             'iscrizione' => ['nullable', 'string', 'max:200'],
             'recapiti' => ['nullable', 'string', 'max:300'],
+            // Luogo che compare sopra la firma di tutti i documenti stampati
+            'luogo' => ['nullable', 'string', 'max:120'],
         ]);
 
-        $organization = Organization::query()->findOrFail($request->user()->tenant_id);
-        $settings = $organization->settings ?? [];
-        // Salvataggio parziale: i campi non inviati restano quelli di prima,
-        // non vengono azzerati
-        $settings['professionista'] = array_replace(
-            $settings['professionista'] ?? [],
-            array_map(
-                fn ($v) => $v !== null && trim($v) !== '' ? trim($v) : null,
-                $data,
-            ),
-        );
-        $organization->forceFill(['settings' => $settings])->save();
+        // Sotto lock, e rileggendo dentro la transazione: nella stessa colonna
+        // "settings" vive il contatore dei numeri di protocollo delle perizie.
+        // Salvando su una copia letta prima si riscriverebbe tutto l'insieme e
+        // un numero appena assegnato potrebbe sparire.
+        $organization = DB::transaction(function () use ($request, $data) {
+            $organization = Organization::query()
+                ->lockForUpdate()
+                ->findOrFail($request->user()->tenant_id);
+
+            $settings = $organization->settings ?? [];
+            // Salvataggio parziale: i campi non inviati restano quelli di prima,
+            // non vengono azzerati
+            $settings['professionista'] = array_replace(
+                $settings['professionista'] ?? [],
+                array_map(
+                    fn ($v) => $v !== null && trim($v) !== '' ? trim($v) : null,
+                    $data,
+                ),
+            );
+            $organization->forceFill(['settings' => $settings])->save();
+
+            return $organization;
+        });
 
         Audit::log('perizia.settings_updated', null, [
-            'nome' => $settings['professionista']['nome'] ?? null,
+            'nome' => $organization->settings['professionista']['nome'] ?? null,
+            'luogo' => $organization->settings['professionista']['luogo'] ?? null,
         ]);
 
         return response()->json(['data' => $this->professionista($organization->id, withDefaults: false)]);
@@ -153,6 +168,13 @@ class PeriziaController extends Controller implements HasMiddleware
             'riferimento' => $assessment->report_number,
             'emessaIl' => $assessment->report_issued_at->setTimezone('Europe/Rome'),
             'professionista' => $this->professionista($assessment->tenant_id),
+            // Nello spazio della firma: luogo impostato una volta sola e la
+            // data di emissione, la stessa che compare in testata e nel pie' di
+            // pagina. Non la data di oggi: due date diverse sullo stesso foglio
+            // firmato non si spiegherebbero. La data di emissione si fissa alla
+            // prima stampa e si azzera se la valutazione viene corretta, quindi
+            // dice sempre quando e' stato emesso questo testo.
+            'luogoData' => LuogoFirma::riga($assessment->tenant_id, $assessment->report_issued_at),
             'rilevatore' => $assessment->assessor_external ?: $assessment->assessor?->name,
             'tipoValutazione' => self::TYPE_LABELS[$assessment->assessment_type] ?? $assessment->assessment_type,
             'esito' => self::OUTCOME_LABELS[$assessment->outcome] ?? null,
@@ -241,6 +263,7 @@ class PeriziaController extends Controller implements HasMiddleware
                 'titolo' => $saved['titolo'] ?? null,
                 'iscrizione' => $saved['iscrizione'] ?? null,
                 'recapiti' => $saved['recapiti'] ?? null,
+                'luogo' => $saved['luogo'] ?? null,
             ];
         }
 
@@ -251,6 +274,7 @@ class PeriziaController extends Controller implements HasMiddleware
             'titolo' => ($saved['titolo'] ?? null) ?: 'Tecnico incaricato',
             'iscrizione' => $saved['iscrizione'] ?? null,
             'recapiti' => $saved['recapiti'] ?? null,
+            'luogo' => $saved['luogo'] ?? null,
         ];
     }
 

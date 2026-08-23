@@ -61,6 +61,38 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - La stima CO2 applica il modello scritto in `config/co2.php` con i suoi riferimenti: il
   programma non inventa formule e la pagina dichiara sempre il metodo.
 
+## Documenti stampati
+
+- Export CAM: `CamExporter` (vedi sopra). Le stampe PDF passano tutte da
+  `PdfRenderer` (dompdf, DejaVu Sans Mono, nessuna risorsa esterna).
+- Sopra la firma di ogni documento firmabile (perizia, bilancio arboreo, verbale
+  di ispezione, registro fitosanitari, preventivo) c'è la riga "Luogo, data"
+  prodotta da `App\Services\Pdf\LuogoFirma::riga()`. Il luogo sta una volta
+  sola in `organizations.settings['professionista']['luogo']` e si cambia dalla
+  pagina Utenti; senza luogo impostato resta la sola data.
+- La data è quella **propria del documento**, mai l'orologio letto al momento
+  della stampa quando il documento una data ce l'ha già: perizia
+  `report_issued_at` (la stessa di testata e piè di pagina), preventivo
+  `created_at` (la stessa della testata), verbale `completed_at` (la stessa del
+  corpo e del nome del file). Bilancio arboreo e registro fitosanitari non hanno
+  una data propria: lì è la data di stampa, letta **una volta sola** e passata
+  alla vista (`stampatoIl`), o a cavallo della mezzanotte "stampato il" e la
+  firma uscirebbero con due giorni diversi.
+- Regola generale: **su uno stesso foglio non devono comparire due date
+  diverse**. È il motivo per cui la firma riusa la data già stampata altrove
+  invece di `now()`.
+- Le viste dei PDF ricevono `luogoData` dal controller: aggiungendo una stampa
+  firmabile va passato anche lì, altrimenti il modello esplode in produzione
+  (ogni vista ha un solo punto di render, elencati in `LuogoFirmaTest`).
+- `PeriziaController::updateSettings` scrive `organizations.settings` **sotto
+  `lockForUpdate` dentro una transazione**: nella stessa colonna vive
+  `perizia_last_number`, il contatore dei protocolli. Salvando su una copia
+  letta prima si riscriverebbe tutto l'insieme e un numero appena assegnato
+  potrebbe sparire.
+- Nei test le stampe si controllano con `Tests\Support\RaccoglitorePdf`, che
+  prende il posto di `PdfRenderer`, tiene i dati passati alla vista e compone
+  davvero il Blade: si vede il testo del documento senza riaprire un PDF.
+
 ## Robustezza delle richieste (dal 23/08/2026)
 
 - `resources/js/bootstrap.js` ripete da solo le richieste respinte per motivi

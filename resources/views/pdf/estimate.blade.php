@@ -174,8 +174,13 @@
 
     <table class="firma">
         <tr>
-            <td style="width: 50%;" class="spazio">&nbsp;</td>
-            <td style="width: 50%;" class="spazio">&nbsp;</td>
+            <td style="width: 50%;"></td>
+            {{-- Luogo e data dell'offerta, sopra la firma dell'impresa --}}
+            <td style="width: 50%;">{{ $luogoData }}</td>
+        </tr>
+        <tr>
+            <td class="spazio">&nbsp;</td>
+            <td class="spazio">&nbsp;</td>
         </tr>
         <tr>
             <td class="linea">Per accettazione: data e firma del committente</td>
