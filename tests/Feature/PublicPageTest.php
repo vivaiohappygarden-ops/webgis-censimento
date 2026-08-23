@@ -100,18 +100,20 @@ class PublicPageTest extends TestCase
         $response = $this->get("/p/{$token}/foto")->assertOk();
         $this->assertSame('image/jpeg', $response->headers->get('Content-Type'));
         // Ricodificata (via i metadati, incluso l'eventuale GPS), nome
-        // file originale mai esposto, niente cache condivisa
-        $stored = Storage::disk('local')->get(
-            \App\Models\Photo::query()->where('category', 'census')->firstOrFail()->s3_key,
-        );
+        // file originale mai esposto, risposta mai tenuta dal browser
+        $foto = \App\Models\Photo::query()->where('category', 'census')->firstOrFail();
+        $stored = Storage::disk('local')->get($foto->s3_key);
         $this->assertNotEquals($stored, $response->getContent());
         $this->assertStringNotContainsString('quercia', (string) $response->headers->get('Content-Disposition'));
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
 
-        // File sparito dal disco: 404 pulito, non un errore del server
-        Storage::disk('local')->delete(
-            \App\Models\Photo::query()->where('category', 'census')->firstOrFail()->s3_key,
-        );
+        // La copia ridotta si calcola una volta sola: se l'originale sparisce
+        // dal disco (ripristino incompleto) la pagina continua a funzionare
+        Storage::disk('local')->delete($foto->s3_key);
+        $this->get("/p/{$token}/foto")->assertOk();
+
+        // Senza nemmeno la copia: 404 pulito, non un errore del server
+        \App\Services\Photos\PublicPhotoCache::dimentica($foto);
         $this->get("/p/{$token}/foto")->assertNotFound();
     }
 

@@ -255,13 +255,31 @@
         @foreach ($foto as $i => $f)
             <div class="foto-box">
                 <img src="{{ $f['data'] }}" alt="Foto {{ $i + 1 }}">
-                <div class="foto-did">
-                    Foto {{ $i + 1 }}@if ($f['scattata']) - scattata il {{ $f['scattata'] }}@endif
-                </div>
+                @php
+                    // La didascalia dice sempre a che titolo e quando: una foto
+                    // successiva al sopralluogo puo' stare negli atti, ma il
+                    // lettore deve poterla riconoscere
+                    $didascalia = 'Foto '.($i + 1);
+                    if ($f['categoria']) {
+                        $didascalia .= ' - '.$f['categoria'];
+                    }
+                    if ($f['scattata']) {
+                        $didascalia .= $f['dopoSopralluogo']
+                            ? ' - ripresa dopo il sopralluogo, il '.$f['scattata']
+                            : ' - scattata il '.$f['scattata'];
+                    }
+                @endphp
+                <div class="foto-did">{{ $didascalia }}</div>
             </div>
         @endforeach
+        @if ($fotoNota)
+            <div class="legenda">{{ $fotoNota }}</div>
+        @endif
     @else
         <p class="vuoto">Nessuna fotografia allegata alla presente perizia.</p>
+        @if ($fotoNota)
+            <div class="legenda">{{ $fotoNota }}</div>
+        @endif
     @endif
 
     <h2>{{ ++$n }}. Inquadramento cartografico</h2>

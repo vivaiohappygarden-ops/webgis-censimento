@@ -351,7 +351,7 @@ class PeriziaTest extends TestCase
         );
     }
 
-    public function test_photos_taken_after_the_survey_are_not_presented_as_evidence(): void
+    public function test_le_foto_successive_al_sopralluogo_restano_ma_sono_dichiarate(): void
     {
         // Orario fissato: le date si contano in giorni italiani, e vicino a
         // mezzanotte UTC un test legato all'orologio darebbe risultati diversi
@@ -380,21 +380,25 @@ class PeriziaTest extends TestCase
         }
 
         $assessment = $this->makeAssessment($asset);
-        $this->renderedHtml($assessment['id']);
+        $html = $this->renderedHtml($assessment['id']);
 
-        // Due sole foto: quella scattata dopo il sopralluogo resta fuori
-        $recenti = (new \ReflectionClass(\App\Http\Controllers\Api\V1\PeriziaController::class))
-            ->getMethod('photos');
-        $recenti->setAccessible(true);
-        $foto = $recenti->invoke(
-            app(\App\Http\Controllers\Api\V1\PeriziaController::class),
-            $asset,
-            \App\Models\TreeAssessment::query()->findOrFail($assessment['id']),
+        // Ci sono tutte e tre: una perizia non perde per strada la
+        // documentazione. Quella ripresa dopo il rilievo si riconosce dalla
+        // didascalia, non sparisce in silenzio.
+        $this->assertSame(3, substr_count($html, 'data:image/jpeg;base64,'));
+        $this->assertStringContainsString('scattata il 08/07/2026', $html);
+        $this->assertStringContainsString('scattata il 15/08/2026', $html);
+        $this->assertStringContainsString('ripresa dopo il sopralluogo, il 20/08/2026', $html);
+
+        // In ordine di scatto: la piu' vecchia per prima
+        $this->assertLessThan(
+            strpos($html, '20/08/2026'),
+            strpos($html, '08/07/2026'),
+            'Le fotografie devono comparire in ordine di scatto.',
         );
 
-        $this->assertCount(2, $foto);
-        // La più recente entro il sopralluogo viene per prima, con la sua data
-        $this->assertSame('15/08/2026', $foto[0]['scattata']);
+        // Nessuna nota: non manca niente
+        $this->assertStringNotContainsString('non sono state allegate', $html);
 
         $this->travelBack();
     }

@@ -6,8 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use App\Models\Organization;
 use App\Models\Photo;
-use App\Services\Photos\ImageDerivative;
-use Illuminate\Support\Facades\Storage;
+use App\Services\Photos\PublicPhotoCache;
 
 /**
  * Pagina pubblica raggiunta dal QR sul cartellino: nessun accesso, solo
@@ -69,8 +68,13 @@ class PublicTreeController extends Controller
     /**
      * La foto viene SEMPRE ricodificata: il file originale può contenere
      * coordinate GPS e altri metadati che la pagina, per scelta, non
-     * pubblica. Niente nome file originale, niente cache condivisa (la
-     * revoca del gettone deve valere subito).
+     * pubblica. Niente nome file originale.
+     *
+     * La copia ridotta si calcola una volta sola e resta sul disco del
+     * server, non nel browser: la risposta è "no-store" e il gettone si
+     * controlla prima, quindi revocarlo vale subito lo stesso. Senza questo
+     * risparmio ogni visita ricodificherebbe l'originale a piena
+     * risoluzione, ed è una pagina che chiunque può aprire.
      */
     public function photo(string $token)
     {
@@ -78,7 +82,7 @@ class PublicTreeController extends Controller
         $photo = $this->publicPhoto($asset);
         abort_if($photo === null, 404);
 
-        $jpeg = ImageDerivative::jpeg(Storage::disk()->get($photo->s3_key));
+        $jpeg = PublicPhotoCache::jpeg($photo);
         abort_if($jpeg === null, 404);
 
         return response($jpeg, 200, [

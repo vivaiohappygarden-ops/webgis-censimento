@@ -11,6 +11,28 @@ namespace App\Services\Photos;
  */
 class ImageDerivative
 {
+    /*
+     * Soglie di sicurezza contro le immagini-trappola (un file piccolo che si
+     * espande in memoria fino a mettere in ginocchio il server).
+     *
+     * Vanno tenute in accordo con due numeri:
+     * - il limite di caricamento delle foto (15 MB in PhotoController): sotto
+     *   quel valore una foto entrerebbe nel programma ma non si potrebbe mai
+     *   mostrare, e sparirebbe in silenzio da perizie e portale;
+     * - la memoria dei processi PHP (256 MB): GD tiene l'immagine decompressa a
+     *   circa 4 byte per pixel, fuori dal conteggio di memory_limit. Misurato
+     *   su questo codice, una foto da 24 megapixel porta il picco di memoria
+     *   del processo a poco piu' di 100 MB: resta margine, e le derivate del
+     *   portale pubblico si calcolano comunque una volta sola (PublicPhotoCache).
+     *
+     * La soglia precedente era 12 megapixel: una normale foto da telefono
+     * (4032 x 3024 = 12,19 megapixel, poco piu' di un megabyte) la superava e
+     * veniva scartata senza dire niente a nessuno.
+     */
+    public const BYTE_MASSIMI = 16 * 1024 * 1024;
+
+    public const PIXEL_MASSIMI = 24_000_000;
+
     public static function jpeg(?string $content, int $maxDimension = 1600, int $quality = 80): ?string
     {
         $source = self::decode($content, $maxDimension, false);
@@ -48,12 +70,12 @@ class ImageDerivative
     /** Decodifica con le soglie di sicurezza e ridimensionamento. */
     private static function decode(?string $content, int $maxDimension, bool $keepAlpha): ?\GdImage
     {
-        if ($content === null || strlen($content) > 8 * 1024 * 1024) {
+        if ($content === null || strlen($content) > self::BYTE_MASSIMI) {
             return null;
         }
 
         $info = @getimagesizefromstring($content);
-        if ($info === false || $info[0] * $info[1] > 12_000_000) {
+        if ($info === false || $info[0] * $info[1] > self::PIXEL_MASSIMI) {
             return null;
         }
 

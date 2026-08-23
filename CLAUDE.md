@@ -89,6 +89,25 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   `perizia_last_number`, il contatore dei protocolli. Salvando su una copia
   letta prima si riscriverebbe tutto l'insieme e un numero appena assegnato
   potrebbe sparire.
+- **Documentazione fotografica della perizia**: entrano *tutte* le foto
+  dell'elemento (tetto `PeriziaController::MASSIMO_FOTO`, oltre il quale si
+  tengono le più vicine al sopralluogo e il documento dichiara il totale).
+  Niente esclusioni silenziose: una foto successiva al sopralluogo si stampa
+  con la didascalia che lo dice, una illeggibile finisce nel conteggio della
+  nota. La versione precedente ne mostrava quattro e scartava in silenzio le
+  altre.
+- Una perizia **validata** congela anche le fotografie: entrano solo quelle
+  caricate prima di `validated_at` (confronto su `created_at`: la domanda è se
+  la foto fosse già negli atti alla firma). Le successive non entrano e la nota
+  le conta. Senza questo, ristampare un atto chiuso dopo aver aggiunto una foto
+  darebbe un documento diverso a parità di impronta SHA-256.
+- `ImageDerivative` ha soglie (`BYTE_MASSIMI`, `PIXEL_MASSIMI`) che vanno tenute
+  sopra il limite di caricamento delle foto: erano 12 Mpx e una normale foto da
+  telefono (4032 x 3024 = 12,19 Mpx) veniva scartata senza avviso, sparendo da
+  perizie, schede e portale pubblico.
+- `PhotoController` ricava `taken_at` dagli EXIF quando il client non la manda:
+  il momento del caricamento non è la data dello scatto, e quella data finisce
+  stampata sotto la fotografia nella perizia.
 - Nei test le stampe si controllano con `Tests\Support\RaccoglitorePdf`, che
   prende il posto di `PdfRenderer`, tiene i dati passati alla vista e compone
   davvero il Blade: si vede il testo del documento senza riaprire un PDF.

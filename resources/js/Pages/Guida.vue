@@ -148,6 +148,20 @@ function goTo(id) {
                                 il documento non dichiara mai controlli che non sono stati fatti.
                             </li>
                             <li>
+                                Nella <strong>documentazione fotografica</strong> entrano tutte le fotografie
+                                dell'albero, in ordine di scatto, ciascuna con la data e a che titolo è stata
+                                presa (censimento, difetto, prima o dopo un lavoro). Se una foto è successiva
+                                al giorno del sopralluogo la didascalia lo dice: resta agli atti, ma si
+                                riconosce. Oltre le 24 fotografie il documento allega le più vicine al
+                                sopralluogo e scrive quante ce ne sono in tutto: niente sparisce in silenzio.
+                            </li>
+                            <li>
+                                Una volta <strong>validata</strong>, la perizia porta le fotografie che
+                                c'erano al momento della firma: quelle caricate dopo non entrano in un atto
+                                già chiuso, e il documento scrive che esistono. Finché è una bozza, invece,
+                                ogni foto nuova compare alla stampa successiva.
+                            </li>
+                            <li>
                                 Alla prima stampa la perizia riceve un <strong>numero di protocollo</strong>
                                 (PER-anno-numero) e una data di emissione, che non cambiano più: ristampare
                                 dà lo stesso documento.

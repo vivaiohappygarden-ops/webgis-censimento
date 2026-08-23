@@ -13,10 +13,10 @@ use App\Services\Pdf\PdfRenderer;
 use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -59,6 +59,27 @@ class PeriziaController extends Controller implements HasMiddleware
         'monitor' => 'Esemplare da monitorare',
         'prescriptions' => 'Esemplare da sottoporre agli interventi prescritti',
         'fell' => 'Se ne propone l\'abbattimento',
+    ];
+
+    /**
+     * Tetto alle fotografie allegate alla perizia. Non e' una scelta di
+     * gusto: ogni immagine entra nel PDF ricodificata e in base64, e un
+     * documento con centinaia di foto diventerebbe impossibile da aprire e
+     * da inviare. Quando il tetto taglia, il documento lo dichiara.
+     */
+    private const MASSIMO_FOTO = 24;
+
+    /** Etichette italiane delle categorie di fotografia. */
+    private const PHOTO_LABELS = [
+        'census' => 'censimento',
+        'reference' => 'riferimento',
+        'before' => 'prima del lavoro',
+        'during' => 'durante il lavoro',
+        'after' => 'dopo il lavoro',
+        'organ' => 'organo',
+        'defect' => 'difetto',
+        'issue' => 'segnalazione',
+        'other' => 'altro',
     ];
 
     private const INSTRUMENT_LABELS = [
@@ -164,6 +185,8 @@ class PeriziaController extends Controller implements HasMiddleware
             [$asset->id],
         );
 
+        $documentazione = $this->photos($asset->id, $assessment);
+
         $pdf = $renderer->render('pdf.perizia', [
             'riferimento' => $assessment->report_number,
             'emessaIl' => $assessment->report_issued_at->setTimezone('Europe/Rome'),
@@ -202,7 +225,8 @@ class PeriziaController extends Controller implements HasMiddleware
             'classiDescrizione' => self::CLASS_DESCRIPTIONS,
             'integrazioneVta' => $survey['integrazione_vta'] ?? null,
             'prioritaIntervento' => $survey['priorita_intervento'] ?? null,
-            'foto' => $this->photos($asset->id, $assessment),
+            'foto' => $documentazione['foto'],
+            'fotoNota' => $documentazione['nota'],
             'mappaDataUri' => $point?->lat !== null
                 ? $map->pngDataUri((float) $point->lat, (float) $point->lon)
                 : null,
@@ -325,56 +349,167 @@ class PeriziaController extends Controller implements HasMiddleware
     }
 
     /**
-     * Fino a 4 foto per la documentazione fotografica: le più recenti che
-     * non siano successive al sopralluogo (una perizia non documenta con
-     * foto scattate dopo), ciascuna con la sua data.
+     * Documentazione fotografica: TUTTE le fotografie dell'esemplare, in
+     * ordine di scatto.
+     *
+     * Prima ne uscivano al massimo quattro, e per giunta solo quelle non
+     * successive al sopralluogo: siccome la data di scatto, quando il telefono
+     * non la fornisce, e' il momento del caricamento, bastava caricarle il
+     * giorno dopo il rilievo perche' sparissero. Una perizia non puo' perdere
+     * per strada la documentazione senza dirlo.
      *
      * Le immagini sono SEMPRE ricodificate e ridotte: la ricodifica elimina
      * EXIF e coordinate GPS del telefono, che altrimenti resterebbero
      * leggibili dentro il PDF firmato, e tiene il documento leggero.
      *
-     * @return list<array{data: string, scattata: ?string, categoria: ?string}>
+     * @return array{foto: list<array{data: string, scattata: ?string, categoria: ?string, dopoSopralluogo: bool}>, nota: ?string}
      */
     private function photos(string $assetId, TreeAssessment $assessment): array
     {
-        $disk = Storage::disk();
-        $limite = $assessment->assessed_on?->copy()->endOfDay();
+        $chiusura = $assessment->validated_at;
 
-        $query = fn (bool $entroSopralluogo) => Photo::query()
+        // Il confine del giorno del sopralluogo si calcola in ora italiana,
+        // la stessa in cui le date vengono stampate: il programma lavora in
+        // UTC, e un tramonto d'estate a Roma cade gia' nel giorno dopo
+        $limite = $assessment->assessed_on === null
+            ? null
+            : Carbon::parse($assessment->assessed_on->toDateString(), 'Europe/Rome')->endOfDay();
+
+        $quando = fn (Photo $p) => $p->taken_at ?? $p->created_at;
+        $istante = fn (Photo $p) => $quando($p)?->timestamp ?? 0;
+
+        /*
+         * Una perizia validata e' un atto chiuso: la documentazione fotografica
+         * e' quella che c'era al momento della validazione, e ristampare deve
+         * dare lo stesso foglio.
+         *
+         * Perche' regga davvero servono due cose: le foto aggiunte dopo non
+         * entrano (confronto su created_at: la domanda e' se quella fotografia
+         * fosse gia' negli atti alla firma), e quelle cancellate dopo NON
+         * escono. L'eliminazione e' morbida, il file resta: si recuperano con
+         * withTrashed, altrimenti bastava cancellare una foto per cambiare un
+         * documento gia' consegnato.
+         */
+        $tutte = Photo::query()
+            ->when($chiusura !== null, fn ($q) => $q->withTrashed())
             ->where('asset_id', $assetId)
-            ->when($entroSopralluogo && $limite !== null, fn ($q) => $q->whereRaw(
-                'COALESCE(taken_at, created_at) <= ?', [$limite],
-            ))
-            ->orderByRaw('COALESCE(taken_at, created_at) DESC')
-            ->limit(4)
+            ->orderByRaw('COALESCE(taken_at, created_at), id')
             ->get();
 
-        $photos = $query(true);
-        if ($photos->isEmpty()) {
-            // Nessuna foto entro il sopralluogo: si usano comunque quelle
-            // disponibili, ma la data stampata sotto lo dice chiaramente
-            $photos = $query(false);
+        if ($chiusura !== null) {
+            $tutte = $tutte->reject(
+                // Cancellata prima della firma: non era negli atti nemmeno allora
+                fn (Photo $p) => $p->deleted_at !== null && $p->deleted_at->lessThanOrEqualTo($chiusura),
+            )->values();
         }
 
-        return $photos
-            ->filter(fn (Photo $p) => $disk->exists($p->s3_key))
-            ->map(function (Photo $p) use ($disk) {
-                $jpeg = \App\Services\Photos\ImageDerivative::jpeg(
-                    $disk->get($p->s3_key), maxDimension: 1200, quality: 78,
-                );
-                if ($jpeg === null) {
-                    return null;
-                }
+        $sullElemento = $tutte->count();
 
-                return [
-                    'data' => 'data:image/jpeg;base64,'.base64_encode($jpeg),
-                    'scattata' => ($p->taken_at ?? $p->created_at)?->setTimezone('Europe/Rome')->format('d/m/Y'),
-                    'categoria' => $p->category,
-                ];
-            })
-            ->filter()
-            ->values()
-            ->all();
+        $dopoLaChiusura = 0;
+        if ($chiusura !== null) {
+            $aggiunteDopo = $tutte->filter(
+                fn (Photo $p) => $p->created_at?->greaterThan($chiusura) === true,
+            );
+            $dopoLaChiusura = $aggiunteDopo->count();
+            $tutte = $tutte->reject(fn (Photo $p) => $aggiunteDopo->contains($p))->values();
+        }
+
+        // Oltre il tetto si tengono quelle piu' vicine al sopralluogo: sono
+        // quelle che documentano questa perizia, non le foto di un lavoro fatto
+        // tre anni prima. Il riferimento e' mezzogiorno del giorno del rilievo,
+        // non la mezzanotte: misurare dalla fine della giornata darebbe la
+        // precedenza alla sera su una foto scattata la mattina stessa.
+        $scelte = $tutte;
+        if ($tutte->count() > self::MASSIMO_FOTO) {
+            $riferimento = $assessment->assessed_on === null
+                ? now()
+                : Carbon::parse($assessment->assessed_on->toDateString(), 'Europe/Rome')->setTime(12, 0);
+
+            $scelte = $tutte
+                // L'id come secondo criterio: a parita' di istante l'ordine
+                // deve restare lo stesso a ogni ristampa
+                ->sortBy([
+                    fn (Photo $a, Photo $b) => abs($istante($a) - $riferimento->timestamp)
+                        <=> abs($istante($b) - $riferimento->timestamp),
+                    fn (Photo $a, Photo $b) => $a->id <=> $b->id,
+                ])
+                ->take(self::MASSIMO_FOTO)
+                ->sortBy([
+                    fn (Photo $a, Photo $b) => $istante($a) <=> $istante($b),
+                    fn (Photo $a, Photo $b) => $a->id <=> $b->id,
+                ])
+                ->values();
+        }
+
+        $nonLeggibili = 0;
+        $foto = [];
+        foreach ($scelte as $p) {
+            // La copia ridotta si calcola una volta sola e resta su disco:
+            // senza, ogni ristampa ricodificherebbe da capo tutte le foto a
+            // piena risoluzione, e con due dozzine di scatti la richiesta
+            // rischierebbe di scadere
+            $jpeg = \App\Services\Photos\PublicPhotoCache::jpeg($p);
+
+            // File mancante o immagine oltre le soglie di sicurezza: non si
+            // rinuncia alla perizia, ma il conto finisce nella nota
+            if ($jpeg === null) {
+                $nonLeggibili++;
+
+                continue;
+            }
+
+            $scattata = $quando($p);
+            $foto[] = [
+                'data' => 'data:image/jpeg;base64,'.base64_encode($jpeg),
+                'scattata' => $scattata?->setTimezone('Europe/Rome')->format('d/m/Y'),
+                'categoria' => self::PHOTO_LABELS[$p->category] ?? null,
+                // Non si nasconde: si dichiara. Il perito vede tutto e il
+                // lettore capisce che cosa e' stato ripreso dopo il rilievo
+                'dopoSopralluogo' => $limite !== null && $scattata !== null && $scattata->greaterThan($limite),
+            ];
+        }
+
+        return [
+            'foto' => $foto,
+            'nota' => $this->notaFotografie($sullElemento, count($foto), $nonLeggibili, $dopoLaChiusura),
+        ];
+    }
+
+    /**
+     * Che cosa non è finito nella documentazione fotografica, e perché.
+     *
+     * Se non manca niente non si scrive niente: una nota che dice "ci sono
+     * tutte" aggiungerebbe rumore a un documento già lungo.
+     */
+    private function notaFotografie(
+        int $totale,
+        int $allegate,
+        int $nonLeggibili,
+        int $dopoLaChiusura = 0,
+    ): ?string {
+        $parti = [];
+
+        // Il numero dichiarato è quello davvero allegato, non quello scelto:
+        // se una delle scelte non si è potuta ricodificare, il conto deve
+        // restare vero
+        if ($totale - $allegate - $nonLeggibili - $dopoLaChiusura > 0) {
+            $parti[] = "Sull'esemplare risultano {$totale} fotografie: ne sono allegate {$allegate}, "
+                .'le più vicine alla data del sopralluogo.';
+        }
+
+        if ($nonLeggibili === 1) {
+            $parti[] = 'Una fotografia non è stata allegata perché il file non è leggibile.';
+        } elseif ($nonLeggibili > 1) {
+            $parti[] = "{$nonLeggibili} fotografie non sono state allegate perché i file non sono leggibili.";
+        }
+
+        if ($dopoLaChiusura === 1) {
+            $parti[] = 'Una fotografia caricata dopo la validazione non fa parte di questo atto.';
+        } elseif ($dopoLaChiusura > 1) {
+            $parti[] = "{$dopoLaChiusura} fotografie caricate dopo la validazione non fanno parte di questo atto.";
+        }
+
+        return $parti === [] ? null : implode(' ', $parti);
     }
 
     private function joinList(?array $values): string
