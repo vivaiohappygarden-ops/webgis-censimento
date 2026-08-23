@@ -2,6 +2,8 @@
 import { nextTick, onMounted, reactive, ref } from 'vue';
 import axios from 'axios';
 import { fetchPdf } from '@/pdf';
+import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import { usaCaricamento } from '@/caricamento';
 
 const props = defineProps({
     asset: { type: Object, required: true },
@@ -10,6 +12,10 @@ const props = defineProps({
     apriValutazione: { type: Boolean, default: false },
 });
 const emit = defineEmits(['saved']);
+
+// Le valutazioni sono lo storico dell'albero: se non arrivano deve dirlo,
+// non far credere che l'albero non sia mai stato valutato
+const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 
 const assessments = ref([]);
 const savingTree = ref(false);
@@ -354,7 +360,7 @@ const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '—');
 const fmtOra = (d) => (d ? new Date(d).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
 onMounted(async () => {
-    await loadAssessments();
+    await carica(loadAssessments);
     if (props.apriValutazione && props.canUpdate) {
         showVtaForm.value = true;
         nextTick(() => document.querySelector('[data-test=vta-bersagli]')?.scrollIntoView({ block: 'center' }));
@@ -365,6 +371,8 @@ onMounted(async () => {
 <template>
     <div class="mt-6 rounded-xl border border-gray-200 bg-white p-6">
         <h2 class="text-sm font-semibold">Scheda albero</h2>
+
+        <AvvisoErrore class="mt-3" :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
 
         <div class="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
             <label class="block text-xs">

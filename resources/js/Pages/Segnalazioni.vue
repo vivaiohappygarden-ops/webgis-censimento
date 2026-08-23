@@ -3,8 +3,12 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import { usaCaricamento } from '@/caricamento';
 
 const page = usePage();
+// Un errore di caricamento va detto, non lasciato indovinare da un elenco vuoto
+const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('works.manage'));
 
 const STATUS = {
@@ -202,7 +206,7 @@ function slaPhaseText(phase) {
 }
 
 onMounted(async () => {
-    await Promise.all([load(), loadAreas()]);
+    await carica(() => Promise.all([load(), loadAreas()]));
 });
 </script>
 
@@ -211,6 +215,8 @@ onMounted(async () => {
 
     <AppLayout>
         <div class="p-6">
+            <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
+
             <div class="mb-4 flex items-center justify-between">
                 <div>
                     <h1 class="text-xl font-semibold">Segnalazioni</h1>

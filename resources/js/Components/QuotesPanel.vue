@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
 import axios from 'axios';
+import { avvisoCaricamento } from '@/avvisi';
 import { fetchPdf } from '@/pdf';
 
 const props = defineProps({
@@ -82,8 +83,8 @@ async function load() {
     try {
         const { data } = await axios.get('/api/v1/estimates');
         estimates.value = data.data;
-    } catch {
-        pageError.value = 'Caricamento non riuscito: ricarica la pagina.';
+    } catch (err) {
+        pageError.value = avvisoCaricamento(err);
     } finally {
         loading.value = false;
     }

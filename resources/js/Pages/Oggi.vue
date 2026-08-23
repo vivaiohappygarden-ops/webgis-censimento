@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { avvisoCaricamento } from '@/avvisi';
 
 const data = ref(null);
 const loading = ref(false);
@@ -51,8 +52,8 @@ async function load() {
     try {
         const res = await axios.get('/api/v1/dashboard/today');
         data.value = res.data.data;
-    } catch {
-        pageError.value = 'Caricamento non riuscito: ricarica la pagina.';
+    } catch (err) {
+        pageError.value = avvisoCaricamento(err);
     } finally {
         loading.value = false;
     }

@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import axios from 'axios';
+import { avvisoCaricamento } from '@/avvisi';
 
 const open = ref(false);
 const query = ref('');
@@ -28,10 +29,13 @@ function onKeydown(e) {
     }
 }
 
+const errore = ref('');
+
 watch(query, (q) => {
     clearTimeout(debounce);
     if (q.trim().length < 2) {
         results.value = null;
+        errore.value = '';
 
         return;
     }
@@ -40,6 +44,12 @@ watch(query, (q) => {
         try {
             const { data } = await axios.get('/api/v1/search', { params: { q } });
             results.value = data.data;
+            errore.value = '';
+        } catch (err) {
+            // Senza questo, una ricerca fallita lasciava a video i risultati
+            // della ricerca precedente, come se fossero quelli nuovi
+            results.value = null;
+            errore.value = avvisoCaricamento(err);
         } finally {
             loading.value = false;
         }
@@ -76,6 +86,7 @@ defineExpose({ toggle });
 
                 <div class="max-h-96 overflow-y-auto p-2 text-sm">
                     <p v-if="loading" class="px-3 py-4 text-gray-400">Ricerca…</p>
+                    <p v-else-if="errore" class="px-3 py-4 text-sm text-red-700">{{ errore }}</p>
                     <p v-else-if="isEmpty(results)" class="px-3 py-4 text-gray-400">Nessun risultato per "{{ query }}".</p>
 
                     <template v-if="results">

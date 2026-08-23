@@ -58,6 +58,27 @@ memory_limit = 256M
 INI
 systemctl reload "php${PHP_V}-fpm" 2>/dev/null || systemctl restart "php${PHP_V}-fpm" || true
 
+# I cinque processi PHP di serie non bastano a una pagina che parte con più
+# richieste insieme: si dimensionano sulla memoria del server
+WEBGIS_PHP_VERSION="${PHP_V}" bash "$(dirname "$(readlink -f "$0")")/php-fpm-config.sh" || true
+
+# Senza memoria di scambio, quando la memoria finisce il sistema chiude di
+# colpo un programma (di solito PostgreSQL o PHP) e per qualche istante il
+# sito risponde con un errore. Due gigabyte di scambio bastano a evitarlo.
+if [ "$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo)" = "0" ]; then
+  LIBERI_MB=$(df -Pm / | awk 'NR==2 {print $4}')
+  if [ "${LIBERI_MB}" -gt 6144 ]; then
+    log "Memoria di scambio (2 GB)"
+    fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
+    chmod 600 /swapfile
+    mkswap /swapfile >/dev/null
+    swapon /swapfile
+    grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  else
+    echo "Avviso: poco spazio libero su disco, memoria di scambio non creata."
+  fi
+fi
+
 log "PostgreSQL + PostGIS, Redis, GDAL"
 apt-get install -y -qq postgresql-16 postgresql-16-postgis-3 redis-server gdal-bin
 systemctl enable --now postgresql redis-server

@@ -3,11 +3,16 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import { usaCaricamento } from '@/caricamento';
 
 const page = usePage();
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('works.manage'));
 
 const lists = ref([]);
+// Un errore di caricamento va detto, non lasciato indovinare da un elenco vuoto
+const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
+
 const workTypes = ref([]);
 const loading = ref(false);
 
@@ -167,7 +172,7 @@ async function toggleActive() {
     }
 }
 
-onMounted(load);
+onMounted(() => carica(load));
 </script>
 
 <template>
@@ -175,6 +180,8 @@ onMounted(load);
 
     <AppLayout>
         <div class="p-6">
+            <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
+
             <div class="mb-4 flex items-center justify-between">
                 <div>
                     <h1 class="text-xl font-semibold">Listini prezzi</h1>

@@ -27,6 +27,11 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
+echo "==> Processi PHP"
+# Ridimensiona i processi PHP sulla memoria del server: il valore di serie
+# (cinque) accoda le richieste di una pagina appena aperta
+bash "${APP_DIR}/deploy/php-fpm-config.sh" || echo "  (dimensionamento non riuscito: si prosegue con la configurazione attuale)"
+
 echo "==> Permessi e servizi"
 chown -R www-data:www-data "${APP_DIR}"
 systemctl restart webgis-queue

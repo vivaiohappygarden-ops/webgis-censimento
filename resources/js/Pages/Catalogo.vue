@@ -3,11 +3,16 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import { usaCaricamento } from '@/caricamento';
 
 const page = usePage();
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('catalog.manage'));
 
 const mainTypes = ref([]);
+// Un errore di caricamento va detto, non lasciato indovinare da un elenco vuoto
+const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
+
 const total = ref(0);
 const search = ref('');
 const open = ref({});
@@ -63,12 +68,14 @@ async function removeField(field) {
 const GEO_LABEL = { P: 'Punto', L: 'Linea', S: 'Superficie' };
 const TP_COLORS = { 1: '#16a34a', 2: '#475569', 3: '#d97706', 4: '#dc2626' };
 
-onMounted(async () => {
+async function caricaCatalogo() {
     const { data } = await axios.get('/api/v1/catalog');
     mainTypes.value = data.data;
     total.value = data.meta.object_types_count;
     if (mainTypes.value.length) open.value[mainTypes.value[0].id] = true;
-});
+}
+
+onMounted(() => carica(caricaCatalogo));
 
 const filtered = computed(() => {
     const q = search.value.trim().toLowerCase();
@@ -97,6 +104,8 @@ const countTypes = (m) => m.sub_types.reduce((acc, s) => acc + s.object_types.le
 
     <AppLayout>
         <div class="p-6">
+            <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
+
             <div class="mb-4">
                 <h1 class="text-xl font-semibold">Catalogo oggetti</h1>
                 <p class="text-sm text-gray-500">
@@ -147,7 +156,7 @@ const countTypes = (m) => m.sub_types.reduce((acc, s) => acc + s.object_types.le
                                         v-if="canManage"
                                         class="text-xs text-green-700 hover:underline"
                                         title="Campi personalizzati"
-                                        @click="openFields(t)"
+                                        @click="carica(() => openFields(t))"
                                     >campi</button>
                                 </div>
                             </div>

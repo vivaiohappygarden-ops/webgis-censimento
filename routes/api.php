@@ -183,7 +183,9 @@ Route::prefix('v1')->group(function () {
         Route::get('documents/{id}/file', [\App\Http\Controllers\Api\V1\DocumentController::class, 'file'])
             ->whereUuid('id')->name('v1.documents.file');
 
+        // Conto delle richieste a parte: vedi il limite "tiles" in AppServiceProvider
         Route::get('tiles/assets/{z}/{x}/{y}', [TileController::class, 'assets'])
+            ->middleware('throttle:tiles')
             ->whereNumber(['z', 'x', 'y']);
     });
 });

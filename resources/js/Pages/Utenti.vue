@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { avvisoCaricamento } from '@/avvisi';
 
 const page = usePage();
 const myId = computed(() => page.props.auth?.user?.id);
@@ -65,8 +66,8 @@ async function load() {
         ]);
         users.value = u.data.data;
         clients.value = c;
-    } catch {
-        pageError.value = 'Caricamento non riuscito: ricarica la pagina.';
+    } catch (err) {
+        pageError.value = avvisoCaricamento(err);
     } finally {
         loading.value = false;
     }

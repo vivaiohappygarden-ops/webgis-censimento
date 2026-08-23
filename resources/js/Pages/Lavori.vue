@@ -7,6 +7,8 @@ import WorkAgenda from '@/Components/WorkAgenda.vue';
 import WorkReport from '@/Components/WorkReport.vue';
 import QualityBoard from '@/Components/QualityBoard.vue';
 import QuotesPanel from '@/Components/QuotesPanel.vue';
+import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import { usaCaricamento } from '@/caricamento';
 import { WORK_STATUS_LABELS } from '@/workStatus';
 
 const page = usePage();
@@ -25,6 +27,10 @@ const STATUS_COLORS = {
 const PRIORITY_LABELS = { low: 'Bassa', normal: 'Normale', high: 'Alta', urgent: 'Urgente' };
 
 const rows = ref([]);
+
+// L'elenco vuoto per un errore di rete e l'elenco vuoto perche' non ci sono
+// ordini si somigliano troppo: qui il primo caso si dichiara
+const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 
 // --- Azioni su piu' ordini insieme -----------------------------------------
 const selezionati = ref([]);
@@ -361,7 +367,7 @@ async function setPriceList(priceListId) {
 }
 
 onMounted(async () => {
-    await Promise.all([load(), loadLookups()]);
+    await carica(() => Promise.all([load(), loadLookups()]));
 });
 </script>
 
@@ -370,6 +376,8 @@ onMounted(async () => {
 
     <AppLayout>
         <div class="p-6">
+            <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
+
             <div class="mb-4 flex items-center justify-between">
                 <div>
                     <h1 class="text-xl font-semibold">Ordini di lavoro</h1>
@@ -476,7 +484,7 @@ onMounted(async () => {
             </ul>
 
             <div v-if="view === 'elenco'" class="mb-3 flex flex-wrap gap-2">
-                <select v-model="filters.status" class="rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @change="filters.page = 1; load()">
+                <select v-model="filters.status" class="rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @change="filters.page = 1; carica(load)">
                     <option value="">Tutti gli stati</option>
                     <option v-for="(label, value) in STATUS_LABELS" :key="value" :value="value">{{ label }}</option>
                 </select>
@@ -484,7 +492,7 @@ onMounted(async () => {
                     v-model="filters.q"
                     placeholder="Cerca per codice o titolo…"
                     class="w-64 rounded-lg border border-gray-300 px-2.5 py-2 text-sm"
-                    @input="filters.page = 1; load()"
+                    @input="filters.page = 1; carica(load)"
                 >
             </div>
 
@@ -547,9 +555,9 @@ onMounted(async () => {
             </div>
 
             <div v-if="view === 'elenco' && meta.last_page > 1" class="mt-3 flex items-center justify-between text-sm">
-                <button class="rounded-lg border border-gray-300 px-3 py-1.5 disabled:opacity-40" :disabled="meta.current_page <= 1" @click="filters.page -= 1; load()">← Precedente</button>
+                <button class="rounded-lg border border-gray-300 px-3 py-1.5 disabled:opacity-40" :disabled="meta.current_page <= 1" @click="filters.page -= 1; carica(load)">← Precedente</button>
                 <span class="text-gray-500">Pagina {{ meta.current_page }} di {{ meta.last_page }}</span>
-                <button class="rounded-lg border border-gray-300 px-3 py-1.5 disabled:opacity-40" :disabled="meta.current_page >= meta.last_page" @click="filters.page += 1; load()">Successiva →</button>
+                <button class="rounded-lg border border-gray-300 px-3 py-1.5 disabled:opacity-40" :disabled="meta.current_page >= meta.last_page" @click="filters.page += 1; carica(load)">Successiva →</button>
             </div>
 
             <!-- Creazione -->

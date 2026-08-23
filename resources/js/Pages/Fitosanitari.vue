@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { avvisoCaricamento } from '@/avvisi';
 import { fetchPdf } from '@/pdf';
 
 const page = usePage();
@@ -99,9 +100,9 @@ async function load() {
         if (seq !== loadSeq) return;
         treatments.value = data.data;
         total.value = data.total ?? data.data.length;
-    } catch {
+    } catch (err) {
         if (seq !== loadSeq) return;
-        pageError.value = 'Caricamento non riuscito: ricarica la pagina.';
+        pageError.value = avvisoCaricamento(err);
     } finally {
         if (seq === loadSeq) loading.value = false;
     }
@@ -126,8 +127,8 @@ async function loadLookups() {
             const { data } = await axios.get('/api/v1/personnel');
             personnel.value = data.data;
         }
-    } catch {
-        pageError.value = 'Caricamento non riuscito: ricarica la pagina.';
+    } catch (err) {
+        pageError.value = avvisoCaricamento(err);
     }
 }
 

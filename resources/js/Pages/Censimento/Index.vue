@@ -3,6 +3,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import { usaCaricamento } from '@/caricamento';
 import { STATUS_LABELS, statusLabel } from '@/assetStatus';
 
 const page = usePage();
@@ -12,6 +14,9 @@ const canCreate = computed(() => permissions.value.includes('assets.create'));
 const canViewClients = computed(() => permissions.value.includes('clients.view'));
 
 const rows = ref([]);
+
+// Se l'elenco non arriva, la tabella non deve restare vuota senza spiegazione
+const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 const canUpdateAssets = computed(() => permissions.value.includes('assets.update'));
 
 // --- Azioni su piu' elementi insieme ---------------------------------------
@@ -258,20 +263,16 @@ watch(() => [filters.q, filters.status, filters.clientId, filters.areaId, showRe
     clearTimeout(debounce);
     debounce = setTimeout(() => {
         filters.page = 1;
-        load();
+        carica(load);
     }, 300);
 });
 
 // Cambiando committente cambia l'elenco delle aree selezionabili
 watch(() => filters.clientId, loadAreas);
 
-watch(() => filters.page, load);
+watch(() => filters.page, () => carica(load));
 
-onMounted(() => {
-    load();
-    loadClients();
-    loadAreas();
-});
+onMounted(() => carica(() => Promise.all([load(), loadClients(), loadAreas()])));
 
 const measure = (row) => {
     if (row.computed_area_sqm) return `${Number(row.computed_area_sqm).toLocaleString('it-IT')} m²`;
@@ -327,6 +328,8 @@ const measure = (row) => {
                     >Importa GeoJSON</button>
                 </div>
             </div>
+
+            <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
 
             <p v-if="camExport.error" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="cam-export-error">
                 {{ camExport.error }}

@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { avvisoCaricamento } from '@/avvisi';
 
 const page = usePage();
 const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
@@ -133,8 +134,8 @@ async function load() {
         ]);
         systems.value = sy.data.data;
         areas.value = ar;
-    } catch {
-        pageError.value = 'Caricamento non riuscito: ricarica la pagina. Se il problema continua, esci e accedi di nuovo.';
+    } catch (err) {
+        pageError.value = avvisoCaricamento(err);
     } finally {
         loading.value = false;
     }

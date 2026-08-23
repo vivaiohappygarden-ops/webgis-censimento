@@ -326,10 +326,49 @@ pagano. È un costo da mettere nel preventivo al committente, come il dominio.
 - Per tutto il resto: aprire una sessione di lavoro con Claude descrivendo
   cosa si vede sullo schermo.
 
+### 7.1 "A volte i dati non si caricano"
+
+Il programma ora ci prova da solo: se una richiesta viene respinta per un
+motivo passeggero la ripete, e solo se non ce la fa mostra un avviso rosso con
+un numero fra parentesi e il pulsante "Riprova". Quel numero dice cosa e'
+successo:
+
+| Numero | Cosa vuol dire |
+| --- | --- |
+| 429 | Troppe richieste in poco tempo (tetto superato) |
+| 502, 503, 504 | I processi PHP erano tutti occupati o fermi |
+| 401 | La sessione e' scaduta: bisogna rientrare |
+| 403 | L'utente non ha il permesso per quei dati |
+| 500 | Errore del programma: va guardato il registro |
+
+Per capire cosa e' successo sul server, un comando solo:
+
+```bash
+bash /var/www/webgis/deploy/diagnostica.sh
+```
+
+Stampa in italiano: memoria e spazio disponibili, servizi attivi, quanti
+processi PHP ci sono, quante richieste sono state rifiutate e con quale
+esito, e gli ultimi errori del programma. Va copiato e incollato per intero
+in una sessione di lavoro con Claude.
+
+Se dice che i processi PHP sono finiti tutti, si rilancia il dimensionamento:
+
+```bash
+bash /var/www/webgis/deploy/php-fpm-config.sh
+```
+
+Il pacchetto di Ubuntu prevede cinque processi PHP: aprendo una pagina del
+gestionale ne partono di piu' insieme, e cinque non bastano. Lo script li
+calcola sulla memoria del server (da 8 a 48) e ricarica il servizio solo dopo
+aver verificato che la configurazione sia valida.
+
 ---
 
 *Questa guida accompagna gli script in `deploy/`: `provision.sh`
 (installazione), `update.sh` (aggiornamenti), `set-domain.sh` (indirizzo del
 sito e HTTPS), `set-portal-domain.sh` (dominio dei portali dei Comuni),
 `caddy-config.sh` (configurazione del server web, generata dal file `.env`),
-`backup.sh` (salvataggi) e `.env.production.example` (configurazione).*
+`php-fpm-config.sh` (dimensionamento dei processi PHP), `diagnostica.sh`
+(fotografia dello stato del server), `backup.sh` (salvataggi) e
+`.env.production.example` (configurazione).*

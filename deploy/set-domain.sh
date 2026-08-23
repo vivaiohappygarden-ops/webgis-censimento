@@ -71,11 +71,19 @@ fi
 
 log "Configurazione dell'applicazione"
 sed -i "s|^APP_URL=.*|APP_URL=${SCHEMA}://${DOMINIO}|" .env
-if grep -q '^SESSION_SECURE_COOKIE=' .env; then
-  sed -i "s|^SESSION_SECURE_COOKIE=.*|SESSION_SECURE_COOKIE=${COOKIE_SICURO}|" .env
-else
-  echo "SESSION_SECURE_COOKIE=${COOKIE_SICURO}" >> .env
-fi
+scrivi_env() {
+  if grep -q "^$1=" .env; then
+    sed -i "s|^$1=.*|$1=$2|" .env
+  else
+    printf '%s=%s\n' "$1" "$2" >> .env
+  fi
+}
+scrivi_env SESSION_SECURE_COOKIE "${COOKIE_SICURO}"
+# Nomi da cui il programma riconosce chi ha già fatto l'accesso: se l'indirizzo
+# usato dal browser non è in elenco, le pagine si aprono ma i dati rispondono
+# "non autenticato" e restano vuoti. Si scrive esplicitamente, invece di
+# affidarsi al valore dedotto da APP_URL, perché l'errore sarebbe silenzioso.
+scrivi_env SANCTUM_STATEFUL_DOMAINS "${DOMINIO},localhost,127.0.0.1"
 sudo -u www-data php artisan config:cache
 sudo -u www-data php artisan route:cache
 sudo -u www-data php artisan view:cache

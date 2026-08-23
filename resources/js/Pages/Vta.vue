@@ -3,13 +3,14 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { avvisoCaricamento } from '@/avvisi';
 
 const data = ref(null);
 const tutelati = ref([]);
 
 // Ricerca di un albero per valutarlo o stamparne la perizia senza passare
 // dal censimento: qui si lavora per albero, non per elenco
-const ricerca = reactive({ q: '', rows: [], loading: false, cercato: false });
+const ricerca = reactive({ q: '', rows: [], loading: false, cercato: false, errore: '' });
 let ricercaTimer = null;
 
 async function cercaAlberi() {
@@ -17,6 +18,7 @@ async function cercaAlberi() {
     if (q.length < 2) {
         ricerca.rows = [];
         ricerca.cercato = false;
+        ricerca.errore = '';
 
         return;
     }
@@ -27,6 +29,11 @@ async function cercaAlberi() {
         });
         ricerca.rows = data.data;
         ricerca.cercato = true;
+        ricerca.errore = '';
+    } catch (err) {
+        ricerca.rows = [];
+        ricerca.cercato = false;
+        ricerca.errore = avvisoCaricamento(err);
     } finally {
         ricerca.loading = false;
     }
@@ -124,8 +131,8 @@ onMounted(async () => {
         // il permesso: si carica a parte e in silenzio
         await caricaCommittenti();
         await loadBalance();
-    } catch {
-        loadError.value = 'Errore nel caricamento del cruscotto. Ricarica la pagina.';
+    } catch (err) {
+        loadError.value = avvisoCaricamento(err);
     }
 });
 </script>
@@ -191,6 +198,10 @@ onMounted(async () => {
                         @input="cercaConAttesa"
                     >
                     <p v-if="ricerca.loading" class="mt-2 text-xs text-gray-400">Ricerca…</p>
+                    <p v-else-if="ricerca.errore" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                        {{ ricerca.errore }}
+                        <button class="ml-1 font-medium underline" @click="cercaAlberi">Riprova</button>
+                    </p>
                     <p v-else-if="ricerca.cercato && ! ricerca.rows.length" class="mt-2 text-xs text-gray-500">
                         Nessun albero trovato.
                     </p>

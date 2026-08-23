@@ -22,9 +22,32 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Limite generale API per utente (le tile della mappa ne consumano molte)
+        /*
+         * Limite generale delle API, contato per utente.
+         *
+         * Aprire una pagina del gestionale costa più di una richiesta: elenco,
+         * committenti, aree, cataloghi partono insieme, e chi lavora tiene
+         * aperte più schede del browser sullo stesso accesso. Il tetto deve
+         * fermare gli abusi, non il lavoro normale: quando lo superava, la
+         * pagina restava vuota e l'unico rimedio era ricaricarla a mano.
+         *
+         * I riquadri della mappa hanno un conto a parte (limite "tiles"):
+         * spostarsi sulla mappa non deve consumare il credito delle altre
+         * pagine.
+         */
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(240)->by($request->user()?->id ?: $request->ip());
+            if ($request->is('api/v1/tiles/*')) {
+                return Limit::none();
+            }
+
+            return Limit::perMinute(600)->by($request->user()?->id ?: $request->ip());
+        });
+
+        // Riquadri della mappa: una schermata ne chiede una ventina e ogni
+        // spostamento ne chiede altri. Stesso ragionamento del portale
+        // pubblico, applicato a chi lavora
+        RateLimiter::for('tiles', function (Request $request) {
+            return Limit::perMinute(1200)->by($request->user()?->id ?: $request->ip());
         });
 
         // Portale pubblico: il visitatore è anonimo e si conta per indirizzo,

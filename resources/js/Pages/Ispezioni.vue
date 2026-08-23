@@ -3,9 +3,13 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import { usaCaricamento } from '@/caricamento';
 import { fetchPdf } from '@/pdf';
 
 const page = usePage();
+// Un errore di caricamento va detto, non lasciato indovinare da un elenco vuoto
+const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('works.manage'));
 
 const OUTCOMES = {
@@ -337,7 +341,7 @@ function deadlineBadge(d) {
 }
 
 onMounted(async () => {
-    await Promise.all([load(), loadAreas(), loadDeadlines()]);
+    await carica(() => Promise.all([load(), loadAreas(), loadDeadlines()]));
 });
 </script>
 
@@ -346,6 +350,8 @@ onMounted(async () => {
 
     <AppLayout>
         <div class="p-6">
+            <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
+
             <div class="mb-4 flex items-center justify-between">
                 <div>
                     <h1 class="text-xl font-semibold">Ispezioni</h1>

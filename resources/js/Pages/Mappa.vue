@@ -4,10 +4,16 @@ import { Head, usePage } from '@inertiajs/vue3';
 import * as maplibregl from 'maplibre-gl';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import { usaCaricamento } from '@/caricamento';
 import { statusLabel } from '@/assetStatus';
 
 const page = usePage();
 const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
+
+// Se aree, catalogo o committenti non arrivano, i filtri e i tipi da disegnare
+// restano vuoti: senza avviso sembrerebbe che non ci sia nulla da scegliere
+const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 const canCreate = computed(() => permissions.value.includes('assets.create'));
 const canViewClients = computed(() => permissions.value.includes('clients.view'));
 
@@ -160,11 +166,38 @@ async function loadAreas() {
     if (creating.areaId && ! known(creating.areaId)) creating.areaId = '';
 }
 
+/**
+ * Tutto ciò che circonda la mappa: aree, catalogo, località e committenti.
+ * Sta in una funzione sola perché il pulsante "Riprova" possa rimetterlo a
+ * posto senza costringere a ricaricare la pagina.
+ */
+async function caricaContorno() {
+    const [areasRes, catalogRes, localitiesRes, clientsRes] = await Promise.all([
+        axios.get('/api/v1/areas', { params: { per_page: 200 } }),
+        axios.get('/api/v1/catalog'),
+        axios.get('/api/v1/localities', { params: { per_page: 200 } }),
+        canViewClients.value
+            ? axios.get('/api/v1/clients', { params: { per_page: 200 } })
+            : Promise.resolve({ data: { data: [] } }),
+    ]);
+    localities.value = localitiesRes.data.data;
+    clients.value = clientsRes.data.data;
+    areas.value = areasRes.data.data;
+    pointTypes.value = catalogRes.data.data.flatMap((m) =>
+        m.sub_types.flatMap((s) =>
+            s.object_types
+                .filter((t) => t.allowed_geometry === 'P')
+                .map((t) => ({ id: t.id, label: `${t.code} — ${t.name}` }))
+        )
+    );
+    refreshAreasSource();
+}
+
 /** Cambio di committente/area/abbattuti: nuove tessere, nuove aree, nuova inquadratura. */
 async function applyVista(refit = true) {
     vista.busy = true;
     try {
-        await loadAreas();
+        await carica(loadAreas);
         refreshAreasSource();
         refreshTiles();
         if (refit) fitToAreas(vista.areaId ? 19 : 17);
@@ -349,17 +382,7 @@ onMounted(async () => {
         map.on('click', onMapClick);
     });
 
-    const [areasRes, catalogRes, localitiesRes, clientsRes] = await Promise.all([
-        axios.get('/api/v1/areas', { params: { per_page: 200 } }),
-        axios.get('/api/v1/catalog'),
-        axios.get('/api/v1/localities', { params: { per_page: 200 } }),
-        canViewClients.value
-            ? axios.get('/api/v1/clients', { params: { per_page: 200 } })
-            : Promise.resolve({ data: { data: [] } }),
-    ]);
-    localities.value = localitiesRes.data.data;
-    clients.value = clientsRes.data.data;
-    areas.value = areasRes.data.data;
+    await carica(caricaContorno);
 
     const setAree = () => {
         refreshAreasSource();
@@ -376,13 +399,6 @@ onMounted(async () => {
     // completo, che su una connessione lenta può tardare parecchio
     vaiAllaPosizione();
 
-    pointTypes.value = catalogRes.data.data.flatMap((m) =>
-        m.sub_types.flatMap((s) =>
-            s.object_types
-                .filter((t) => t.allowed_geometry === 'P')
-                .map((t) => ({ id: t.id, label: `${t.code} — ${t.name}` }))
-        )
-    );
 });
 
 onBeforeUnmount(() => {
@@ -396,6 +412,9 @@ onBeforeUnmount(() => {
 
     <AppLayout>
         <div class="relative h-full">
+            <div v-if="avviso" class="absolute inset-x-3 top-3 z-20">
+                <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
+            </div>
             <div ref="mapEl" class="h-full w-full" />
 
             <!-- Pannello layer -->

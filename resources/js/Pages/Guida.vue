@@ -629,6 +629,19 @@ function goTo(id) {
                             con la storia delle modifiche. Le cose ormai chiuse (ordini completati, segnalazioni
                             risolte, ispezioni registrate) non si modificano: fanno da registro.
                         </p>
+                        <h3>Ogni tanto una pagina non mostra i dati: cosa faccio?</h3>
+                        <p>
+                            Niente. Se una richiesta viene respinta per un motivo passeggero, il programma la
+                            ripete da solo fino a tre volte, ad attese crescenti: nella maggior parte dei casi
+                            i dati compaiono senza che ci sia nulla da fare.
+                        </p>
+                        <p>
+                            Se invece non ce la fa, compare un avviso rosso con il pulsante "Riprova": il
+                            pulsante rifà solo l'operazione fallita, senza ricaricare tutta la pagina.
+                            Nell'avviso c'è un numero fra parentesi ed è utile riferirlo: 429 significa troppe
+                            richieste in poco tempo, 502 o 503 che il server era occupato, 401 che la sessione
+                            è scaduta (in quel caso il programma riporta da solo alla pagina di accesso).
+                        </p>
                         <h3>Serve aiuto in più?</h3>
                         <p>
                             I messaggi dell'applicazione sono scritti in italiano e dicono come rimediare;

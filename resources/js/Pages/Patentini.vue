@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { avvisoCaricamento } from '@/avvisi';
 
 const page = usePage();
 const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
@@ -96,9 +97,9 @@ async function load() {
         if (seq !== loadSeq) return;
         certificates.value = data.data;
         total.value = data.total ?? data.data.length;
-    } catch {
+    } catch (err) {
         if (seq !== loadSeq) return;
-        pageError.value = 'Caricamento non riuscito: ricarica la pagina.';
+        pageError.value = avvisoCaricamento(err);
     } finally {
         if (seq === loadSeq) loading.value = false;
     }

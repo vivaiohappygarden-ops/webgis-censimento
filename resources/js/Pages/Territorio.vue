@@ -3,6 +3,8 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import { usaCaricamento } from '@/caricamento';
 import { workStatusLabel } from '@/workStatus';
 
 const page = usePage();
@@ -11,6 +13,10 @@ const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).incl
 const clients = ref([]);
 const sites = ref([]);
 const localities = ref([]);
+
+// Un caricamento andato male non deve lasciare le tre colonne vuote in
+// silenzio: si vede l'avviso con il pulsante per riprovare
+const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 
 // --- Scheda della localita' -------------------------------------------------
 const scheda = ref(null);
@@ -398,7 +404,7 @@ async function removeItem(kind, id, refresh) {
 
 const CLIENT_TYPES = { public: 'Pubblico (PA)', private: 'Privato', condo: 'Condominio', other: 'Altro' };
 
-onMounted(loadClients);
+onMounted(() => carica(loadClients));
 </script>
 
 <template>
@@ -410,6 +416,8 @@ onMounted(loadClients);
             <p class="mb-4 text-sm text-gray-500">Clienti → Sedi → Località. Le aree si disegnano dalla Mappa.</p>
 
             <p v-if="error" class="mb-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{{ error }}</p>
+
+            <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
 
             <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <!-- Clienti -->
@@ -439,7 +447,7 @@ onMounted(loadClients);
                             <button
                                 class="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-green-50/50"
                                 :class="selectedClient?.id === c.id ? 'bg-green-50 font-medium' : ''"
-                                @click="selectClient(c)"
+                                @click="carica(() => selectClient(c))"
                             >
                                 <span>
                                     {{ c.name }}
@@ -480,7 +488,7 @@ onMounted(loadClients);
                             <button
                                 class="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-green-50/50"
                                 :class="selectedSite?.id === s.id ? 'bg-green-50 font-medium' : ''"
-                                @click="selectSite(s)"
+                                @click="carica(() => selectSite(s))"
                             >
                                 <span>{{ s.name }} <span v-if="s.municipality" class="text-gray-400">— {{ s.municipality }}</span></span>
                                 <span class="text-xs text-gray-400">{{ s.localities_count }} località</span>

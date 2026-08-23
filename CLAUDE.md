@@ -61,6 +61,32 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - La stima CO2 applica il modello scritto in `config/co2.php` con i suoi riferimenti: il
   programma non inventa formule e la pagina dichiara sempre il metodo.
 
+## Robustezza delle richieste (dal 23/08/2026)
+
+- `resources/js/bootstrap.js` ripete da solo le richieste respinte per motivi
+  passeggeri (429, 502, 503, 504, rete assente): tre tentativi ad attese
+  crescenti, rispettando `Retry-After`. Le scritture si ripetono **solo** su 429
+  (respinte prima di essere eseguite); mai su 502/504, che potrebbero averle già
+  applicate. Con `navigator.onLine === false` non si ritenta: l'app di campo ha
+  la sua coda.
+- Su 401/419 si torna alla pagina di accesso **una volta sola** per sessione del
+  browser (`webgis:rientro-accesso` in `sessionStorage`): senza quel freno, se le
+  chiamate ai dati non fossero riconosciute mentre la sessione web è ancora
+  valida, il browser rimbalzerebbe all'infinito fra `/login` e la home.
+  `/operatore` è escluso: avvisa da sé e non va sbalzato fuori in cantiere.
+- **Nessun caricamento deve fallire in silenzio**: un elenco vuoto per errore e
+  un elenco vuoto perché non ci sono dati si somigliano troppo. Si usa
+  `usaCaricamento()` (`resources/js/caricamento.js`) con `<AvvisoErrore>`, oppure
+  `avvisoCaricamento(err)` (`resources/js/avvisi.js`) su un banner esistente. Il
+  messaggio riporta sempre il numero dell'errore: è l'unico modo per capire da
+  una schermata inviata dal committente che cosa è successo.
+- I riquadri della mappa hanno un tetto di richieste separato (`throttle:tiles`,
+  1200/min): spostarsi sulla mappa non deve consumare il credito delle altre
+  pagine (`api`, 600/min).
+- Sul server i processi PHP si dimensionano con `deploy/php-fpm-config.sh` (i
+  cinque di serie non bastano); `deploy/diagnostica.sh` stampa in italiano lo
+  stato del server quando qualcosa "a volte non funziona".
+
 ## Flusso di lavoro
 
 - Direttiva committente 11/08/2026: **proseguire sempre** con il blocco successivo della roadmap

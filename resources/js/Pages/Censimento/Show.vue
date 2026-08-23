@@ -8,6 +8,8 @@ import AssetEditPanel from '@/Components/AssetEditPanel.vue';
 import GestionalePanel from '@/Components/GestionalePanel.vue';
 import PlantingSitePanel from '@/Components/PlantingSitePanel.vue';
 import TreeVtaPanel from '@/Components/TreeVtaPanel.vue';
+import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import { usaCaricamento } from '@/caricamento';
 import { fetchPdf } from '@/pdf';
 import { statusLabel } from '@/assetStatus';
 
@@ -21,6 +23,10 @@ const canDelete = computed(() => permissions.value.includes('assets.delete'));
 const apriValutazione = new URLSearchParams(window.location.search).get('vta') === '1';
 
 const asset = ref(null);
+
+// Senza la scheda la pagina resterebbe bianca: se il caricamento fallisce si
+// dice perché e si offre di riprovare
+const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 const editing = ref(false);
 const pdfBusy = ref(false);
 const pdfError = ref('');
@@ -296,8 +302,7 @@ const measure = computed(() => {
 const attributeRows = computed(() => Object.entries(asset.value?.attributes ?? {}));
 
 onMounted(async () => {
-    await load();
-    initMap();
+    if (await carica(load)) initMap();
 });
 
 onBeforeUnmount(() => map?.remove());
@@ -309,6 +314,8 @@ onBeforeUnmount(() => map?.remove());
     <AppLayout>
         <div class="p-6">
             <Link href="/censimento" class="text-sm text-green-700 hover:underline">← Torna al censimento</Link>
+
+            <AvvisoErrore class="mt-3" :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
 
             <div v-if="asset" class="mt-3 grid grid-cols-1 gap-6 xl:grid-cols-3">
                 <!-- Scheda -->
