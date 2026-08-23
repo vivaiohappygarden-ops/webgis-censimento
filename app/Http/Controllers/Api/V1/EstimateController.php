@@ -9,7 +9,6 @@ use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Models\Organization;
 use App\Models\WorkOrder;
-use App\Services\Pdf\LuogoFirma;
 use App\Services\Pdf\PdfRenderer;
 use App\Support\Audit;
 use App\Support\ListQuery;
@@ -298,11 +297,6 @@ class EstimateController extends Controller implements HasMiddleware
             'organization' => $organization,
             // Recapiti dell'intestazione: gli stessi impostati per le perizie
             'recapiti' => $organization?->settings['professionista']['recapiti'] ?? null,
-            // Luogo e data nello spazio della firma dell'impresa: la data e'
-            // quella dell'offerta, gia' stampata in testata. Con la data di
-            // stampa una ristampa potrebbe risultare firmata dopo la scadenza
-            // dell'offerta scritta due righe sopra.
-            'luogoData' => LuogoFirma::riga($estimate->tenant_id, $estimate->created_at),
             'indirizzoCliente' => $this->addressLines($estimate->client?->address ?? []),
             'subtotal' => $subtotal,
             'vat' => $vat,

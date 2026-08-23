@@ -374,12 +374,13 @@ onMounted(() => {
                         <input v-model="perizia.form.luogo" maxlength="120" placeholder="es. Roma" data-test="perizia-luogo" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
                         <span class="mt-1 block text-gray-500">
                             Compare nello spazio della firma di perizie, bilanci arborei, verbali di
-                            ispezione, registro dei fitosanitari e preventivi, seguito dalla data. La data
-                            si scrive da sé ed è quella propria del documento: emissione per la perizia,
-                            offerta per il preventivo, giorno del controllo per il verbale. Dove il
-                            documento non ha una data sua (bilancio arboreo, registro dei fitosanitari) è
-                            la data di stampa. Così su uno stesso foglio non compaiono mai due date
-                            diverse. Lasciando vuoto questo campo resta la sola data.
+                            ispezione e registro dei fitosanitari, seguito dalla data. Non compare sul
+                            preventivo, dove la data dell'offerta è già in testata. La data si scrive da
+                            sé ed è quella propria del documento: emissione per la perizia, giorno del
+                            controllo per il verbale; dove il documento non ha una data sua (bilancio
+                            arboreo, registro dei fitosanitari) è la data di stampa. Così su uno stesso
+                            foglio non compaiono mai due date diverse. Lasciando vuoto questo campo resta
+                            la sola data.
                         </span>
                     </label>
                 </div>

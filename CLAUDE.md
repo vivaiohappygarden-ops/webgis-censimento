@@ -66,15 +66,17 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - Export CAM: `CamExporter` (vedi sopra). Le stampe PDF passano tutte da
   `PdfRenderer` (dompdf, DejaVu Sans Mono, nessuna risorsa esterna).
 - Sopra la firma di ogni documento firmabile (perizia, bilancio arboreo, verbale
-  di ispezione, registro fitosanitari, preventivo) c'è la riga "Luogo, data"
+  di ispezione, registro fitosanitari) c'è la riga "Luogo, data"
   prodotta da `App\Services\Pdf\LuogoFirma::riga()`. Il luogo sta una volta
   sola in `organizations.settings['professionista']['luogo']` e si cambia dalla
   pagina Utenti; senza luogo impostato resta la sola data.
 - La data è quella **propria del documento**, mai l'orologio letto al momento
   della stampa quando il documento una data ce l'ha già: perizia
-  `report_issued_at` (la stessa di testata e piè di pagina), preventivo
-  `created_at` (la stessa della testata), verbale `completed_at` (la stessa del
-  corpo e del nome del file). Bilancio arboreo e registro fitosanitari non hanno
+  `report_issued_at` (la stessa di testata e piè di pagina), verbale
+  `completed_at` (la stessa del corpo e del nome del file). Il **preventivo non
+  porta la riga** (decisione committente 23/08/2026): la data dell'offerta è già
+  in testata e sotto si firma per accettazione, non per attestazione.
+  Bilancio arboreo e registro fitosanitari non hanno
   una data propria: lì è la data di stampa, letta **una volta sola** e passata
   alla vista (`stampatoIl`), o a cavallo della mezzanotte "stampato il" e la
   firma uscirebbero con due giorni diversi.

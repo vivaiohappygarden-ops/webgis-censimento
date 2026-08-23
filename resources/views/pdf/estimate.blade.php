@@ -172,15 +172,13 @@
         preventivo separato. Il presente documento non costituisce fattura.
     </p>
 
+    {{-- Niente "Luogo, data" qui: il preventivo porta gia' la data dell'offerta
+         in testata, e sotto si firma per accettazione, non per attestazione
+         (decisione committente 23/08/2026) --}}
     <table class="firma">
         <tr>
-            <td style="width: 50%;"></td>
-            {{-- Luogo e data dell'offerta, sopra la firma dell'impresa --}}
-            <td style="width: 50%;">{{ $luogoData }}</td>
-        </tr>
-        <tr>
-            <td class="spazio">&nbsp;</td>
-            <td class="spazio">&nbsp;</td>
+            <td style="width: 50%;" class="spazio">&nbsp;</td>
+            <td style="width: 50%;" class="spazio">&nbsp;</td>
         </tr>
         <tr>
             <td class="linea">Per accettazione: data e firma del committente</td>

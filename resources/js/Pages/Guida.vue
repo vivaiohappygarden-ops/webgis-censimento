@@ -181,8 +181,9 @@ function goTo(id) {
                             Nella pagina <strong>Utenti</strong>, sezione "Intestazione e firma dei documenti",
                             si scrive una volta sola il <strong>luogo di firma</strong> (per esempio Roma). Da
                             quel momento compare nello spazio della firma di perizie, bilanci arborei, verbali
-                            di ispezione, registro dei fitosanitari e preventivi, seguito dalla data: non c'è
-                            più lo spazio da riempire a penna.
+                            di ispezione e registro dei fitosanitari, seguito dalla data: non c'è più lo
+                            spazio da riempire a penna. Sul preventivo non compare: lì la data dell'offerta
+                            è già in testata e sotto si firma per accettazione.
                         </p>
                         <p>
                             La data si scrive da sé, ed è quella <strong>propria del documento</strong>, non
@@ -194,11 +195,6 @@ function goTo(id) {
                                 <strong>Perizia di stabilità</strong>: la data di emissione, la stessa scritta
                                 in cima e in fondo al documento. Si fissa alla prima stampa e si azzera se
                                 correggi la valutazione, quindi dice sempre quando è stato emesso quel testo.
-                            </li>
-                            <li>
-                                <strong>Preventivo</strong>: la data dell'offerta, la stessa scritta in testata.
-                                Se qui comparisse la data di stampa, una copia ristampata potrebbe risultare
-                                firmata dopo la scadenza dell'offerta indicata due righe sopra.
                             </li>
                             <li>
                                 <strong>Verbale di ispezione</strong>: il giorno del controllo.

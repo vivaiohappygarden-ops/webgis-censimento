@@ -202,8 +202,11 @@ class LuogoFirmaTest extends TestCase
         $this->assertStringContainsString('Roma, '.$this->oggi(), $this->stampe->html['pdf.phyto-register']);
     }
 
-    public function test_il_preventivo_porta_luogo_e_data(): void
+    public function test_il_preventivo_non_porta_luogo_e_data(): void
     {
+        // Decisione del committente: sul preventivo non serve. La data
+        // dell'offerta e' gia' in testata, e sotto si firma per accettazione,
+        // non per attestazione.
         $this->impostaLuogo('Roma');
         $committente = Client::create([
             'tenant_id' => $this->organizzazione->id, 'name' => 'Condominio Test', 'client_type' => 'private',
@@ -213,16 +216,11 @@ class LuogoFirmaTest extends TestCase
         ])->assertCreated()->json('data.id');
 
         $this->get("/api/v1/estimates/{$preventivo}/pdf")->assertOk();
-        $this->assertStringContainsString('Roma, '.$this->oggi(), $this->stampe->html['pdf.estimate']);
 
-        // Ristampato dieci giorni dopo porta ancora la data dell'offerta: con
-        // la data di stampa risulterebbe firmato dopo la propria scadenza
-        $giornoDellOfferta = $this->oggi();
-        $this->travel(10)->days();
-        $this->get("/api/v1/estimates/{$preventivo}/pdf")->assertOk();
-
-        $this->assertStringContainsString('Roma, '.$giornoDellOfferta, $this->stampe->html['pdf.estimate']);
-        $this->assertStringNotContainsString('Roma, '.$this->oggi(), $this->stampe->html['pdf.estimate']);
+        $html = $this->stampe->html['pdf.estimate'];
+        $this->assertStringNotContainsString('Roma', $html);
+        // Il resto del blocco della firma resta dov'era
+        $this->assertStringContainsString('Per accettazione: data e firma del committente', $html);
     }
 
     public function test_la_prima_stampa_della_perizia_fissa_la_data_e_le_ristampe_non_la_cambiano(): void
