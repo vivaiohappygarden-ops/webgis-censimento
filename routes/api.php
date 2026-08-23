@@ -50,6 +50,12 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('localities', LocalityController::class)
             ->only(['index', 'store', 'update', 'destroy'])->whereUuid('locality');
 
+        // Scheda completa della localita' e documenti allegati
+        Route::get('localities/{id}/scheda', [LocalityController::class, 'scheda'])->whereUuid('id');
+        Route::post('localities/{id}/documenti', [LocalityController::class, 'documento'])->whereUuid('id');
+        Route::delete('localities/{id}/documenti/{documentId}', [LocalityController::class, 'eliminaDocumento'])
+            ->whereUuid(['id', 'documentId']);
+
         Route::get('sync/bootstrap', [\App\Http\Controllers\Api\V1\SyncController::class, 'bootstrap']);
         Route::get('sync/changes', [\App\Http\Controllers\Api\V1\SyncController::class, 'changes']);
         Route::post('sync/batch', [\App\Http\Controllers\Api\V1\SyncController::class, 'batch']);

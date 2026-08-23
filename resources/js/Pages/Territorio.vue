@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { workStatusLabel } from '@/workStatus';
 
 const page = usePage();
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('clients.manage'));
@@ -10,6 +11,78 @@ const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).incl
 const clients = ref([]);
 const sites = ref([]);
 const localities = ref([]);
+
+// --- Scheda della localita' -------------------------------------------------
+const scheda = ref(null);
+const schedaLocalita = ref(null);
+const schedaInCaricamento = ref(false);
+const classificazioni = ref({});
+const documentoLocalitaInput = ref(null);
+
+// apriScheda commuta: per aggiornare i dati si usa ricaricaScheda,
+// altrimenti chiamandola due volte la scheda si chiuderebbe e riaprirebbe
+async function apriScheda(l) {
+    if (schedaLocalita.value?.id === l.id) {
+        schedaLocalita.value = null;
+        scheda.value = null;
+
+        return;
+    }
+    schedaLocalita.value = l;
+    await ricaricaScheda();
+}
+
+async function ricaricaScheda() {
+    if (! schedaLocalita.value) return;
+    scheda.value = null;
+    schedaInCaricamento.value = true;
+    try {
+        const { data } = await axios.get(`/api/v1/localities/${schedaLocalita.value.id}/scheda`);
+        scheda.value = data.data;
+        classificazioni.value = data.meta.classificazioni;
+    } catch (err) {
+        error.value = firstError(err);
+        schedaLocalita.value = null;
+    } finally {
+        schedaInCaricamento.value = false;
+    }
+}
+
+async function salvaClassificazione(valore) {
+    try {
+        await axios.patch(`/api/v1/localities/${schedaLocalita.value.id}`, { istat_class: valore || null });
+        await ricaricaScheda();
+    } catch (err) {
+        error.value = firstError(err);
+    }
+}
+
+async function caricaDocumentoLocalita(evento) {
+    const file = evento.target.files?.[0];
+    if (! file) return;
+    const modulo = new FormData();
+    modulo.append('documento', file);
+    try {
+        await axios.post(`/api/v1/localities/${schedaLocalita.value.id}/documenti`, modulo);
+        await ricaricaScheda();
+    } catch (err) {
+        error.value = firstError(err);
+    } finally {
+        if (documentoLocalitaInput.value) documentoLocalitaInput.value.value = '';
+    }
+}
+
+async function eliminaDocumentoLocalita(d) {
+    if (! window.confirm(`Eliminare il documento "${d.title}"?`)) return;
+    try {
+        await axios.delete(`/api/v1/localities/${schedaLocalita.value.id}/documenti/${d.id}`);
+        await ricaricaScheda();
+    } catch (err) {
+        error.value = firstError(err);
+    }
+}
+
+const mq = (n) => new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 }).format(n ?? 0);
 const selectedClient = ref(null);
 const selectedSite = ref(null);
 const error = ref('');
@@ -449,6 +522,11 @@ onMounted(loadClients);
                             <span class="flex items-center gap-3">
                                 <span class="text-xs text-gray-400">{{ l.areas_count }} aree</span>
                                 <button
+                                    class="text-xs font-medium text-green-700 hover:underline"
+                                    data-test="apri-scheda-localita"
+                                    @click="apriScheda(l)"
+                                >{{ schedaLocalita?.id === l.id ? 'chiudi scheda' : 'scheda' }}</button>
+                                <button
                                     v-if="canManage && l.areas_count === 0"
                                     class="text-xs text-red-500 hover:underline"
                                     @click="removeItem('localities', l.id, () => selectSite(selectedSite))"
@@ -458,8 +536,129 @@ onMounted(loadClients);
                         <li v-if="selectedSite && ! localities.length" class="px-4 py-6 text-center text-sm text-gray-400">Nessuna località.</li>
                         <li v-if="! selectedSite" class="px-4 py-6 text-center text-sm text-gray-400">Seleziona una sede.</li>
                     </ul>
+
                 </section>
             </div>
+
+            <!-- Scheda della località -->
+                    <section v-if="schedaLocalita" data-test="scheda-localita" class="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+                        <h3 class="text-sm font-semibold">{{ schedaLocalita.name }}</h3>
+                        <p v-if="schedaInCaricamento" class="mt-2 text-sm text-gray-400">Caricamento…</p>
+
+                        <div v-else-if="scheda" class="mt-3 space-y-4">
+                            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                <div class="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                                    <div class="text-lg font-semibold">{{ mq(scheda.superfici.totale_mq) }} m²</div>
+                                    <div class="text-xs text-gray-500">Superficie totale</div>
+                                </div>
+                                <div class="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                                    <div class="text-lg font-semibold">{{ mq(scheda.superfici.gestita_mq) }} m²</div>
+                                    <div class="text-xs text-gray-500">Superficie gestita</div>
+                                </div>
+                                <div class="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                                    <div class="text-lg font-semibold">{{ scheda.superfici.aree }}</div>
+                                    <div class="text-xs text-gray-500">Aree ({{ scheda.superfici.aree_attive }} attive)</div>
+                                </div>
+                                <div class="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                                    <div class="text-lg font-semibold">{{ scheda.per_tipo.reduce((t, r) => t + Number(r.quanti), 0) }}</div>
+                                    <div class="text-xs text-gray-500">Elementi censiti</div>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500">
+                                Superficie totale:
+                                {{ scheda.superfici.totale_da_perimetro
+                                    ? 'dal perimetro disegnato della località.'
+                                    : 'somma delle aree, perché il perimetro della località non è stato disegnato.' }}
+                                Superficie gestita: somma delle sole aree attive, quella che conta per i lavori.
+                            </p>
+
+                            <label class="block text-sm">
+                                <span class="mb-1 block text-xs font-medium text-gray-600">Classificazione (tipologia di verde urbano ISTAT)</span>
+                                <select
+                                    :value="scheda.localita.istat_class || ''"
+                                    :disabled="! canManage"
+                                    data-test="scheda-istat"
+                                    class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm sm:w-96"
+                                    @change="salvaClassificazione($event.target.value)"
+                                >
+                                    <option value="">Non classificata</option>
+                                    <option v-for="(etichetta, chiave) in classificazioni" :key="chiave" :value="chiave">{{ etichetta }}</option>
+                                </select>
+                            </label>
+
+                            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                <div>
+                                    <h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Piante presenti</h4>
+                                    <table v-if="scheda.piante.length" class="mt-1 w-full text-sm">
+                                        <tbody class="divide-y divide-gray-100">
+                                            <tr v-for="p in scheda.piante" :key="p.scientifico">
+                                                <td class="py-1.5 italic">{{ p.scientifico }}</td>
+                                                <td class="py-1.5 text-gray-500">{{ p.comune || '—' }}</td>
+                                                <td class="py-1.5 text-right font-medium">{{ p.quanti }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <p v-else class="mt-1 text-sm text-gray-400">Nessuna pianta censita.</p>
+                                </div>
+
+                                <div>
+                                    <h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Elementi per tipo</h4>
+                                    <table v-if="scheda.per_tipo.length" class="mt-1 w-full text-sm">
+                                        <tbody class="divide-y divide-gray-100">
+                                            <tr v-for="t in scheda.per_tipo" :key="t.code">
+                                                <td class="py-1.5"><span class="text-xs text-gray-400">{{ t.code }}</span> {{ t.name }}</td>
+                                                <td class="py-1.5 text-right font-medium">{{ t.quanti }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <p v-else class="mt-1 text-sm text-gray-400">Nessun elemento censito.</p>
+                                </div>
+
+                                <div>
+                                    <h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Chi ci lavora</h4>
+                                    <ul v-if="scheda.imprese.length" class="mt-1 divide-y divide-gray-100 text-sm">
+                                        <li v-for="i in scheda.imprese" :key="i.nome" class="flex justify-between py-1.5">
+                                            <span>{{ i.nome }}</span>
+                                            <span class="text-gray-500">{{ i.lavori }} lavori</span>
+                                        </li>
+                                    </ul>
+                                    <p v-else class="mt-1 text-sm text-gray-400">Nessun lavoro assegnato.</p>
+                                </div>
+
+                                <div>
+                                    <h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Documenti</h4>
+                                    <ul v-if="scheda.documenti.length" class="mt-1 divide-y divide-gray-100 text-sm">
+                                        <li v-for="d in scheda.documenti" :key="d.id" class="flex items-center justify-between gap-2 py-1.5">
+                                            <a :href="`/api/v1/documents/${d.id}/file`" target="_blank" class="truncate text-green-700 hover:underline">{{ d.title }}</a>
+                                            <button v-if="canManage" class="text-xs text-red-500 hover:underline" @click="eliminaDocumentoLocalita(d)">elimina</button>
+                                        </li>
+                                    </ul>
+                                    <p v-else class="mt-1 text-sm text-gray-400">Nessun documento allegato.</p>
+                                    <input
+                                        v-if="canManage"
+                                        ref="documentoLocalitaInput"
+                                        type="file"
+                                        accept="application/pdf"
+                                        data-test="scheda-documento"
+                                        class="mt-2 w-full text-xs"
+                                        @change="caricaDocumentoLocalita"
+                                    >
+                                    <p v-if="canManage" class="mt-1 text-xs text-gray-400">Solo PDF, per esempio il piano di gestione.</p>
+                                </div>
+                            </div>
+
+                            <div v-if="scheda.lavori.length">
+                                <h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Ultimi lavori</h4>
+                                <ul class="mt-1 divide-y divide-gray-100 text-sm">
+                                    <li v-for="w in scheda.lavori" :key="w.id" class="flex flex-wrap items-center gap-2 py-1.5">
+                                        <span class="font-medium">{{ w.code }}</span>
+                                        <span class="truncate">{{ w.title }}</span>
+                                        <span class="ml-auto text-xs text-gray-500">{{ workStatusLabel(w.status) }}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
 
             <!-- Portale pubblico del committente -->
             <section v-if="selectedClient && canManage" class="mt-4 rounded-xl border border-gray-200 bg-white">

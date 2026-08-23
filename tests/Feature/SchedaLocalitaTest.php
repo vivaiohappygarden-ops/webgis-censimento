@@ -1,0 +1,147 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Locality;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Tests\Concerns\InteractsWithTenant;
+use Tests\TestCase;
+
+/**
+ * Scheda della localita': cosa c'e' dentro, quanto e' grande, chi ci lavora.
+ */
+class SchedaLocalitaTest extends TestCase
+{
+    use InteractsWithTenant, RefreshDatabase;
+
+    private $organizzazione;
+
+    private $utente;
+
+    private $area;
+
+    private $tipoAlbero;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Storage::fake('local');
+        [$this->organizzazione, $this->utente] = $this->createTenantUser();
+        $this->area = $this->createArea($this->organizzazione);
+        $this->tipoAlbero = $this->makeObjectType($this->organizzazione, 'P', 'P103108');
+        $this->actingAsTenantUser($this->utente);
+    }
+
+    private function localita(): Locality
+    {
+        return Locality::findOrFail($this->area->locality_id);
+    }
+
+    private function creaAlbero(array $albero = []): string
+    {
+        $id = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $this->tipoAlbero->id,
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated()->json('data.id');
+
+        if ($albero !== []) {
+            $this->patchJson("/api/v1/assets/{$id}", ['tree' => $albero])->assertOk();
+        }
+
+        return $id;
+    }
+
+    public function test_la_scheda_riporta_superfici_e_conteggi(): void
+    {
+        $this->creaAlbero();
+
+        $risposta = $this->getJson("/api/v1/localities/{$this->localita()->id}/scheda")->assertOk();
+
+        $this->assertSame(1, $risposta->json('data.superfici.aree'));
+        $this->assertGreaterThan(0, $risposta->json('data.superfici.totale_mq'));
+        $this->assertSame('P103108', $risposta->json('data.per_tipo.0.code'));
+        $this->assertSame(1, (int) $risposta->json('data.per_tipo.0.quanti'));
+    }
+
+    public function test_la_scheda_elenca_le_piante_con_nome_scientifico_e_quantita(): void
+    {
+        $this->creaAlbero(['species' => 'Tilia cordata', 'common_name' => 'Tiglio selvatico']);
+        $this->creaAlbero(['species' => 'Tilia cordata', 'common_name' => 'Tiglio selvatico']);
+        $this->creaAlbero(['species' => 'Acer campestre']);
+
+        $piante = $this->getJson("/api/v1/localities/{$this->localita()->id}/scheda")
+            ->assertOk()->json('data.piante');
+
+        $this->assertSame('Tilia cordata', $piante[0]['scientifico']);
+        $this->assertSame(2, (int) $piante[0]['quanti']);
+        $this->assertSame('Tiglio selvatico', $piante[0]['comune']);
+    }
+
+    public function test_la_superficie_gestita_conta_solo_le_aree_attive(): void
+    {
+        $scheda = $this->getJson("/api/v1/localities/{$this->localita()->id}/scheda")->assertOk();
+        $gestitaPrima = $scheda->json('data.superfici.gestita_mq');
+        $this->assertGreaterThan(0, $gestitaPrima);
+
+        $this->area->forceFill(['status' => 'dismissed'])->save();
+
+        $dopo = $this->getJson("/api/v1/localities/{$this->localita()->id}/scheda")->assertOk();
+        $this->assertSame(0.0, (float) $dopo->json('data.superfici.gestita_mq'));
+        // La superficie totale invece non cambia: il terreno c'e' comunque
+        $this->assertSame($scheda->json('data.superfici.totale_mq'), $dopo->json('data.superfici.totale_mq'));
+    }
+
+    public function test_la_classificazione_si_salva_e_torna_con_l_etichetta(): void
+    {
+        $id = $this->localita()->id;
+
+        $this->patchJson("/api/v1/localities/{$id}", ['istat_class' => 'verde_attrezzato'])->assertOk();
+
+        $this->getJson("/api/v1/localities/{$id}/scheda")
+            ->assertOk()
+            ->assertJsonPath('data.localita.istat_class', 'verde_attrezzato')
+            ->assertJsonPath('data.localita.istat_class_label', 'Verde attrezzato');
+    }
+
+    public function test_una_classificazione_inventata_viene_rifiutata(): void
+    {
+        $this->patchJson("/api/v1/localities/{$this->localita()->id}", ['istat_class' => 'non_esiste'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('istat_class');
+    }
+
+    public function test_si_allega_e_si_toglie_un_documento(): void
+    {
+        $id = $this->localita()->id;
+
+        $documento = $this->postJson("/api/v1/localities/{$id}/documenti", [
+            'documento' => UploadedFile::fake()->create('piano-di-gestione.pdf', 100, 'application/pdf'),
+        ])->assertCreated()->json('data');
+
+        $this->getJson("/api/v1/localities/{$id}/scheda")
+            ->assertOk()
+            ->assertJsonPath('data.documenti.0.title', 'piano-di-gestione.pdf');
+
+        $this->deleteJson("/api/v1/localities/{$id}/documenti/{$documento['id']}")->assertNoContent();
+
+        $this->getJson("/api/v1/localities/{$id}/scheda")->assertOk()->assertJsonCount(0, 'data.documenti');
+    }
+
+    public function test_solo_i_pdf_si_allegano(): void
+    {
+        $this->postJson("/api/v1/localities/{$this->localita()->id}/documenti", [
+            'documento' => UploadedFile::fake()->create('foglio.xlsx', 10),
+        ])->assertStatus(422);
+    }
+
+    public function test_la_scheda_di_un_altra_impresa_non_si_apre(): void
+    {
+        [$altra] = $this->createTenantUser();
+        $areaEstranea = $this->createArea($altra);
+
+        $this->getJson("/api/v1/localities/{$areaEstranea->locality_id}/scheda")->assertNotFound();
+    }
+}

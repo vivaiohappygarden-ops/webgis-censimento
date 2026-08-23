@@ -7,19 +7,12 @@ import WorkAgenda from '@/Components/WorkAgenda.vue';
 import WorkReport from '@/Components/WorkReport.vue';
 import QualityBoard from '@/Components/QualityBoard.vue';
 import QuotesPanel from '@/Components/QuotesPanel.vue';
+import { WORK_STATUS_LABELS } from '@/workStatus';
 
 const page = usePage();
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('works.manage'));
 
-const STATUS_LABELS = {
-    draft: 'Bozza',
-    planned: 'Pianificato',
-    assigned: 'Assegnato',
-    in_progress: 'In corso',
-    suspended: 'Sospeso',
-    completed: 'Completato',
-    cancelled: 'Annullato',
-};
+const STATUS_LABELS = WORK_STATUS_LABELS;
 const STATUS_COLORS = {
     draft: 'bg-gray-100 text-gray-700',
     planned: 'bg-blue-100 text-blue-800',

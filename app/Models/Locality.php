@@ -13,7 +13,7 @@ class Locality extends Model
     use BelongsToTenant, HasFactory, HasUuids, SoftDeletes;
 
     protected $fillable = [
-        'tenant_id', 'site_id', 'code', 'name', 'survey_zone_code', 'geom',
+        'tenant_id', 'site_id', 'code', 'name', 'survey_zone_code', 'geom', 'istat_class',
     ];
 
     public function site()
@@ -24,5 +24,11 @@ class Locality extends Model
     public function areas()
     {
         return $this->hasMany(Area::class);
+    }
+
+    /** Documenti allegati alla localita', per esempio il piano di gestione. */
+    public function documents()
+    {
+        return $this->morphMany(Document::class, 'subject');
     }
 }

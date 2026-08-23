@@ -318,6 +318,40 @@ function goTo(id) {
                             un ente prima che il suo nome sia pubblicato nel DNS.
                         </p>
 
+                        <h3>La scheda della localita'</h3>
+                        <p class="mt-2">
+                            Dalla pagina <strong>Territorio</strong>, accanto a ogni localita' c'e' il
+                            collegamento <strong>"scheda"</strong>. Si apre sotto, a tutta larghezza, e
+                            raccoglie in un colpo d'occhio quello che un ufficio tecnico chiede per primo:
+                            quanto e' grande, cosa c'e' dentro, chi ci lavora e quali documenti sono
+                            allegati.
+                        </p>
+                        <p class="mt-2">
+                            <strong>Le due superfici sono cose diverse</strong>, ed e' bene saperlo prima
+                            di scriverle in un capitolato. La <strong>superficie totale</strong> e' il
+                            terreno che la localita' occupa, presa dal suo perimetro se e' stato disegnato,
+                            altrimenti sommando le aree interne. La <strong>superficie gestita</strong> e'
+                            la somma delle sole aree attive: e' quella che conta per i lavori e per il
+                            corrispettivo. La scheda scrive sempre quale delle due strade ha usato.
+                        </p>
+                        <p class="mt-2">
+                            L'elenco delle <strong>piante presenti</strong> riporta nome scientifico, nome
+                            comune e quantita': e' la tabella che finisce nelle relazioni. Accanto, gli
+                            elementi per tipo di catalogo, chi ha lavorato qui e gli ultimi ordini.
+                        </p>
+                        <p class="mt-2">
+                            La <strong>classificazione</strong> segue le tipologie di verde urbano della
+                            rilevazione ISTAT. L'elenco delle voci sta in un file di configurazione, non
+                            dentro il programma, perche' e' una classificazione esterna che cambia con le
+                            rilevazioni: <strong>va confrontata con quella vigente</strong> prima di usarla
+                            in una consegna ufficiale. Il programma registra la voce che scegli tu, non
+                            pretende di essere la fonte.
+                        </p>
+                        <p class="mt-2">
+                            Nei <strong>documenti</strong> si allegano PDF, tipicamente il piano di
+                            gestione dell'area.
+                        </p>
+
                         <h3>Lavorare su tanti elementi insieme</h3>
                         <p class="mt-2">
                             Negli elenchi <strong>Censimento</strong> e <strong>Lavori</strong> ogni riga ha
