@@ -5,6 +5,7 @@ import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import { usaCaricamento } from '@/caricamento';
+import { corrisponde } from '@/ricerca';
 
 const page = usePage();
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('catalog.manage'));
@@ -78,18 +79,18 @@ async function caricaCatalogo() {
 onMounted(() => carica(caricaCatalogo));
 
 const filtered = computed(() => {
-    const q = search.value.trim().toLowerCase();
+    const q = search.value.trim();
     if (!q) return mainTypes.value;
 
+    // Ricerca a parole come nel resto del programma: "panchina legno" trova
+    // anche "Panchina in legno di pino"
     return mainTypes.value
         .map((m) => ({
             ...m,
             sub_types: m.sub_types
                 .map((s) => ({
                     ...s,
-                    object_types: s.object_types.filter(
-                        (t) => t.code.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)
-                    ),
+                    object_types: s.object_types.filter((t) => corrisponde([t.code, t.name], q)),
                 }))
                 .filter((s) => s.object_types.length > 0),
         }))
@@ -116,7 +117,7 @@ const countTypes = (m) => m.sub_types.reduce((acc, s) => acc + s.object_types.le
             <input
                 v-model="search"
                 type="search"
-                placeholder="Cerca per codice o descrizione (es. P103108, panchina)…"
+                placeholder="Cerca per codice o descrizione (es. P103108, panchina legno)…"
                 class="mb-4 w-full rounded-lg md:w-96 border border-gray-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none"
             >
 

@@ -217,8 +217,13 @@ class LuogoFirmaTest extends TestCase
 
         $this->get("/api/v1/estimates/{$preventivo}/pdf")->assertOk();
 
+        // Il modello non riceve nemmeno il dato: non c'e' niente da stampare
+        // (assertare l'assenza di "Roma" nel testo sarebbe fragile, il nome
+        // dell'organizzazione nei test e' casuale e a volte contiene "Roma")
+        $this->assertArrayNotHasKey('luogoData', $this->stampe->dati['pdf.estimate']);
+
         $html = $this->stampe->html['pdf.estimate'];
-        $this->assertStringNotContainsString('Roma', $html);
+        $this->assertStringNotContainsString('Roma, '.$this->oggi(), $html);
         // Il resto del blocco della firma resta dov'era
         $this->assertStringContainsString('Per accettazione: data e firma del committente', $html);
     }

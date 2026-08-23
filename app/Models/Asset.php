@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Support\RicercaTestuale;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -34,6 +35,51 @@ class Asset extends Model
             'computed_perimeter_m' => 'decimal:2',
             'version' => 'integer',
         ];
+    }
+
+    /**
+     * Ricerca a parole sull'elemento.
+     *
+     * Non solo codice e note: si cerca anche per specie e nome comune
+     * dell'albero, per tipo di catalogo, per area, località e committente.
+     * La pagina VTA prometteva "cerca per codice, specie o note" mentre la
+     * specie non veniva cercata affatto; e chi ha in testa "la quercia del
+     * parco Rossi" scrive quello, non un codice di censimento.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     */
+    public function scopeCercaTesto($query, ?string $testo): void
+    {
+        RicercaTestuale::applica(
+            $query,
+            $testo,
+            ['assets.census_code', 'assets.notes'],
+            function ($gruppo, string $parola) {
+                $gruppo
+                    ->orWhereHas('tree', fn ($t) => RicercaTestuale::inColonne(
+                        $t, $parola, ['genus', 'species', 'cultivar', 'common_name'],
+                    ))
+                    ->orWhereHas('objectType', fn ($t) => RicercaTestuale::inColonne(
+                        $t, $parola, ['code', 'name'],
+                    ))
+                    ->orWhereHas('area', fn ($a) => RicercaTestuale::inColonne(
+                        $a, $parola, ['name', 'code'],
+                    ))
+                    ->orWhereHas('area.locality', fn ($l) => RicercaTestuale::inColonne(
+                        $l, $parola, ['name', 'code'],
+                    ))
+                    // Solo i nomi, che compaiono gia' nella scheda dell'elemento:
+                    // codice cliente, partita IVA e comune della sede sono
+                    // anagrafica, e chi non puo' aprirla non deve poterla
+                    // indovinare cercando
+                    ->orWhereHas('area.locality.site', fn ($s) => RicercaTestuale::inColonne(
+                        $s, $parola, ['name'],
+                    ))
+                    ->orWhereHas('area.locality.site.client', fn ($c) => RicercaTestuale::inColonne(
+                        $c, $parola, ['name'],
+                    ));
+            },
+        );
     }
 
     public function area()

@@ -11,6 +11,7 @@ use App\Models\CatalogObjectType;
 use App\Support\Audit;
 use App\Support\Geometry;
 use App\Support\ListQuery;
+use App\Support\RicercaTestuale;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -75,8 +76,8 @@ class AssetController extends Controller implements HasMiddleware
             $query->where('status', '!=', 'removed');
         }
         if ($request->filled('q')) {
-            $q = '%'.$request->string('q').'%';
-            $query->where(fn ($w) => $w->where('census_code', 'ilike', $q)->orWhere('notes', 'ilike', $q));
+            $request->validate(['q' => RicercaTestuale::regole()]);
+            $query->cercaTesto($request->string('q'));
         }
         if ($request->filled('bbox')) {
             $query->whereRaw('geom && ST_MakeEnvelope(?, ?, ?, ?, 4326)', ListQuery::bbox($request));

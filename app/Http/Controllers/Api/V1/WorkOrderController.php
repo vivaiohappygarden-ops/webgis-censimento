@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderAsset;
+use App\Support\RicercaTestuale;
 use App\Support\Audit;
 use App\Support\ListQuery;
 use Illuminate\Http\JsonResponse;
@@ -54,8 +55,8 @@ class WorkOrderController extends Controller implements HasMiddleware
             }
         }
         if ($request->filled('q')) {
-            $q = '%'.$request->string('q').'%';
-            $query->where(fn ($w) => $w->where('code', 'ilike', $q)->orWhere('title', 'ilike', $q));
+            $request->validate(['q' => RicercaTestuale::regole()]);
+            RicercaTestuale::applica($query, $request->string('q'), ['code', 'title', 'description']);
         }
 
         // Finestra dell'agenda: ordini il cui periodo previsto interseca [from, to]

@@ -31,6 +31,9 @@ function onKeydown(e) {
 
 const errore = ref('');
 
+// Contatore delle ricerche partite: vale solo l'ultima
+let ultimaRicerca = 0;
+
 watch(query, (q) => {
     clearTimeout(debounce);
     if (q.trim().length < 2) {
@@ -39,19 +42,23 @@ watch(query, (q) => {
 
         return;
     }
+    const mia = ++ultimaRicerca;
     debounce = setTimeout(async () => {
         loading.value = true;
         try {
             const { data } = await axios.get('/api/v1/search', { params: { q } });
+            // Una risposta arrivata in ritardo non deve coprire una piu' recente
+            if (mia !== ultimaRicerca) return;
             results.value = data.data;
             errore.value = '';
         } catch (err) {
+            if (mia !== ultimaRicerca) return;
             // Senza questo, una ricerca fallita lasciava a video i risultati
             // della ricerca precedente, come se fossero quelli nuovi
             results.value = null;
             errore.value = avvisoCaricamento(err);
         } finally {
-            loading.value = false;
+            if (mia === ultimaRicerca) loading.value = false;
         }
     }, 250);
 });
@@ -62,7 +69,8 @@ function go(href) {
 }
 
 const isEmpty = (r) =>
-    r && ! r.tag_match && ! r.assets.length && ! r.areas.length && ! r.localities.length && ! r.catalog_types.length;
+    r && ! r.tag_match && ! r.assets.length && ! r.areas.length && ! r.localities.length
+    && ! (r.clients?.length) && ! r.catalog_types.length;
 
 onMounted(() => window.addEventListener('keydown', onKeydown));
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
@@ -79,7 +87,7 @@ defineExpose({ toggle });
                         ref="inputEl"
                         v-model="query"
                         type="search"
-                        placeholder="Cerca codice, albero, area, tag, tipo… (Esc per chiudere)"
+                        placeholder="Cerca: codice, specie, area, committente, tag… (Esc per chiudere)"
                         class="w-full border-0 py-3 text-sm focus:outline-none focus:ring-0"
                     >
                 </div>
@@ -122,6 +130,19 @@ defineExpose({ toggle });
                             >
                                 <span class="font-medium">{{ a.name }}</span>
                                 <span class="text-gray-400">{{ a.code }}</span>
+                            </button>
+                        </template>
+
+                        <template v-if="results.clients?.length">
+                            <div class="px-3 pb-1 pt-3 text-xs font-semibold uppercase text-gray-400">Committenti</div>
+                            <button
+                                v-for="c in results.clients"
+                                :key="c.id"
+                                class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-green-50"
+                                @click="go('/territorio')"
+                            >
+                                <span class="font-medium">{{ c.name }}</span>
+                                <span class="text-gray-400">{{ c.code }}</span>
                             </button>
                         </template>
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Issue;
 use App\Models\WorkOrder;
+use App\Support\RicercaTestuale;
 use App\Support\Audit;
 use App\Support\ListQuery;
 use Illuminate\Http\JsonResponse;
@@ -39,7 +40,7 @@ class IssueController extends Controller implements HasMiddleware
             'status' => ['nullable', Rule::in(Issue::STATUSES)],
             'severity' => ['nullable', Rule::in(['low', 'medium', 'high', 'critical'])],
             'sla' => ['nullable', Rule::in(['overdue', 'late'])],
-            'q' => ['nullable', 'string', 'max:200'],
+            'q' => ['nullable', ...RicercaTestuale::regole()],
         ]);
 
         $query = Issue::query()
@@ -61,10 +62,9 @@ class IssueController extends Controller implements HasMiddleware
             }
         }
         if ($request->filled('q')) {
-            $q = '%'.$request->string('q').'%';
-            $query->where(fn ($w) => $w->where('code', 'ilike', $q)
-                ->orWhere('description', 'ilike', $q)
-                ->orWhere('reporter_name', 'ilike', $q));
+            RicercaTestuale::applica($query, $request->string('q'), [
+                'code', 'description', 'reporter_name',
+            ]);
         }
         // "Fuori tempo massimo": aperte oltre la finestra di presa in carico
         // o comunque oltre la scadenza di risoluzione

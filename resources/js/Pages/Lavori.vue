@@ -366,6 +366,16 @@ async function setPriceList(priceListId) {
     }
 }
 
+// Senza attesa partiva una richiesta per ogni tasto premuto
+let attesaRicerca = null;
+function cercaConAttesa() {
+    clearTimeout(attesaRicerca);
+    attesaRicerca = setTimeout(() => {
+        filters.page = 1;
+        carica(load);
+    }, 300);
+}
+
 onMounted(async () => {
     await carica(() => Promise.all([load(), loadLookups()]));
 });
@@ -490,9 +500,9 @@ onMounted(async () => {
                 </select>
                 <input
                     v-model="filters.q"
-                    placeholder="Cerca per codice o titolo…"
+                    placeholder="Cerca per codice, titolo o descrizione…"
                     class="w-64 rounded-lg border border-gray-300 px-2.5 py-2 text-sm"
-                    @input="filters.page = 1; carica(load)"
+                    @input="cercaConAttesa"
                 >
             </div>
 

@@ -20,6 +20,7 @@ const sections = [
     { id: 'territorio', label: 'Territorio e catalogo' },
     { id: 'consegna', label: 'La consegna CAM' },
     { id: 'utenti', label: 'Gli utenti' },
+    { id: 'ricerca', label: 'Come cercare' },
     { id: 'domande', label: 'Domande frequenti' },
 ];
 const active = ref('in-breve');
@@ -655,6 +656,40 @@ function goTo(id) {
                             (la sua storia resta); "Nuova password" rimedia a una password dimenticata.
                             Non è possibile disattivare sé stessi né l'ultimo amministratore attivo.
                         </p>
+                    </section>
+
+                    <section id="ricerca">
+                        <h2>Come cercare</h2>
+                        <p>
+                            In tutti i campi di ricerca delle pagine di gestione si scrive
+                            <strong>a parole</strong>, nell'ordine che
+                            viene in mente. Cercando <em>rossi mario</em> si trova "Mario Rossi" esattamente
+                            come cercando <em>mario rossi</em>, e basta anche solo <em>rossi</em>. Non serve
+                            la parola intera: <em>ros mar</em> funziona lo stesso.
+                        </p>
+                        <ul class="mt-2 list-disc space-y-1 pl-5">
+                            <li>
+                                <strong>Ogni parola in più restringe.</strong> Scrivendo <em>farnia rose</em>
+                                escono le farnie del Parco delle Rose, non tutte le farnie e tutti i parchi.
+                            </li>
+                            <li>
+                                Nel <strong>censimento</strong> non si cerca solo per codice: valgono anche la
+                                specie e il nome comune dell'albero, il tipo di catalogo, l'area, la località
+                                e il nome del committente.
+                            </li>
+                            <li>
+                                La <strong>ricerca rapida</strong> in alto (o con la tastiera) cerca in un
+                                colpo solo fra elementi, aree, località, committenti, tipi di catalogo e
+                                cartellini.
+                            </li>
+                            <li>
+                                Gli <strong>accenti contano</strong>: cercando "citta" non si trova "Città".
+                            </li>
+                            <li>
+                                Nell'<strong>app di campo</strong> il campo in alto serve a leggere il
+                                cartellino (QR o codice): lì si scrive il codice, non il nome.
+                            </li>
+                        </ul>
                     </section>
 
                     <section id="domande">

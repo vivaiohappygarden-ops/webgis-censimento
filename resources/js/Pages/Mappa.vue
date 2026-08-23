@@ -156,14 +156,29 @@ function fitToAreas(maxZoom = 17) {
 }
 
 async function loadAreas() {
-    const { data } = await axios.get('/api/v1/areas', {
-        params: { client_id: vista.clientId || undefined, per_page: 200 },
-    });
-    areas.value = data.data;
+    areas.value = await tutteLePagine('/api/v1/areas', { client_id: vista.clientId || undefined });
     // L'area scelta prima può non essere di questo committente
     const known = (id) => areas.value.some((a) => a.id === id);
     if (vista.areaId && ! known(vista.areaId)) vista.areaId = '';
     if (creating.areaId && ! known(creating.areaId)) creating.areaId = '';
+}
+
+/**
+ * Un elenco intero, non solo la prima pagina.
+ *
+ * I filtri della mappa chiedevano 200 voci e il server ne restituisce al
+ * massimo 100: con più di cento aree, le altre sparivano dalle tendine senza
+ * che niente lo dicesse.
+ */
+async function tutteLePagine(indirizzo, params = {}) {
+    const tutte = [];
+    for (let p = 1; p <= 20; p++) {
+        const { data } = await axios.get(indirizzo, { params: { ...params, per_page: 100, page: p } });
+        tutte.push(...data.data);
+        if (! data.next_page_url) break;
+    }
+
+    return tutte;
 }
 
 /**
@@ -172,17 +187,15 @@ async function loadAreas() {
  * posto senza costringere a ricaricare la pagina.
  */
 async function caricaContorno() {
-    const [areasRes, catalogRes, localitiesRes, clientsRes] = await Promise.all([
-        axios.get('/api/v1/areas', { params: { per_page: 200 } }),
+    const [aree, catalogRes, localita, committenti] = await Promise.all([
+        tutteLePagine('/api/v1/areas'),
         axios.get('/api/v1/catalog'),
-        axios.get('/api/v1/localities', { params: { per_page: 200 } }),
-        canViewClients.value
-            ? axios.get('/api/v1/clients', { params: { per_page: 200 } })
-            : Promise.resolve({ data: { data: [] } }),
+        tutteLePagine('/api/v1/localities'),
+        canViewClients.value ? tutteLePagine('/api/v1/clients') : Promise.resolve([]),
     ]);
-    localities.value = localitiesRes.data.data;
-    clients.value = clientsRes.data.data;
-    areas.value = areasRes.data.data;
+    localities.value = localita;
+    clients.value = committenti;
+    areas.value = aree;
     pointTypes.value = catalogRes.data.data.flatMap((m) =>
         m.sub_types.flatMap((s) =>
             s.object_types

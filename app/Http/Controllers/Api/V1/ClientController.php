@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Support\RicercaTestuale;
 use App\Support\Audit;
 use App\Support\ListQuery;
 use Illuminate\Http\JsonResponse;
@@ -29,8 +30,12 @@ class ClientController extends Controller implements HasMiddleware
         $query = Client::query()->withCount('sites');
 
         if ($request->filled('q')) {
-            $q = '%'.$request->string('q').'%';
-            $query->where(fn ($w) => $w->where('name', 'ilike', $q)->orWhere('code', 'ilike', $q));
+            $request->validate(['q' => RicercaTestuale::regole()]);
+            // Anche partita IVA e codice fiscale: sono i dati con cui un
+            // committente si cerca quando il nome non si ricorda per intero
+            RicercaTestuale::applica($query, $request->string('q'), [
+                'name', 'code', 'vat_number', 'fiscal_code',
+            ]);
         }
 
         return response()->json(

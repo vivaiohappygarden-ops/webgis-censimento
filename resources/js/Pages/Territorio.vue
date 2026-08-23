@@ -5,6 +5,7 @@ import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import { usaCaricamento } from '@/caricamento';
+import { corrisponde } from '@/ricerca';
 import { workStatusLabel } from '@/workStatus';
 
 const page = usePage();
@@ -17,6 +18,16 @@ const localities = ref([]);
 // Un caricamento andato male non deve lasciare le tre colonne vuote in
 // silenzio: si vede l'avviso con il pulsante per riprovare
 const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
+
+// Con qualche decina di committenti scorrere l'elenco non basta piu': si
+// cerca a parole, come nel resto del programma. Il filtro lavora sull'elenco
+// gia' in pagina, senza chiedere niente al server
+const cercaCliente = ref('');
+const clientiVisibili = computed(
+    () => clients.value.filter(
+        (c) => corrisponde([c.name, c.code, c.vat_number, c.fiscal_code], cercaCliente.value),
+    ),
+);
 
 // --- Scheda della localita' -------------------------------------------------
 const scheda = ref(null);
@@ -103,8 +114,15 @@ const firstError = (err) =>
     Object.values(err.response?.data?.errors ?? {})[0]?.[0] ?? err.response?.data?.message ?? 'Errore imprevisto';
 
 async function loadClients() {
-    const { data } = await axios.get('/api/v1/clients', { params: { per_page: 100 } });
-    clients.value = data.data;
+    // Tutte le pagine, non solo la prima: con piu' di cento committenti la
+    // ricerca in pagina non troverebbe quelli oltre il centesimo
+    const tutti = [];
+    for (let p = 1; p <= 20; p++) {
+        const { data } = await axios.get('/api/v1/clients', { params: { per_page: 100, page: p } });
+        tutti.push(...data.data);
+        if (! data.next_page_url) break;
+    }
+    clients.value = tutti;
 }
 
 async function selectClient(client) {
@@ -423,13 +441,25 @@ onMounted(() => carica(loadClients));
                 <!-- Clienti -->
                 <section class="rounded-xl border border-gray-200 bg-white">
                     <header class="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                        <h2 class="text-sm font-semibold">Clienti ({{ clients.length }})</h2>
+                        <h2 class="text-sm font-semibold">
+                            Clienti ({{ clientiVisibili.length }}<span v-if="clientiVisibili.length !== clients.length"> di {{ clients.length }}</span>)
+                        </h2>
                         <button
                             v-if="canManage"
                             class="rounded-lg bg-green-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-800"
                             @click="forms.client.open = ! forms.client.open"
                         >+ Nuovo</button>
                     </header>
+
+                    <div v-if="clients.length > 5" class="border-b border-gray-100 px-3 py-2">
+                        <input
+                            v-model="cercaCliente"
+                            type="search"
+                            placeholder="Cerca per nome o codice…"
+                            data-test="cerca-cliente"
+                            class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                        >
+                    </div>
 
                     <form v-if="forms.client.open" class="space-y-2 border-b border-gray-100 bg-green-50/40 p-3" @submit.prevent="saveClient">
                         <input v-model="forms.client.name" required placeholder="Ragione sociale *" class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
@@ -443,7 +473,7 @@ onMounted(() => carica(loadClients));
                     </form>
 
                     <ul class="divide-y divide-gray-50">
-                        <li v-for="c in clients" :key="c.id">
+                        <li v-for="c in clientiVisibili" :key="c.id">
                             <button
                                 class="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-green-50/50"
                                 :class="selectedClient?.id === c.id ? 'bg-green-50 font-medium' : ''"
@@ -456,7 +486,9 @@ onMounted(() => carica(loadClients));
                                 <span class="text-xs text-gray-400">{{ c.sites_count }} sedi</span>
                             </button>
                         </li>
-                        <li v-if="! clients.length" class="px-4 py-6 text-center text-sm text-gray-400">Nessun cliente.</li>
+                        <li v-if="! clientiVisibili.length" class="px-4 py-6 text-center text-sm text-gray-400">
+                            {{ clients.length ? 'Nessun cliente trovato.' : 'Nessun cliente.' }}
+                        </li>
                     </ul>
                 </section>
 

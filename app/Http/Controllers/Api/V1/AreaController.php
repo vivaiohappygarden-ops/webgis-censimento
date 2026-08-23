@@ -7,6 +7,7 @@ use App\Http\Requests\StoreAreaRequest;
 use App\Http\Requests\UpdateAreaRequest;
 use App\Models\Area;
 use App\Models\Locality;
+use App\Support\RicercaTestuale;
 use App\Support\Audit;
 use App\Support\Geometry;
 use App\Support\ListQuery;
@@ -53,8 +54,8 @@ class AreaController extends Controller implements HasMiddleware
             $query->where('status', $request->string('status'));
         }
         if ($request->filled('q')) {
-            $q = '%'.$request->string('q').'%';
-            $query->where(fn ($w) => $w->where('name', 'ilike', $q)->orWhere('code', 'ilike', $q));
+            $request->validate(['q' => RicercaTestuale::regole()]);
+            RicercaTestuale::applica($query, $request->string('q'), ['name', 'code']);
         }
         if ($request->filled('bbox')) {
             $query->whereRaw('geom && ST_MakeEnvelope(?, ?, ?, ?, 4326)', ListQuery::bbox($request));

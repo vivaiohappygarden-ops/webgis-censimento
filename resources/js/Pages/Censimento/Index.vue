@@ -87,17 +87,33 @@ const filters = reactive({ q: '', status: '', clientId: '', areaId: '', page: 1 
 const clients = ref([]);
 const areas = ref([]);
 
+/**
+ * Un elenco intero, non solo la prima pagina.
+ *
+ * Le tendine chiedevano 200 voci e il server ne restituisce al massimo 100:
+ * oltre il centesimo committente, o la centesima area, le voci in coda
+ * sparivano dal filtro e sembrava che non esistessero.
+ */
+async function tutteLePagine(indirizzo, params = {}) {
+    const tutte = [];
+    for (let p = 1; p <= 20; p++) {
+        const { data } = await axios.get(indirizzo, { params: { ...params, per_page: 100, page: p } });
+        tutte.push(...data.data);
+        if (! data.next_page_url) break;
+    }
+
+    return tutte;
+}
+
 async function loadClients() {
     if (! canViewClients.value) return;
-    const { data } = await axios.get('/api/v1/clients', { params: { per_page: 200 } });
-    clients.value = data.data;
+    clients.value = await tutteLePagine('/api/v1/clients');
 }
 
 async function loadAreas() {
-    const { data } = await axios.get('/api/v1/areas', {
-        params: { client_id: filters.clientId || undefined, per_page: 200 },
+    areas.value = await tutteLePagine('/api/v1/areas', {
+        client_id: filters.clientId || undefined,
     });
-    areas.value = data.data;
     // L'area scelta prima può non appartenere al nuovo committente
     if (filters.areaId && ! areas.value.some((a) => a.id === filters.areaId)) {
         filters.areaId = '';
@@ -345,7 +361,7 @@ const measure = (row) => {
                 <input
                     v-model="filters.q"
                     type="search"
-                    placeholder="Cerca per codice o note…"
+                    placeholder="Cerca: codice, specie, area, committente, note…"
                     class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none sm:w-72"
                 >
                 <select

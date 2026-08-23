@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Organization;
 use App\Services\Export\CamExporter;
 use App\Support\Audit;
+use App\Support\RicercaTestuale;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
@@ -122,8 +123,8 @@ class ExportController extends Controller implements HasMiddleware
             $query->where('status', '!=', 'removed');
         }
         if ($request->filled('q')) {
-            $q = '%'.$request->string('q').'%';
-            $query->where(fn ($w) => $w->where('census_code', 'ilike', $q)->orWhere('notes', 'ilike', $q));
+            $request->validate(['q' => RicercaTestuale::regole()]);
+            $query->cercaTesto($request->string('q'));
         }
 
         Audit::log('export.assets_csv', null, ['filters' => $request->only([

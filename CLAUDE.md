@@ -61,6 +61,26 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - La stima CO2 applica il modello scritto in `config/co2.php` con i suoi riferimenti: il
   programma non inventa formule e la pagina dichiara sempre il metodo.
 
+## Ricerca (dal 23/08/2026)
+
+- Tutti i campi di ricerca usano `App\Support\RicercaTestuale`: il testo si spezza
+  in parole (massimo 6), ognuna diventa `%parola%`, le parole vanno in **AND** e i
+  campi in **OR**. "rossi mario" trova "Mario Rossi"; ogni parola in più
+  restringe. I jolly `%` e `_` sono schermati: chi cerca "50%" cerca quello.
+- L'elemento censito ha lo scope `Asset::cercaTesto()`, l'unico posto in cui si
+  decide dove si cerca: codice, note, specie/genere/nome comune dell'albero, tipo
+  di catalogo, area, località, sede e committente. Lo usano l'elenco del
+  censimento, l'export CSV (deve esportare quello che si vede) e la ricerca
+  rapida: se si aggiunge un campo va aggiunto lì, non nei controller.
+- Lato interfaccia la stessa logica sta in `resources/js/ricerca.js`
+  (`corrisponde()`), per gli elenchi filtrati in pagina (Catalogo, committenti in
+  Territorio).
+- La ricerca del portale pubblico (`PortalSearch`) **resta a corrispondenza
+  esatta**: lì si cerca il numero dell'etichetta letto sul cartellino, non un
+  nome.
+- Gli accenti contano ancora: "citta" non trova "Città". Per toglierli servirebbe
+  l'estensione `unaccent` di PostgreSQL, che va creata da superutente.
+
 ## Documenti stampati
 
 - Export CAM: `CamExporter` (vedi sopra). Le stampe PDF passano tutte da

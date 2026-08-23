@@ -7,7 +7,9 @@ use App\Models\Area;
 use App\Models\Asset;
 use App\Models\AssetTag;
 use App\Models\CatalogObjectType;
+use App\Models\Client;
 use App\Models\Locality;
+use App\Support\RicercaTestuale;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -23,9 +25,8 @@ class SearchController extends Controller implements HasMiddleware
 
     public function index(Request $request): JsonResponse
     {
-        $data = $request->validate(['q' => ['required', 'string', 'min:2', 'max:80']]);
+        $data = $request->validate(['q' => ['required', 'min:2', ...RicercaTestuale::regole()]]);
         $q = $data['q'];
-        $like = '%'.$q.'%';
 
         // Tag fisico: corrispondenza esatta sull'UID (scan/tap)
         $tagAsset = null;
@@ -40,29 +41,44 @@ class SearchController extends Controller implements HasMiddleware
 
         $assets = Asset::query()
             ->with('objectType:id,code,name')
-            ->where(fn ($w) => $w->where('census_code', 'ilike', $like)->orWhere('notes', 'ilike', $like))
+            ->cercaTesto($q)
             ->orderBy('census_code')
             ->limit(8)
             ->get(['id', 'census_code', 'object_type_id', 'status']);
 
         $areas = Area::query()
-            ->where(fn ($w) => $w->where('name', 'ilike', $like)->orWhere('code', 'ilike', $like))
+            ->tap(fn ($w) => RicercaTestuale::applica($w, $q, ['name', 'code']))
             ->orderBy('name')
             ->limit(5)
             ->get(['id', 'name', 'code', 'status']);
 
         $localities = Locality::query()
             ->with('site:id,name')
-            ->where('name', 'ilike', $like)
+            ->tap(fn ($w) => RicercaTestuale::applica($w, $q, ['name', 'code']))
             ->orderBy('name')
             ->limit(5)
             ->get(['id', 'name', 'code', 'site_id']);
 
         $types = CatalogObjectType::query()
-            ->where(fn ($w) => $w->where('code', 'ilike', $like)->orWhere('name', 'ilike', $like))
+            ->tap(fn ($w) => RicercaTestuale::applica($w, $q, ['code', 'name']))
             ->orderBy('code')
             ->limit(6)
             ->get(['id', 'code', 'name', 'allowed_geometry']);
+
+        // I committenti mancavano: cercando "Rossi" nella ricerca rapida non
+        // usciva il committente Rossi, che e' il primo posto dove si guarda.
+        //
+        // Ma solo a chi l'anagrafica la puo' vedere: la rotta chiede
+        // assets.view, che ha anche l'operatore, e l'elenco dei committenti
+        // non e' roba sua. Cercare non deve mostrare piu' di quanto si veda
+        // aprendo le pagine.
+        $clients = $request->user()->can('clients.view')
+            ? Client::query()
+                ->tap(fn ($w) => RicercaTestuale::applica($w, $q, ['name', 'code']))
+                ->orderBy('name')
+                ->limit(5)
+                ->get(['id', 'name', 'code', 'client_type'])
+            : collect();
 
         return response()->json([
             'data' => [
@@ -85,6 +101,7 @@ class SearchController extends Controller implements HasMiddleware
                     'id' => $l->id, 'name' => $l->name, 'code' => $l->code,
                     'site_name' => $l->site?->name,
                 ]),
+                'clients' => $clients,
                 'catalog_types' => $types,
             ],
         ]);
