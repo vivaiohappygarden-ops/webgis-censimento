@@ -186,4 +186,54 @@ class AzioniMultipleTest extends TestCase
             'ids' => ['01a00000-0000-7000-8000-000000000000'], 'public_hidden' => true,
         ])->assertForbidden();
     }
+
+    // --- Prova a vuoto: si conta prima, si esegue dopo ----------------------
+
+    public function test_la_prova_a_vuoto_conta_senza_toccare_niente(): void
+    {
+        $aperto = $this->creaOrdine('in_progress');
+        $chiuso = $this->creaOrdine('completed');
+
+        $esito = $this->postJson('/api/v1/azioni/chiudi-lavori', [
+            'ids' => [$aperto->id, $chiuso->id], 'prova' => 1,
+        ])->assertOk()->json('data');
+
+        // Il conto e' giusto: uno passerebbe, uno no, con il motivo
+        $this->assertCount(1, $esito['completati']);
+        $this->assertCount(1, $esito['saltati']);
+        $this->assertStringContainsString('completato', $esito['saltati'][0]['motivo']);
+
+        // E niente e' stato toccato davvero
+        $this->assertSame('in_progress', $aperto->fresh()->status);
+    }
+
+    public function test_la_prova_a_vuoto_della_modifica_non_scrive(): void
+    {
+        $elemento = $this->creaElemento();
+
+        $this->postJson('/api/v1/azioni/modifica-elementi', [
+            'ids' => [$elemento], 'public_hidden' => true, 'prova' => 1,
+        ])->assertOk()->assertJsonCount(1, 'data.modificati');
+
+        $this->assertFalse(Asset::findOrFail($elemento)->public_hidden);
+    }
+
+    public function test_la_prova_a_vuoto_del_collegamento_non_collega(): void
+    {
+        $ordine = $this->creaOrdine();
+        $elemento = $this->creaElemento();
+
+        $this->postJson("/api/v1/azioni/lavori/{$ordine->id}/collega-elementi", [
+            'ids' => [$elemento], 'prova' => 1,
+        ])->assertOk()->assertJsonCount(1, 'data.collegati');
+
+        $this->assertSame(0, \App\Models\WorkOrderAsset::query()->count());
+
+        // La conferma poi collega davvero
+        $this->postJson("/api/v1/azioni/lavori/{$ordine->id}/collega-elementi", [
+            'ids' => [$elemento],
+        ])->assertOk();
+
+        $this->assertSame(1, \App\Models\WorkOrderAsset::query()->count());
+    }
 }

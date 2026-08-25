@@ -38,6 +38,17 @@ class TileTest extends TestCase
         $this->assertSame('application/vnd.mapbox-vector-tile', $response->headers->get('Content-Type'));
         $this->assertNotSame('', $response->getContent());
 
+        // Il diametro della chioma viaggia nella tessera: serve alla mappa
+        // per disegnare il cerchio a dimensione reale
+        \App\Models\Tree::create([
+            'asset_id' => Asset::withoutGlobalScopes()->where('census_code', 'TILE-1')->firstOrFail()->id,
+            'tenant_id' => $organization->id,
+            'crown_diameter_m' => 8.5,
+        ]);
+        $conChioma = $this->get("/api/v1/tiles/assets/15/{$x}/{$y}")->assertOk()->getContent();
+        $this->assertStringContainsString('chioma_m', $conChioma);
+        $this->assertStringContainsString('8.5', $conChioma);
+
         // Un tile lontano dall'asset è vuoto
         $this->get('/api/v1/tiles/assets/15/0/0')->assertNoContent();
     }

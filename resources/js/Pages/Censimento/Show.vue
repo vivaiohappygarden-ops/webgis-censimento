@@ -10,6 +10,7 @@ import PlantingSitePanel from '@/Components/PlantingSitePanel.vue';
 import TreeVtaPanel from '@/Components/TreeVtaPanel.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import { usaCaricamento } from '@/caricamento';
+import { avvisoCaricamento } from '@/avvisi';
 import { fetchPdf } from '@/pdf';
 import { statusLabel } from '@/assetStatus';
 
@@ -88,6 +89,28 @@ async function toggleNascondi() {
 const vincoli = ref([]);
 const vincoliDisponibili = ref([]);
 const vincoloDaCollegare = ref('');
+
+// --- Storia delle modifiche -------------------------------------------------
+// Si carica solo quando la si apre: e' una consultazione, non un dato di scheda
+const storia = ref(null);
+const storiaAperta = ref(false);
+const storiaInCaricamento = ref(false);
+const storiaErrore = ref('');
+
+async function apriStoria() {
+    storiaAperta.value = ! storiaAperta.value;
+    if (! storiaAperta.value || storia.value !== null) return;
+    storiaInCaricamento.value = true;
+    storiaErrore.value = '';
+    try {
+        const { data } = await axios.get(`/api/v1/assets/${props.assetId}/versioni`);
+        storia.value = data.data;
+    } catch (err) {
+        storiaErrore.value = avvisoCaricamento(err);
+    } finally {
+        storiaInCaricamento.value = false;
+    }
+}
 
 async function caricaVincoli() {
     try {
@@ -213,6 +236,9 @@ let map = null;
 async function load() {
     const { data } = await axios.get(`/api/v1/assets/${props.assetId}`);
     asset.value = data.data;
+    // La scheda e' cambiata: la storia gia' letta non e' piu' aggiornata
+    storia.value = null;
+    storiaAperta.value = false;
     await caricaVincoli();
 }
 
@@ -253,6 +279,28 @@ function initMap() {
             id: 'geom-line', type: 'line', source: 'geom',
             paint: { 'line-color': '#15803d', 'line-width': 2.5 },
         });
+        // La chioma a dimensione reale, se il diametro e' censito: stesso
+        // calcolo della Mappa (un metro = 2^zoom / (78271,517 x cos(lat)) pixel)
+        const diametro = Number(asset.value.tree?.crown_diameter_m) || 0;
+        if (diametro > 0 && asset.value.geom_geojson.type === 'Point') {
+            const lat = asset.value.geom_geojson.coordinates[1];
+            const cosLat = Math.cos((lat * Math.PI) / 180);
+            const pixelPerMetro = (zoom) => (2 ** zoom) / (78271.517 * cosLat);
+            map.addLayer({
+                id: 'chioma', type: 'circle', source: 'geom',
+                paint: {
+                    'circle-color': '#16a34a',
+                    'circle-opacity': 0.16,
+                    'circle-stroke-color': '#15803d',
+                    'circle-stroke-opacity': 0.4,
+                    'circle-stroke-width': 1,
+                    'circle-radius': ['interpolate', ['exponential', 2], ['zoom'],
+                        14, (diametro / 2) * pixelPerMetro(14),
+                        20, (diametro / 2) * pixelPerMetro(20),
+                    ],
+                },
+            });
+        }
         map.addLayer({
             id: 'geom-point', type: 'circle', source: 'geom',
             filter: ['==', ['geometry-type'], 'Point'],
@@ -520,6 +568,52 @@ onBeforeUnmount(() => map?.remove());
                             </a>
                         </div>
                         <p v-else class="mt-3 text-sm text-gray-400">Nessuna fotografia caricata.</p>
+                    </div>
+
+                    <!-- Storia delle modifiche -->
+                    <div class="mt-6 rounded-xl border border-gray-200 bg-white p-6">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-sm font-semibold">Storia delle modifiche</h2>
+                            <button
+                                class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                                data-test="apri-storia"
+                                @click="apriStoria"
+                            >{{ storiaAperta ? 'Nascondi' : 'Mostra' }}</button>
+                        </div>
+
+                        <template v-if="storiaAperta">
+                            <p v-if="storiaInCaricamento" class="mt-3 text-sm text-gray-400">Caricamento…</p>
+                            <p v-else-if="storiaErrore" class="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ storiaErrore }}</p>
+                            <p v-else-if="! storia?.length" class="mt-3 text-sm text-gray-400">
+                                Nessuna modifica registrata: la scheda è ancora come è stata creata.
+                            </p>
+
+                            <div v-else class="mt-3 space-y-4" data-test="storia-modifiche">
+                                <div v-for="r in storia" :key="r.versione" class="rounded-lg border border-gray-100">
+                                    <div class="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50 px-3 py-1.5 text-xs text-gray-600">
+                                        <span class="font-medium text-gray-800">{{ r.quando }}</span>
+                                        <span v-if="r.chi">{{ r.chi }}</span>
+                                        <span v-if="r.origine && r.origine !== 'web'" class="rounded bg-gray-200 px-1.5 text-[10px] uppercase">{{ r.origine }}</span>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-xs">
+                                            <tbody>
+                                                <tr v-for="m in r.modifiche" :key="m.campo" class="border-b border-gray-50 last:border-0">
+                                                    <td class="px-3 py-1.5 font-medium text-gray-700">{{ m.campo }}</td>
+                                                    <td class="px-3 py-1.5 text-gray-500">
+                                                        <span v-if="m.prima !== null" class="line-through decoration-red-300">{{ m.prima }}</span>
+                                                        <span v-else>—</span>
+                                                    </td>
+                                                    <td class="px-3 py-1.5">
+                                                        <span class="rounded bg-green-100 px-1.5 py-0.5 text-green-900">{{ m.dopo ?? '—' }}</span>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
                     </div>
 
                     <!-- Vincoli del territorio -->

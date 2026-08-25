@@ -81,6 +81,31 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - Gli accenti contano ancora: "citta" non trova "Città". Per toglierli servirebbe
   l'estensione `unaccent` di PostgreSQL, che va creata da superutente.
 
+## Elenchi, mappa e scheda (dal 25/08/2026)
+
+- **Viste salvate**: i filtri con un nome stanno in `saved_filters` (jsonb `filtri`),
+  API in `VisteController`; le pagine ammesse sono la whitelist `PAGINE` (censimento,
+  lavori, segnalazioni): una pagina nuova va aggiunta lì e monta
+  `Components/VisteSalvate.vue` con `:filtri` (computed dei filtri correnti) ed evento
+  `@applica`. "Una sola predefinita per utente e pagina" la garantisce l'indice parziale
+  unico sul DB, non il codice; le viste condivise si applicano ma si modificano solo le
+  proprie.
+- **Chiome sulla mappa**: il tile MVT porta `chioma_m` (join su `trees.crown_diameter_m`);
+  il cerchio in metri veri usa `interpolate exponential base 2` su due stop con
+  `pixel = metri × 2^zoom / (78271.517 × cos(lat))` — con base 2 la formula è esatta a
+  ogni zoom, non un'approssimazione fra gli stop.
+- **Azioni multiple con pre-conteggio**: `AzioniMultiple` accetta `bool $prova`; con
+  `prova=1` conta fatti/saltati senza scrivere. Il conteggio d'anteprima e l'esecuzione
+  passano **dallo stesso metodo**: mai duplicare la logica dei saltati in un percorso
+  separato, o anteprima ed esito divergeranno.
+- **Storico della scheda**: il trigger `fn_trg_assets_version_snapshot` fotografa in
+  `asset_versions` anche `albero` e `posto`. **Ordine delle scritture obbligato** in
+  `AssetController::update`: prima si prepara la specializzazione (fill, senza save),
+  poi si salva/incrementa `assets` (la fotografia scatta lì e deve riprendere i valori
+  vecchi), e solo dopo si salvano albero e posto. Invertirlo fa mentire lo storico
+  (prima = dopo). Etichette e formati dei campi vivono solo in
+  `App\Services\Assets\StoriaScheda`; endpoint `GET assets/{id}/versioni`.
+
 ## Documenti stampati
 
 - Export CAM: `CamExporter` (vedi sopra). Le stampe PDF passano tutte da

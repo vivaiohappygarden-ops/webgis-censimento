@@ -44,6 +44,13 @@ const pointTypes = ref([]);
 // Vista: di chi guardo il verde e dove. Gli abbattuti restano in archivio
 // ma non sulla mappa di tutti i giorni
 const vista = reactive({ clientId: '', areaId: '', showRemoved: false, busy: false });
+
+// Chiome a dimensione reale: il cerchio cresce con il diametro censito
+const chiomeVisibili = ref(true);
+
+function applicaChiome() {
+    map?.setLayoutProperty('chiome', 'visibility', chiomeVisibili.value ? 'visible' : 'none');
+}
 // Posizione del dispositivo: il browser la dà solo su siti sicuri (https),
 // quindi il motivo del rifiuto va spiegato, non nascosto
 const posizione = reactive({ error: '', located: false, cercando: false });
@@ -315,6 +322,9 @@ onMounted(async () => {
             ],
         },
     });
+    // Aggancio per le verifiche automatiche nel browser (Playwright):
+    // permette di spostare la mappa e interrogare i layer disegnati
+    window.__mappa = map;
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }));
 
@@ -375,6 +385,38 @@ onMounted(async () => {
             id: 'assets-line', type: 'line', source: 'assets', 'source-layer': 'assets',
             filter: ['==', ['geometry-type'], 'LineString'],
             paint: { 'line-color': colorExpr, 'line-width': 2.5 },
+        });
+        /*
+         * Chioma a dimensione reale: un cerchio con il raggio vero in metri,
+         * calcolato dal diametro censito. Da vicino la mappa diventa una
+         * carta della copertura arborea.
+         *
+         * La conversione metri -> pixel dipende dallo zoom e dalla latitudine:
+         * a MapLibre un metro vale 2^zoom / (78271,517 x cos(lat)) pixel. Con
+         * due sole tappe e interpolazione esponenziale in base 2 la formula
+         * e' esatta a ogni zoom; il coseno si fissa alla latitudine iniziale
+         * della mappa (dentro un Comune l'errore non si vede).
+         */
+        const cosLat = Math.cos((map.getCenter().lat * Math.PI) / 180);
+        const pixelPerMetro = (zoom) => (2 ** zoom) / (78271.517 * cosLat);
+        map.addLayer({
+            id: 'chiome', type: 'circle', source: 'assets', 'source-layer': 'assets',
+            minzoom: 15.5,
+            filter: ['all',
+                ['==', ['geometry-type'], 'Point'],
+                ['>', ['coalesce', ['to-number', ['get', 'chioma_m']], 0], 0],
+            ],
+            paint: {
+                'circle-color': '#16a34a',
+                'circle-opacity': 0.16,
+                'circle-stroke-color': '#15803d',
+                'circle-stroke-opacity': 0.4,
+                'circle-stroke-width': 1,
+                'circle-radius': ['interpolate', ['exponential', 2], ['zoom'],
+                    15, ['*', ['/', ['to-number', ['get', 'chioma_m']], 2], pixelPerMetro(15)],
+                    22, ['*', ['/', ['to-number', ['get', 'chioma_m']], 2], pixelPerMetro(22)],
+                ],
+            },
         });
         map.addLayer({
             id: 'assets-point', type: 'circle', source: 'assets', 'source-layer': 'assets',
@@ -469,6 +511,10 @@ onBeforeUnmount(() => {
                         @change="applyVista(false)"
                     >
                     Mostra anche gli abbattuti
+                </label>
+                <label class="flex items-center gap-2 text-sm text-gray-600">
+                    <input v-model="chiomeVisibili" type="checkbox" data-test="mostra-chiome" class="rounded border-gray-300" @change="applicaChiome">
+                    Chiome a dimensione reale
                 </label>
 
                 <hr class="my-3 border-gray-200">

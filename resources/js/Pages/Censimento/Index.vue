@@ -4,6 +4,7 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import VisteSalvate from '@/Components/VisteSalvate.vue';
 import { usaCaricamento } from '@/caricamento';
 import { STATUS_LABELS, statusLabel } from '@/assetStatus';
 
@@ -45,15 +46,42 @@ async function caricaOrdiniAperti() {
     }
 }
 
-async function azioneMultipla(chiamata, riuscita) {
+/*
+ * Ogni azione in blocco passa da una prova a vuoto: prima di toccare i dati
+ * si legge "N verranno elaborati, M esclusi perche'...". La conferma esegue
+ * la stessa chiamata senza la prova.
+ */
+const anteprimaMultipla = ref(null);
+
+async function azioneMultipla(chiamata, riuscita, contaFatti) {
     azioneInCorso.value = true;
     esitoMultiplo.value = '';
     saltatiMultiplo.value = [];
     try {
-        const { data } = await chiamata();
+        const { data } = await chiamata(true);
+        anteprimaMultipla.value = {
+            fatti: contaFatti(data.data),
+            saltati: data.data.saltati ?? [],
+            conferma: () => confermaAzione(chiamata, riuscita),
+        };
+    } catch (err) {
+        esitoMultiplo.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Errore nell\'operazione.';
+    } finally {
+        azioneInCorso.value = false;
+    }
+}
+
+async function confermaAzione(chiamata, riuscita) {
+    azioneInCorso.value = true;
+    esitoMultiplo.value = '';
+    saltatiMultiplo.value = [];
+    try {
+        const { data } = await chiamata(false);
         saltatiMultiplo.value = data.data.saltati ?? [];
         esitoMultiplo.value = riuscita(data.data);
         selezionati.value = [];
+        anteprimaMultipla.value = null;
         await load();
     } catch (err) {
         esitoMultiplo.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
@@ -63,21 +91,31 @@ async function azioneMultipla(chiamata, riuscita) {
     }
 }
 
+// La selezione cambia: l'anteprima calcolata prima non vale piu'
+watch(selezionati, () => { anteprimaMultipla.value = null; });
+
 const nascondiSelezionati = (nascosto) => azioneMultipla(
-    () => axios.post('/api/v1/azioni/modifica-elementi', { ids: selezionati.value, public_hidden: nascosto }),
+    (prova) => axios.post('/api/v1/azioni/modifica-elementi', {
+        ids: selezionati.value, public_hidden: nascosto, prova: prova ? 1 : 0,
+    }),
     (d) => `${d.modificati.length} element${d.modificati.length === 1 ? 'o' : 'i'} ${nascosto ? 'nascost' : 'rimess'}${d.modificati.length === 1 ? 'o' : 'i'} ${nascosto ? '' : 'in vista '}sul portale.`,
+    (d) => d.modificati.length,
 );
 
 const applicaDataRilievo = () => azioneMultipla(
-    () => axios.post('/api/v1/azioni/modifica-elementi', {
-        ids: selezionati.value, surveyed_at: dataRilievoMultipla.value || null,
+    (prova) => axios.post('/api/v1/azioni/modifica-elementi', {
+        ids: selezionati.value, surveyed_at: dataRilievoMultipla.value || null, prova: prova ? 1 : 0,
     }),
     (d) => `Data di rilievo aggiornata su ${d.modificati.length}.`,
+    (d) => d.modificati.length,
 );
 
 const collegaAOrdine = () => azioneMultipla(
-    () => axios.post(`/api/v1/azioni/lavori/${ordineScelto.value}/collega-elementi`, { ids: selezionati.value }),
+    (prova) => axios.post(`/api/v1/azioni/lavori/${ordineScelto.value}/collega-elementi`, {
+        ids: selezionati.value, prova: prova ? 1 : 0,
+    }),
     (d) => `${d.collegati.length} collegat${d.collegati.length === 1 ? 'o' : 'i'} all'ordine di lavoro.`,
+    (d) => d.collegati.length,
 );
 const meta = reactive({ total: 0, current_page: 1, last_page: 1 });
 const loading = ref(false);
@@ -123,6 +161,25 @@ async function loadAreas() {
 // Gli abbattuti restano in archivio ma non nell'elenco di tutti i giorni.
 // Se si chiede proprio lo stato "abbattuto" è ovvio che vanno mostrati
 const showRemoved = ref(false);
+
+// --- Viste salvate ----------------------------------------------------------
+// I filtri correnti in una forma salvabile, e il percorso inverso
+const filtriCorrenti = computed(() => ({
+    q: filters.q,
+    status: filters.status,
+    clientId: filters.clientId,
+    areaId: filters.areaId,
+    showRemoved: showRemoved.value,
+}));
+
+function applicaVista(filtri) {
+    filters.q = filtri.q ?? '';
+    filters.status = filtri.status ?? '';
+    filters.clientId = filtri.clientId ?? '';
+    filters.areaId = filtri.areaId ?? '';
+    showRemoved.value = !! filtri.showRemoved;
+    // Il watcher dei filtri riparte da solo e ricarica l'elenco
+}
 const hideRemoved = computed(() => ! showRemoved.value && filters.status !== 'removed');
 
 // Import GeoJSON / CAM
@@ -391,6 +448,8 @@ const measure = (row) => {
                     <input v-model="showRemoved" type="checkbox" data-test="mostra-abbattuti" class="rounded border-gray-300">
                     Mostra anche gli abbattuti
                 </label>
+
+                <VisteSalvate pagina="censimento" :filtri="filtriCorrenti" @applica="applicaVista" />
             </div>
 
             <div
@@ -401,6 +460,20 @@ const measure = (row) => {
                 <div class="flex flex-wrap items-center gap-3">
                     <span class="font-medium">{{ selezionati.length }} selezionati</span>
 
+                    <template v-if="anteprimaMultipla">
+                        <span data-test="multipla-anteprima" class="text-gray-800">
+                            {{ anteprimaMultipla.fatti }} verranno elaborat{{ anteprimaMultipla.fatti === 1 ? 'o' : 'i' }}<template v-if="anteprimaMultipla.saltati.length">, {{ anteprimaMultipla.saltati.length }} esclus{{ anteprimaMultipla.saltati.length === 1 ? 'o' : 'i' }}</template>.
+                        </span>
+                        <button
+                            class="rounded-lg bg-green-700 px-3 py-1.5 font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                            :disabled="azioneInCorso || ! anteprimaMultipla.fatti"
+                            data-test="multipla-conferma"
+                            @click="anteprimaMultipla.conferma()"
+                        >Conferma</button>
+                        <button class="text-gray-600 hover:underline" @click="anteprimaMultipla = null">Annulla</button>
+                    </template>
+
+                    <template v-if="! anteprimaMultipla">
                     <button
                         class="rounded-lg bg-green-700 px-3 py-1.5 font-medium text-white hover:bg-green-800 disabled:opacity-50"
                         :disabled="azioneInCorso"
@@ -437,12 +510,22 @@ const measure = (row) => {
                             @click="collegaAOrdine"
                         >Collega</button>
                     </label>
+                    </template>
 
                     <button class="text-gray-600 hover:underline" @click="selezionati = []">Annulla selezione</button>
                 </div>
 
                 <p v-if="esitoMultiplo" class="mt-2 text-gray-700">{{ esitoMultiplo }}</p>
             </div>
+
+            <ul
+                v-if="anteprimaMultipla?.saltati.length"
+                data-test="multipla-anteprima-esclusi"
+                class="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900"
+            >
+                <li class="mb-1 font-medium">Questi verranno esclusi:</li>
+                <li v-for="s in anteprimaMultipla.saltati" :key="s.id" class="text-xs">{{ s.codice || s.id }} - {{ s.motivo }}</li>
+            </ul>
 
             <ul v-if="saltatiMultiplo.length" data-test="censimento-saltati" class="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
                 <li class="mb-1 font-medium">Questi sono stati saltati:</li>

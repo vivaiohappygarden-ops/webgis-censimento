@@ -4,6 +4,7 @@ import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import VisteSalvate from '@/Components/VisteSalvate.vue';
 import { usaCaricamento } from '@/caricamento';
 
 const page = usePage();
@@ -22,6 +23,20 @@ const SEVERITY = { low: 'Bassa', medium: 'Media', high: 'Alta', critical: 'Criti
 const rows = ref([]);
 const meta = reactive({ total: 0, current_page: 1, last_page: 1 });
 const filters = reactive({ status: '', severity: '', sla: '', q: '', page: 1 });
+
+// --- Viste salvate ----------------------------------------------------------
+const filtriCorrenti = computed(() => ({
+    status: filters.status, severity: filters.severity, sla: filters.sla, q: filters.q,
+}));
+
+function applicaVista(filtri) {
+    filters.status = filtri.status ?? '';
+    filters.severity = filtri.severity ?? '';
+    filters.sla = filtri.sla ?? '';
+    filters.q = filtri.q ?? '';
+    filters.page = 1;
+    carica(load);
+}
 const loading = ref(false);
 const loadError = ref(false);
 const areas = ref([]);
@@ -249,6 +264,8 @@ onMounted(async () => {
                     class="w-72 rounded-lg border border-gray-300 px-2.5 py-2 text-sm"
                     @input="searchList"
                 >
+
+                <VisteSalvate pagina="segnalazioni" :filtri="filtriCorrenti" @applica="applicaVista" />
             </div>
 
             <p v-if="loadError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">

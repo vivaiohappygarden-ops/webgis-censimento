@@ -26,7 +26,7 @@ class AssetController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:assets.view', only: ['index', 'show']),
+            new Middleware('can:assets.view', only: ['index', 'show', 'versioni']),
             new Middleware('can:assets.create', only: ['store']),
             new Middleware('can:assets.update', only: ['update', 'registerRemoval', 'cancelRemoval']),
             new Middleware('can:assets.delete', only: ['destroy']),
@@ -150,6 +150,14 @@ class AssetController extends Controller implements HasMiddleware
         return response()->json(['data' => $asset]);
     }
 
+    /** La storia delle modifiche: chi, quando e che cosa e' cambiato. */
+    public function versioni(string $id): JsonResponse
+    {
+        $asset = Asset::query()->with(['tree', 'plantingSite'])->findOrFail($id);
+
+        return response()->json(['data' => \App\Services\Assets\StoriaScheda::per($asset)]);
+    }
+
     public function update(UpdateAssetRequest $request, string $id): JsonResponse
     {
         $data = $request->validated();
@@ -205,18 +213,18 @@ class AssetController extends Controller implements HasMiddleware
             $siteData = $data['planting_site'] ?? null;
             unset($data['tree'], $data['planting_site']);
 
-            $asset->fill($data);
-            $asset->updated_by = $request->user()->id;
-            $this->assertValidityDates($asset);
-            $asset->save();
-
-            $specializationChanged = false;
+            // La specializzazione si prepara PRIMA di salvare qualsiasi cosa:
+            // la fotografia di versione scatta sull'aggiornamento di assets e
+            // deve riprendere la scheda albero com'era, non come sta per
+            // diventare. Per questo l'ordine e': prepara, salva assets (o
+            // incrementa la versione), e solo alla fine salva albero e posto.
+            $treeDirty = false;
+            $siteDirty = false;
 
             if ($treeData !== null && $asset->tree) {
                 $asset->tree->fill($treeData);
                 $this->assertTreeDates($asset->tree);
-                $specializationChanged = $asset->tree->isDirty();
-                $asset->tree->save();
+                $treeDirty = $asset->tree->isDirty();
             }
 
             if ($siteData !== null && $asset->plantingSite) {
@@ -225,15 +233,28 @@ class AssetController extends Controller implements HasMiddleware
                     \App\Models\Tree::query()->findOrFail($siteData['previous_tree_id']);
                 }
                 $asset->plantingSite->fill($siteData);
-                $specializationChanged = $specializationChanged || $asset->plantingSite->isDirty();
-                $asset->plantingSite->save();
+                $siteDirty = $asset->plantingSite->isDirty();
             }
+
+            $asset->fill($data);
+            $asset->updated_by = $request->user()->id;
+            $this->assertValidityDates($asset);
+            $asset->save();
 
             // Anche le modifiche a scheda albero/posto libero incrementano la versione
             // della scheda: senza questo, il lock ottimistico non vedrebbe i salvataggi
             // concorrenti che toccano solo la specializzazione (la riga assets non cambia)
-            if ($specializationChanged && ! $asset->wasChanged()) {
-                DB::update('UPDATE assets SET version = version + 1 WHERE id = ?', [$asset->id]);
+            if (($treeDirty || $siteDirty) && ! $asset->wasChanged()) {
+                DB::update('UPDATE assets SET version = version + 1, updated_at = now(), updated_by = ? WHERE id = ?', [
+                    $request->user()->id, $asset->id,
+                ]);
+            }
+
+            if ($treeDirty) {
+                $asset->tree->save();
+            }
+            if ($siteDirty) {
+                $asset->plantingSite->save();
             }
 
             Audit::log('asset.updated', $asset);

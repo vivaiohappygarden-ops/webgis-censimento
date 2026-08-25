@@ -184,6 +184,15 @@ Route::prefix('v1')->group(function () {
             ->whereUuid('id')->name('v1.documents.file');
 
         // Conto delle richieste a parte: vedi il limite "tiles" in AppServiceProvider
+        Route::get('assets/{id}/versioni', [\App\Http\Controllers\Api\V1\AssetController::class, 'versioni'])
+            ->whereUuid('id');
+
+        // Viste salvate: filtri con nome, per gli elenchi
+        Route::get('viste', [\App\Http\Controllers\Api\V1\VisteController::class, 'index']);
+        Route::post('viste', [\App\Http\Controllers\Api\V1\VisteController::class, 'store']);
+        Route::patch('viste/{id}', [\App\Http\Controllers\Api\V1\VisteController::class, 'update'])->whereUuid('id');
+        Route::delete('viste/{id}', [\App\Http\Controllers\Api\V1\VisteController::class, 'destroy'])->whereUuid('id');
+
         Route::get('tiles/assets/{z}/{x}/{y}', [TileController::class, 'assets'])
             ->middleware('throttle:tiles')
             ->whereNumber(['z', 'x', 'y']);

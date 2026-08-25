@@ -62,9 +62,13 @@ class TileController extends Controller implements HasMiddleware
                 a.status,
                 t.code AS type_code,
                 t.name AS type_name,
-                t.allowed_geometry
+                t.allowed_geometry,
+                -- Diametro della chioma: serve alla mappa per disegnare il
+                -- cerchio a dimensione reale sopra il punto dell'albero
+                tr.crown_diameter_m AS chioma_m
               FROM assets a
               JOIN catalog_object_types t ON t.id = a.object_type_id
+              LEFT JOIN trees tr ON tr.asset_id = a.id
               CROSS JOIN bounds
               WHERE a.tenant_id = ?
                 AND a.deleted_at IS NULL

@@ -107,10 +107,43 @@ function goTo(id) {
                             Il pulsante <strong>"Esporta CSV"</strong> scarica l'elenco (con i filtri attivi)
                             in un file da aprire direttamente in Excel.
                         </p>
+                        <h3>Le viste salvate (filtri con un nome)</h3>
+                        <p>
+                            Negli elenchi <strong>Censimento</strong>, <strong>Lavori</strong> e
+                            <strong>Segnalazioni</strong> puoi salvare la combinazione di filtri che usi
+                            spesso dandole un nome ("Tigli viale Roma", "Ordini aperti squadra A"): la
+                            ritrovi nella tendina <strong>Viste</strong> in cima all'elenco. Una vista
+                            segnata come <strong>predefinita</strong> si applica da sola quando apri la
+                            pagina; una vista <strong>condivisa</strong> la vedono anche i colleghi
+                            (che possono usarla ma non cambiarla: predefinita ed eliminazione valgono
+                            solo sulle proprie).
+                        </p>
+                        <h3>La storia delle modifiche della scheda</h3>
+                        <p>
+                            In fondo alla scheda di ogni elemento, il pulsante <strong>"Mostra"</strong>
+                            accanto a "Storia delle modifiche" apre l'elenco dei salvataggi: per ognuno
+                            vedi <strong>chi</strong> ha salvato, <strong>quando</strong>, e una tabella
+                            campo per campo con il valore <strong>prima</strong> (barrato) e
+                            <strong>dopo</strong> (evidenziato). Ci sono anche i campi dell'albero
+                            (specie, misure) e uno spostamento sulla mappa viene segnalato. Serve a
+                            rispondere a "chi ha cambiato la specie di questa pianta, e quando?" senza
+                            dover chiedere in giro.
+                        </p>
                         <h3>Se due persone modificano la stessa scheda</h3>
                         <p>
                             Vince chi salva per primo; al secondo il sistema chiede di ricaricare la scheda
                             aggiornata prima di riprovare. Nessuna modifica va persa in silenzio.
+                        </p>
+                        <h3>Le chiome a dimensione reale sulla mappa</h3>
+                        <p>
+                            Sulla pagina <strong>Mappa</strong>, la casella <strong>"Chiome a dimensione
+                            reale"</strong> disegna attorno a ogni albero un cerchio verde largo quanto il
+                            <strong>diametro di chioma</strong> scritto nella sua scheda, in metri veri:
+                            avvicinandoti la mappa le chiome crescono con le case e le strade. Si vede
+                            solo dai livelli di ingrandimento piu' spinti, dove un metro e' distinguibile,
+                            e serve a capire a colpo d'occhio coperture, sovrapposizioni e spazi liberi
+                            per nuove piante. Gli alberi senza diametro di chioma compilato non
+                            disegnano nulla.
                         </p>
                         <h3>Stampe e pagina pubblica</h3>
                         <p>
@@ -419,11 +452,19 @@ function goTo(id) {
                             vedendo.
                         </p>
                         <p class="mt-2">
-                            <strong>Quello che non riesce te lo dice.</strong> Se fra i venti ordini
-                            selezionati tre non si potevano chiudere, compare un riquadro giallo con
-                            l'elenco di quali e il motivo. Non vengono forzati e non spariscono in
-                            silenzio: un'azione di gruppo che salta righe senza dirlo ti fa credere di aver
-                            finito un lavoro rimasto a meta'.
+                            <strong>Prima di eseguire, il programma conta.</strong> Premendo un'azione di
+                            gruppo non succede ancora niente: compare un riquadro che dice quante righe
+                            verranno toccate e quante sono escluse, con l'elenco delle escluse e il
+                            motivo. Solo il pulsante <strong>"Conferma"</strong> esegue davvero;
+                            "Annulla" lascia tutto com'era. Cosi' scopri <em>prima</em> che tre dei venti
+                            ordini selezionati non si possono chiudere, non dopo.
+                        </p>
+                        <p class="mt-2">
+                            <strong>Quello che non riesce te lo dice.</strong> Anche dopo la conferma,
+                            l'esito riporta quante righe sono andate e quali sono state saltate con il
+                            motivo. Non vengono forzate e non spariscono in silenzio: un'azione di gruppo
+                            che salta righe senza dirlo ti fa credere di aver finito un lavoro rimasto a
+                            meta'.
                         </p>
                         <p class="mt-2">
                             Due cose <strong>non</strong> si fanno in blocco, di proposito: cambiare

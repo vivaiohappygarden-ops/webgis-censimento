@@ -31,12 +31,12 @@ class AzioniMultiple
      *
      * @param  list<string>  $ids
      */
-    public static function chiudiLavori(array $ids, User $utente): array
+    public static function chiudiLavori(array $ids, User $utente, bool $prova = false): array
     {
         $fatti = [];
         $saltati = [];
 
-        DB::transaction(function () use ($ids, $utente, &$fatti, &$saltati) {
+        DB::transaction(function () use ($ids, $utente, $prova, &$fatti, &$saltati) {
             $ordini = WorkOrder::query()->whereIn('id', $ids)->lockForUpdate()->get();
             $trovati = $ordini->pluck('id')->all();
 
@@ -57,13 +57,17 @@ class AzioniMultiple
                     continue;
                 }
 
-                $ordine->status = 'completed';
-                $ordine->completed_at = now();
-                $ordine->version += 1;
-                $ordine->updated_by = $utente->id;
-                $ordine->save();
+                // Prova a vuoto: si conta cosa succederebbe, senza toccare niente.
+                // Cosi' prima di confermare si legge "N verranno chiusi, M esclusi"
+                if (! $prova) {
+                    $ordine->status = 'completed';
+                    $ordine->completed_at = now();
+                    $ordine->version += 1;
+                    $ordine->updated_by = $utente->id;
+                    $ordine->save();
 
-                Audit::log('work_order.transition', $ordine, ['to' => 'completed', 'multipla' => true]);
+                    Audit::log('work_order.transition', $ordine, ['to' => 'completed', 'multipla' => true]);
+                }
                 $fatti[] = ['id' => $ordine->id, 'codice' => $ordine->code];
             }
         });
@@ -82,12 +86,12 @@ class AzioniMultiple
      *
      * @param  list<string>  $ids
      */
-    public static function modificaElementi(array $ids, array $modifiche, User $utente): array
+    public static function modificaElementi(array $ids, array $modifiche, User $utente, bool $prova = false): array
     {
         $fatti = [];
         $saltati = [];
 
-        DB::transaction(function () use ($ids, $modifiche, $utente, &$fatti, &$saltati) {
+        DB::transaction(function () use ($ids, $modifiche, $utente, $prova, &$fatti, &$saltati) {
             $elementi = Asset::query()->whereIn('id', $ids)->lockForUpdate()->get();
 
             foreach (array_diff($ids, $elementi->pluck('id')->all()) as $mancante) {
@@ -95,12 +99,14 @@ class AzioniMultiple
             }
 
             foreach ($elementi as $elemento) {
-                $elemento->fill($modifiche);
-                $elemento->version += 1;
-                $elemento->updated_by = $utente->id;
-                $elemento->save();
+                if (! $prova) {
+                    $elemento->fill($modifiche);
+                    $elemento->version += 1;
+                    $elemento->updated_by = $utente->id;
+                    $elemento->save();
 
-                Audit::log('asset.updated', $elemento, ['multipla' => true, 'campi' => array_keys($modifiche)]);
+                    Audit::log('asset.updated', $elemento, ['multipla' => true, 'campi' => array_keys($modifiche)]);
+                }
                 $fatti[] = ['id' => $elemento->id, 'codice' => $elemento->census_code];
             }
         });
@@ -115,12 +121,12 @@ class AzioniMultiple
      *
      * @param  list<string>  $ids
      */
-    public static function collegaElementi(WorkOrder $ordine, array $ids, ?string $workTypeId = null): array
+    public static function collegaElementi(WorkOrder $ordine, array $ids, ?string $workTypeId = null, bool $prova = false): array
     {
         $fatti = [];
         $saltati = [];
 
-        DB::transaction(function () use ($ordine, $ids, $workTypeId, &$fatti, &$saltati) {
+        DB::transaction(function () use ($ordine, $ids, $workTypeId, $prova, &$fatti, &$saltati) {
             $elementi = Asset::query()->whereIn('id', $ids)->get();
 
             foreach (array_diff($ids, $elementi->pluck('id')->all()) as $mancante) {
@@ -140,12 +146,14 @@ class AzioniMultiple
                     continue;
                 }
 
-                WorkOrderAsset::create([
-                    'tenant_id' => $ordine->tenant_id,
-                    'work_order_id' => $ordine->id,
-                    'asset_id' => $elemento->id,
-                    'work_type_id' => $workTypeId,
-                ]);
+                if (! $prova) {
+                    WorkOrderAsset::create([
+                        'tenant_id' => $ordine->tenant_id,
+                        'work_order_id' => $ordine->id,
+                        'asset_id' => $elemento->id,
+                        'work_type_id' => $workTypeId,
+                    ]);
+                }
 
                 $fatti[] = ['id' => $elemento->id, 'codice' => $elemento->census_code];
             }

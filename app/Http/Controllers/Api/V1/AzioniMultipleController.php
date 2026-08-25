@@ -31,8 +31,10 @@ class AzioniMultipleController extends Controller implements HasMiddleware
     {
         $data = $request->validate($this->regoleIds());
 
+        // prova=1: si conta cosa succederebbe senza eseguire, per mostrare
+        // "N verranno chiusi, M esclusi" prima della conferma
         return response()->json([
-            'data' => AzioniMultiple::chiudiLavori($data['ids'], $request->user()),
+            'data' => AzioniMultiple::chiudiLavori($data['ids'], $request->user(), $request->boolean('prova')),
         ]);
     }
 
@@ -59,7 +61,9 @@ class AzioniMultipleController extends Controller implements HasMiddleware
         }
 
         return response()->json([
-            'data' => AzioniMultiple::modificaElementi($data['ids'], $modifiche, $request->user()),
+            'data' => AzioniMultiple::modificaElementi(
+                $data['ids'], $modifiche, $request->user(), $request->boolean('prova'),
+            ),
         ]);
     }
 
@@ -80,7 +84,9 @@ class AzioniMultipleController extends Controller implements HasMiddleware
         }
 
         return response()->json([
-            'data' => AzioniMultiple::collegaElementi($ordine, $data['ids'], $data['work_type_id'] ?? null),
+            'data' => AzioniMultiple::collegaElementi(
+                $ordine, $data['ids'], $data['work_type_id'] ?? null, $request->boolean('prova'),
+            ),
         ]);
     }
 
