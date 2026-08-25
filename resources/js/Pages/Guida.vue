@@ -148,7 +148,9 @@ function goTo(id) {
                         <h3>Stampe e pagina pubblica</h3>
                         <p>
                             Dalla scheda di un elemento si scaricano la <strong>scheda PDF</strong> (per
-                            fascicoli e consegne) e, per gli alberi, il <strong>cartellino con codice QR</strong>
+                            fascicoli e consegne, con la documentazione fotografica completa: tutte le
+                            foto dell'elemento, con categoria e data di scatto) e, per gli alberi, il
+                            <strong>cartellino con codice QR</strong>
                             da stampare e fissare in campo. Attivando la <strong>pagina pubblica</strong>,
                             chi inquadra il QR vede una pagina informativa con foto e dati essenziali,
                             senza bisogno di accesso; si può disattivare in qualunque momento e il vecchio

@@ -62,25 +62,12 @@ class PeriziaController extends Controller implements HasMiddleware
     ];
 
     /**
-     * Tetto alle fotografie allegate alla perizia. Non e' una scelta di
-     * gusto: ogni immagine entra nel PDF ricodificata e in base64, e un
-     * documento con centinaia di foto diventerebbe impossibile da aprire e
-     * da inviare. Quando il tetto taglia, il documento lo dichiara.
+     * Tetto alle fotografie allegate alla perizia, lo stesso della scheda
+     * elemento (FotoStampa): ogni immagine entra nel PDF ricodificata e in
+     * base64, e un documento con centinaia di foto diventerebbe impossibile
+     * da aprire e da inviare. Quando il tetto taglia, il documento lo dichiara.
      */
-    private const MASSIMO_FOTO = 24;
-
-    /** Etichette italiane delle categorie di fotografia. */
-    private const PHOTO_LABELS = [
-        'census' => 'censimento',
-        'reference' => 'riferimento',
-        'before' => 'prima del lavoro',
-        'during' => 'durante il lavoro',
-        'after' => 'dopo il lavoro',
-        'organ' => 'organo',
-        'defect' => 'difetto',
-        'issue' => 'segnalazione',
-        'other' => 'altro',
-    ];
+    private const MASSIMO_FOTO = \App\Services\Photos\FotoStampa::MASSIMO;
 
     private const INSTRUMENT_LABELS = [
         'resistograph' => 'Resistografo',
@@ -462,7 +449,7 @@ class PeriziaController extends Controller implements HasMiddleware
             $foto[] = [
                 'data' => 'data:image/jpeg;base64,'.base64_encode($jpeg),
                 'scattata' => $scattata?->setTimezone('Europe/Rome')->format('d/m/Y'),
-                'categoria' => self::PHOTO_LABELS[$p->category] ?? null,
+                'categoria' => \App\Services\Photos\FotoStampa::ETICHETTE[$p->category] ?? null,
                 // Non si nasconde: si dichiara. Il perito vede tutto e il
                 // lettore capisce che cosa e' stato ripreso dopo il rilievo
                 'dopoSopralluogo' => $limite !== null && $scattata !== null && $scattata->greaterThan($limite),

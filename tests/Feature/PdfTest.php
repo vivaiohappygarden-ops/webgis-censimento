@@ -104,4 +104,72 @@ class PdfTest extends TestCase
         $this->actingAsTenantUser($bare);
         $this->get("/api/v1/assets/{$assetId}/pdf")->assertForbidden();
     }
+
+    public function test_la_scheda_elemento_stampa_tutte_le_fotografie(): void
+    {
+        Storage::fake('local');
+        $stampe = new \Tests\Support\RaccoglitorePdf;
+        $this->app->instance(\App\Services\Pdf\PdfRenderer::class, $stampe);
+
+        $area = $this->createArea($this->organization);
+        $type = $this->makeObjectType($this->organization, 'P', 'P103108');
+        $assetId = $this->postJson('/api/v1/assets', [
+            'area_id' => $area->id,
+            'object_type_id' => $type->id,
+            'census_code' => 'ALB-PDF-2',
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated()->json('data.id');
+
+        foreach (['census', 'defect', 'other'] as $i => $categoria) {
+            $this->post("/api/v1/assets/{$assetId}/photos", [
+                'photo' => UploadedFile::fake()->image("foto{$i}.jpg", 320, 240),
+                'category' => $categoria,
+            ])->assertCreated();
+        }
+
+        $this->get("/api/v1/assets/{$assetId}/pdf")->assertOk();
+
+        // La versione precedente stampava una sola foto "di riferimento" e
+        // scartava le altre in silenzio: ora entrano tutte, con la didascalia
+        $dati = $stampe->dati['pdf.asset'];
+        $this->assertCount(3, $dati['foto']);
+        $this->assertNull($dati['fotoNota']);
+        $this->assertEqualsCanonicalizing(['censimento', 'difetto', 'altro'],
+            array_column($dati['foto'], 'categoria'));
+
+        $html = $stampe->html['pdf.asset'];
+        $this->assertStringContainsString('Documentazione fotografica', $html);
+        $this->assertStringContainsString('scattata il', $html);
+    }
+
+    public function test_oltre_il_tetto_la_scheda_dichiara_il_totale(): void
+    {
+        Storage::fake('local');
+        $stampe = new \Tests\Support\RaccoglitorePdf;
+        $this->app->instance(\App\Services\Pdf\PdfRenderer::class, $stampe);
+
+        $area = $this->createArea($this->organization);
+        $type = $this->makeObjectType($this->organization, 'P', 'P103108');
+        $assetId = $this->postJson('/api/v1/assets', [
+            'area_id' => $area->id,
+            'object_type_id' => $type->id,
+            'census_code' => 'ALB-PDF-3',
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated()->json('data.id');
+
+        $oltre = \App\Services\Photos\FotoStampa::MASSIMO + 2;
+        for ($i = 0; $i < $oltre; $i++) {
+            $this->post("/api/v1/assets/{$assetId}/photos", [
+                'photo' => UploadedFile::fake()->image("foto{$i}.jpg", 60, 40),
+                'category' => 'census',
+            ])->assertCreated();
+        }
+
+        $this->get("/api/v1/assets/{$assetId}/pdf")->assertOk();
+
+        $dati = $stampe->dati['pdf.asset'];
+        $this->assertCount(\App\Services\Photos\FotoStampa::MASSIMO, $dati['foto']);
+        $this->assertStringContainsString("risultano {$oltre} fotografie", $dati['fotoNota']);
+        $this->assertStringContainsString('le più recenti', $dati['fotoNota']);
+    }
 }

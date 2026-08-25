@@ -11,7 +11,10 @@
     table { width: 100%; border-collapse: collapse; margin-top: 4px; table-layout: fixed; }
     th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: left; vertical-align: top; font-size: 9.5px; word-wrap: break-word; overflow-wrap: break-word; }
     th { background: #eee; width: 30%; }
-    .foto { margin-top: 10px; max-width: 320px; max-height: 240px; }
+    .foto-box { width: 46%; border: 1px solid #999; display: inline-block; margin: 0 1.5% 8px 0; text-align: center; color: #999; vertical-align: top; page-break-inside: avoid; }
+    .foto-box img { max-width: 100%; max-height: 150px; }
+    .foto-did { font-size: 8.5px; color: #333; border-top: 1px solid #ddd; padding: 2px; }
+    .legenda { font-size: 8.5px; color: #444; margin-top: 4px; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -89,9 +92,26 @@
     </table>
     @endif
 
-    @if ($photoDataUri)
-    <h2>Foto di riferimento</h2>
-    <img class="foto" src="{{ $photoDataUri }}" alt="Foto dell'elemento">
+    @if (count($foto) || $fotoNota)
+    <h2>Documentazione fotografica</h2>
+    @foreach ($foto as $i => $f)
+        <div class="foto-box">
+            <img src="{{ $f['data'] }}" alt="Foto {{ $i + 1 }}">
+            @php
+                $didascalia = 'Foto '.($i + 1);
+                if ($f['categoria']) {
+                    $didascalia .= ' - '.$f['categoria'];
+                }
+                if ($f['scattata']) {
+                    $didascalia .= ' - scattata il '.$f['scattata'];
+                }
+            @endphp
+            <div class="foto-did">{{ $didascalia }}</div>
+        </div>
+    @endforeach
+    @if ($fotoNota)
+        <div class="legenda">{{ $fotoNota }}</div>
+    @endif
     @endif
 </body>
 </html>

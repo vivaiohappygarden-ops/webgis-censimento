@@ -13,7 +13,6 @@ use App\Services\Pdf\PdfRenderer;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
-use Illuminate\Support\Facades\Storage;
 
 /** Stampe: verbale di ispezione e scheda dell'elemento censito. */
 class PdfController extends Controller implements HasMiddleware
@@ -109,14 +108,6 @@ class PdfController extends Controller implements HasMiddleware
             ])
             ->findOrFail($id);
 
-        // La stessa foto di riferimento dell'export CAM: prima la categoria
-        // censimento, poi la più recente
-        $photo = $asset->photos()
-            ->orderByRaw("(category = 'census') DESC")
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->first();
-
         $fields = \App\Models\CustomField::query()
             ->where('object_type_id', $asset->object_type_id)
             ->get()->keyBy('key');
@@ -124,10 +115,15 @@ class PdfController extends Controller implements HasMiddleware
         $assessment = $asset->tree?->assessments()
             ->orderByDesc('assessed_on')->orderByDesc('created_at')->first();
 
+        // Tutte le fotografie dell'elemento, non solo quella di riferimento:
+        // una scheda con una foto su dieci racconterebbe un decimo del vero
+        $fotografie = \App\Services\Photos\FotoStampa::perScheda($asset->id);
+
         $pdf = $renderer->render('pdf.asset', [
             'organization' => Organization::find($request->user()->tenant_id),
             'asset' => $asset,
-            'photoDataUri' => $photo !== null ? $this->photoDataUri($photo) : null,
+            'foto' => $fotografie['foto'],
+            'fotoNota' => $fotografie['nota'],
             'fields' => $fields,
             'assessment' => $assessment,
         ]);
@@ -140,20 +136,4 @@ class PdfController extends Controller implements HasMiddleware
         ]);
     }
 
-    /**
-     * Foto incorporata in dimensione da stampa: l'originale può pesare
-     * 15 MB e decine di megapixel, e finirebbe intero nel PDF (e nella
-     * memoria di dompdf). Oltre le soglie di sicurezza si rinuncia alla
-     * foto, mai alla scheda.
-     */
-    private function photoDataUri(\App\Models\Photo $photo): ?string
-    {
-        $jpeg = \App\Services\Photos\ImageDerivative::jpeg(
-            Storage::disk()->get($photo->s3_key),
-            maxDimension: 1200,
-            quality: 78,
-        );
-
-        return $jpeg !== null ? 'data:image/jpeg;base64,'.base64_encode($jpeg) : null;
-    }
 }
