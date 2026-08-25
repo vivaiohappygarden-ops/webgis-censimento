@@ -148,8 +148,11 @@ class FotoPeriziaTest extends TestCase
         $this->carica('buona.jpg');
         $rotta = $this->carica('rotta.jpg');
 
-        // Il file sparisce dal disco: succede con un ripristino incompleto
-        Storage::disk('local')->delete(Photo::withoutGlobalScopes()->findOrFail($rotta)->s3_key);
+        // Il file sparisce dal disco: succede con un ripristino incompleto.
+        // Sparisce anche la copia ridotta, che ora si prepara al caricamento
+        $foto = Photo::withoutGlobalScopes()->findOrFail($rotta);
+        Storage::disk('local')->delete($foto->s3_key);
+        \App\Services\Photos\PublicPhotoCache::dimentica($foto);
 
         $html = $this->stampa();
 

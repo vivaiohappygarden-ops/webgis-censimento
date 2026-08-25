@@ -123,6 +123,16 @@ class PhotoController extends Controller implements HasMiddleware
 
         Audit::log('photo.uploaded', $photo, ['asset_id' => $asset->id]);
 
+        // La copia ridotta si prepara subito, una foto per richiesta: così
+        // la prima stampa di una scheda con tante foto le trova già pronte
+        // invece di doverle ricodificare tutte insieme (e rischiare di
+        // superare il tempo massimo della richiesta)
+        try {
+            \App\Services\Photos\PublicPhotoCache::jpeg($photo);
+        } catch (\Throwable) {
+            // la derivata verrà preparata alla prima stampa o visita
+        }
+
         return response()->json(['data' => $photo->fresh()], 201);
     }
 
