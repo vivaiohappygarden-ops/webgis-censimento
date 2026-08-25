@@ -13,7 +13,18 @@ export async function fetchPdf(url) {
         return { error: null };
     }
     if (! response.ok) {
-        return { error: 'Stampa non riuscita: aggiorna la pagina e riprova.' };
+        // Spesso il server sa il motivo esatto (es. "la perizia non si può
+        // emettere senza la classe di propensione al cedimento"): mostrarlo
+        // vale più di un invito generico a riprovare
+        let motivo = null;
+        try {
+            const corpo = await response.json();
+            motivo = Object.values(corpo.errors ?? {})[0]?.[0] ?? corpo.message ?? null;
+        } catch {
+            // corpo non leggibile: resta il messaggio generico col numero
+        }
+
+        return { error: motivo ?? `Stampa non riuscita (errore ${response.status}): aggiorna la pagina e riprova.` };
     }
     const blobUrl = URL.createObjectURL(await response.blob());
     window.open(blobUrl, '_blank');
