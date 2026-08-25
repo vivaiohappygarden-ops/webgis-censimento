@@ -662,3 +662,151 @@ Niente di stravolto, ma tre aggiustamenti:
 
 Il portale pubblico resta una cosa fatta bene da noi, ma va venduto per quello
 che fa, non per il fatto di esistere.
+
+---
+
+# Aggiornamento dalla demo vera (25/08/2026)
+
+Il committente e' entrato nella demo ufficiale (demo-gs-it.r3gis.com) e ha
+raccolto **242 schermate** di tutte le sezioni: elenchi, schede, moduli di
+inserimento, configurazione, mappa. Ogni schermata e' stata letta e
+trascritta; questa sezione sostituisce, dove differiscono, le valutazioni
+fatte su brochure e video: la demo e' la fonte piu' affidabile delle tre.
+
+# Mappa dei moduli di GreenSpaces (come risulta dalla demo, 242 schermate)
+
+Nota di metodo: una schermata (perizia PDF con didascalia "ripresa dopo il sopralluogo") e' quasi certamente un documento del NOSTRO programma finito per errore nella cartella; non e' stata contata. Molte schermate sono duplicati: la mappa qui sotto usa solo le informazioni confermate.
+
+## 1. Localita' (catasto delle aree verdi)
+- Elenco di 267 aree con codice gerarchico per comune (es. 1.001), nome bilingue italiano/tedesco, zona omogenea.
+- Doppia classificazione: propria (parco urbano, strada alberata, giardino privato...) e ISTAT (parchi urbani, verde storico...).
+- Superficie totale e superficie gestita calcolate dalla geometria.
+- Ciclo di vita dell'area a stati colorati: in costruzione, collaudata, da verificare, in aggiornamento, storicizzata; validita' con data inizio/fine.
+- Centro di costo, attributo "senza barriere architettoniche", tag NFC dell'intera area.
+- Imprese manutentrici assegnate all'area, anche piu' d'una, ciascuna per categoria di lavoro, con visibilita' anche temporanea (le ditte entrano nel sistema e vedono solo le proprie aree).
+- Nove schede collegate: Imprese, Statistiche (consistenze per codice oggetto), Statistiche-Alberi (composizione per specie), Lavori, Documenti (anche come link esterni), Immagini (galleria con foto principale), Oggetti, Valore ambientale, Servizi ecosistemici.
+
+## 2. Oggetti (censimento generale del verde e dell'arredo)
+- 44.704 oggetti su 7 temi organizzati per geometria: P1/L1/S1 vegetazione, P2/L2/S2 arredo urbano, S3 fruizione e gestione (stessa logica del Modello Dati CAM che usiamo noi).
+- Catalogo profondissimo: arredo (panchine per tipo costruttivo, cestini, lampioni, bacheche), recinzioni per tipologia, pavimentazioni per materiale, impianti sportivi per disciplina, pavimentazioni antitrauma, componenti di irrigazione (centralina, valvola, irrigatore, adduttore), perfino sensori IoT (temperatura, qualita' dell'aria, contapersone).
+- Ogni tipo di superficie ha un coefficiente di capacita' d'infiltrazione [%] usato per i calcoli ambientali.
+- Storicizzazione nativa: ogni oggetto ha data inizio/fine validita', filtro "Mostra storico" e filtro "Attivo in data" (fotografia del patrimonio a una data passata).
+- Import di shapefile zip con modello scaricabile; export multi-tema in Excel, eseguito in coda ("Attivita' in background") con avviso quando il file e' pronto.
+
+## 3. Alberi (catasto arboreo)
+- 42.829 alberi; numero pianta, numero cartellino fisico e Object ID distinti; posizione chilometrica stradale con lato (pensato per le alberate provinciali).
+- Anagrafica agronomica ricca: sito di crescita (16-17 voci, dal "bauletto" al "buco nell'asfalto"), fase fisiologica a 6 stadi, posizione sociale (isolato/filare/gruppo), bersaglio del rischio gia' in anagrafica.
+- Biometria con fusti multipli, altezza castello; eta' calcolata con qualificatore preciso/stimato/non rilevato.
+- Contrassegni speciali: monumentale, dedicato (con data e motivo), Legge 10/2013, microhabitat, bat box, Tree Talker (sensore), interferenza filobus, soggetta a scavo.
+- Storico versioni a confronto visivo: tabella delle revisioni con le sole celle cambiate evidenziate in verde.
+- Servizi ecosistemici per singolo albero, annuali e giornalieri, con valore in euro.
+- Filtri salvati con nome, condivisibili e con predefinito; modifica multipla con casella per campo; pianificazione VSA in blocco (max 500, con pre-conteggio degli esclusi per motivo); creazione lavori in blocco (max 3000 oggetti).
+
+## 4. VSA (valutazioni di stabilita', il loro VTA)
+- Scheda per parti dell'albero (radici, colletto, tronco, branche, castello, chioma, agenti patogeni, dendromicrohabitat) con difetti a gravita' su tre livelli.
+- Esito: classe di propensione al cedimento (A-D) e classe di rischio (R1-R3); stato vegetativo; strumenti diagnostici registrati (tomografo, prova di trazione, dendrodensimetro con rapporto t/R).
+- Flusso di validazione a stati: in lavorazione, richiesta validazione, validata, con "conflitto rilevato" e "stampa fallita"; validazione anche in blocco.
+- Dalla scheda nascono direttamente i lavori proposti (es. ricontrollo VTA a 2 anni con importo) e si vede l'elenco delle lavorazioni aperte.
+- Vista dedicata "Alberi con VSA pianificate" con assegnatario del rilievo.
+
+## 5. Cespugli, tappezzanti e siepi
+- Modulo di censimento autonomo (2.765 oggetti) con tassonomie multiple per oggetto, ognuna con il proprio intervallo di validita' (la composizione della siepe nel tempo).
+- Campo "Sostituisce Object ID" per la successione fra impianti; tag NFC anche sugli arbusti.
+
+## 6. Aree gioco/sport, Attrezzi e Ispezioni
+- Aree gioco/sport come oggetti areali con categoria e tipo (anche "privato aperto al pubblico").
+- Ispezioni delle attrezzature con checklist normata Si'/No/N.A., separata per attrezzo e per sottofondo; tipi periodici (mensile, trimestrale, annuale, su richiesta); flusso di validazione a stati; dall'anomalia nasce il lavoro proposto (es. "ingrassaggio cerniere") con date e impresa.
+
+## 7. Lavori
+- Tipi codificati a tariffario con quantita' e importo in euro calcolato; origine classificata (VTA, ispezione, programmato, monitoraggio).
+- Stati: proposto, in esecuzione, eseguito, riprogrammato, richiesta riprogrammazione, archiviato; preavviso di scadenza; motivo di riprogrammazione obbligatorio e codificato.
+- Pianificazione con squadra, utenti, responsabile, giorno e orario; creazione in blocco con impresa proposta in automatico e raggruppamento per localita'; viste calendario e mappa.
+
+## 8. Ambiente (valore ambientale e servizi ecosistemici)
+- Indici d'area storicizzati per data: capacita' d'infiltrazione media, indice di Simpson (diversita'), indice dimensionale, ognuno con la propria "robustezza" in % (quanto e' affidabile il numero).
+- Servizi ecosistemici per anno e per area: CO2 stoccata/sequestrata/assorbita, ossigeno, PM2,5 e PM10, energia risparmiata, pioggia intercettata, con la % di censito coperta dal calcolo e la monetizzazione in euro ("valore economico totale euro/anno").
+
+## 9. Mappa (GisClient 3.1)
+- Applicazione GIS in finestra separata, di vecchia generazione: albero dei layer, basemap multiple (ortofoto comprese), misure, stampa mappa configurabile, ricerca strutturata per tema, coordinate UTM/WGS84.
+- Chiome disegnate a raggio reale (il cerchio cresce con il diametro censito): carta della copertura arborea a colpo d'occhio.
+- Layer per segnalazioni cittadini ("Tree SOS") e mappe di vulnerabilita'.
+
+## 10. Trasversali
+- Bilinguismo italiano/tedesco nativo; menu con moduli Comunicazioni, Documenti, Non conformita', Impianti d'irrigazione, app di campo "GreenSpaces Mobile" e "mappa tablet".
+- Ovunque: audit inserimento/ultima modifica, filtri salvati, stampe componibili (si sceglie il modello e le sezioni da includere), dizionari estendibili sul posto con il pulsante "+".
+- Debolezze viste nella demo: errori grezzi a video (messaggio S3 "NoSuchKey" stampato crudo, "Errore inaspettato" senza codice), layer di prova lasciati visibili, dati specie non normalizzati (righe "-", "--" e vuote), cartografia separata dal gestionale.
+
+---
+
+# Confronto onesto con il nostro WebGIS
+
+## Cosa hanno loro che a noi manca davvero
+
+**Priorita' alta (pesa nei bandi o nell'uso quotidiano)**
+- **Servizi ecosistemici completi e monetizzati.** Per albero e per area, per anno (perfino giornalieri), con ossigeno, polveri sottili, energia, pioggia intercettata e il controvalore in euro. La nostra stima si ferma alla CO2, senza euro. E' il loro argomento di vendita piu' forte verso i Comuni.
+- **Quantita' e importo dentro l'ordine di lavoro.** Ogni lavoro ha tipo a tariffario, quantita' aggregata dagli oggetti selezionati e importo calcolato. Da noi il consuntivo si valorizza dal listino, ma la quantita' e' sempre digitata a mano: il ponte geometria-prezzo manca (gia' segnato "assente" nel confronto precedente, confermato dalla demo).
+- **Filtri salvati con nome**, condivisibili fra utenti e con predefinito ("tigli adulti in scuole da spollonare"). Noi non li abbiamo: ogni ricerca si ricostruisce da capo.
+- **Storicizzazione interrogabile.** "Attivo in data" + "Mostra storico" danno la fotografia del patrimonio a una data passata. Noi conserviamo le versioni nel database (asset_versions) ma l'utente non le vede ne' le interroga.
+- **Flusso con le imprese appaltatrici.** Le ditte accedono, vedono solo le proprie aree (anche con visibilita' a tempo), chiedono formalmente la riprogrammazione con motivo codificato. Il nostro portale esterno e' solo quello del committente.
+- **Modifica multipla dei dati di scheda** con casella per singolo campo. Noi le azioni in blocco le abbiamo (portale, data di rilievo, collegamento a ordine, chiusura ordini) ma di proposito non tocchiamo specie e misure; loro si', con un meccanismo che evita sovrascritture accidentali.
+- **Import shapefile generico** con modello scaricabile. Noi importiamo solo file gia' in formato CAM: e' la porta per subentrare a loro nei Comuni, e resta chiusa.
+
+**Priorita' media**
+- Indici ambientali d'area (Simpson, infiltrazione) con la "robustezza" dichiarata del dato.
+- Stampe componibili: modello a scelta piu' sezioni opzionali (solo ultima VSA, solo lavori da eseguire); le nostre stampe sono fisse.
+- Dizionari agronomici in anagrafica albero: fase fisiologica a 6 stadi, posizione sociale, bersaglio, sito di crescita a 17 voci, altezza castello, qualificatore dell'eta' (preciso/stimato).
+- Il ricontrollo VTA diventa un lavoro vero, pianificato a orizzonte pluriennale con importo. Noi calcoliamo la data del ricontrollo ma non generiamo nulla in agenda.
+- Chiome a raggio reale sulla mappa; chilometrica stradale con lato; tassonomie multiple versionate sulle siepi; checklist EN 1176 precompilate per attrezzo e sottofondo; export in coda con avviso; pre-conteggio diagnostico prima delle azioni in blocco.
+
+**Priorita' bassa (di nicchia o di marketing)**
+- Bilinguismo it/de (mercato altoatesino), tag NFC per avvicinamento, sensori IoT/Tree Talker, "gemello digitale", app cittadino, mappe di vulnerabilita', coefficiente d'infiltrazione per superficie.
+
+## Cosa abbiamo noi con un altro nome (non farsi ingannare dai termini)
+
+- **VSA = la nostra VTA.** Difetti per parte dell'albero, classe di propensione al cedimento, analisi strumentali con t/R: li abbiamo. La loro "validazione della scheda" corrisponde alla nostra perizia validata, che e' anzi piu' forte: protocollo, data di emissione, blocco nel database e impronta SHA-256 del contenuto.
+- **Localita' = la nostra scheda di localita' in Territorio**, gia' con superficie totale e gestita (con il metodo dichiarato), classificazione ISTAT, elenco piante con quantita', imprese/lavori e documenti allegati. Manca solo la stampa in PDF.
+- **Ispezioni e Non conformita'.** Checklist su modello con periodicita', scadenzario, NC aperte in automatico dalle risposte negative, verbale PDF: c'e' tutto; da noi "Non conformita'" sta nella vista Qualita' invece che come voce di menu.
+- **Storico oggetto**: le versioni e il blocco delle modifiche concorrenti li abbiamo; manca solo la resa a video con il confronto cella per cella.
+- **Statistiche** per tipologia e per specie: le abbiamo (pagina Statistiche piu' scheda localita').
+- **Albero monumentale, tutelato e dedicato**: presenti, con riferimento all'elenco nazionale e visibilita' sul portale pubblico.
+- **Tag fisici**: l'archivio tag (NFC/QR/barcode/RFID) e la scansione in campo ci sono; manca solo la lettura NFC per avvicinamento (che comunque non funziona su iPhone).
+- **Comunicazioni/Tree SOS ~ le nostre segnalazioni**, con in piu' da noi le scadenze di presa in carico e risoluzione per gravita'.
+- **Irrigazione**: il nostro modulo impianti/settori/letture contatore e' per certi versi piu' operativo del loro censimento dei componenti.
+
+## Cosa facciamo meglio noi
+
+- **Portale pubblico per committente**: personalizzazione per Comune, QR sul cartellino, cronologia degli atti pubblicati, vincoli con documento, stima CO2 con metodo dichiarato, privacy. Loro un portale ce l'hanno (dal video), ma nella demo gestionale non se ne vede la profondita'.
+- **La perizia come atto**: immutabile dopo la validazione, foto congelate alla firma, regola dell'unica data per foglio, impronta verificabile. Il loro certificato esiste, ma il nostro impianto documentale (perizia, bilancio arboreo, verbale, registro fitosanitari, preventivo) e' piu' curato e difendibile.
+- **Adempimenti che loro non mostrano**: registro fitosanitari, scadenzario patentini e certificati, preventivi con flusso bozza-accettato-ordine, consegna CAM completa con foto e manifesto.
+- **Mappa moderna integrata** (MapLibre dentro la pagina) contro il loro GisClient 3.1 in finestra separata, di vecchia generazione.
+- **Robustezza percepita**: i nostri errori riportano sempre il codice e ritentano da soli; nella loro demo si vedono errori S3 grezzi e un "Errore inaspettato" senza numero. La nostra app di campo lavora davvero offline con coda e riallineamento.
+- **Cruscotto Oggi** con email mattutina delle scadenze: un punto d'ingresso quotidiano che nella loro demo non compare.
+
+## Cosa fanno peggio loro
+- Cartografia separata e datata; dati demo sporchi (specie "-", "--", vuote; layer di prova visibili); messaggi di errore non gestiti; nessuna evidenza di offline reale nell'app di campo dalle schermate viste.
+
+---
+
+# Le idee da copiare, in ordine di resa per ora di lavoro
+
+1. **Filtri salvati con nome negli elenchi** (sforzo: poco). Una tabella "viste" per utente con i filtri correnti serializzati: si usa cento volte al giorno ("tigli da spollonare", "VTA in scadenza") e si vede subito in una dimostrazione.
+
+2. **Chiome a raggio reale sulla mappa** (sforzo: poco). Il diametro chioma e' gia' censito: basta un cerchio proporzionale in MapLibre oltre una certa scala. Trasforma la mappa in una carta della copertura arborea, ed e' l'effetto piu' scenografico della loro demo.
+
+3. **Pre-conteggio prima delle azioni in blocco** (sforzo: poco). Prima di eseguire, mostrare "42 verranno elaborati, 3 esclusi perche'...", come fa il loro "Pianifica VSA". Noi gia' spieghiamo gli esclusi dopo: dirlo prima costa poco e da' fiducia.
+
+4. **Storico della scheda a confronto visivo** (sforzo: poco/medio). Le versioni sono gia' nel database (asset_versions) ma nessuna pagina le mostra: una tabella delle revisioni con le celle cambiate evidenziate rende visibile un lavoro gia' fatto.
+
+5. **Stampa PDF della scheda di localita'** (sforzo: medio-basso). La scheda a video c'e' gia' (superfici, ISTAT, piante, elementi, lavori): riversarla in PDF con PdfRenderer produce il dossier d'area che gli uffici tecnici allegano ai capitolati.
+
+6. **Dizionari agronomici sull'albero** (sforzo: poco/medio). Fase fisiologica, posizione sociale, bersaglio in anagrafica, sito di crescita ricco, altezza castello, qualificatore dell'eta' (preciso/stimato): campi che danno credibilita' tecnica alla VTA e costano soprattutto una migrazione e qualche tendina.
+
+7. **Quantita' del lavoro proposta dalla geometria** (sforzo: medio). Collegando elementi a un ordine, proporre la somma di superfici/lunghezze/cadauno gia' calcolate dal database (colonne computed_*) e valorizzarla dal listino. Era gia' il punto 4 della nostra scaletta: la demo conferma che per loro e' il cuore del modulo lavori.
+
+8. **Il ricontrollo VTA entra nel flusso operativo** (sforzo: medio). La data la calcoliamo gia': farla comparire nel cruscotto Oggi e, a richiesta, generare l'ordine di lavoro "Ricontrollo VTA" chiude il cerchio rilievo-prescrizione-lavoro che loro vendono bene.
+
+9. **Monetizzazione dei benefici, partendo dalla CO2** (sforzo: medio). Aggiungere a config/co2.php un prezzo per tonnellata con fonte dichiarata e mostrare "valore in euro" su scheda e portale. E' il primo passo, onesto e verificabile, verso i loro servizi ecosistemici completi; il resto (PM10, energia, pioggia) solo se un bando lo chiede.
+
+10. **Stampe componibili** (sforzo: medio). Nella finestra di stampa della scheda albero e della localita', caselle per includere o escludere sezioni (solo ultima valutazione, solo lavori da eseguire): stessa infrastruttura PDF, documenti su misura senza nuovi modelli.
+
+Non da copiare ora: export asincrono in coda (alla nostra scala il CSV sincrono basta), lettura NFC per avvicinamento (non funziona su iPhone, il QR copre l'uso), bilinguismo, IoT e "gemello digitale" (marketing senza domanda dei nostri committenti), portale delle imprese appaltatrici (aspettare di avere un cliente che lo pretende, come gia' deciso per i SAL).
