@@ -660,7 +660,13 @@ function goTo(id) {
                             Un'area con elementi censiti (o impianti di irrigazione) non si elimina: prima
                             vanno spostati o eliminati, e il programma lo dice chiaramente. È una protezione,
                             non un difetto: eliminare un'area con dentro il censimento lascerebbe alberi
-                            orfani. La pagina <strong>Catalogo</strong>
+                            orfani. Per <strong>spostare un elemento</strong> in un'altra area: apri la sua
+                            scheda, premi "Modifica" e cambia il campo <strong>Area</strong> — l'elemento si
+                            trasferisce con tutta la sua storia (perizie, foto, versioni) e il cambio resta
+                            scritto nello storico. Se invece l'elemento era uno sbaglio, si elimina dalla
+                            scheda; se ha valutazioni VTA <strong>in bozza</strong>, prima si eliminano quelle
+                            dal pannello VTA (le perizie <strong>validate</strong> invece non si toccano mai:
+                            in quel caso la strada è lo spostamento). La pagina <strong>Catalogo</strong>
                             contiene i tipi di oggetto del Modello Dati ministeriale (387 tipi, non modificabili) e i
                             <strong>campi personalizzati</strong> che si possono aggiungere a ciascun tipo
                             (per esempio la larghezza delle siepi), con la possibilità di collegarli ai campi

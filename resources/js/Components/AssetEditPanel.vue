@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import axios from 'axios';
 
 const props = defineProps({ asset: { type: Object, required: true } });
@@ -17,7 +17,21 @@ const form = reactive({
     status: props.asset.status ?? 'active',
     surveyed_at: soloData(props.asset.surveyed_at),
     notes: props.asset.notes ?? '',
+    area_id: props.asset.area_id,
     attributes: { ...(props.asset.attributes ?? {}) },
+});
+
+// Tutte le aree, per lo spostamento: l'elemento porta con se' la sua storia
+// (perizie, foto, versioni) e nello storico resta scritto il cambio di area
+const aree = ref([]);
+const areeRaggruppate = computed(() => {
+    const gruppi = new Map();
+    for (const a of aree.value) {
+        const nome = a.locality?.name ?? 'Senza località';
+        if (! gruppi.has(nome)) gruppi.set(nome, []);
+        gruppi.get(nome).push(a);
+    }
+    return [...gruppi.entries()].map(([nome, lista]) => ({ nome, aree: lista }));
 });
 
 onMounted(async () => {
@@ -30,6 +44,17 @@ onMounted(async () => {
             form.attributes[f.key] = f.field_type === 'multiselect' ? [] : null;
         }
     }
+
+    // Tutte le pagine: il tetto del server e' 100 per richiesta
+    let pagina = 1;
+    let righe = [];
+    for (;;) {
+        const { data: risposta } = await axios.get('/api/v1/areas', { params: { per_page: 100, page: pagina } });
+        righe = righe.concat(risposta.data);
+        if (! risposta.next_page_url) break;
+        pagina += 1;
+    }
+    aree.value = righe;
 });
 
 async function save() {
@@ -44,6 +69,7 @@ async function save() {
             status: form.status,
             surveyed_at: form.surveyed_at || null,
             notes: form.notes || null,
+            area_id: form.area_id,
             attributes,
             version: props.asset.version,
         });
@@ -99,6 +125,23 @@ async function save() {
                     data-test="data-rilievo"
                     class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
                 >
+            </label>
+            <label class="block text-xs">
+                <span class="text-gray-500">Area</span>
+                <select
+                    v-model="form.area_id"
+                    data-test="modifica-area"
+                    class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                >
+                    <optgroup v-for="g in areeRaggruppate" :key="g.nome" :label="g.nome">
+                        <option v-for="a in g.aree" :key="a.id" :value="a.id">
+                            {{ a.name }}{{ a.code ? ` (${a.code})` : '' }}
+                        </option>
+                    </optgroup>
+                </select>
+                <span class="mt-0.5 block text-[11px] text-gray-400">
+                    Cambiandola l'elemento si sposta con tutta la sua storia; il cambio resta nello storico.
+                </span>
             </label>
         </div>
         <p v-if="asset.status === 'removed'" class="mt-1 text-xs text-amber-700">

@@ -75,6 +75,29 @@ class PeriziaValidazioneTest extends TestCase
         $this->assertSame(null, TreeAssessment::findOrFail($id)->prescriptions);
     }
 
+    public function test_una_bozza_si_elimina_e_l_eliminazione_resta_registrata(): void
+    {
+        $id = $this->creaPerizia();
+
+        $this->deleteJson("/api/v1/assessments/{$id}")->assertNoContent();
+
+        // Cancellazione morbida: sparisce dall'app ma la riga resta
+        $this->assertSoftDeleted('tree_assessments', ['id' => $id]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'vta.deleted']);
+    }
+
+    public function test_l_operatore_non_elimina_nemmeno_le_bozze(): void
+    {
+        $id = $this->creaPerizia();
+
+        $operatore = \App\Models\User::factory()->create(['tenant_id' => $this->utente->tenant_id]);
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($this->utente->tenant_id);
+        $operatore->assignRole('operatore');
+        $this->actingAsTenantUser($operatore);
+
+        $this->deleteJson("/api/v1/assessments/{$id}")->assertForbidden();
+    }
+
     public function test_il_messaggio_spiega_come_si_corregge(): void
     {
         $id = $this->creaPerizia();

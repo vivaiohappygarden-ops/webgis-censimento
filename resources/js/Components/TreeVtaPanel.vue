@@ -1,5 +1,6 @@
 <script setup>
-import { nextTick, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { fetchPdf } from '@/pdf';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
@@ -12,6 +13,10 @@ const props = defineProps({
     apriValutazione: { type: Boolean, default: false },
 });
 const emit = defineEmits(['saved']);
+
+// Eliminare una bozza chiede un permesso piu' alto della correzione:
+// l'operatore in campo registra e corregge, ma non butta via
+const canDelete = computed(() => (usePage().props.auth?.user?.permissions ?? []).includes('assets.delete'));
 
 // Le valutazioni sono lo storico dell'albero: se non arrivano deve dirlo,
 // non far credere che l'albero non sia mai stato valutato
@@ -356,6 +361,35 @@ async function validaPerizia(a) {
     }
 }
 
+/**
+ * Eliminazione di una valutazione IN BOZZA: per le validate il server
+ * risponde 409 (un atto emesso non si toglie). La cancellazione e' morbida
+ * e resta nel registro di controllo: la conferma dice cosa si sta buttando.
+ */
+const eliminando = ref(null);
+
+async function eliminaValutazione(a) {
+    const conferma = window.confirm(
+        `Vuoi eliminare questa valutazione in bozza del ${fmt(a.assessed_on)}`
+        + `${a.failure_class ? ` (classe ${a.failure_class})` : ''}?\n\n`
+        + 'Verranno eliminate anche le sue analisi strumentali. '
+        + 'L\'operazione resta registrata nel registro di controllo.'
+    );
+    if (! conferma) return;
+
+    periziaError.value = '';
+    eliminando.value = a.id;
+    try {
+        await axios.delete(`/api/v1/assessments/${a.id}`);
+        await loadAssessments();
+        emit('saved');
+    } catch (err) {
+        periziaError.value = err.response?.data?.message ?? 'Eliminazione non riuscita';
+    } finally {
+        eliminando.value = null;
+    }
+}
+
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '—');
 const fmtOra = (d) => (d ? new Date(d).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
@@ -687,6 +721,14 @@ onMounted(async () => {
                             data-test="vta-perizia"
                             @click="openPerizia(a.id)"
                         >{{ periziaBusy === a.id ? 'Preparazione…' : 'Perizia PDF' }}</button>
+                        <button
+                            v-if="canDelete && ! a.validated_at"
+                            class="text-xs text-red-500 hover:underline disabled:opacity-50"
+                            :disabled="eliminando === a.id"
+                            data-test="vta-elimina"
+                            title="Solo le bozze si eliminano: una perizia validata si supera con una nuova"
+                            @click="eliminaValutazione(a)"
+                        >{{ eliminando === a.id ? 'Eliminazione…' : 'Elimina' }}</button>
                         <span v-if="a.report_number" class="text-xs text-gray-400">perizia {{ a.report_number }}</span>
                     </div>
 
