@@ -654,7 +654,13 @@ function goTo(id) {
                         <p class="mt-2">
                             La pagina <strong>Territorio</strong> organizza clienti, sedi (i comuni) e località;
                             le aree di gestione si disegnano dalla <strong>Mappa</strong> e ogni elemento censito
-                            appartiene a un'area. La pagina <strong>Catalogo</strong>
+                            appartiene a un'area. Accanto a ogni località, il collegamento
+                            <strong>"N aree"</strong> apre l'elenco delle sue aree con il numero di elementi:
+                            da lì l'amministratore può <strong>eliminare un'area</strong>, ma solo se è vuota.
+                            Un'area con elementi censiti (o impianti di irrigazione) non si elimina: prima
+                            vanno spostati o eliminati, e il programma lo dice chiaramente. È una protezione,
+                            non un difetto: eliminare un'area con dentro il censimento lascerebbe alberi
+                            orfani. La pagina <strong>Catalogo</strong>
                             contiene i tipi di oggetto del Modello Dati ministeriale (387 tipi, non modificabili) e i
                             <strong>campi personalizzati</strong> che si possono aggiungere a ciascun tipo
                             (per esempio la larghezza delle siepi), con la possibilità di collegarli ai campi

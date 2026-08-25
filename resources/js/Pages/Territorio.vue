@@ -420,6 +420,60 @@ async function removeItem(kind, id, refresh) {
     }
 }
 
+// --- Aree di una localita' --------------------------------------------------
+// Le aree si disegnano dalla Mappa; qui si elencano e, da vuote, si
+// eliminano. Un'area con elementi censiti (o impianti) non si elimina: il
+// server rifiuta e spiega, cosi' non si orfanizza mai un censimento.
+const canDeleteAree = computed(() => (page.props.auth?.user?.permissions ?? []).includes('areas.delete'));
+const areeAperte = ref('');
+const aree = ref([]);
+const areeInCaricamento = ref(false);
+
+async function commutaAree(l) {
+    if (areeAperte.value === l.id) {
+        areeAperte.value = '';
+        return;
+    }
+    areeAperte.value = l.id;
+    await caricaAree();
+}
+
+async function caricaAree() {
+    areeInCaricamento.value = true;
+    aree.value = [];
+    try {
+        // Tutte le pagine: il tetto del server e' 100 per richiesta
+        let pagina = 1;
+        let righe = [];
+        for (;;) {
+            const { data } = await axios.get('/api/v1/areas', {
+                params: { locality_id: areeAperte.value, per_page: 100, page: pagina },
+            });
+            righe = righe.concat(data.data);
+            if (! data.next_page_url) break;
+            pagina += 1;
+        }
+        aree.value = righe;
+    } catch (err) {
+        error.value = firstError(err);
+    } finally {
+        areeInCaricamento.value = false;
+    }
+}
+
+async function eliminaArea(a) {
+    if (! window.confirm(`Eliminare l'area "${a.name}"?`)) return;
+    error.value = '';
+    try {
+        await axios.delete(`/api/v1/areas/${a.id}`);
+        await caricaAree();
+        // Il conteggio "N aree" della localita' deve aggiornarsi
+        await selectSite(selectedSite.value);
+    } catch (err) {
+        error.value = firstError(err);
+    }
+}
+
 const CLIENT_TYPES = { public: 'Pubblico (PA)', private: 'Privato', condo: 'Condominio', other: 'Altro' };
 
 onMounted(() => carica(loadClients));
@@ -556,22 +610,56 @@ onMounted(() => carica(loadClients));
                         <li
                             v-for="l in localities"
                             :key="l.id"
-                            class="flex items-center justify-between px-4 py-2.5 text-sm"
+                            class="px-4 py-2.5 text-sm"
                         >
-                            <span>{{ l.name }} <span v-if="l.code" class="text-gray-400">({{ l.code }})</span></span>
-                            <span class="flex items-center gap-3">
-                                <span class="text-xs text-gray-400">{{ l.areas_count }} aree</span>
-                                <button
-                                    class="text-xs font-medium text-green-700 hover:underline"
-                                    data-test="apri-scheda-localita"
-                                    @click="apriScheda(l)"
-                                >{{ schedaLocalita?.id === l.id ? 'chiudi scheda' : 'scheda' }}</button>
-                                <button
-                                    v-if="canManage && l.areas_count === 0"
-                                    class="text-xs text-red-500 hover:underline"
-                                    @click="removeItem('localities', l.id, () => selectSite(selectedSite))"
-                                >elimina</button>
-                            </span>
+                            <div class="flex items-center justify-between">
+                                <span>{{ l.name }} <span v-if="l.code" class="text-gray-400">({{ l.code }})</span></span>
+                                <span class="flex items-center gap-3">
+                                    <button
+                                        v-if="l.areas_count > 0"
+                                        class="text-xs text-gray-500 hover:underline"
+                                        data-test="apri-aree"
+                                        @click="commutaAree(l)"
+                                    >{{ areeAperte === l.id ? 'nascondi le aree' : `${l.areas_count} aree` }}</button>
+                                    <span v-else class="text-xs text-gray-400">0 aree</span>
+                                    <button
+                                        class="text-xs font-medium text-green-700 hover:underline"
+                                        data-test="apri-scheda-localita"
+                                        @click="apriScheda(l)"
+                                    >{{ schedaLocalita?.id === l.id ? 'chiudi scheda' : 'scheda' }}</button>
+                                    <button
+                                        v-if="canManage && l.areas_count === 0"
+                                        class="text-xs text-red-500 hover:underline"
+                                        @click="removeItem('localities', l.id, () => selectSite(selectedSite))"
+                                    >elimina</button>
+                                </span>
+                            </div>
+
+                            <!-- Le aree della localita': si disegnano dalla Mappa, da vuote si eliminano qui -->
+                            <ul v-if="areeAperte === l.id" data-test="elenco-aree" class="mt-2 space-y-1 border-l-2 border-gray-100 pl-3">
+                                <li v-if="areeInCaricamento" class="text-xs text-gray-400">Caricamento…</li>
+                                <li
+                                    v-for="a in aree"
+                                    :key="a.id"
+                                    class="flex flex-wrap items-center justify-between gap-2 text-xs"
+                                >
+                                    <span>
+                                        {{ a.name }} <span v-if="a.code" class="text-gray-400">({{ a.code }})</span>
+                                        <span v-if="a.status !== 'active'" class="ml-1 rounded bg-gray-100 px-1 uppercase text-[10px] text-gray-500">{{ a.status === 'planned' ? 'prevista' : 'dismessa' }}</span>
+                                    </span>
+                                    <span class="flex items-center gap-3">
+                                        <span class="text-gray-400">{{ a.assets_count }} elementi</span>
+                                        <button
+                                            v-if="canDeleteAree"
+                                            class="text-red-500 hover:underline"
+                                            :title="a.assets_count > 0 ? 'Si può eliminare solo un\'area senza elementi censiti' : 'Elimina l\'area'"
+                                            data-test="elimina-area"
+                                            @click="eliminaArea(a)"
+                                        >elimina</button>
+                                    </span>
+                                </li>
+                                <li v-if="! areeInCaricamento && ! aree.length" class="text-xs text-gray-400">Nessun'area.</li>
+                            </ul>
                         </li>
                         <li v-if="selectedSite && ! localities.length" class="px-4 py-6 text-center text-sm text-gray-400">Nessuna località.</li>
                         <li v-if="! selectedSite" class="px-4 py-6 text-center text-sm text-gray-400">Seleziona una sede.</li>

@@ -112,4 +112,72 @@ class AreaApiTest extends TestCase
             ],
         ])->assertUnprocessable()->assertJsonValidationErrors('geometry');
     }
+
+    public function test_un_area_vuota_si_elimina(): void
+    {
+        $id = $this->creaArea('Da eliminare');
+
+        $this->deleteJson("/api/v1/areas/{$id}")->assertNoContent();
+
+        $this->assertSoftDeleted('areas', ['id' => $id]);
+    }
+
+    public function test_un_area_con_elementi_censiti_non_si_elimina(): void
+    {
+        $id = $this->creaArea('Con un albero');
+
+        $type = $this->makeObjectType($this->organization, 'P', 'P103108');
+        $this->postJson('/api/v1/assets', [
+            'area_id' => $id,
+            'object_type_id' => $type->id,
+            'census_code' => 'ALB-AREA-1',
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated();
+
+        $risposta = $this->deleteJson("/api/v1/areas/{$id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('area');
+
+        // Il motivo si spiega da solo, al singolare
+        $this->assertStringContainsString('un elemento censito', $risposta->json('errors.area.0'));
+        $this->assertDatabaseHas('areas', ['id' => $id, 'deleted_at' => null]);
+    }
+
+    public function test_l_elenco_delle_aree_porta_il_conteggio_degli_elementi(): void
+    {
+        $id = $this->creaArea('Con conteggio');
+        $type = $this->makeObjectType($this->organization, 'P', 'P103108');
+        $this->postJson('/api/v1/assets', [
+            'area_id' => $id,
+            'object_type_id' => $type->id,
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated();
+
+        $aree = $this->getJson("/api/v1/areas?locality_id={$this->locality->id}")
+            ->assertOk()->json('data');
+
+        $this->assertSame(1, collect($aree)->firstWhere('id', $id)['assets_count']);
+    }
+
+    public function test_senza_il_permesso_l_area_non_si_elimina(): void
+    {
+        $id = $this->creaArea('Protetta');
+
+        // Il tecnico disegna e modifica le aree, ma non le elimina
+        $tecnico = User::factory()->create(['tenant_id' => $this->organization->id]);
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($this->organization->id);
+        $tecnico->assignRole('tecnico');
+        $this->actingAsTenantUser($tecnico);
+
+        $this->deleteJson("/api/v1/areas/{$id}")->assertForbidden();
+    }
+
+    private function creaArea(string $nome): string
+    {
+        return $this->postJson('/api/v1/areas', [
+            'locality_id' => $this->locality->id,
+            'name' => $nome,
+            'geometry' => $this->squarePolygon(),
+        ])->assertCreated()->json('data.id');
+    }
 }

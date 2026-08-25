@@ -37,6 +37,9 @@ class AreaController extends Controller implements HasMiddleware
 
         $query = Area::query()
             ->with('locality:id,name,code')
+            // Quanti elementi censiti contiene: serve a Territorio per far
+            // capire perche' un'area non si puo' (ancora) eliminare
+            ->withCount('assets')
             ->selectRaw('areas.*, ST_AsGeoJSON(geom)::json AS geom_geojson')
             ->withCasts(['geom_geojson' => 'array']);
 
@@ -139,14 +142,18 @@ class AreaController extends Controller implements HasMiddleware
             $assetCount = $area->assets()->count();
             if ($assetCount > 0) {
                 throw ValidationException::withMessages([
-                    'area' => "L'area contiene {$assetCount} elementi censiti: spostali o eliminali prima di eliminarla.",
+                    'area' => $assetCount === 1
+                        ? "L'area contiene un elemento censito: spostalo o eliminalo prima di eliminarla."
+                        : "L'area contiene {$assetCount} elementi censiti: spostali o eliminali prima di eliminarla.",
                 ]);
             }
 
             $irrigationCount = \App\Models\IrrigationSystem::query()->where('area_id', $area->id)->count();
             if ($irrigationCount > 0) {
                 throw ValidationException::withMessages([
-                    'area' => "L'area ha {$irrigationCount} impianti di irrigazione: eliminali o spostali prima di eliminarla.",
+                    'area' => $irrigationCount === 1
+                        ? "L'area ha un impianto di irrigazione: eliminalo o spostalo prima di eliminarla."
+                        : "L'area ha {$irrigationCount} impianti di irrigazione: eliminali o spostali prima di eliminarla.",
                 ]);
             }
 
