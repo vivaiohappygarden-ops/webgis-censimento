@@ -109,6 +109,13 @@ const loading = ref(false);
 const VIEWS = ['elenco', 'agenda', 'rendiconto', 'qualita', 'preventivi'];
 const requested = new URLSearchParams(window.location.search).get('vista');
 const view = ref(VIEWS.includes(requested) ? requested : 'elenco');
+// La predefinita delle viste salvate si applica solo alla prima apertura
+// dell'elenco: tornando dall'Agenda il componente si rimonta e non deve
+// scartare i filtri che l'utente ha impostato a mano nel frattempo
+const visteAuto = ref(true);
+watch(view, (nuova, vecchia) => {
+    if (vecchia === 'elenco') visteAuto.value = false;
+});
 const agendaRef = ref(null);
 const reportRef = ref(null);
 const qualityRef = ref(null);
@@ -522,7 +529,7 @@ onMounted(async () => {
                 </template>
                 <template v-else>
                     <span data-test="lavori-anteprima" class="text-gray-800">
-                        {{ anteprimaChiusura.completati.length }} verranno completat{{ anteprimaChiusura.completati.length === 1 ? 'o' : 'i' }}<template v-if="anteprimaChiusura.saltati.length">, {{ anteprimaChiusura.saltati.length }} esclus{{ anteprimaChiusura.saltati.length === 1 ? 'o' : 'i' }}</template>.
+                        {{ anteprimaChiusura.completati.length }} {{ anteprimaChiusura.completati.length === 1 ? 'verrà completato' : 'verranno completati' }}<template v-if="anteprimaChiusura.saltati.length">, {{ anteprimaChiusura.saltati.length }} esclus{{ anteprimaChiusura.saltati.length === 1 ? 'o' : 'i' }}</template>.
                     </span>
                     <button
                         class="rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
@@ -562,7 +569,7 @@ onMounted(async () => {
                     @input="cercaConAttesa"
                 >
 
-                <VisteSalvate pagina="lavori" :filtri="filtriCorrenti" @applica="applicaVista" />
+                <VisteSalvate pagina="lavori" :filtri="filtriCorrenti" :auto="visteAuto" @applica="applicaVista" />
             </div>
 
             <div v-if="view === 'elenco'" class="overflow-x-auto rounded-xl border border-gray-200 bg-white">

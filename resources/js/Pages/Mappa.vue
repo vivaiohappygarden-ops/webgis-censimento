@@ -77,6 +77,13 @@ function applyVisibility() {
     map.setFilter('assets-fill', ['all', ['==', ['geometry-type'], 'Polygon'], tpFilter]);
     map.setFilter('assets-line', ['all', ['==', ['geometry-type'], 'LineString'], tpFilter]);
     map.setFilter('assets-point', ['all', ['==', ['geometry-type'], 'Point'], tpFilter]);
+    // Le chiome seguono la categoria del loro albero: spegnendo la
+    // Vegetazione non devono restare cerchi orfani sulla mappa
+    map.setFilter('chiome', ['all',
+        ['==', ['geometry-type'], 'Point'],
+        ['>', ['coalesce', ['to-number', ['get', 'chioma_m']], 0], 0],
+        tpFilter,
+    ]);
 }
 
 function refreshTiles() {
@@ -394,11 +401,20 @@ onMounted(async () => {
          * La conversione metri -> pixel dipende dallo zoom e dalla latitudine:
          * a MapLibre un metro vale 2^zoom / (78271,517 x cos(lat)) pixel. Con
          * due sole tappe e interpolazione esponenziale in base 2 la formula
-         * e' esatta a ogni zoom; il coseno si fissa alla latitudine iniziale
-         * della mappa (dentro un Comune l'errore non si vede).
+         * e' esatta a ogni zoom. Il coseno segue la latitudine inquadrata
+         * (ricalcolato a fine spostamento oltre una soglia): fissarlo su un
+         * punto qualsiasi disegnerebbe chiome ~12% piu' grandi a Palermo.
          */
-        const cosLat = Math.cos((map.getCenter().lat * Math.PI) / 180);
-        const pixelPerMetro = (zoom) => (2 ** zoom) / (78271.517 * cosLat);
+        const raggioChiome = () => {
+            const cosLat = Math.cos((map.getCenter().lat * Math.PI) / 180);
+            const pixelPerMetro = (zoom) => (2 ** zoom) / (78271.517 * cosLat);
+
+            return ['interpolate', ['exponential', 2], ['zoom'],
+                15, ['*', ['/', ['to-number', ['get', 'chioma_m']], 2], pixelPerMetro(15)],
+                22, ['*', ['/', ['to-number', ['get', 'chioma_m']], 2], pixelPerMetro(22)],
+            ];
+        };
+        let latChiome = map.getCenter().lat;
         map.addLayer({
             id: 'chiome', type: 'circle', source: 'assets', 'source-layer': 'assets',
             minzoom: 15.5,
@@ -412,11 +428,14 @@ onMounted(async () => {
                 'circle-stroke-color': '#15803d',
                 'circle-stroke-opacity': 0.4,
                 'circle-stroke-width': 1,
-                'circle-radius': ['interpolate', ['exponential', 2], ['zoom'],
-                    15, ['*', ['/', ['to-number', ['get', 'chioma_m']], 2], pixelPerMetro(15)],
-                    22, ['*', ['/', ['to-number', ['get', 'chioma_m']], 2], pixelPerMetro(22)],
-                ],
+                'circle-radius': raggioChiome(),
             },
+        });
+        map.on('moveend', () => {
+            // 0,1 grado sono ~11 km: sotto, l'errore del coseno non si vede
+            if (Math.abs(map.getCenter().lat - latChiome) < 0.1) return;
+            latChiome = map.getCenter().lat;
+            map.setPaintProperty('chiome', 'circle-radius', raggioChiome());
         });
         map.addLayer({
             id: 'assets-point', type: 'circle', source: 'assets', 'source-layer': 'assets',

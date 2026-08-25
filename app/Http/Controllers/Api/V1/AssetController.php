@@ -153,9 +153,17 @@ class AssetController extends Controller implements HasMiddleware
     /** La storia delle modifiche: chi, quando e che cosa e' cambiato. */
     public function versioni(string $id): JsonResponse
     {
-        $asset = Asset::query()->with(['tree', 'plantingSite'])->findOrFail($id);
+        // Scheda, fotografie e geometria si leggono in un colpo solo: il
+        // blocco condiviso sulla riga tiene in attesa un salvataggio
+        // concorrente (che parte sempre dal lock della stessa riga), che a
+        // meta' lettura farebbe sparire la revisione appena creata
+        $storia = DB::transaction(function () use ($id) {
+            $asset = Asset::query()->with(['tree', 'plantingSite'])->sharedLock()->findOrFail($id);
 
-        return response()->json(['data' => \App\Services\Assets\StoriaScheda::per($asset)]);
+            return \App\Services\Assets\StoriaScheda::per($asset);
+        });
+
+        return response()->json(['data' => $storia]);
     }
 
     public function update(UpdateAssetRequest $request, string $id): JsonResponse

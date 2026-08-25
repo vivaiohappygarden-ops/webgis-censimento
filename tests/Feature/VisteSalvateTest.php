@@ -134,4 +134,35 @@ class VisteSalvateTest extends TestCase
             'pagina' => 'inventata', 'nome' => 'X', 'filtri' => [],
         ])->assertUnprocessable();
     }
+
+    public function test_il_ruolo_cliente_non_legge_ne_crea_viste(): void
+    {
+        $this->salva('Della squadra', extra: ['condivisa' => true]);
+
+        // Il cliente del portale non vede il censimento: nemmeno le viste,
+        // che raccontano come lavora lo staff (nomi, filtri, dipendenti)
+        $cliente = \App\Models\User::factory()->create(['tenant_id' => $this->organizzazione->id]);
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($this->organizzazione->id);
+        $cliente->assignRole('cliente');
+        $this->actingAsTenantUser($cliente);
+
+        $this->getJson('/api/v1/viste?pagina=censimento')->assertForbidden();
+        $this->postJson('/api/v1/viste', [
+            'pagina' => 'censimento', 'nome' => 'Intrusa', 'filtri' => ['q' => 'x'], 'condivisa' => true,
+        ])->assertForbidden();
+    }
+
+    public function test_filtri_smisurati_vengono_rifiutati(): void
+    {
+        // Un filtro non e' un archivio: valori semplici e corti
+        $this->postJson('/api/v1/viste', [
+            'pagina' => 'censimento', 'nome' => 'Gonfia',
+            'filtri' => ['q' => str_repeat('x', 500)],
+        ])->assertUnprocessable();
+
+        $this->postJson('/api/v1/viste', [
+            'pagina' => 'censimento', 'nome' => 'Annidata',
+            'filtri' => ['q' => ['dentro' => ['altro' => 'no']]],
+        ])->assertUnprocessable();
+    }
 }

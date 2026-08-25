@@ -263,11 +263,17 @@ class CommandApplier
 
         $asset->tree->fill($payload);
         $treeChanged = $asset->tree->isDirty();
-        $asset->tree->save();
 
+        // Ordine obbligato (vedi migrazione snapshot_with_tree): PRIMA la
+        // versione su assets — la fotografia scatta lì e deve riprendere la
+        // scheda albero com'era — e solo dopo il salvataggio dell'albero.
+        // Invertirlo attribuirebbe la modifica al salvataggio precedente.
         if ($treeChanged) {
-            DB::update('UPDATE assets SET version = version + 1 WHERE id = ?', [$asset->id]);
+            DB::update('UPDATE assets SET version = version + 1, updated_at = now(), updated_by = ? WHERE id = ?', [
+                $user->id, $asset->id,
+            ]);
         }
+        $asset->tree->save();
 
         Audit::log('asset.updated', $asset, ['source' => 'sync', 'fields' => array_keys($payload)]);
 

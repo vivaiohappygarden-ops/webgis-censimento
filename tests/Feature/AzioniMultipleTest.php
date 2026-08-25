@@ -236,4 +236,25 @@ class AzioniMultipleTest extends TestCase
 
         $this->assertSame(1, \App\Models\WorkOrderAsset::query()->count());
     }
+
+    public function test_la_prova_a_vuoto_non_scrive_nel_registro_di_controllo(): void
+    {
+        $ordine = $this->creaOrdine();
+        $elemento = $this->creaElemento();
+
+        $this->postJson("/api/v1/azioni/lavori/{$ordine->id}/collega-elementi", [
+            'ids' => [$elemento], 'prova' => 1,
+        ])->assertOk();
+
+        // Il registro racconta solo cose successe: la prova non ha collegato niente
+        $this->assertSame(0, \App\Models\AuditLog::query()
+            ->where('action', 'work_order.assets_attached')->count());
+
+        $this->postJson("/api/v1/azioni/lavori/{$ordine->id}/collega-elementi", [
+            'ids' => [$elemento],
+        ])->assertOk();
+
+        $this->assertSame(1, \App\Models\AuditLog::query()
+            ->where('action', 'work_order.assets_attached')->count());
+    }
 }

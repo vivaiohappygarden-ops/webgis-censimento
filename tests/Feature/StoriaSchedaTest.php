@@ -151,6 +151,41 @@ class StoriaSchedaTest extends TestCase
         }
     }
 
+    public function test_una_nota_che_inizia_con_una_data_resta_testo(): void
+    {
+        $id = $this->creaElemento();
+
+        $this->patchJson("/api/v1/assets/{$id}", ['notes' => '2026-08-18 controllo chioma'])->assertOk();
+        $this->patchJson("/api/v1/assets/{$id}", ['notes' => '2026-08-18 sostituito tutore'])->assertOk();
+
+        $storia = $this->getJson("/api/v1/assets/{$id}/versioni")->assertOk()->json('data');
+
+        // Se la normalizzazione trattasse come "data" tutto cio' che inizia
+        // con una data, le due note collasserebbero a "2026-08-18" e la
+        // correzione sparirebbe dalla storia
+        $nota = collect($storia[0]['modifiche'])->firstWhere('campo', 'Note');
+        $this->assertSame('2026-08-18 controllo chioma', $nota['prima']);
+        $this->assertSame('2026-08-18 sostituito tutore', $nota['dopo']);
+    }
+
+    public function test_correggere_un_codice_con_lo_zero_iniziale_e_una_modifica(): void
+    {
+        $id = $this->creaElemento();
+
+        $this->patchJson("/api/v1/assets/{$id}", ['census_code' => 'ALB-0002'])->assertOk();
+        $this->patchJson("/api/v1/assets/{$id}", ['tree' => ['plant_number' => '0123']])->assertOk();
+        $this->patchJson("/api/v1/assets/{$id}", ['tree' => ['plant_number' => '123']])->assertOk();
+
+        $storia = $this->getJson("/api/v1/assets/{$id}/versioni")->assertOk()->json('data');
+
+        // "0123" non e' il numero 123: lo zero di riempimento sta sulle
+        // etichette stampate e toglierlo E' una modifica da raccontare
+        $numero = collect($storia[0]['modifiche'])->firstWhere('campo', 'Numero pianta');
+        $this->assertNotNull($numero, 'La correzione 0123 -> 123 non compare nella storia.');
+        $this->assertSame('0123', $numero['prima']);
+        $this->assertSame('123', $numero['dopo']);
+    }
+
     public function test_scheda_appena_creata_non_ha_storia(): void
     {
         $id = $this->creaElemento();

@@ -127,6 +127,12 @@ class AzioniMultiple
         $saltati = [];
 
         DB::transaction(function () use ($ordine, $ids, $workTypeId, $prova, &$fatti, &$saltati) {
+            // Blocco della riga dell'ordine: due conferme quasi simultanee
+            // sullo stesso ordine si mettono in fila, così la lista dei "già
+            // presenti" letta sotto è affidabile e il vincolo di unicità non
+            // fa mai saltare in aria l'intero blocco della seconda
+            WorkOrder::query()->lockForUpdate()->findOrFail($ordine->id);
+
             $elementi = Asset::query()->whereIn('id', $ids)->get();
 
             foreach (array_diff($ids, $elementi->pluck('id')->all()) as $mancante) {
@@ -158,7 +164,10 @@ class AzioniMultiple
                 $fatti[] = ['id' => $elemento->id, 'codice' => $elemento->census_code];
             }
 
-            Audit::log('work_order.assets_attached', $ordine, ['quanti' => count($fatti)]);
+            // Il registro racconta solo cose successe: niente audit in prova
+            if (! $prova && $fatti !== []) {
+                Audit::log('work_order.assets_attached', $ordine, ['quanti' => count($fatti)]);
+            }
         });
 
         return ['collegati' => $fatti, 'saltati' => $saltati];

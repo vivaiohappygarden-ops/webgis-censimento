@@ -13,6 +13,10 @@ const props = defineProps({
     pagina: { type: String, required: true },
     // I filtri correnti della pagina, pronti da salvare
     filtri: { type: Object, required: true },
+    // Applicare la predefinita al montaggio: la pagina lo spegne quando
+    // rimonta il componente (cambio scheda interna) e i filtri a video
+    // sono gia' quelli scelti a mano dall'utente, da non sovrascrivere
+    auto: { type: Boolean, default: true },
 });
 
 const emit = defineEmits(['applica']);
@@ -93,7 +97,7 @@ async function elimina() {
     }
 }
 
-onMounted(() => carica(true));
+onMounted(() => carica(props.auto));
 </script>
 
 <template>

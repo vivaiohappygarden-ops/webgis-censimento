@@ -143,6 +143,12 @@ class StoriaScheda
         $modifiche = [];
 
         foreach (self::CAMPI as $campo => $etichetta) {
+            // Una colonna nata dopo la fotografia (per esempio public_hidden,
+            // aggiunta il 18/08) non c'era: mostrarne la comparsa come
+            // modifica attribuirebbe a qualcuno un cambiamento mai fatto
+            if (! array_key_exists($campo, $prima)) {
+                continue;
+            }
             $a = $prima[$campo] ?? null;
             $b = $dopo[$campo] ?? null;
             if (self::normalizza($a) === self::normalizza($b)) {
@@ -174,14 +180,15 @@ class StoriaScheda
                 continue;
             }
             foreach ($campi as $campo => $etichetta) {
+                // Le fotografie piu' vecchie non hanno la sezione (o una
+                // colonna nata dopo): un confronto "da niente a tutto"
+                // mentirebbe sull'autore della prima compilazione
+                if (! array_key_exists($campo, $sa)) {
+                    continue;
+                }
                 $a = $sa[$campo] ?? null;
                 $b = $sb[$campo] ?? null;
                 if (self::normalizza($a) === self::normalizza($b)) {
-                    continue;
-                }
-                // Le fotografie piu' vecchie di questo aggiornamento non hanno
-                // la sezione: un confronto "da niente a tutto" mentirebbe
-                if ($sa === [] && $sb !== []) {
                     continue;
                 }
                 $modifiche[] = ['campo' => $etichetta, 'prima' => self::valore($a), 'dopo' => self::valore($b)];
@@ -191,27 +198,42 @@ class StoriaScheda
         return $modifiche;
     }
 
-    /** Confronto indifferente a "12.50" contro 12.5 e a true contro "true". */
+    /** Data o data-ora completa, e nient'altro: ancorata a inizio e fine. */
+    private const DATA_ORA = '(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}(?::?\d{2})?)?)?';
+
+    /** Confronto indifferente a "12.50" contro 12.5 e a true contro "1". */
     private static function normalizza(mixed $valore): mixed
     {
-        if (is_bool($valore)) {
-            return $valore;
-        }
         // La scheda attuale porta oggetti Carbon (cast "date"), la fotografia
         // jsonb stringhe: senza riportarli alla stessa forma ogni data
         // sembrerebbe cambiata a ogni salvataggio
         if ($valore instanceof \DateTimeInterface) {
             $valore = $valore->format('Y-m-d H:i');
         }
+        // Le caselle arrivano serializzate in modi diversi (true, 1, "1"):
+        // non e' una modifica
+        if ($valore === true || $valore === 1 || $valore === '1' || $valore === 'true') {
+            return true;
+        }
+        if ($valore === false || $valore === 0 || $valore === '0' || $valore === 'false') {
+            return false;
+        }
         if ($valore === null || $valore === '') {
             return null;
         }
-        if (is_numeric($valore)) {
+        if (is_int($valore) || is_float($valore)) {
+            return (float) $valore;
+        }
+        // Solo i numeri decimali "puliti" si confrontano come numeri: "0123"
+        // e' un codice con lo zero di riempimento, non il numero 123, e
+        // correggerlo E' una modifica da mostrare
+        if (is_string($valore) && preg_match('/^-?(0|[1-9]\d*)(\.\d+)?$/', $valore)) {
             return (float) $valore;
         }
         // "2026-08-18", "2026-08-18T00:00:00Z" e "2026-08-18 00:00" sono la
-        // stessa data: a mezzanotte conta solo il giorno
-        if (is_string($valore) && preg_match('/^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}))?/', $valore, $m)) {
+        // stessa data: a mezzanotte conta solo il giorno. La stringa deve
+        // essere TUTTA una data: una nota che inizia con una data resta testo
+        if (is_string($valore) && preg_match('/^'.self::DATA_ORA.'$/', $valore, $m)) {
             return ($m[2] ?? '00:00') === '00:00' ? $m[1] : $m[1].' '.$m[2];
         }
 
@@ -236,7 +258,7 @@ class StoriaScheda
     private static function valore(mixed $valore): ?string
     {
         if ($valore instanceof \DateTimeInterface) {
-            $valore = $valore->format('Y-m-d');
+            $valore = $valore->format('Y-m-d H:i');
         }
         if ($valore === null || $valore === '') {
             return null;
@@ -247,8 +269,14 @@ class StoriaScheda
         if (is_array($valore)) {
             return implode(', ', array_map(fn ($v) => (string) $v, $valore));
         }
-        if (is_string($valore) && preg_match('/^(\d{4})-(\d{2})-(\d{2})([T ]|$)/', $valore, $m)) {
-            return "{$m[3]}/{$m[2]}/{$m[1]}";
+        // Come data si stampa solo cio' che E' una data (con l'eventuale
+        // orario, se non e' mezzanotte): un testo che inizia con una data
+        // resta intero, o "prima" e "dopo" uscirebbero mutilati e uguali
+        if (is_string($valore) && preg_match('/^'.self::DATA_ORA.'$/', $valore, $m)) {
+            [$anno, $mese, $giorno] = explode('-', $m[1]);
+            $data = "{$giorno}/{$mese}/{$anno}";
+
+            return isset($m[2]) && $m[2] !== '00:00' ? "{$data} {$m[2]}" : $data;
         }
 
         return (string) $valore;

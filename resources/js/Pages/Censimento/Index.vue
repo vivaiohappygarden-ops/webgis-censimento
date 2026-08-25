@@ -462,7 +462,7 @@ const measure = (row) => {
 
                     <template v-if="anteprimaMultipla">
                         <span data-test="multipla-anteprima" class="text-gray-800">
-                            {{ anteprimaMultipla.fatti }} verranno elaborat{{ anteprimaMultipla.fatti === 1 ? 'o' : 'i' }}<template v-if="anteprimaMultipla.saltati.length">, {{ anteprimaMultipla.saltati.length }} esclus{{ anteprimaMultipla.saltati.length === 1 ? 'o' : 'i' }}</template>.
+                            {{ anteprimaMultipla.fatti }} {{ anteprimaMultipla.fatti === 1 ? 'verrà elaborato' : 'verranno elaborati' }}<template v-if="anteprimaMultipla.saltati.length">, {{ anteprimaMultipla.saltati.length }} esclus{{ anteprimaMultipla.saltati.length === 1 ? 'o' : 'i' }}</template>.
                         </span>
                         <button
                             class="rounded-lg bg-green-700 px-3 py-1.5 font-medium text-white hover:bg-green-800 disabled:opacity-50"

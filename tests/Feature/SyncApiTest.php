@@ -145,6 +145,49 @@ class SyncApiTest extends TestCase
         $this->assertEquals(14.5, $conflict['theirs']['fields']['height_m']);
     }
 
+    public function test_la_storia_racconta_le_misure_sincronizzate_con_i_valori_precedenti(): void
+    {
+        $entityId = (string) Str::uuid();
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([$this->createCommand($entityId)]))->assertOk();
+
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([[
+            'idempotency_key' => (string) Str::uuid(),
+            'device_seq' => 2,
+            'type' => 'asset.update_measures',
+            'entity_id' => $entityId,
+            'base_version' => 1,
+            'payload' => ['height_m' => 12, 'species' => 'Tilia cordata'],
+        ]]))->assertOk()->assertJsonPath('results.0.status', 'applied');
+
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([[
+            'idempotency_key' => (string) Str::uuid(),
+            'device_seq' => 3,
+            'type' => 'asset.update_measures',
+            'entity_id' => $entityId,
+            'base_version' => 2,
+            'payload' => ['height_m' => 14.5],
+        ]]))->assertOk()->assertJsonPath('results.0.status', 'applied');
+
+        $storia = $this->getJson("/api/v1/assets/{$entityId}/versioni")->assertOk()->json('data');
+
+        // Anche nel percorso di sincronizzazione la fotografia scatta PRIMA
+        // del salvataggio dell'albero: due sincronizzazioni = due revisioni,
+        // la prima con la compilazione iniziale, l'ultima con 12 -> 14.5.
+        // Con l'ordine invertito le fotografie conterrebbero gia' i valori
+        // nuovi: la modifica scivolerebbe nella revisione precedente e una
+        // delle due sparirebbe (qui ne resterebbe una sola).
+        $this->assertCount(2, $storia);
+
+        $campi = collect($storia[0]['modifiche'])->keyBy('campo');
+        $this->assertEqualsWithDelta(12, (float) $campi['Altezza (m)']['prima'], 0.001);
+        $this->assertEqualsWithDelta(14.5, (float) $campi['Altezza (m)']['dopo'], 0.001);
+        $this->assertSame($this->user->name, $storia[0]['chi']);
+
+        $inizio = collect($storia[1]['modifiche'])->keyBy('campo');
+        $this->assertNull($inizio['Altezza (m)']['prima']);
+        $this->assertSame('Tilia cordata', $inizio['Specie']['dopo']);
+    }
+
     public function test_unknown_command_type_is_rejected_not_dropped(): void
     {
         $this->postJson('/api/v1/sync/batch', $this->batchPayload([

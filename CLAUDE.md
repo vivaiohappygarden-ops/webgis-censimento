@@ -84,12 +84,16 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 ## Elenchi, mappa e scheda (dal 25/08/2026)
 
 - **Viste salvate**: i filtri con un nome stanno in `saved_filters` (jsonb `filtri`),
-  API in `VisteController`; le pagine ammesse sono la whitelist `PAGINE` (censimento,
-  lavori, segnalazioni): una pagina nuova va aggiunta lì e monta
-  `Components/VisteSalvate.vue` con `:filtri` (computed dei filtri correnti) ed evento
-  `@applica`. "Una sola predefinita per utente e pagina" la garantisce l'indice parziale
-  unico sul DB, non il codice; le viste condivise si applicano ma si modificano solo le
-  proprie.
+  API in `VisteController`; le pagine ammesse sono la mappa `PAGINE`
+  (pagina → permesso: censimento → assets.view, lavori/segnalazioni → works.view):
+  una pagina nuova va aggiunta lì **con il suo permesso** (senza, il ruolo cliente
+  leggerebbe le viste dello staff) e monta `Components/VisteSalvate.vue` con `:filtri`
+  (computed dei filtri correnti) ed evento `@applica`; la prop `:auto` spegne
+  l'applicazione della predefinita quando il componente si rimonta (Lavori, cambio
+  scheda interna). "Una sola predefinita per utente e pagina" la garantisce l'indice
+  parziale unico sul DB, non il codice; la predefinita è personale (quella di un
+  collega condivisa non vale per gli altri); le viste condivise si applicano ma si
+  modificano solo le proprie.
 - **Chiome sulla mappa**: il tile MVT porta `chioma_m` (join su `trees.crown_diameter_m`);
   il cerchio in metri veri usa `interpolate exponential base 2` su due stop con
   `pixel = metri × 2^zoom / (78271.517 × cos(lat))` — con base 2 la formula è esatta a
@@ -100,11 +104,16 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   separato, o anteprima ed esito divergeranno.
 - **Storico della scheda**: il trigger `fn_trg_assets_version_snapshot` fotografa in
   `asset_versions` anche `albero` e `posto`. **Ordine delle scritture obbligato** in
-  `AssetController::update`: prima si prepara la specializzazione (fill, senza save),
-  poi si salva/incrementa `assets` (la fotografia scatta lì e deve riprendere i valori
-  vecchi), e solo dopo si salvano albero e posto. Invertirlo fa mentire lo storico
-  (prima = dopo). Etichette e formati dei campi vivono solo in
-  `App\Services\Assets\StoriaScheda`; endpoint `GET assets/{id}/versioni`.
+  **ogni** percorso che tocca la specializzazione (`AssetController::update` e
+  `CommandApplier::applyMeasures` del sync): prima si prepara la specializzazione
+  (fill, senza save), poi si salva/incrementa `assets` (la fotografia scatta lì e deve
+  riprendere i valori vecchi, e il bump grezzo imposta anche `updated_by`/`updated_at`),
+  e solo dopo si salvano albero e posto. Invertirlo fa mentire lo storico (la modifica
+  scivola nella revisione precedente, con autore e data sbagliati). Etichette e formati
+  vivono solo in `App\Services\Assets\StoriaScheda`; `normalizza()` confronta le date
+  riportate alla stessa forma ma **solo** se la stringa è tutta una data, tiene i
+  codici con zero iniziale come testo e salta le colonne nate dopo la fotografia;
+  endpoint `GET assets/{id}/versioni` (lettura con `sharedLock` sulla riga).
 
 ## Documenti stampati
 
