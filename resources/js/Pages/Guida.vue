@@ -652,16 +652,23 @@ function goTo(id) {
                     <section id="territorio">
                         <h2>Territorio e catalogo</h2>
                         <p class="mt-2">
-                            La pagina <strong>Territorio</strong> organizza clienti, sedi (i comuni) e località;
-                            le aree di gestione si disegnano dalla <strong>Mappa</strong> e ogni elemento censito
-                            appartiene a un'area. Accanto a ogni località, il collegamento
-                            <strong>"N aree"</strong> apre l'elenco delle sue aree con il numero di elementi:
-                            da lì l'amministratore può <strong>eliminare un'area</strong>, ma solo se è vuota.
-                            Un'area con elementi censiti (o impianti di irrigazione) non si elimina: prima
-                            vanno spostati o eliminati, e il programma lo dice chiaramente. È una protezione,
-                            non un difetto: eliminare un'area con dentro il censimento lascerebbe alberi
-                            orfani. Per <strong>spostare un elemento</strong> in un'altra area: apri la sua
-                            scheda, premi "Modifica" e cambia il campo <strong>Area</strong> — l'elemento si
+                            La pagina <strong>Territorio</strong> mostra tutto in un <strong>albero
+                            unico</strong>: committente, poi sede (il comune), poi località, con le aree
+                            dentro la scheda della località. In alto ci sono la <strong>ricerca</strong>
+                            (trova committenti, sedi e località a parole) e il <strong>filtro per
+                            committente</strong>: scegliendone uno, gli altri spariscono dall'albero —
+                            comodo quando si lavora tutto il giorno sullo stesso Comune. Scegliendo una voce
+                            dell'albero, a destra si apre la sua scheda: per la <strong>località</strong> i
+                            numeri in alto (aree, elementi, superficie gestita, portale) e le schede interne
+                            Aree, Scheda località e Documenti — con l'anteprima geografica delle aree accanto
+                            all'elenco; per il <strong>committente</strong> le sue sedi, il portale pubblico
+                            e i vincoli. Le aree si disegnano dalla <strong>Mappa</strong>; da qui
+                            l'amministratore può <strong>eliminare un'area vuota</strong>. Un'area con
+                            elementi censiti (o impianti di irrigazione) non si elimina: prima vanno spostati
+                            o eliminati, e il programma lo dice chiaramente. È una protezione, non un
+                            difetto: eliminare un'area con dentro il censimento lascerebbe alberi orfani.
+                            Per <strong>spostare un elemento</strong> in un'altra area: apri la sua scheda,
+                            premi "Modifica" e cambia il campo <strong>Area</strong> — l'elemento si
                             trasferisce con tutta la sua storia (perizie, foto, versioni) e il cambio resta
                             scritto nello storico. Se invece l'elemento era uno sbaglio, si elimina dalla
                             scheda; se ha valutazioni VTA <strong>in bozza</strong>, prima si eliminano quelle
