@@ -48,6 +48,17 @@ const vista = reactive({ clientId: '', areaId: '', showRemoved: false, busy: fal
 // Chiome a dimensione reale: il cerchio cresce con il diametro censito
 const chiomeVisibili = ref(true);
 
+// Sfondo della mappa: strade (OpenStreetMap) o ortofoto satellitare (Esri).
+// La scelta resta per la prossima visita: chi censisce il verde lavora
+// quasi sempre sul satellite
+const sfondoMappa = ref(localStorage.getItem('webgis:sfondo-mappa') === 'satellite' ? 'satellite' : 'strade');
+
+function applicaSfondo() {
+    map?.setLayoutProperty('osm', 'visibility', sfondoMappa.value === 'strade' ? 'visible' : 'none');
+    map?.setLayoutProperty('satellite', 'visibility', sfondoMappa.value === 'satellite' ? 'visible' : 'none');
+    localStorage.setItem('webgis:sfondo-mappa', sfondoMappa.value);
+}
+
 function applicaChiome() {
     map?.setLayoutProperty('chiome', 'visibility', chiomeVisibili.value ? 'visible' : 'none');
 }
@@ -321,11 +332,21 @@ onMounted(async () => {
                     maxzoom: 19,
                     attribution: '© OpenStreetMap contributors',
                 },
+                // Ortofoto Esri World Imagery: per il censimento del verde le
+                // chiome si vedono solo dal satellite, le strade non bastano
+                satellite: {
+                    type: 'raster',
+                    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+                    tileSize: 256,
+                    maxzoom: 19,
+                    attribution: 'Esri, Maxar, Earthstar Geographics',
+                },
                 assets: { type: 'vector', tiles: [tilesUrl()], minzoom: 5, maxzoom: 22 },
             },
             layers: [
                 { id: 'sfondo', type: 'background', paint: { 'background-color': '#e8ede9' } },
                 { id: 'osm', type: 'raster', source: 'osm' },
+                { id: 'satellite', type: 'raster', source: 'satellite', layout: { visibility: 'none' } },
             ],
         },
     });
@@ -358,6 +379,9 @@ onMounted(async () => {
     });
 
     map.on('load', () => {
+        // Lo sfondo scelto l'ultima volta (strade o satellite) si riapplica
+        applicaSfondo();
+
         map.addSource('aree', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addLayer({
             id: 'aree-fill', type: 'fill', source: 'aree',
@@ -535,6 +559,18 @@ onBeforeUnmount(() => {
                     <input v-model="chiomeVisibili" type="checkbox" data-test="mostra-chiome" class="rounded border-gray-300" @change="applicaChiome">
                     Chiome a dimensione reale
                 </label>
+
+                <div class="mt-2 flex items-center gap-3 text-sm text-gray-600">
+                    <span class="text-gray-500">Sfondo</span>
+                    <label class="flex items-center gap-1.5">
+                        <input v-model="sfondoMappa" type="radio" value="strade" data-test="sfondo-strade" class="border-gray-300" @change="applicaSfondo">
+                        Strade
+                    </label>
+                    <label class="flex items-center gap-1.5">
+                        <input v-model="sfondoMappa" type="radio" value="satellite" data-test="sfondo-satellite" class="border-gray-300" @change="applicaSfondo">
+                        Satellite
+                    </label>
+                </div>
 
                 <hr class="my-3 border-gray-200">
                 <h2 class="mb-2 text-sm font-semibold">Layer</h2>
