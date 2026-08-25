@@ -48,19 +48,23 @@ let tuttoCaricato = false;
 
 async function caricaTutto() {
     // La ricerca deve trovare anche le località mai aperte: al primo uso si
-    // carica l'intero albero (una volta sola)
-    if (tuttoCaricato) return;
-    tuttoCaricato = true;
+    // carica l'intero albero. Il segnale di "fatto" scatta solo alla fine e
+    // solo se i committenti erano già in pagina: un errore o una partenza a
+    // vuoto non devono lasciare la ricerca cieca per sempre
+    if (tuttoCaricato || ! clients.value.length) return;
     for (const c of clients.value) {
         await caricaSedi(c.id);
         for (const s of alberoSedi[c.id] ?? []) {
             await caricaLocalita(s.id);
         }
     }
+    tuttoCaricato = true;
 }
 
-watch([cerca, filtroCommittente], async ([q, f]) => {
-    if (q || f) await caricaTutto();
+// clients è fra le sorgenti: se si scrive nella ricerca mentre l'elenco sta
+// ancora arrivando (o dopo un nuovo committente), il caricamento riparte
+watch([cerca, filtroCommittente, clients], ([q, f]) => {
+    if (q || f) carica(caricaTutto);
     if (f) apertoCliente[f] = true;
 });
 
@@ -75,7 +79,7 @@ const alberoVisibile = computed(() => {
 
     return lista
         .map((cliente) => {
-            const clienteCorrisponde = corrisponde([cliente.name, cliente.code], cerca.value);
+            const clienteCorrisponde = corrisponde([cliente.name, cliente.code, cliente.vat_number, cliente.fiscal_code], cerca.value);
             const sediCorrispondono = (alberoSedi[cliente.id] ?? []).some((s) =>
                 corrisponde([s.name, s.municipality], cerca.value)
                 || (alberoLocalita[s.id] ?? []).some((l) => corrisponde([l.name, l.code], cerca.value)));
@@ -90,7 +94,7 @@ function sediVisibili(cliente) {
     if (! cerca.value.trim()) return sedi;
 
     // Se il committente corrisponde da solo, si mostrano tutte le sue sedi
-    if (corrisponde([cliente.name, cliente.code], cerca.value)) return sedi;
+    if (corrisponde([cliente.name, cliente.code, cliente.vat_number, cliente.fiscal_code], cerca.value)) return sedi;
 
     return sedi.filter((s) => corrisponde([s.name, s.municipality], cerca.value)
         || (alberoLocalita[s.id] ?? []).some((l) => corrisponde([l.name, l.code], cerca.value)));
@@ -99,7 +103,7 @@ function sediVisibili(cliente) {
 function localitaVisibili(cliente, sede) {
     const localita = alberoLocalita[sede.id] ?? [];
     if (! cerca.value.trim()) return localita;
-    if (corrisponde([cliente.name, cliente.code], cerca.value)) return localita;
+    if (corrisponde([cliente.name, cliente.code, cliente.vat_number, cliente.fiscal_code], cerca.value)) return localita;
     if (corrisponde([sede.name, sede.municipality], cerca.value)) return localita;
 
     return localita.filter((l) => corrisponde([l.name, l.code], cerca.value));
@@ -136,18 +140,28 @@ async function caricaSedi(clientId) {
 
 async function caricaLocalita(siteId) {
     if (alberoLocalita[siteId]) return;
-    const { data } = await axios.get('/api/v1/localities', { params: { site_id: siteId, per_page: 100 } });
-    alberoLocalita[siteId] = data.data;
+    // Tutte le pagine: una sede può avere più di cento località
+    let pagina = 1;
+    let righe = [];
+    for (;;) {
+        const { data } = await axios.get('/api/v1/localities', {
+            params: { site_id: siteId, per_page: 100, page: pagina },
+        });
+        righe = righe.concat(data.data);
+        if (! data.next_page_url) break;
+        pagina += 1;
+    }
+    alberoLocalita[siteId] = righe;
 }
 
 async function commutaCliente(c) {
     apertoCliente[c.id] = ! apertoCliente[c.id];
-    if (apertoCliente[c.id]) await caricaSedi(c.id).catch((err) => { error.value = firstError(err); });
+    if (apertoCliente[c.id]) await caricaSedi(c.id);
 }
 
 async function commutaSede(s) {
     apertaSede[s.id] = ! apertaSede[s.id];
-    if (apertaSede[s.id]) await caricaLocalita(s.id).catch((err) => { error.value = firstError(err); });
+    if (apertaSede[s.id]) await caricaLocalita(s.id);
 }
 
 // --- Selezione e pannello di destra -----------------------------------------
@@ -158,16 +172,18 @@ const schedaLocalitaAttiva = ref('aree'); // scheda interna della località
 
 const selectedClient = computed(() => selezione.value?.cliente ?? null);
 
+// Le selezioni si lanciano dal template dentro carica(): un errore di rete
+// mostra l'avviso con il numero e il pulsante Riprova, mai il silenzio
 async function selezionaCliente(c) {
     error.value = '';
     selezione.value = { tipo: 'committente', cliente: c };
     schedaCliente.value = 'sedi';
     apertoCliente[c.id] = true;
     caricaPortale(c);
-    await Promise.all([
-        caricaSedi(c.id).catch((err) => { error.value = firstError(err); }),
-        caricaVincoli(c).catch((err) => { error.value = firstError(err); }),
-    ]);
+    // I vincoli del committente precedente non devono restare a video se il
+    // caricamento dei nuovi fallisce
+    vincoli.value = [];
+    await Promise.all([caricaSedi(c.id), caricaVincoli(c)]);
 }
 
 async function selezionaSede(cliente, sede) {
@@ -175,7 +191,7 @@ async function selezionaSede(cliente, sede) {
     selezione.value = { tipo: 'sede', cliente, sede };
     apertoCliente[cliente.id] = true;
     apertaSede[sede.id] = true;
-    await caricaLocalita(sede.id).catch((err) => { error.value = firstError(err); });
+    await caricaLocalita(sede.id);
 }
 
 async function selezionaLocalita(cliente, sede, localita) {
@@ -197,15 +213,18 @@ const localitaScelta = computed(() => selezione.value?.tipo === 'localita' ? sel
 
 async function ricaricaScheda() {
     if (! localitaScelta.value) return;
+    // La risposta vale solo se nel frattempo non si è scelta un'altra voce:
+    // senza questa guardia, due clic ravvicinati mostrerebbero i dati di una
+    // località sotto l'intestazione di un'altra
+    const id = localitaScelta.value.id;
     schedaInCaricamento.value = true;
     try {
-        const { data } = await axios.get(`/api/v1/localities/${localitaScelta.value.id}/scheda`);
+        const { data } = await axios.get(`/api/v1/localities/${id}/scheda`);
+        if (localitaScelta.value?.id !== id) return;
         scheda.value = data.data;
         classificazioni.value = data.meta.classificazioni;
-    } catch (err) {
-        error.value = firstError(err);
     } finally {
-        schedaInCaricamento.value = false;
+        if (localitaScelta.value?.id === id) schedaInCaricamento.value = false;
     }
 }
 
@@ -265,27 +284,38 @@ async function caricaAreeLocalita(localityId) {
             if (! data.next_page_url) break;
             pagina += 1;
         }
+        // Nel frattempo si è scelta un'altra località: queste aree non sono
+        // più sue, e il pulsante elimina agirebbe sull'area sbagliata
+        if (localitaScelta.value?.id !== localityId) return;
         aree.value = righe;
         await nextTick();
         disegnaAnteprima();
-    } catch (err) {
-        error.value = firstError(err);
     } finally {
-        areeInCaricamento.value = false;
+        if (localitaScelta.value?.id === localityId) areeInCaricamento.value = false;
     }
 }
 
 async function eliminaArea(a) {
     if (! window.confirm(`Eliminare l'area "${a.name}"?`)) return;
     error.value = '';
+    // Località e sede si fissano PRIMA della richiesta: se durante l'attesa
+    // si clicca altrove, la selezione cambia e i riferimenti sparirebbero
+    const localita = localitaScelta.value;
+    const sede = selezione.value?.sede;
     try {
         await axios.delete(`/api/v1/areas/${a.id}`);
-        await caricaAreeLocalita(localitaScelta.value.id);
-        // Il conteggio "N aree" nell'albero deve aggiornarsi
-        delete alberoLocalita[selezione.value.sede.id];
-        await caricaLocalita(selezione.value.sede.id);
-        const aggiornata = (alberoLocalita[selezione.value.sede.id] ?? []).find((l) => l.id === localitaScelta.value.id);
-        if (aggiornata) selezione.value = { ...selezione.value, localita: aggiornata };
+        if (localitaScelta.value?.id === localita?.id) {
+            await Promise.all([caricaAreeLocalita(localita.id), ricaricaScheda()]);
+        }
+        // Il conteggio "N aree" nell'albero deve aggiornarsi comunque
+        if (sede) {
+            delete alberoLocalita[sede.id];
+            await caricaLocalita(sede.id);
+            const aggiornata = (alberoLocalita[sede.id] ?? []).find((l) => l.id === localita?.id);
+            if (aggiornata && localitaScelta.value?.id === localita?.id) {
+                selezione.value = { ...selezione.value, localita: aggiornata };
+            }
+        }
     } catch (err) {
         error.value = firstError(err);
     }
@@ -378,6 +408,25 @@ async function saveClient() {
     }
 }
 
+// Dopo una creazione o eliminazione i conteggi ("N sedi", "N località")
+// vanno riallineati anche negli oggetti tenuti dalla selezione, che sono
+// copie: senza, l'intestazione direbbe "2 sedi" e l'albero "3 sedi"
+async function aggiornaContatori(clienteId, sedeId = null) {
+    await loadClients();
+    if (clienteId) {
+        delete alberoSedi[clienteId];
+        await caricaSedi(clienteId);
+    }
+    if (selezione.value?.cliente) {
+        const c = clients.value.find((x) => x.id === selezione.value.cliente.id);
+        if (c) selezione.value = { ...selezione.value, cliente: { ...selezione.value.cliente, ...c } };
+    }
+    if (sedeId && selezione.value?.sede) {
+        const s = (alberoSedi[clienteId] ?? []).find((x) => x.id === selezione.value.sede.id);
+        if (s) selezione.value = { ...selezione.value, sede: { ...selezione.value.sede, ...s } };
+    }
+}
+
 async function saveSite() {
     error.value = '';
     try {
@@ -389,9 +438,7 @@ async function saveSite() {
             province: forms.site.province || null,
         });
         forms.site = { open: false, name: '', municipality: '', istat_code: '', province: '' };
-        delete alberoSedi[selezione.value.cliente.id];
-        await caricaSedi(selezione.value.cliente.id);
-        await loadClients();
+        await aggiornaContatori(selezione.value.cliente.id);
     } catch (err) {
         error.value = firstError(err);
     }
@@ -408,6 +455,7 @@ async function saveLocality() {
         forms.locality = { open: false, name: '', code: '' };
         delete alberoLocalita[selezione.value.sede.id];
         await caricaLocalita(selezione.value.sede.id);
+        await aggiornaContatori(selezione.value.cliente.id, selezione.value.sede.id);
     } catch (err) {
         error.value = firstError(err);
     }
@@ -416,14 +464,16 @@ async function saveLocality() {
 async function eliminaLocalita(l) {
     error.value = '';
     if (! window.confirm(`Eliminare la località "${l.name}"?`)) return;
+    const sedeId = selezione.value?.sede?.id ?? l.site_id;
+    const clienteId = selezione.value?.cliente?.id;
     try {
         await axios.delete(`/api/v1/localities/${l.id}`);
-        delete alberoLocalita[selezione.value.sede?.id ?? l.site_id];
+        delete alberoLocalita[sedeId];
         if (selezione.value?.tipo === 'localita' && selezione.value.localita.id === l.id) {
             selezione.value = { tipo: 'sede', cliente: selezione.value.cliente, sede: selezione.value.sede };
         }
-        const sedeId = selezione.value?.sede?.id;
-        if (sedeId) await caricaLocalita(sedeId);
+        await caricaLocalita(sedeId);
+        if (clienteId) await aggiornaContatori(clienteId, sedeId);
     } catch (err) {
         error.value = firstError(err);
     }
@@ -581,6 +631,8 @@ async function caricaVincoli(cliente = null) {
     const { data } = await axios.get('/api/v1/constraints', {
         params: { client_id: id, per_page: 100 },
     });
+    // La risposta vale solo se il committente scelto è ancora lui
+    if (selectedClient.value?.id !== id) return;
     vincoli.value = data.data;
 }
 
@@ -711,13 +763,13 @@ onMounted(() => carica(loadClients));
                                 class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 hover:bg-gray-50"
                                 :class="selezione?.tipo === 'committente' && selezione.cliente.id === riga.cliente.id ? 'bg-green-50 hover:bg-green-50' : ''"
                             >
-                                <button class="p-0.5 text-gray-400 hover:text-gray-700" :title="clienteAperto(riga.cliente) ? 'Chiudi' : 'Apri'" @click="commutaCliente(riga.cliente)">
+                                <button class="p-0.5 text-gray-400 hover:text-gray-700" :title="clienteAperto(riga.cliente) ? 'Chiudi' : 'Apri'" @click="carica(() => commutaCliente(riga.cliente))">
                                     <span class="inline-block font-mono text-xs">{{ clienteAperto(riga.cliente) ? '−' : '+' }}</span>
                                 </button>
                                 <button
                                     class="flex min-w-0 flex-1 items-center gap-2 text-left"
                                     data-test="albero-committente"
-                                    @click="selezionaCliente(riga.cliente)"
+                                    @click="carica(() => selezionaCliente(riga.cliente))"
                                 >
                                     <span class="truncate font-semibold" :class="selezione?.cliente?.id === riga.cliente.id ? 'text-green-800' : ''">{{ riga.cliente.name }}</span>
                                     <span class="rounded bg-gray-100 px-1.5 text-[10px] uppercase text-gray-500">{{ CLIENT_TYPES[riga.cliente.client_type] }}</span>
@@ -732,10 +784,10 @@ onMounted(() => carica(loadClients));
                                         class="flex items-center gap-1.5 rounded-lg py-1 pl-6 pr-2 hover:bg-gray-50"
                                         :class="selezione?.tipo === 'sede' && selezione.sede.id === s.id ? 'bg-green-50 hover:bg-green-50' : ''"
                                     >
-                                        <button class="p-0.5 text-gray-400 hover:text-gray-700" @click="commutaSede(s)">
+                                        <button class="p-0.5 text-gray-400 hover:text-gray-700" @click="carica(() => commutaSede(s))">
                                             <span class="inline-block font-mono text-xs">{{ sedeAperta(s) ? '−' : '+' }}</span>
                                         </button>
-                                        <button class="flex min-w-0 flex-1 items-center gap-2 text-left" data-test="albero-sede" @click="selezionaSede(riga.cliente, s)">
+                                        <button class="flex min-w-0 flex-1 items-center gap-2 text-left" data-test="albero-sede" @click="carica(() => selezionaSede(riga.cliente, s))">
                                             <span class="truncate font-medium">{{ s.name }}</span>
                                             <span v-if="s.municipality" class="truncate text-xs text-gray-400">{{ s.municipality }}</span>
                                             <span class="ml-auto whitespace-nowrap text-xs text-gray-400">{{ s.localities_count }} località</span>
@@ -750,7 +802,7 @@ onMounted(() => carica(loadClients));
                                             class="flex w-full items-center gap-2 rounded-lg py-1.5 pl-12 pr-2 text-left hover:bg-gray-50"
                                             :class="selezione?.tipo === 'localita' && selezione.localita.id === l.id ? 'bg-green-50 text-green-800 hover:bg-green-50' : ''"
                                             data-test="albero-localita"
-                                            @click="selezionaLocalita(riga.cliente, s, l)"
+                                            @click="carica(() => selezionaLocalita(riga.cliente, s, l))"
                                         >
                                             <span class="truncate font-medium">{{ l.name }}</span>
                                             <span v-if="l.code" class="font-mono text-xs text-gray-400">{{ l.code }}</span>
@@ -823,7 +875,7 @@ onMounted(() => carica(loadClients));
 
                             <ul class="divide-y divide-gray-50">
                                 <li v-for="s in alberoSedi[selezione.cliente.id] ?? []" :key="s.id">
-                                    <button class="flex w-full items-center justify-between py-2 text-left text-sm hover:bg-gray-50" @click="selezionaSede(selezione.cliente, s)">
+                                    <button class="flex w-full items-center justify-between py-2 text-left text-sm hover:bg-gray-50" @click="carica(() => selezionaSede(selezione.cliente, s))">
                                         <span>{{ s.name }} <span v-if="s.municipality" class="text-gray-400">— {{ s.municipality }}</span></span>
                                         <span class="text-xs text-gray-400">{{ s.localities_count }} località</span>
                                     </button>
@@ -1121,7 +1173,7 @@ onMounted(() => carica(loadClients));
 
                         <ul class="divide-y divide-gray-50">
                             <li v-for="l in alberoLocalita[selezione.sede.id] ?? []" :key="l.id" class="flex items-center justify-between py-2 text-sm">
-                                <button class="min-w-0 flex-1 text-left hover:underline" @click="selezionaLocalita(selezione.cliente, selezione.sede, l)">
+                                <button class="min-w-0 flex-1 text-left hover:underline" @click="carica(() => selezionaLocalita(selezione.cliente, selezione.sede, l))">
                                     {{ l.name }} <span v-if="l.code" class="text-gray-400">({{ l.code }})</span>
                                 </button>
                                 <span class="flex items-center gap-3">
@@ -1214,8 +1266,9 @@ onMounted(() => carica(loadClients));
                                                 <td class="py-2 pr-3 text-right">{{ a.computed_area_sqm ? `${mq(a.computed_area_sqm)} m²` : '—' }}</td>
                                                 <td class="py-2 text-right">
                                                     <button
-                                                        v-if="canDeleteAree && a.assets_count === 0"
+                                                        v-if="canDeleteAree"
                                                         class="text-xs text-red-500 hover:underline"
+                                                        :title="a.assets_count > 0 ? 'Si può eliminare solo un\'area senza elementi censiti' : 'Elimina l\'area'"
                                                         data-test="elimina-area"
                                                         @click="eliminaArea(a)"
                                                     >elimina</button>
