@@ -4,6 +4,7 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import VisteSalvate from '@/Components/VisteSalvate.vue';
 import { usaCaricamento } from '@/caricamento';
 import { STATUS_LABELS, statusLabel } from '@/assetStatus';
@@ -421,15 +422,15 @@ const measure = (row) => {
                     placeholder="Cerca: codice, specie, area, committente, note…"
                     class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none sm:w-72"
                 >
-                <select
+                <ScegliCommittente
                     v-if="canViewClients"
                     v-model="filters.clientId"
                     data-test="filtro-committente"
-                    class="w-full max-w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-auto"
-                >
-                    <option value="">Tutti i committenti</option>
-                    <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                </select>
+                    class="w-full max-w-full sm:w-56"
+                    campo-classe="px-3 py-2 text-sm"
+                    :committenti="clients"
+                    tutti="Tutti i committenti"
+                />
                 <select
                     v-model="filters.areaId"
                     data-test="filtro-area"

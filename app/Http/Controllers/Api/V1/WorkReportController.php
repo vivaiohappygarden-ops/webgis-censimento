@@ -80,7 +80,9 @@ class WorkReportController extends Controller implements HasMiddleware
                 'id' => $order->id,
                 'code' => $order->code,
                 'title' => $order->title,
-                'client' => $order->client?->only(['id', 'name']),
+                // Anche codice, P.IVA e CF: il filtro committente del rendiconto
+                // cerca su quei campi come ovunque nel programma
+                'client' => $order->client?->only(['id', 'name', 'code', 'vat_number', 'fiscal_code']),
                 'area' => $order->area?->name,
                 'work_type' => $order->workType?->name,
                 'team' => $order->team?->name,

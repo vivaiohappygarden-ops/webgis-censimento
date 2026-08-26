@@ -5,6 +5,7 @@ import * as maplibregl from 'maplibre-gl';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import { usaCaricamento } from '@/caricamento';
 import { statusLabel } from '@/assetStatus';
 
@@ -526,16 +527,16 @@ onBeforeUnmount(() => {
                 >{{ posizione.cercando ? 'Ricerca della posizione…' : 'La mia posizione' }}</button>
                 <p v-if="posizione.error" class="mt-2 text-xs text-amber-700" data-test="errore-posizione">{{ posizione.error }}</p>
 
-                <select
+                <ScegliCommittente
                     v-if="canViewClients"
                     v-model="vista.clientId"
                     data-test="mappa-committente"
-                    class="mt-2 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
-                    @change="applyVista()"
-                >
-                    <option value="">Tutti i committenti</option>
-                    <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                </select>
+                    class="mt-2 w-full"
+                    campo-classe="px-2 py-1.5 text-xs"
+                    :committenti="clients"
+                    tutti="Tutti i committenti"
+                    @cambia="applyVista()"
+                />
                 <select
                     v-model="vista.areaId"
                     data-test="mappa-area"

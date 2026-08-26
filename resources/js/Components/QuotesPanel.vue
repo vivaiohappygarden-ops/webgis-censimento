@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
 import axios from 'axios';
+import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import { avvisoCaricamento } from '@/avvisi';
 import { fetchPdf } from '@/pdf';
 
@@ -312,10 +313,7 @@ defineExpose({ load });
                     <div class="mt-4 space-y-3">
                         <label class="block text-xs">
                             <span class="text-gray-500">Cliente *</span>
-                            <select v-model="creator.form.client_id" data-test="est-client" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
-                                <option value="" disabled>Seleziona…</option>
-                                <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                            </select>
+                            <ScegliCommittente v-model="creator.form.client_id" data-test="est-client" class="mt-1 w-full" campo-classe="px-2.5 py-2 text-sm" :committenti="clients" />
                         </label>
                         <label class="block text-xs">
                             <span class="text-gray-500">Oggetto *</span>

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import axios from 'axios';
+import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 
 const props = defineProps({
     clients: { type: Array, default: () => [] },
@@ -144,10 +145,7 @@ onMounted(reload);
             </label>
             <label class="block text-xs">
                 <span class="text-gray-500">Cliente</span>
-                <select v-model="filters.client_id" data-test="report-client" class="mt-1 rounded-lg border border-gray-300 px-2 py-2 text-sm" @change="reload">
-                    <option value="">Tutti</option>
-                    <option v-for="c in clientOptions" :key="c.id" :value="c.id">{{ c.name }}</option>
-                </select>
+                <ScegliCommittente v-model="filters.client_id" data-test="report-client" class="mt-1 w-full sm:w-56" campo-classe="px-2 py-2 text-sm" :committenti="clientOptions" tutti="Tutti" @cambia="reload" />
             </label>
             <button class="rounded-lg border border-gray-300 px-3 py-2 text-sm" @click="setMonth(0)">Questo mese</button>
             <button class="rounded-lg border border-gray-300 px-3 py-2 text-sm" @click="setMonth(-1)">Mese scorso</button>

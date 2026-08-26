@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import { avvisoCaricamento } from '@/avvisi';
 
 const data = ref(null);
@@ -414,15 +415,14 @@ onMounted(async () => {
                 </div>
                 <label class="block text-xs">
                     <span class="text-gray-500">Committente</span>
-                    <select
+                    <ScegliCommittente
                         v-model="filtri.client_id"
                         data-test="vta-filtro-committente"
-                        class="mt-1 block w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm sm:w-auto"
-                        @change="cambiaCommittente"
-                    >
-                        <option value="">Tutti</option>
-                        <option v-for="c in committenti" :key="c.id" :value="c.id">{{ c.name }}</option>
-                    </select>
+                        class="mt-1 w-full sm:w-64"
+                        :committenti="committenti"
+                        tutti="Tutti"
+                        @cambia="cambiaCommittente"
+                    />
                 </label>
             </div>
 
@@ -717,14 +717,13 @@ onMounted(async () => {
                         <p class="text-xs text-gray-500">Consistenza tra due date, con impianti e abbattimenti</p>
                         <label class="mt-2 block text-xs">
                             <span class="text-gray-500">Committente</span>
-                            <select
+                            <ScegliCommittente
                                 v-model="balance.client_id"
                                 data-test="bilancio-committente"
-                                class="mt-1 block w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
-                            >
-                                <option value="">Tutti</option>
-                                <option v-for="c in committenti" :key="c.id" :value="c.id">{{ c.name }}</option>
-                            </select>
+                                class="mt-1 w-full"
+                                :committenti="committenti"
+                                tutti="Tutti"
+                            />
                         </label>
                         <div class="mt-2 flex gap-2">
                             <label class="block flex-grow text-xs">

@@ -5,6 +5,7 @@ import axios from 'axios';
 import * as maplibregl from 'maplibre-gl';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import { usaCaricamento } from '@/caricamento';
 import { corrisponde } from '@/ricerca';
 import { workStatusLabel } from '@/workStatus';
@@ -710,14 +711,14 @@ onMounted(() => carica(loadClients));
                     <p class="text-sm text-gray-500">Committenti, sedi, località e aree in un albero unico. Le aree si disegnano dalla Mappa.</p>
                 </div>
                 <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-                    <select
+                    <ScegliCommittente
                         v-model="filtroCommittente"
                         data-test="territorio-filtro-committente"
-                        class="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm sm:w-56"
-                    >
-                        <option value="">Tutti i committenti</option>
-                        <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                    </select>
+                        class="w-full sm:w-56"
+                        campo-classe="px-3 py-2 text-sm"
+                        :committenti="clients"
+                        tutti="Tutti i committenti"
+                    />
                     <input
                         v-model="cerca"
                         type="search"

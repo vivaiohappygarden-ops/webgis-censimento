@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import { avvisoCaricamento } from '@/avvisi';
 
 const page = usePage();
@@ -438,10 +439,7 @@ onMounted(() => {
                             </label>
                             <label v-if="creator.form.role === 'cliente'" class="block text-xs">
                                 <span class="text-gray-500">Cliente collegato *</span>
-                                <select v-model="creator.form.client_id" data-test="usr-client" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
-                                    <option value="" disabled>Seleziona…</option>
-                                    <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                                </select>
+                                <ScegliCommittente v-model="creator.form.client_id" data-test="usr-client" class="mt-1 w-full" campo-classe="px-2.5 py-2 text-sm" :committenti="clients" />
                             </label>
                             <p class="text-xs text-gray-500">
                                 La password provvisoria viene generata automaticamente e mostrata una sola volta
@@ -480,10 +478,7 @@ onMounted(() => {
                             </label>
                             <label v-if="editor.form.role === 'cliente'" class="block text-xs">
                                 <span class="text-gray-500">Cliente collegato *</span>
-                                <select v-model="editor.form.client_id" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
-                                    <option value="" disabled>Seleziona…</option>
-                                    <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                                </select>
+                                <ScegliCommittente v-model="editor.form.client_id" class="mt-1 w-full" campo-classe="px-2.5 py-2 text-sm" :committenti="clients" />
                             </label>
                             <label v-if="editor.form.role !== 'cliente'" class="flex items-center gap-1.5 text-xs text-gray-600">
                                 <input v-model="editor.form.notify_email" type="checkbox" data-test="usr-notify">

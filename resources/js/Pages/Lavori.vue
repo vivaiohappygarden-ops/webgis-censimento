@@ -7,6 +7,7 @@ import WorkAgenda from '@/Components/WorkAgenda.vue';
 import WorkReport from '@/Components/WorkReport.vue';
 import QualityBoard from '@/Components/QualityBoard.vue';
 import QuotesPanel from '@/Components/QuotesPanel.vue';
+import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import VisteSalvate from '@/Components/VisteSalvate.vue';
 import { usaCaricamento } from '@/caricamento';
@@ -665,10 +666,7 @@ onMounted(async () => {
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Cliente</span>
-                                <select v-model="creator.form.client_id" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
-                                    <option value="">—</option>
-                                    <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                                </select>
+                                <ScegliCommittente v-model="creator.form.client_id" class="mt-1 w-full" campo-classe="px-2 py-2 text-sm" :committenti="clients" tutti="—" />
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Area</span>

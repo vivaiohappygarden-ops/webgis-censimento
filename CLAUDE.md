@@ -75,6 +75,11 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - Lato interfaccia la stessa logica sta in `resources/js/ricerca.js`
   (`corrisponde()`), per gli elenchi filtrati in pagina (Catalogo, committenti in
   Territorio).
+- La scelta del committente (filtri di pagina e moduli di creazione) passa da
+  `Components/ScegliCommittente.vue`: campo di ricerca a parole su nome, codice,
+  partita IVA e codice fiscale, con tendina filtrata. Niente `<select>` semplici
+  per i committenti nel gestionale; l'app operatore tiene la tendina di sistema
+  (sul telefono è più comoda) e il portale pubblico resta a corrispondenza esatta.
 - La ricerca del portale pubblico (`PortalSearch`) **resta a corrispondenza
   esatta**: lì si cerca il numero dell'etichetta letto sul cartellino, non un
   nome.

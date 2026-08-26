@@ -768,6 +768,11 @@ function goTo(id) {
                                 cartellini.
                             </li>
                             <li>
+                                Anche la <strong>scelta del committente</strong> (nei filtri e nei moduli)
+                                si fa scrivendo: <em>guidonia</em> trova "Comune di Guidonia Montecelio",
+                                e valgono pure codice, partita IVA e codice fiscale.
+                            </li>
+                            <li>
                                 Gli <strong>accenti contano</strong>: cercando "citta" non si trova "Città".
                             </li>
                             <li>
