@@ -520,7 +520,7 @@ const measure = (row) => {
                             :voci="ordiniVoci"
                             :campi-ricerca="['code', 'title']"
                             segnaposto="Scegli…"
-                            vuoto="Nessun ordine aperto."
+                            vuoto="Nessun ordine trovato."
                             @apre="ordini.length || caricaOrdiniAperti()"
                         />
                         <button

@@ -10,6 +10,7 @@ import ScegliVoce from '@/Components/ScegliVoce.vue';
 import { usaCaricamento } from '@/caricamento';
 import { avvisoCaricamento } from '@/avvisi';
 import { statusLabel } from '@/assetStatus';
+import { contornoSiIncrocia } from '@/geometria';
 
 const page = usePage();
 const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
@@ -149,6 +150,11 @@ async function saveDrawnArea() {
     if (drawing.vertices.length < 3 || !drawing.localityId || !drawing.name) {
         drawing.ok = false;
         drawing.message = 'Servono almeno 3 vertici, una località e un nome.';
+        return;
+    }
+    if (contornoSiIncrocia(drawing.vertices)) {
+        drawing.ok = false;
+        drawing.message = 'Il contorno si incrocia su se stesso: sposta o togli i punti che si accavallano.';
         return;
     }
     drawing.saving = true;
@@ -403,6 +409,11 @@ function misuraDi(elemento, geo) {
 
 async function salvaElementoDisegnato() {
     const pts = creating.vertices;
+    if (geoScelta.value === 'S' && contornoSiIncrocia(pts)) {
+        creating.ok = false;
+        creating.message = 'Il contorno si incrocia su se stesso: sposta o togli i punti che si accavallano.';
+        return;
+    }
     const geometry = geoScelta.value === 'L'
         ? { type: 'LineString', coordinates: pts }
         : { type: 'Polygon', coordinates: [[...pts, pts[0]]] };
@@ -467,6 +478,11 @@ const minimoPunti = computed(() => ({ P: 1, L: 2, S: 3 }[redraw.geo] ?? 1));
 
 async function salvaRidisegno() {
     const pts = redraw.vertices;
+    if (redraw.geo === 'S' && contornoSiIncrocia(pts)) {
+        redraw.ok = false;
+        redraw.message = 'Il contorno si incrocia su se stesso: sposta o togli i punti che si accavallano.';
+        return;
+    }
     const geometry = redraw.geo === 'P'
         ? { type: 'Point', coordinates: pts[0] }
         : redraw.geo === 'L'

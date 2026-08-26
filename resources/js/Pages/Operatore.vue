@@ -1,5 +1,6 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { contornoSiIncrocia } from '@/geometria';
 import { Head, usePage } from '@inertiajs/vue3';
 import * as maplibregl from 'maplibre-gl';
 import { openFieldDb } from '@/field/db';
@@ -18,7 +19,7 @@ const tab = ref('rilievo');
 const state = reactive({ pending: 0, attention: 0, photos: 0, photosFailed: 0, syncing: false, online: navigator.onLine });
 const bootstrapped = ref(false);
 const areas = ref([]);
-const pointTypes = ref([]);
+const tipiRilievo = ref([]);
 const localAssets = ref([]);
 const queueRows = ref([]);
 const logRows = ref([]);
@@ -28,6 +29,32 @@ const message = reactive({ text: '', ok: true });
 const form = reactive({
     areaId: '', typeId: '', censusCode: '', notes: '',
     lat: '', lon: '', accuracy: null, locating: false,
+    // Vertici di una linea o di una superficie: dal tocco sulla mappa
+    // (penna o dito) o dalla posizione GPS camminando lungo il bordo
+    vertici: [],
+});
+
+// La geometria che il tipo scelto richiede: P un punto, L e S un disegno
+const geoRilievo = computed(() => typesById.value[form.typeId]?.allowed_geometry ?? 'P');
+const minimoVertici = computed(() => (geoRilievo.value === 'S' ? 3 : 2));
+
+// I punti raccolti valgono finche' la geometria richiesta resta la stessa:
+// correggere il tipo (siepe -> filare) non deve buttare il disegno
+watch(() => form.typeId, (nuovo, vecchio) => {
+    const geoNuova = typesById.value[nuovo]?.allowed_geometry ?? 'P';
+    const geoVecchia = typesById.value[vecchio]?.allowed_geometry ?? 'P';
+    if (geoNuova !== geoVecchia) {
+        form.vertici = [];
+        aggiornaDisegnoLocale();
+    }
+    if (geoNuova === 'P') mapState.drawing = false;
+});
+
+// Durante il disegno il doppio tocco non deve far saltare l'inquadratura
+watch(() => mapState.drawing, (attivo) => {
+    if (! map) return;
+    if (attivo) map.doubleClickZoom.disable();
+    else map.doubleClickZoom.enable();
 });
 
 // Scheda elemento aperta (da elenco o da scansione)
@@ -483,7 +510,7 @@ const mapEl = ref(null);
 let map = null;
 let geoWatchId = null;
 let mapFitted = false;
-const mapState = reactive({ placing: false, located: false, clientId: '', areaId: '' });
+const mapState = reactive({ placing: false, drawing: false, located: false, clientId: '', areaId: '' });
 
 // Committenti presenti fra le aree scaricate sul dispositivo: il filtro
 // funziona anche senza rete, perche' legge la replica locale
@@ -602,6 +629,7 @@ async function initOrRefreshMap() {
     map.once('style.load', () => {
         map.addSource('aree', { type: 'geojson', data: data.areas });
         map.addSource('el', { type: 'geojson', data: data.assets });
+        map.addSource('disegno', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
 
         map.addLayer({
             id: 'aree-fill', type: 'fill', source: 'aree',
@@ -643,6 +671,18 @@ async function initOrRefreshMap() {
             },
         });
 
+        map.addLayer({
+            id: 'disegno-linea', type: 'line', source: 'disegno',
+            paint: { 'line-color': '#f59e0b', 'line-width': 3, 'line-dasharray': [2, 2] },
+        });
+        map.addLayer({
+            id: 'disegno-punti', type: 'circle', source: 'disegno',
+            filter: ['==', ['geometry-type'], 'Point'],
+            paint: { 'circle-color': '#f59e0b', 'circle-radius': 6, 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff' },
+        });
+        aggiornaDisegnoLocale();
+        if (mapState.drawing) map.doubleClickZoom.disable();
+
         // Inquadra le aree di lavoro scaricate
         const bounds = new maplibregl.LngLatBounds();
         const extend = (coords) => {
@@ -654,6 +694,11 @@ async function initOrRefreshMap() {
         if (! bounds.isEmpty()) map.fitBounds(bounds, { padding: 40, maxZoom: 17 });
 
         map.on('click', async (e) => {
+            if (mapState.drawing) {
+                form.vertici.push({ lon: e.lngLat.lng, lat: e.lngLat.lat, gps: false, accuracy: null });
+                aggiornaDisegnoLocale();
+                return;
+            }
             if (mapState.placing) {
                 // Posizionamento del nuovo rilievo dal tocco sulla mappa
                 form.lat = e.lngLat.lat.toFixed(6);
@@ -721,9 +766,13 @@ async function refreshLocal() {
     areas.value = await db.areas.orderBy('name').toArray();
     const types = await db.catalog_types.toArray();
     typesById.value = Object.fromEntries(types.map((t) => [t.id, t]));
-    pointTypes.value = types
-        .filter((t) => t.allowed_geometry === 'P')
-        .sort((a, b) => a.code.localeCompare(b.code));
+    tipiRilievo.value = types
+        .sort((a, b) => a.code.localeCompare(b.code))
+        .map((t) => ({
+            ...t,
+            etichetta: `${t.code} — ${t.name}`
+                + (t.allowed_geometry === 'L' ? ' (linea)' : t.allowed_geometry === 'S' ? ' (superficie)' : ''),
+        }));
     localAssets.value = (await db.assets.orderBy('updated_at').reverse().limit(200).toArray());
     localOrders.value = await db.work_orders.toArray();
     localTemplates.value = await db.inspection_templates.orderBy('name').toArray();
@@ -790,6 +839,63 @@ function locate() {
     );
 }
 
+/** L'anteprima dei punti raccolti sulla mappa del dispositivo. */
+function aggiornaDisegnoLocale() {
+    const sorgente = map?.getSource('disegno');
+    if (! sorgente) return;
+    const pts = form.vertici.map((v) => [v.lon, v.lat]);
+    const chiudi = geoRilievo.value === 'S';
+    const features = pts.map((c) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: c }, properties: {} }));
+    if (pts.length >= 2) {
+        features.push({ type: 'Feature', geometry: {
+            type: 'LineString', coordinates: chiudi ? [...pts, pts[0]] : pts,
+        }, properties: {} });
+    }
+    sorgente.setData({ type: 'FeatureCollection', features });
+}
+
+function iniziaDisegno() {
+    mapState.placing = false;
+    mapState.drawing = true;
+    map?.doubleClickZoom.disable();
+    switchTab('mappa');
+    setMessage('Tocca la mappa (penna o dito) per aggiungere i punti; "Fatto" riporta al rilievo.');
+}
+
+function fineDisegno() {
+    mapState.drawing = false;
+    switchTab('rilievo');
+}
+
+function annullaUltimoVertice() {
+    form.vertici.pop();
+    aggiornaDisegnoLocale();
+}
+
+/** Un vertice dalla posizione GPS: si traccia il bordo camminando. */
+function aggiungiVerticeGps() {
+    if (! navigator.geolocation) {
+        setMessage('Geolocalizzazione non disponibile su questo dispositivo.', false);
+        return;
+    }
+    form.locating = true;
+    navigator.geolocation.getCurrentPosition(
+        (pos) => {
+            form.vertici.push({
+                lon: pos.coords.longitude, lat: pos.coords.latitude,
+                gps: true, accuracy: Math.round(pos.coords.accuracy * 10) / 10,
+            });
+            form.locating = false;
+            aggiornaDisegnoLocale();
+        },
+        () => {
+            form.locating = false;
+            setMessage('Posizione GPS non disponibile.', false);
+        },
+        { enableHighAccuracy: true, timeout: 10000 },
+    );
+}
+
 // Accetta anche la virgola decimale italiana; il campo vuoto NON vale zero
 function parseCoordinate(value) {
     const text = String(value).trim().replace(',', '.');
@@ -799,15 +905,42 @@ function parseCoordinate(value) {
 
 async function saveCensus() {
     setMessage('');
-    const lat = parseCoordinate(form.lat);
-    const lon = parseCoordinate(form.lon);
     if (! form.areaId || ! form.typeId) {
         setMessage('Seleziona area e tipo oggetto.', false);
         return;
     }
-    if (! Number.isFinite(lat) || ! Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
-        setMessage('Coordinate mancanti o fuori intervallo.', false);
-        return;
+
+    let geometry;
+    let gpsAccuracy;
+    let surveyMethod;
+    if (geoRilievo.value === 'P') {
+        const lat = parseCoordinate(form.lat);
+        const lon = parseCoordinate(form.lon);
+        if (! Number.isFinite(lat) || ! Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+            setMessage('Coordinate mancanti o fuori intervallo.', false);
+            return;
+        }
+        geometry = { type: 'Point', coordinates: [lon, lat] };
+        gpsAccuracy = form.accuracy;
+        surveyMethod = form.accuracy != null ? 'gps' : 'manual_map';
+    } else {
+        if (form.vertici.length < minimoVertici.value) {
+            setMessage(`Servono almeno ${minimoVertici.value} punti per ${geoRilievo.value === 'L' ? 'una linea' : 'una superficie'}.`, false);
+            return;
+        }
+        const coords = form.vertici.map((v) => [v.lon, v.lat]);
+        if (geoRilievo.value === 'S' && contornoSiIncrocia(coords)) {
+            setMessage('Il contorno si incrocia su se stesso: sposta o togli i punti che si accavallano.', false);
+            return;
+        }
+        geometry = geoRilievo.value === 'L'
+            ? { type: 'LineString', coordinates: coords }
+            : { type: 'Polygon', coordinates: [[...coords, coords[0]]] };
+        // Se ogni punto viene dal GPS il rilievo e' un GPS a tutti gli
+        // effetti (precisione: la peggiore); un disegno resta un disegno
+        const tuttiGps = form.vertici.every((v) => v.gps);
+        gpsAccuracy = tuttiGps ? Math.max(...form.vertici.map((v) => v.accuracy ?? 0)) || null : null;
+        surveyMethod = tuttiGps ? 'gps' : 'manual_map';
     }
 
     busy.value = true;
@@ -817,11 +950,13 @@ async function saveCensus() {
             objectTypeId: form.typeId,
             censusCode: form.censusCode.trim(),
             notes: form.notes.trim(),
-            geometry: { type: 'Point', coordinates: [lon, lat] },
-            gpsAccuracy: form.accuracy,
-            surveyMethod: form.accuracy != null ? 'gps' : 'manual_map',
+            geometry,
+            gpsAccuracy,
+            surveyMethod,
         });
-        Object.assign(form, { censusCode: '', notes: '', lat: '', lon: '', accuracy: null });
+        Object.assign(form, { censusCode: '', notes: '', lat: '', lon: '', accuracy: null, vertici: [] });
+        mapState.drawing = false;
+        aggiornaDisegnoLocale();
         await refreshLocal();
         setMessage(state.online
             ? 'Elemento registrato: verrà sincronizzato ora.'
@@ -1085,10 +1220,10 @@ onBeforeUnmount(() => {
                         </select>
                     </label>
                     <label class="block text-xs">
-                        <span class="text-gray-500">Tipo oggetto (puntuale) *</span>
-                        <select v-model="form.typeId" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2.5 text-sm">
+                        <span class="text-gray-500">Tipo oggetto *</span>
+                        <select v-model="form.typeId" data-test="op-tipo" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2.5 text-sm">
                             <option value="" disabled>Seleziona…</option>
-                            <option v-for="t in pointTypes" :key="t.id" :value="t.id">{{ t.code }} — {{ t.name }}</option>
+                            <option v-for="t in tipiRilievo" :key="t.id" :value="t.id">{{ t.etichetta }}</option>
                         </select>
                     </label>
                     <label class="block text-xs">
@@ -1096,24 +1231,56 @@ onBeforeUnmount(() => {
                         <input v-model="form.censusCode" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. ALB-0102">
                     </label>
 
-                    <div class="grid grid-cols-2 gap-3">
-                        <label class="block text-xs">
-                            <span class="text-gray-500">Latitudine *</span>
-                            <input v-model="form.lat" inputmode="decimal" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="45.4652" @input="form.accuracy = null">
-                        </label>
-                        <label class="block text-xs">
-                            <span class="text-gray-500">Longitudine *</span>
-                            <input v-model="form.lon" inputmode="decimal" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="9.1905" @input="form.accuracy = null">
-                        </label>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <button
-                            class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700"
-                            :disabled="form.locating"
-                            @click="locate"
-                        >{{ form.locating ? 'Rilevamento…' : 'Usa posizione GPS' }}</button>
-                        <span v-if="form.accuracy" class="text-xs text-gray-500">Precisione: {{ form.accuracy }} m</span>
-                    </div>
+                    <template v-if="geoRilievo === 'P'">
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Latitudine *</span>
+                                <input v-model="form.lat" inputmode="decimal" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="45.4652" @input="form.accuracy = null">
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Longitudine *</span>
+                                <input v-model="form.lon" inputmode="decimal" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="9.1905" @input="form.accuracy = null">
+                            </label>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button
+                                class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700"
+                                :disabled="form.locating"
+                                @click="locate"
+                            >{{ form.locating ? 'Rilevamento…' : 'Usa posizione GPS' }}</button>
+                            <span v-if="form.accuracy" class="text-xs text-gray-500">Precisione: {{ form.accuracy }} m</span>
+                        </div>
+                    </template>
+                    <template v-else>
+                        <p class="text-xs text-gray-500" data-test="op-vertici">
+                            Punti raccolti: <span class="font-semibold text-gray-900">{{ form.vertici.length }}</span>
+                            (minimo {{ minimoVertici }} per {{ geoRilievo === 'L' ? 'la linea' : 'la superficie' }}).
+                            Disegna sulla mappa con la penna o il dito, oppure cammina lungo il bordo
+                            aggiungendo la posizione GPS punto per punto.
+                        </p>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button
+                                class="rounded-lg bg-green-700 px-3 py-2.5 text-sm font-medium text-white"
+                                data-test="op-disegna"
+                                @click="iniziaDisegno"
+                            >Disegna sulla mappa</button>
+                            <button
+                                class="rounded-lg border border-green-700 px-3 py-2.5 text-sm font-medium text-green-700 disabled:opacity-50"
+                                :disabled="form.locating"
+                                @click="aggiungiVerticeGps"
+                            >{{ form.locating ? 'Rilevamento…' : 'Aggiungi posizione GPS' }}</button>
+                            <button
+                                class="rounded-lg border border-gray-300 px-3 py-2.5 text-sm disabled:opacity-50"
+                                :disabled="! form.vertici.length"
+                                @click="annullaUltimoVertice"
+                            >← Ultimo punto</button>
+                            <button
+                                class="rounded-lg border border-gray-300 px-3 py-2.5 text-sm disabled:opacity-50"
+                                :disabled="! form.vertici.length"
+                                @click="form.vertici = []; aggiornaDisegnoLocale()"
+                            >Svuota i punti</button>
+                        </div>
+                    </template>
 
                     <label class="block text-xs">
                         <span class="text-gray-500">Note</span>
@@ -1252,11 +1419,29 @@ onBeforeUnmount(() => {
                             @click="locateOnMap"
                         >La mia posizione</button>
                         <button
+                            v-if="! mapState.drawing"
                             class="self-start rounded-lg px-3 py-2 text-xs font-medium shadow"
                             :class="mapState.placing ? 'bg-green-700 text-white' : 'bg-white'"
                             data-test="map-place"
                             @click="mapState.placing = ! mapState.placing"
                         >{{ mapState.placing ? 'Tocca la mappa per il rilievo…' : 'Nuovo rilievo dalla mappa' }}</button>
+                        <div
+                            v-if="mapState.drawing"
+                            class="flex flex-wrap items-center gap-2 self-start rounded-lg bg-white px-3 py-2 shadow"
+                            data-test="op-barra-disegno"
+                        >
+                            <span class="text-sm font-medium">Punti: {{ form.vertici.length }}</span>
+                            <button
+                                class="rounded-lg border border-gray-300 px-3 py-2.5 text-sm disabled:opacity-50"
+                                :disabled="! form.vertici.length"
+                                @click="annullaUltimoVertice"
+                            >← Ultimo</button>
+                            <button
+                                class="rounded-lg bg-green-700 px-3 py-2.5 text-sm font-medium text-white"
+                                data-test="op-disegno-fatto"
+                                @click="fineDisegno"
+                            >Fatto</button>
+                        </div>
                     </div>
                 </div>
             </section>

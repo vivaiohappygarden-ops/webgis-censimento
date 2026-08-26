@@ -93,8 +93,12 @@ function scrivi(evento) {
 }
 
 function scegli(id) {
-    emit('update:modelValue', id);
-    emit('cambia', id);
+    // Riscegliere la stessa voce non e' un cambiamento: emetterlo farebbe
+    // scattare falsi "modifiche non salvate" nei moduli in ascolto
+    if (id !== props.modelValue) {
+        emit('update:modelValue', id);
+        emit('cambia', id);
+    }
     appenaScelto = Date.now();
     aperto.value = false;
     campo.value?.blur();
@@ -125,6 +129,9 @@ function tasto(evento) {
             return;
         }
         evento.preventDefault();
+        // Nessun risultato: l'Invio non deve ripiegare sulla voce vuota
+        // azzerando la scelta gia' fatta
+        if (! filtrate.value.length) return;
         if (elenco.value[evidenziato.value]) scegli(elenco.value[evidenziato.value].id);
     } else if (evento.key === 'Escape') {
         aperto.value = false;
@@ -138,7 +145,7 @@ function tasto(evento) {
         <input
             ref="campo"
             type="text"
-            :value="aperto ? testo : (scelto ? nomeDi(scelto) : (modelValue ? 'Voce non in elenco' : ''))"
+            :value="aperto ? testo : (scelto ? nomeDi(scelto) : (modelValue && voci.length ? 'Voce non in elenco' : ''))"
             :placeholder="tutti ?? segnaposto"
             autocomplete="off"
             :disabled="disabilitato"

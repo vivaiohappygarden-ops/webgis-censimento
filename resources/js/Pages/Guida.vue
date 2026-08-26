@@ -677,6 +677,16 @@ function goTo(id) {
                             consuntivi dei lavori assegnati, eseguire ispezioni su checklist e aprire segnalazioni:
                             tutto resta in coda sul dispositivo e parte da solo appena torna la rete.
                         </p>
+                        <h3>Censire linee e superfici dal campo</h3>
+                        <p>
+                            Nel rilievo si sceglie qualsiasi tipo del catalogo: per una <strong>siepe</strong>
+                            o un <strong>prato</strong> il modulo raccoglie i punti invece delle coordinate.
+                            Con <strong>"Disegna sulla mappa"</strong> si traccia il contorno toccando la
+                            mappa del dispositivo (con la penna del tablet o il dito); in alternativa si
+                            cammina lungo il bordo premendo <strong>"Aggiungi posizione GPS"</strong> a ogni
+                            punto. Anche il disegno funziona senza rete: metri e metri quadrati li calcola
+                            il server alla sincronizzazione.
+                        </p>
                         <h3>Se un invio viene rifiutato</h3>
                         <p>
                             La scheda Sync elenca gli invii che il server non ha accettato, con il motivo scritto
@@ -781,9 +791,11 @@ function goTo(id) {
                                 cartellini.
                             </li>
                             <li>
-                                Anche la <strong>scelta del committente</strong> (nei filtri e nei moduli)
-                                si fa scrivendo: <em>guidonia</em> trova "Comune di Guidonia Montecelio",
-                                e valgono pure codice, partita IVA e codice fiscale.
+                                Anche le <strong>tendine degli elenchi lunghi</strong> si scelgono
+                                scrivendo: committente (<em>guidonia</em> trova "Comune di Guidonia
+                                Montecelio", e valgono pure codice, partita IVA e codice fiscale),
+                                aree e località, tipi di catalogo, ordini di lavoro aperti e
+                                lavorazioni di listino.
                             </li>
                             <li>
                                 Gli <strong>accenti contano</strong>: cercando "citta" non si trova "Città".
