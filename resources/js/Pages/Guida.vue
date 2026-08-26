@@ -167,6 +167,19 @@ function goTo(id) {
                             strumentali con referto, scadenzario delle rivalutazioni, alberi monumentali o dedicati,
                             e il bilancio arboreo (messi a dimora, abbattuti, sostituiti).
                         </p>
+                        <p>
+                            Al centro della pagina c'è l'elenco <strong>Alberi e valutazioni</strong>: ogni
+                            riga è un albero con l'ultima VTA, la classe, l'esito e la data del prossimo
+                            controllo, in ordine di urgenza (prima i ricontrolli scaduti, poi quelli in
+                            scadenza, poi gli alberi mai valutati). Un clic sui <strong>riquadri dei
+                            conteggi</strong> in alto o sulle <strong>classi</strong> filtra l'elenco:
+                            ad esempio "Mai valutati" diventa la lista degli alberi su cui programmare la
+                            prima valutazione. Il filtro <strong>Committente</strong> in testata restringe
+                            contatori, elenco e alberi tutelati a un solo committente; il Bilancio
+                            arboreo ha invece il suo filtro a parte, perché il documento si prepara per
+                            l'ente che lo riceve. Da ogni riga si apre la scheda o si registra subito
+                            una nuova valutazione.
+                        </p>
                         <h3>La perizia di stabilità in PDF</h3>
                         <p>
                             Da ogni valutazione, con il pulsante <strong>Perizia PDF</strong> nella scheda

@@ -106,7 +106,109 @@ class TreeVtaTest extends TestCase
         $this->assertSame(1, $response->json('data.trees_total'));
         $this->assertSame(1, $response->json('data.assessed'));
         $this->assertSame(1, $response->json('data.overdue_count'));
-        $this->assertSame('C/D', $response->json('data.overdue.0.failure_class'));
+        $this->assertSame(['C/D' => 1], $response->json('data.by_class'));
+    }
+
+    public function test_vta_tree_list_orders_by_urgency_and_reports_status(): void
+    {
+        // Tre alberi: mai valutato, scaduto, valutato di recente
+        $maiValutato = $this->createTreeAsset();
+        $scaduto = $this->createTreeAsset();
+        $recente = $this->createTreeAsset();
+
+        // Sullo scaduto una VTA vecchia in classe A e una piu' recente in C/D
+        // gia' oltre il ricontrollo: nell'elenco deve valere l'ultima
+        $this->postJson("/api/v1/assets/{$scaduto}/assessments", [
+            'assessment_type' => 'vta_visual',
+            'assessed_on' => now()->subMonths(40)->toDateString(),
+            'failure_class' => 'A',
+        ])->assertCreated();
+        $this->postJson("/api/v1/assets/{$scaduto}/assessments", [
+            'assessment_type' => 'vta_visual',
+            'assessed_on' => now()->subMonths(20)->toDateString(),
+            'failure_class' => 'C/D',
+            'outcome' => 'prescriptions',
+        ])->assertCreated();
+
+        $this->postJson("/api/v1/assets/{$recente}/assessments", [
+            'assessment_type' => 'vta_visual',
+            'assessed_on' => now()->subDays(10)->toDateString(),
+            'failure_class' => 'A',
+            'outcome' => 'ok',
+        ])->assertCreated();
+
+        $righe = $this->getJson('/api/v1/vta/alberi')->assertOk()->json();
+
+        $this->assertSame(3, $righe['total']);
+        // Prima le urgenze, poi i mai valutati, in coda i valutati a posto
+        $this->assertSame([$scaduto, $maiValutato, $recente], array_column($righe['data'], 'id'));
+        $this->assertSame(['scaduto', 'mai_valutato', 'valutato'], array_column($righe['data'], 'stato'));
+        $this->assertSame('C/D', $righe['data'][0]['failure_class']);
+
+        // I filtri di stato e classe restringono l'elenco
+        $this->assertSame([$maiValutato], array_column(
+            $this->getJson('/api/v1/vta/alberi?status=never')->json('data'), 'id'));
+        $this->assertSame([$scaduto], array_column(
+            $this->getJson('/api/v1/vta/alberi?status=overdue')->json('data'), 'id'));
+        $this->assertSame([$recente], array_column(
+            $this->getJson('/api/v1/vta/alberi?class=A')->json('data'), 'id'));
+
+        // Una scadenza entro 30 giorni finisce fra gli "in scadenza"
+        $this->postJson("/api/v1/assets/{$maiValutato}/assessments", [
+            'assessment_type' => 'vta_visual',
+            'assessed_on' => now()->toDateString(),
+            'failure_class' => 'C',
+            'next_check_due' => now()->addDays(10)->toDateString(),
+        ])->assertCreated();
+        $inScadenza = $this->getJson('/api/v1/vta/alberi?status=upcoming')->json('data');
+        $this->assertSame([$maiValutato], array_column($inScadenza, 'id'));
+        $this->assertSame('in_scadenza', $inScadenza[0]['stato']);
+
+        $this->getJson('/api/v1/vta/alberi?status=inesistente')->assertUnprocessable();
+    }
+
+    public function test_vta_tree_list_searches_and_filters_by_client(): void
+    {
+        // Due committenti distinti: ogni area creata dal test ha il suo
+        $altraArea = $this->createArea($this->organization, ['name' => 'Area Altrove']);
+
+        $qui = $this->createTreeAsset();
+        $la = $this->postJson('/api/v1/assets', [
+            'area_id' => $altraArea->id,
+            'object_type_id' => $this->treeType->id,
+            'census_code' => 'ALT-0001',
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated()->json('data.id');
+        $this->patchJson("/api/v1/assets/{$la}", [
+            'tree' => ['genus' => 'Quercus', 'species' => 'Quercus robur'],
+        ])->assertOk();
+
+        $clienteLa = $altraArea->locality->site->client_id;
+
+        // Il filtro per committente vale per elenco, cruscotto e tutelati
+        $righe = $this->getJson("/api/v1/vta/alberi?client_id={$clienteLa}")->assertOk()->json();
+        $this->assertSame([$la], array_column($righe['data'], 'id'));
+        $this->assertSame('Area Altrove', $righe['data'][0]['area_name']);
+        $this->assertSame('Cliente Test', $righe['data'][0]['client_name']);
+
+        $cruscotto = $this->getJson("/api/v1/vta/dashboard?client_id={$clienteLa}")->assertOk()->json('data');
+        $this->assertSame(1, $cruscotto['trees_total']);
+        $this->assertSame(1, $cruscotto['never_assessed']);
+
+        $this->patchJson("/api/v1/assets/{$qui}", [
+            'tree' => ['is_monumental' => true, 'monumental_ref' => 'DM 757/2023'],
+        ])->assertOk();
+        $this->assertCount(0, $this->getJson("/api/v1/vta/tutelati?client_id={$clienteLa}")->json('data'));
+        $this->assertCount(1, $this->getJson('/api/v1/vta/tutelati')->json('data'));
+
+        // La ricerca testuale passa dallo stesso scope del censimento
+        $trovati = $this->getJson('/api/v1/vta/alberi?q=quercus')->assertOk()->json('data');
+        $this->assertSame([$la], array_column($trovati, 'id'));
+
+        // Byte non leggibili in UTF-8: messaggio chiaro, non errore del server
+        $this->getJson('/api/v1/vta/alberi?q='.rawurlencode("\xC3\x28rossi"))
+            ->assertStatus(422)
+            ->assertSee('non si possono leggere', false);
     }
 
     public function test_assessment_can_be_corrected_without_losing_its_analyses(): void

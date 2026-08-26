@@ -88,6 +88,7 @@ Route::prefix('v1')->group(function () {
         Route::get('perizia/settings', [\App\Http\Controllers\Api\V1\PeriziaController::class, 'settings']);
         Route::put('perizia/settings', [\App\Http\Controllers\Api\V1\PeriziaController::class, 'updateSettings']);
         Route::get('vta/dashboard', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'index']);
+        Route::get('vta/alberi', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'alberi']);
         Route::get('vta/tutelati', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'tutelati']);
         Route::get('vta/bilancio', [\App\Http\Controllers\Api\V1\TreeBalanceController::class, 'index']);
         Route::get('vta/bilancio/pdf', [\App\Http\Controllers\Api\V1\TreeBalanceController::class, 'pdf']);

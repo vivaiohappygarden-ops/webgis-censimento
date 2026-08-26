@@ -8,41 +8,17 @@ import { avvisoCaricamento } from '@/avvisi';
 const data = ref(null);
 const tutelati = ref([]);
 
-// Ricerca di un albero per valutarlo o stamparne la perizia senza passare
-// dal censimento: qui si lavora per albero, non per elenco
-const ricerca = reactive({ q: '', rows: [], loading: false, cercato: false, errore: '' });
-let ricercaTimer = null;
+// Filtri della pagina: il committente vale per cruscotto, elenco e tutelati;
+// stato e classe restringono l'elenco e si comandano anche dai riquadri
+const filtri = reactive({ client_id: '', status: '', class: '', q: '' });
 
-async function cercaAlberi() {
-    const q = ricerca.q.trim();
-    if (q.length < 2) {
-        ricerca.rows = [];
-        ricerca.cercato = false;
-        ricerca.errore = '';
-
-        return;
-    }
-    ricerca.loading = true;
-    try {
-        const { data } = await axios.get('/api/v1/assets', {
-            params: { q, type_code: 'P103108', hide_removed: 1, per_page: 15 },
-        });
-        ricerca.rows = data.data;
-        ricerca.cercato = true;
-        ricerca.errore = '';
-    } catch (err) {
-        ricerca.rows = [];
-        ricerca.cercato = false;
-        ricerca.errore = avvisoCaricamento(err);
-    } finally {
-        ricerca.loading = false;
-    }
-}
-
-function cercaConAttesa() {
-    clearTimeout(ricercaTimer);
-    ricercaTimer = setTimeout(cercaAlberi, 300);
-}
+const STATI = {
+    '': 'Tutti gli alberi',
+    assessed: 'Con almeno una VTA',
+    never: 'Mai valutati',
+    overdue: 'Ricontrolli scaduti',
+    upcoming: 'In scadenza (30 gg)',
+};
 
 const CLASS_COLORS = {
     'A': 'bg-green-100 text-green-800',
@@ -53,7 +29,93 @@ const CLASS_COLORS = {
     'n.d.': 'bg-gray-100 text-gray-600',
 };
 
+const OUTCOMES = { ok: 'Nessun intervento', monitor: 'Monitorare', prescriptions: 'Prescrizioni', fell: 'Abbattimento' };
+
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '—');
+
+// Elenco degli alberi con l'ultima valutazione: la lista di lavoro
+const elenco = reactive({ rows: [], total: 0, page: 1, lastPage: 1, paginaRichiesta: 1, loading: false, errore: '' });
+let elencoTimer = null;
+let elencoRichiesta = 0;
+
+async function caricaElenco(pagina = 1) {
+    // Un cambio di filtro mentre una risposta e' in volo: vale solo l'ultima
+    // richiesta, o l'elenco mostrerebbe i dati del filtro precedente
+    const richiesta = ++elencoRichiesta;
+    // "Riprova" deve ripetere la pagina chiesta per ultima, non l'ultima
+    // riuscita: dopo un cambio filtro fallito a pagina 3 si riparte da 1
+    elenco.paginaRichiesta = pagina;
+    elenco.loading = true;
+    try {
+        const { data: res } = await axios.get('/api/v1/vta/alberi', {
+            params: {
+                page: pagina,
+                per_page: 25,
+                ...(filtri.client_id ? { client_id: filtri.client_id } : {}),
+                ...(filtri.status ? { status: filtri.status } : {}),
+                ...(filtri.class ? { class: filtri.class } : {}),
+                ...(filtri.q.trim() ? { q: filtri.q.trim() } : {}),
+            },
+        });
+        if (richiesta !== elencoRichiesta) return;
+        // Pagina oltre la fine (un filtro ha accorciato l'elenco): si va
+        // all'ultima pagina vera invece di mostrare un vuoto che non e' tale
+        if (! res.data.length && res.current_page > res.last_page) {
+            caricaElenco(Math.max(1, res.last_page));
+
+            return;
+        }
+        elenco.rows = res.data;
+        elenco.total = res.total;
+        elenco.page = res.current_page;
+        elenco.lastPage = res.last_page;
+        elenco.errore = '';
+    } catch (err) {
+        if (richiesta !== elencoRichiesta) return;
+        elenco.rows = [];
+        elenco.total = 0;
+        elenco.errore = avvisoCaricamento(err);
+    } finally {
+        if (richiesta === elencoRichiesta) elenco.loading = false;
+    }
+}
+
+function cercaConAttesa() {
+    clearTimeout(elencoTimer);
+    elencoTimer = setTimeout(() => caricaElenco(1), 300);
+}
+
+function scegliStato(status) {
+    filtri.status = status;
+    caricaElenco(1);
+}
+
+function scegliClasse(cls) {
+    const valore = cls === 'n.d.' ? 'nd' : cls;
+    filtri.class = filtri.class === valore ? '' : valore;
+    caricaElenco(1);
+}
+
+const vuotoElenco = computed(() => {
+    // Con ricerca o classe attive il messaggio per stato direbbe il falso
+    // ("Nessun ricontrollo scaduto" sotto il riquadro che ne conta tre)
+    if (filtri.q.trim() || filtri.class) return 'Nessun albero trovato con questi filtri.';
+
+    return {
+        assessed: 'Nessun albero con valutazioni registrate.',
+        never: 'Nessun albero senza valutazione.',
+        overdue: 'Nessun ricontrollo scaduto.',
+        upcoming: 'Nessuna scadenza nei prossimi 30 giorni.',
+    }[filtri.status] ?? 'Nessun albero trovato.';
+});
+
+function specie(r) {
+    return r.species || r.genus || r.common_name || '—';
+}
+
+function posizione(r) {
+    return [r.area_name, r.locality_name].filter(Boolean).join(' · ') || '—';
+}
 
 // Bilancio arboreo (L. 10/2013): dal 1 gennaio dell'anno corrente a oggi
 // (data locale, non UTC: a ridosso della mezzanotte i due fusi divergono)
@@ -65,7 +127,8 @@ const balance = reactive({
     to: todayLocal,
     // Il bilancio di fine mandato riguarda un Comune: sommare piu' enti in un
     // foglio solo darebbe un numero che nessuno puo' usare. Vuoto = tutti,
-    // che serve all'impresa per il proprio quadro d'insieme
+    // che serve all'impresa per il proprio quadro d'insieme. Il filtro resta
+    // suo: e' la scelta di chi riceve il documento, non una vista di lavoro
     client_id: '',
     loading: false,
     error: '',
@@ -119,14 +182,41 @@ function qualifiche(t) {
 
 const loadError = ref('');
 
-onMounted(async () => {
+let cruscottoRichiesta = 0;
+
+async function caricaCruscotto() {
+    // Stessa guardia dell'elenco: due cambi rapidi di committente non devono
+    // lasciare i riquadri sui numeri del committente precedente
+    const richiesta = ++cruscottoRichiesta;
+    const params = filtri.client_id ? { client_id: filtri.client_id } : {};
     try {
         const [dashboard, protectedTrees] = await Promise.all([
-            axios.get('/api/v1/vta/dashboard'),
-            axios.get('/api/v1/vta/tutelati'),
+            axios.get('/api/v1/vta/dashboard', { params }),
+            axios.get('/api/v1/vta/tutelati', { params }),
         ]);
+        if (richiesta !== cruscottoRichiesta) return;
         data.value = dashboard.data.data;
         tutelati.value = protectedTrees.data.data;
+    } catch (err) {
+        // Il fallimento di una richiesta ormai superata non deve coprire
+        // con un errore i dati freschi gia' arrivati
+        if (richiesta !== cruscottoRichiesta) return;
+        throw err;
+    }
+}
+
+async function cambiaCommittente() {
+    loadError.value = '';
+    try {
+        await Promise.all([caricaCruscotto(), caricaElenco(1)]);
+    } catch (err) {
+        loadError.value = avvisoCaricamento(err);
+    }
+}
+
+onMounted(async () => {
+    try {
+        await Promise.all([caricaCruscotto(), caricaElenco(1)]);
         // L'elenco dei committenti non deve far fallire il cruscotto se manca
         // il permesso: si carica a parte e in silenzio
         await caricaCommittenti();
@@ -142,12 +232,24 @@ onMounted(async () => {
 
     <AppLayout>
         <div class="p-6">
-            <div class="mb-4 flex items-center justify-between">
+            <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold">Scadenzario VTA</h1>
                     <p class="text-sm text-gray-500">Valutazioni di stabilità: stato del patrimonio arboreo e ricontrolli</p>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex flex-wrap items-end gap-2">
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Committente</span>
+                        <select
+                            v-model="filtri.client_id"
+                            data-test="vta-filtro-committente"
+                            class="mt-1 block w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm sm:w-auto"
+                            @change="cambiaCommittente"
+                        >
+                            <option value="">Tutti</option>
+                            <option v-for="c in committenti" :key="c.id" :value="c.id">{{ c.name }}</option>
+                        </select>
+                    </label>
                     <a href="/api/v1/exports/cam?layer=P1&format=geojson" class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50">
                         Export CAM P1 (GeoJSON)
                     </a>
@@ -157,130 +259,203 @@ onMounted(async () => {
                 </div>
             </div>
 
+            <!-- Cruscotto gia' in pagina ma aggiornamento fallito (es. cambio
+                 committente): l'errore va detto, o i numeri vecchi passerebbero
+                 per buoni -->
+            <p v-if="loadError && data" class="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                {{ loadError }}
+                <button class="ml-1 font-medium underline" @click="cambiaCommittente">Riprova</button>
+            </p>
+
             <div v-if="data" class="space-y-6">
-                <!-- Contatori -->
+                <!-- Contatori: un clic filtra l'elenco qui sotto -->
                 <div class="grid grid-cols-2 gap-4 md:grid-cols-5">
-                    <div class="rounded-xl border border-gray-200 bg-white p-4">
+                    <button
+                        type="button"
+                        data-test="riquadro-totale"
+                        class="rounded-xl border bg-white p-4 text-left hover:border-gray-400"
+                        :class="filtri.status === '' ? 'border-gray-500 ring-1 ring-gray-400' : 'border-gray-200'"
+                        @click="scegliStato('')"
+                    >
                         <div class="text-2xl font-semibold">{{ data.trees_total }}</div>
                         <div class="text-xs text-gray-500">Alberi censiti</div>
-                    </div>
-                    <div class="rounded-xl border border-gray-200 bg-white p-4">
+                    </button>
+                    <button
+                        type="button"
+                        data-test="riquadro-valutati"
+                        class="rounded-xl border bg-white p-4 text-left hover:border-gray-400"
+                        :class="filtri.status === 'assessed' ? 'border-gray-500 ring-1 ring-gray-400' : 'border-gray-200'"
+                        @click="scegliStato('assessed')"
+                    >
                         <div class="text-2xl font-semibold">{{ data.assessed }}</div>
                         <div class="text-xs text-gray-500">Con almeno una VTA</div>
-                    </div>
-                    <div class="rounded-xl border border-gray-200 bg-white p-4">
+                    </button>
+                    <button
+                        type="button"
+                        data-test="riquadro-mai-valutati"
+                        class="rounded-xl border bg-white p-4 text-left hover:border-gray-400"
+                        :class="filtri.status === 'never' ? 'border-gray-500 ring-1 ring-gray-400' : 'border-gray-200'"
+                        @click="scegliStato('never')"
+                    >
                         <div class="text-2xl font-semibold text-gray-500">{{ data.never_assessed }}</div>
                         <div class="text-xs text-gray-500">Mai valutati</div>
-                    </div>
-                    <div class="rounded-xl border border-red-200 bg-red-50 p-4">
+                    </button>
+                    <button
+                        type="button"
+                        data-test="riquadro-scaduti"
+                        class="rounded-xl border bg-red-50 p-4 text-left hover:border-red-400"
+                        :class="filtri.status === 'overdue' ? 'border-red-500 ring-1 ring-red-400' : 'border-red-200'"
+                        @click="scegliStato('overdue')"
+                    >
                         <div class="text-2xl font-semibold text-red-700">{{ data.overdue_count }}</div>
                         <div class="text-xs text-red-600">Ricontrolli scaduti</div>
-                    </div>
-                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    </button>
+                    <button
+                        type="button"
+                        data-test="riquadro-in-scadenza"
+                        class="rounded-xl border bg-amber-50 p-4 text-left hover:border-amber-400"
+                        :class="filtri.status === 'upcoming' ? 'border-amber-500 ring-1 ring-amber-400' : 'border-amber-200'"
+                        @click="scegliStato('upcoming')"
+                    >
                         <div class="text-2xl font-semibold text-amber-700">{{ data.upcoming_count }}</div>
                         <div class="text-xs text-amber-600">In scadenza (30 gg)</div>
-                    </div>
+                    </button>
                 </div>
 
-                <!-- Ricerca per albero: da qui si valuta e si stampa la perizia -->
-                <div class="rounded-xl border border-gray-200 bg-white p-4" data-test="vta-ricerca">
-                    <h2 class="text-sm font-semibold">Valuta un albero</h2>
-                    <p class="text-xs text-gray-500">
-                        Cerca l'albero per codice, specie o note: da qui apri la scheda, registri
-                        una nuova valutazione di stabilità e stampi la perizia.
-                    </p>
-                    <input
-                        v-model="ricerca.q"
-                        type="search"
-                        data-test="vta-cerca-albero"
-                        placeholder="Codice, specie o note dell'albero…"
-                        class="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none sm:w-96"
-                        @input="cercaConAttesa"
-                    >
-                    <p v-if="ricerca.loading" class="mt-2 text-xs text-gray-400">Ricerca…</p>
-                    <p v-else-if="ricerca.errore" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
-                        {{ ricerca.errore }}
-                        <button class="ml-1 font-medium underline" @click="cercaAlberi">Riprova</button>
-                    </p>
-                    <p v-else-if="ricerca.cercato && ! ricerca.rows.length" class="mt-2 text-xs text-gray-500">
-                        Nessun albero trovato.
-                    </p>
-                    <ul v-else-if="ricerca.rows.length" class="mt-3 divide-y divide-gray-100 rounded-lg border border-gray-200">
-                        <li v-for="a in ricerca.rows" :key="a.id" class="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
-                            <span class="font-medium">{{ a.census_code || a.id.slice(0, 8) }}</span>
-                            <span class="text-gray-500">{{ a.area?.name }}</span>
-                            <span class="ml-auto flex gap-3">
-                                <Link :href="`/censimento/${a.id}?vta=1`" class="font-medium text-green-700 hover:underline">
-                                    Nuova valutazione
-                                </Link>
-                                <Link :href="`/censimento/${a.id}`" class="font-medium text-green-700 hover:underline">
-                                    Apri scheda
-                                </Link>
-                            </span>
-                        </li>
-                    </ul>
-                </div>
-
-                <!-- Classi -->
+                <!-- Classi: un clic filtra l'elenco, un secondo clic toglie il filtro -->
                 <div class="rounded-xl border border-gray-200 bg-white p-4">
                     <h2 class="text-sm font-semibold">Classi di propensione al cedimento (ultima VTA per albero)</h2>
                     <div class="mt-3 flex flex-wrap gap-3">
-                        <span
+                        <button
                             v-for="(count, cls) in data.by_class"
                             :key="cls"
+                            type="button"
+                            :data-test="`classe-${cls === 'n.d.' ? 'nd' : cls.replace('/', '-')}`"
                             class="rounded-full px-4 py-1.5 text-sm font-semibold"
-                            :class="CLASS_COLORS[cls] ?? 'bg-gray-100'"
-                        >{{ cls }}: {{ count }}</span>
+                            :class="[
+                                CLASS_COLORS[cls] ?? 'bg-gray-100',
+                                filtri.class === (cls === 'n.d.' ? 'nd' : cls) ? 'ring-2 ring-gray-500' : '',
+                            ]"
+                            @click="scegliClasse(cls)"
+                        >{{ cls }}: {{ count }}</button>
                         <span v-if="! Object.keys(data.by_class).length" class="text-sm text-gray-400">Nessuna valutazione ancora registrata.</span>
                     </div>
                 </div>
 
-                <!-- Scaduti -->
-                <div class="rounded-xl border border-gray-200 bg-white">
-                    <h2 class="border-b border-gray-100 px-4 py-3 text-sm font-semibold text-red-700">
-                        Ricontrolli scaduti ({{ data.overdue_count }})
-                    </h2>
-                    <table v-if="data.overdue.length" class="w-full text-sm">
-                        <tbody class="divide-y divide-gray-50">
-                            <tr v-for="row in data.overdue" :key="row.tree_id" class="hover:bg-red-50/40">
-                                <td class="px-4 py-2 font-medium">{{ row.census_code || '—' }}</td>
-                                <td class="px-4 py-2">
-                                    <span v-if="row.failure_class" class="rounded-full px-2 py-0.5 text-xs font-bold" :class="CLASS_COLORS[row.failure_class]">{{ row.failure_class }}</span>
-                                </td>
-                                <td class="px-4 py-2 text-gray-500">VTA {{ fmt(row.assessed_on) }}</td>
-                                <td class="px-4 py-2 font-semibold text-red-600">scaduto {{ fmt(row.next_check_due) }}</td>
-                                <td class="px-4 py-2 text-right">
-                                    <Link :href="`/censimento/${row.tree_id}?vta=1`" class="mr-3 font-medium text-green-700 hover:underline">Valuta</Link>
-                                    <Link :href="`/censimento/${row.tree_id}`" class="font-medium text-green-700 hover:underline">Apri</Link>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <p v-else class="px-4 py-5 text-sm text-gray-400">Nessun ricontrollo scaduto.</p>
-                </div>
+                <!-- Elenco unico: la lista di lavoro dello scadenzario -->
+                <div class="rounded-xl border border-gray-200 bg-white" data-test="vta-elenco">
+                    <div class="flex flex-wrap items-end justify-between gap-3 border-b border-gray-100 px-4 py-3">
+                        <div>
+                            <h2 class="text-sm font-semibold">Alberi e valutazioni ({{ elenco.total }})</h2>
+                            <p class="text-xs text-gray-500">
+                                Da ogni riga apri la scheda, registri una nuova valutazione di
+                                stabilità e stampi la perizia.
+                            </p>
+                        </div>
+                        <div class="flex flex-wrap items-end gap-2">
+                            <input
+                                v-model="filtri.q"
+                                type="search"
+                                data-test="vta-cerca-albero"
+                                placeholder="Codice, specie, area o note…"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-green-600 focus:outline-none sm:w-64"
+                                @input="cercaConAttesa"
+                            >
+                            <select
+                                v-model="filtri.status"
+                                data-test="vta-filtro-stato"
+                                class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm sm:w-auto"
+                                @change="caricaElenco(1)"
+                            >
+                                <option v-for="(label, value) in STATI" :key="value" :value="value">{{ label }}</option>
+                            </select>
+                            <select
+                                v-model="filtri.class"
+                                data-test="vta-filtro-classe"
+                                class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm sm:w-auto"
+                                @change="caricaElenco(1)"
+                            >
+                                <option value="">Tutte le classi</option>
+                                <option value="A">Classe A</option>
+                                <option value="B">Classe B</option>
+                                <option value="C">Classe C</option>
+                                <option value="C/D">Classe C/D</option>
+                                <option value="D">Classe D</option>
+                                <option value="nd">Senza classe (n.d.)</option>
+                            </select>
+                        </div>
+                    </div>
 
-                <!-- In scadenza -->
-                <div class="rounded-xl border border-gray-200 bg-white">
-                    <h2 class="border-b border-gray-100 px-4 py-3 text-sm font-semibold text-amber-700">
-                        In scadenza nei prossimi 30 giorni ({{ data.upcoming_count }})
-                    </h2>
-                    <table v-if="data.upcoming.length" class="w-full text-sm">
-                        <tbody class="divide-y divide-gray-50">
-                            <tr v-for="row in data.upcoming" :key="row.tree_id" class="hover:bg-amber-50/40">
-                                <td class="px-4 py-2 font-medium">{{ row.census_code || '—' }}</td>
-                                <td class="px-4 py-2">
-                                    <span v-if="row.failure_class" class="rounded-full px-2 py-0.5 text-xs font-bold" :class="CLASS_COLORS[row.failure_class]">{{ row.failure_class }}</span>
-                                </td>
-                                <td class="px-4 py-2 text-gray-500">VTA {{ fmt(row.assessed_on) }}</td>
-                                <td class="px-4 py-2 font-medium text-amber-700">entro {{ fmt(row.next_check_due) }}</td>
-                                <td class="px-4 py-2 text-right">
-                                    <Link :href="`/censimento/${row.tree_id}?vta=1`" class="mr-3 font-medium text-green-700 hover:underline">Valuta</Link>
-                                    <Link :href="`/censimento/${row.tree_id}`" class="font-medium text-green-700 hover:underline">Apri</Link>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <p v-else class="px-4 py-5 text-sm text-gray-400">Nessuna scadenza nei prossimi 30 giorni.</p>
+                    <p v-if="elenco.errore" class="px-4 py-3 text-sm text-red-700">
+                        {{ elenco.errore }}
+                        <button class="ml-1 font-medium underline" @click="caricaElenco(elenco.paginaRichiesta)">Riprova</button>
+                    </p>
+                    <p v-else-if="elenco.loading && ! elenco.rows.length" class="px-4 py-5 text-sm text-gray-400">Caricamento…</p>
+                    <p v-else-if="! elenco.rows.length" class="px-4 py-5 text-sm text-gray-400">{{ vuotoElenco }}</p>
+
+                    <div v-else class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-left text-xs text-gray-400">
+                                    <th class="px-4 py-2 font-medium">Codice</th>
+                                    <th class="px-4 py-2 font-medium">Specie</th>
+                                    <th class="px-4 py-2 font-medium">Area</th>
+                                    <th class="px-4 py-2 font-medium">Classe</th>
+                                    <th class="px-4 py-2 font-medium">Ultima VTA</th>
+                                    <th class="px-4 py-2 font-medium">Prossima verifica</th>
+                                    <th class="px-4 py-2 text-right font-medium"></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-50">
+                                <tr v-for="r in elenco.rows" :key="r.id" class="hover:bg-gray-50" data-test="vta-riga">
+                                    <td class="px-4 py-2 font-medium whitespace-nowrap">{{ r.census_code || r.id.slice(0, 8) }}</td>
+                                    <td class="px-4 py-2">{{ specie(r) }}</td>
+                                    <td class="px-4 py-2 text-gray-500">
+                                        {{ posizione(r) }}
+                                        <span v-if="! filtri.client_id && r.client_name" class="block text-xs text-gray-400">{{ r.client_name }}</span>
+                                    </td>
+                                    <td class="px-4 py-2">
+                                        <span v-if="r.failure_class" class="rounded-full px-2 py-0.5 text-xs font-bold" :class="CLASS_COLORS[r.failure_class]">{{ r.failure_class }}</span>
+                                        <span v-else-if="r.assessed_on" class="text-xs text-gray-400">n.d.</span>
+                                    </td>
+                                    <td class="px-4 py-2 text-gray-500 whitespace-nowrap">
+                                        <template v-if="r.assessed_on">
+                                            {{ fmt(r.assessed_on) }}<span v-if="r.outcome"> · {{ OUTCOMES[r.outcome] }}</span>
+                                        </template>
+                                        <span v-else class="text-gray-400">mai valutato</span>
+                                    </td>
+                                    <td class="px-4 py-2 whitespace-nowrap">
+                                        <span v-if="r.stato === 'scaduto'" class="font-semibold text-red-600">scaduta {{ fmt(r.next_check_due) }}</span>
+                                        <span v-else-if="r.stato === 'in_scadenza'" class="font-medium text-amber-700">entro {{ fmt(r.next_check_due) }}</span>
+                                        <span v-else-if="r.next_check_due" class="text-gray-500">{{ fmt(r.next_check_due) }}</span>
+                                        <span v-else class="text-gray-400">—</span>
+                                    </td>
+                                    <td class="px-4 py-2 text-right whitespace-nowrap">
+                                        <Link :href="`/censimento/${r.id}?vta=1`" class="mr-3 font-medium text-green-700 hover:underline">Valuta</Link>
+                                        <Link :href="`/censimento/${r.id}`" class="font-medium text-green-700 hover:underline">Apri</Link>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div v-if="elenco.lastPage > 1 && ! elenco.errore" class="flex items-center justify-between border-t border-gray-100 px-4 py-2 text-sm">
+                        <button
+                            type="button"
+                            data-test="elenco-precedente"
+                            class="font-medium text-green-700 hover:underline disabled:text-gray-300 disabled:no-underline"
+                            :disabled="elenco.page <= 1 || elenco.loading"
+                            @click="caricaElenco(elenco.page - 1)"
+                        >← Precedente</button>
+                        <span class="text-gray-500">Pagina {{ elenco.page }} di {{ elenco.lastPage }}</span>
+                        <button
+                            type="button"
+                            data-test="elenco-successiva"
+                            class="font-medium text-green-700 hover:underline disabled:text-gray-300 disabled:no-underline"
+                            :disabled="elenco.page >= elenco.lastPage || elenco.loading"
+                            @click="caricaElenco(elenco.page + 1)"
+                        >Successiva →</button>
+                    </div>
                 </div>
 
                 <!-- Bilancio arboreo -->
@@ -394,35 +569,37 @@ onMounted(async () => {
                     <h2 class="border-b border-gray-100 px-4 py-3 text-sm font-semibold">
                         Alberi monumentali, tutelati e dedicati ({{ tutelati.length }})
                     </h2>
-                    <table v-if="tutelati.length" class="w-full text-sm">
-                        <thead>
-                            <tr class="text-left text-xs text-gray-400">
-                                <th class="px-4 py-2 font-medium">Codice</th>
-                                <th class="px-4 py-2 font-medium">Specie</th>
-                                <th class="px-4 py-2 font-medium">Qualifica</th>
-                                <th class="px-4 py-2 font-medium">Riferimenti</th>
-                                <th class="px-4 py-2 font-medium">Dedica</th>
-                                <th class="px-4 py-2 text-right font-medium"></th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-50">
-                            <tr v-for="t in tutelati" :key="t.asset_id" :class="t.removed_on ? 'text-gray-400' : ''">
-                                <td class="px-4 py-2 font-medium">{{ t.census_code || '—' }}{{ t.removed_on ? ' (rimosso)' : '' }}</td>
-                                <td class="px-4 py-2">{{ t.species || t.genus || t.common_name || '—' }}</td>
-                                <td class="px-4 py-2">{{ qualifiche(t) }}</td>
-                                <td class="px-4 py-2 text-gray-500">{{ [t.monumental_ref, t.protection_ref].filter(Boolean).join(' · ') || '—' }}</td>
-                                <td class="px-4 py-2 text-gray-500">
-                                    <template v-if="t.is_dedicated && t.dedicated_to?.name">
-                                        {{ t.dedicated_to.name }}<template v-if="t.dedicated_to.occasion"> ({{ t.dedicated_to.occasion }})</template><template v-if="t.dedicated_to.date"> · {{ fmt(t.dedicated_to.date) }}</template>
-                                    </template>
-                                    <template v-else>—</template>
-                                </td>
-                                <td class="px-4 py-2 text-right">
-                                    <Link :href="`/censimento/${t.asset_id}`" class="font-medium text-green-700 hover:underline">Apri</Link>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div v-if="tutelati.length" class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-left text-xs text-gray-400">
+                                    <th class="px-4 py-2 font-medium">Codice</th>
+                                    <th class="px-4 py-2 font-medium">Specie</th>
+                                    <th class="px-4 py-2 font-medium">Qualifica</th>
+                                    <th class="px-4 py-2 font-medium">Riferimenti</th>
+                                    <th class="px-4 py-2 font-medium">Dedica</th>
+                                    <th class="px-4 py-2 text-right font-medium"></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-50">
+                                <tr v-for="t in tutelati" :key="t.asset_id" :class="t.removed_on ? 'text-gray-400' : ''">
+                                    <td class="px-4 py-2 font-medium">{{ t.census_code || '—' }}{{ t.removed_on ? ' (rimosso)' : '' }}</td>
+                                    <td class="px-4 py-2">{{ t.species || t.genus || t.common_name || '—' }}</td>
+                                    <td class="px-4 py-2">{{ qualifiche(t) }}</td>
+                                    <td class="px-4 py-2 text-gray-500">{{ [t.monumental_ref, t.protection_ref].filter(Boolean).join(' · ') || '—' }}</td>
+                                    <td class="px-4 py-2 text-gray-500">
+                                        <template v-if="t.is_dedicated && t.dedicated_to?.name">
+                                            {{ t.dedicated_to.name }}<template v-if="t.dedicated_to.occasion"> ({{ t.dedicated_to.occasion }})</template><template v-if="t.dedicated_to.date"> · {{ fmt(t.dedicated_to.date) }}</template>
+                                        </template>
+                                        <template v-else>—</template>
+                                    </td>
+                                    <td class="px-4 py-2 text-right">
+                                        <Link :href="`/censimento/${t.asset_id}`" class="font-medium text-green-700 hover:underline">Apri</Link>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                     <p v-else class="px-4 py-5 text-sm text-gray-400">Nessun albero monumentale, tutelato o dedicato registrato.</p>
                 </div>
             </div>
