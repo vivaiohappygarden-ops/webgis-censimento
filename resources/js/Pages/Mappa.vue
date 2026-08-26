@@ -21,6 +21,7 @@ const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 const canCreate = computed(() => permissions.value.includes('assets.create'));
 const canUpdate = computed(() => permissions.value.includes('assets.update'));
 const canViewClients = computed(() => permissions.value.includes('clients.view'));
+const canManageWorks = computed(() => permissions.value.includes('works.manage'));
 
 const mapEl = ref(null);
 let map = null;
@@ -91,6 +92,20 @@ const redraw = reactive({
 const drawing = reactive({
     active: false, vertices: [], name: '', code: '', localityId: '', saving: false, message: '', ok: false,
 });
+
+// Selezione di elementi sulla mappa per farne un ordine di lavoro: la
+// quantità di ciascuno la propone il server dalla geometria
+const selezione = reactive({
+    active: false, ids: [], codici: {}, titolo: '', workTypeId: '', clientId: '',
+    saving: false, message: '', ok: false, creato: null,
+});
+const workTypes = ref([]);
+// La geometria non si vede nel nome: l'unità di misura sì, e fa capire
+// quale quantità verrà proposta (mq, m, cad)
+const lavorazioniVoci = computed(() => workTypes.value.map((w) => ({
+    ...w,
+    nome: w.unit ? `${w.name} (${w.unit})` : w.name,
+})));
 const canCreateAreas = computed(() => (page.props.auth?.user?.permissions ?? []).includes('areas.create'));
 const assetLayers = ['assets-fill', 'assets-line', 'assets-point'];
 
@@ -242,15 +257,17 @@ async function tutteLePagine(indirizzo, params = {}) {
  * posto senza costringere a ricaricare la pagina.
  */
 async function caricaContorno() {
-    const [aree, catalogRes, localita, committenti] = await Promise.all([
+    const [aree, catalogRes, localita, committenti, lavorazioni] = await Promise.all([
         tutteLePagine('/api/v1/areas'),
         axios.get('/api/v1/catalog'),
         tutteLePagine('/api/v1/localities'),
         canViewClients.value ? tutteLePagine('/api/v1/clients') : Promise.resolve([]),
+        canManageWorks.value ? axios.get('/api/v1/work-types') : Promise.resolve(null),
     ]);
     localities.value = localita;
     clients.value = committenti;
     areas.value = aree;
+    workTypes.value = lavorazioni?.data.data ?? [];
     tipiCensibili.value = catalogRes.data.data.flatMap((m) =>
         m.sub_types.flatMap((s) =>
             s.object_types.map((t) => ({
@@ -316,12 +333,14 @@ function anteprimaCreazione() {
     disegnaAnteprima(creating.vertices, geoScelta.value === 'S');
 }
 
-// Un solo strumento per volta sulla mappa: disegno area, nuovo elemento o
-// ridisegno. Attivarne uno spegne gli altri, o i clic andrebbero a due mani
+// Un solo strumento per volta sulla mappa: disegno area, nuovo elemento,
+// ridisegno o selezione. Attivarne uno spegne gli altri, o i clic
+// andrebbero a due mani
 watch(() => creating.active, (attivo) => {
     if (attivo) {
         drawing.active = false;
         redraw.active = false;
+        selezione.active = false;
     }
     creating.vertices = [];
     creating.message = '';
@@ -331,12 +350,26 @@ watch(() => drawing.active, (attivo) => {
     if (attivo) {
         creating.active = false;
         redraw.active = false;
+        selezione.active = false;
     } else {
         // Spento da un altro strumento: i vertici abbandonati non devono
         // restare disegnati come un poligono fantasma
         drawing.vertices = [];
     }
     updateDrawPreview();
+});
+watch(() => selezione.active, (attivo) => {
+    if (attivo) {
+        creating.active = false;
+        drawing.active = false;
+        redraw.active = false;
+        // Il committente del filtro della vista è quasi sempre quello giusto
+        if (! selezione.clientId) selezione.clientId = vista.clientId || '';
+    } else {
+        svuotaSelezione();
+        selezione.message = '';
+        selezione.creato = null;
+    }
 });
 
 // Durante un disegno il doppio clic non deve far saltare l'inquadratura
@@ -462,6 +495,7 @@ async function avviaRidisegno() {
         redraw.ok = false;
         creating.active = false;
         drawing.active = false;
+        selezione.active = false;
         redraw.active = true;
         disegnaAnteprima([], false);
         selected.value = null;
@@ -525,11 +559,84 @@ function chiudiRidisegno() {
     disegnaAnteprima([], false);
 }
 
+// Il gestore del clic e' registrato su ogni livello (superfici, linee,
+// punti): dove una linea passa sopra un prato scatterebbe due volte e la
+// selezione commuterebbe due elementi con un clic solo. Si tiene l'evento
+// gia' servito e si prende il solo elemento piu' in vista
+let clicServito = null;
+
 function onFeatureClick(e) {
     if (creating.active || drawing.active || redraw.active) return;
-    const f = e.features?.[0];
+    if (e.originalEvent === clicServito) return;
+    clicServito = e.originalEvent;
+    const f = map.queryRenderedFeatures(e.point, { layers: assetLayers })[0] ?? e.features?.[0];
     if (!f) return;
+    if (selezione.active) {
+        commutaElemento(f.properties);
+        return;
+    }
     selected.value = { ...f.properties };
+}
+
+// ---- Selezione di elementi per un ordine di lavoro ----
+
+function commutaElemento(props) {
+    const id = props.id;
+    if (! id) return;
+    const dove = selezione.ids.indexOf(id);
+    if (dove >= 0) {
+        selezione.ids.splice(dove, 1);
+        delete selezione.codici[id];
+    } else {
+        selezione.ids.push(id);
+        selezione.codici[id] = props.census_code || String(id).slice(0, 8);
+    }
+    selezione.message = '';
+    aggiornaEvidenzaSelezione();
+}
+
+/** L'evidenza ambra sugli elementi scelti: filtri sui livelli dedicati. */
+function aggiornaEvidenzaSelezione() {
+    if (! map?.getLayer('selezione-linea')) return;
+    // Con l'elenco vuoto un id impossibile spegne l'evidenza
+    const idFiltro = ['in', ['get', 'id'], ['literal', selezione.ids.length ? [...selezione.ids] : ['-']]];
+    map.setFilter('selezione-fill', ['all', ['==', ['geometry-type'], 'Polygon'], idFiltro]);
+    map.setFilter('selezione-linea', idFiltro);
+    map.setFilter('selezione-punti', ['all', ['==', ['geometry-type'], 'Point'], idFiltro]);
+}
+
+function svuotaSelezione() {
+    selezione.ids = [];
+    selezione.codici = {};
+    aggiornaEvidenzaSelezione();
+}
+
+async function creaOrdineDaSelezione() {
+    selezione.saving = true;
+    selezione.message = '';
+    selezione.creato = null;
+    try {
+        const { data } = await axios.post('/api/v1/work-orders', {
+            title: selezione.titolo.trim(),
+            work_type_id: selezione.workTypeId || undefined,
+            client_id: selezione.clientId || undefined,
+            asset_ids: [...selezione.ids],
+        });
+        const n = data.data.assets?.length ?? selezione.ids.length;
+        const conQuantita = (data.data.assets ?? []).filter((r) => r.planned_quantity != null).length;
+        selezione.ok = true;
+        selezione.creato = { id: data.data.id, code: data.data.code };
+        selezione.message = `Ordine ${data.data.code} creato in bozza con ${n} element${n === 1 ? 'o' : 'i'}`
+            + (conQuantita ? `, quantità dalla mappa per ${conQuantita}.` : '.');
+        selezione.titolo = '';
+        svuotaSelezione();
+    } catch (err) {
+        selezione.ok = false;
+        selezione.message = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Errore nella creazione dell\'ordine';
+    } finally {
+        selezione.saving = false;
+    }
 }
 
 onMounted(async () => {
@@ -689,6 +796,31 @@ onMounted(async () => {
                 'circle-stroke-color': '#ffffff',
             },
         });
+
+        // Evidenza ambra degli elementi scelti per un ordine di lavoro
+        // (i filtri partono su un id impossibile: nessuna evidenza)
+        map.addLayer({
+            id: 'selezione-fill', type: 'fill', source: 'assets', 'source-layer': 'assets',
+            filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['in', ['get', 'id'], ['literal', ['-']]]],
+            paint: { 'fill-color': '#b45309', 'fill-opacity': 0.25 },
+        });
+        map.addLayer({
+            id: 'selezione-linea', type: 'line', source: 'assets', 'source-layer': 'assets',
+            filter: ['in', ['get', 'id'], ['literal', ['-']]],
+            paint: { 'line-color': '#b45309', 'line-width': 3 },
+        });
+        map.addLayer({
+            id: 'selezione-punti', type: 'circle', source: 'assets', 'source-layer': 'assets',
+            filter: ['all', ['==', ['geometry-type'], 'Point'], ['in', ['get', 'id'], ['literal', ['-']]]],
+            paint: {
+                'circle-color': '#b45309',
+                'circle-opacity': 0,
+                'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 6, 16, 11],
+                'circle-stroke-width': 3,
+                'circle-stroke-color': '#b45309',
+            },
+        });
+        aggiornaEvidenzaSelezione();
 
         for (const layer of assetLayers) {
             map.on('click', layer, onFeatureClick);
@@ -888,6 +1020,70 @@ onBeforeUnmount(() => {
                         </div>
                         <p v-if="creating.message" class="text-xs font-medium" :class="creating.ok ? 'text-green-700' : 'text-red-600'">
                             {{ creating.message }}
+                        </p>
+                    </div>
+                </template>
+
+                <template v-if="canManageWorks">
+                    <hr class="my-3 border-gray-200">
+                    <label class="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                        <input v-model="selezione.active" type="checkbox" data-test="selezione-lavoro" class="rounded border-gray-300">
+                        Elementi per un lavoro
+                    </label>
+                    <div v-if="selezione.active" class="mt-2 space-y-2">
+                        <p class="text-xs text-gray-500">
+                            Clicca gli elementi sulla mappa: un clic li aggiunge, un altro li
+                            toglie ({{ selezione.ids.length }}). Con la lavorazione scelta, la
+                            quantità di ciascuno si propone dalla misura sulla mappa.
+                        </p>
+                        <ul
+                            v-if="selezione.ids.length"
+                            data-test="selezione-elenco"
+                            class="max-h-28 space-y-0.5 overflow-y-auto rounded-lg border border-gray-200 px-2 py-1.5 text-xs"
+                        >
+                            <li v-for="id in selezione.ids" :key="id" class="flex items-center justify-between gap-2">
+                                <span>{{ selezione.codici[id] }}</span>
+                                <button class="text-gray-400 hover:text-gray-600" :aria-label="`Togli ${selezione.codici[id]}`" @click="commutaElemento({ id })">✕</button>
+                            </li>
+                        </ul>
+                        <input
+                            v-model="selezione.titolo"
+                            data-test="selezione-titolo"
+                            placeholder="Titolo dell'ordine *"
+                            class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
+                        >
+                        <ScegliVoce
+                            v-model="selezione.workTypeId"
+                            data-test="selezione-lavorazione"
+                            campo-classe="px-2 py-1.5 text-xs"
+                            campo-nome="nome"
+                            :voci="lavorazioniVoci"
+                            :campi-ricerca="['name', 'code']"
+                            segnaposto="Lavorazione…"
+                            vuoto="Nessuna lavorazione trovata."
+                        />
+                        <ScegliCommittente
+                            v-if="canViewClients"
+                            v-model="selezione.clientId"
+                            data-test="selezione-committente"
+                            campo-classe="px-2 py-1.5 text-xs"
+                            :committenti="clients"
+                            tutti="Senza committente"
+                        />
+                        <button
+                            data-test="selezione-crea"
+                            class="w-full rounded-lg bg-green-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                            :disabled="selezione.saving || ! selezione.ids.length || ! selezione.titolo.trim()"
+                            @click="creaOrdineDaSelezione"
+                        >{{ selezione.saving ? 'Creazione…' : 'Crea ordine di lavoro (in bozza)' }}</button>
+                        <p v-if="selezione.message" class="text-xs font-medium" :class="selezione.ok ? 'text-green-700' : 'text-red-600'" data-test="selezione-esito">
+                            {{ selezione.message }}
+                            <a
+                                v-if="selezione.creato"
+                                :href="`/lavori?ordine=${selezione.creato.id}`"
+                                class="underline"
+                                data-test="selezione-apri-ordine"
+                            >Apri l'ordine</a>
                         </p>
                     </div>
                 </template>

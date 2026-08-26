@@ -26,7 +26,7 @@ class AssetController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:assets.view', only: ['index', 'show', 'versioni']),
+            new Middleware('can:assets.view', only: ['index', 'show', 'versioni', 'quantita']),
             new Middleware('can:assets.create', only: ['store']),
             new Middleware('can:assets.update', only: ['update', 'registerRemoval', 'cancelRemoval']),
             new Middleware('can:assets.delete', only: ['destroy']),
@@ -148,6 +148,23 @@ class AssetController extends Controller implements HasMiddleware
             ->findOrFail($id);
 
         return response()->json(['data' => $asset]);
+    }
+
+    /**
+     * La quantità che la geometria dell'elemento propone nell'unità indicata
+     * (regola unica in QuantitaDaGeometria): la usa il preventivo quando una
+     * voce viene collegata a un elemento censito.
+     */
+    public function quantita(Request $request, string $id): JsonResponse
+    {
+        $data = $request->validate(['unit' => ['required', 'string', 'max:20']]);
+        $asset = Asset::query()->findOrFail($id);
+
+        return response()->json(['data' => [
+            'quantity' => \App\Services\Works\QuantitaDaGeometria::perAsset($data['unit'], $asset),
+            'unit' => $data['unit'],
+            'tipo_misura' => \App\Services\Works\QuantitaDaGeometria::tipoMisura($data['unit']),
+        ]]);
     }
 
     /** La storia delle modifiche: chi, quando e che cosa e' cambiato. */

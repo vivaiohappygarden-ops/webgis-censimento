@@ -121,6 +121,8 @@ function openDetailData(estimate) {
     detail.value = estimate;
     items.value = (estimate.items ?? []).map((i) => ({
         work_type_id: i.work_type_id ?? '',
+        asset_id: i.asset_id ?? '',
+        asset_code: i.asset?.census_code ?? '',
         description: i.description,
         unit: i.unit,
         quantity: Number(i.quantity),
@@ -130,6 +132,7 @@ function openDetailData(estimate) {
     detailSaved.value = false;
     workOrderMessage.value = '';
     editorDirty.value = false;
+    collega.index = null;
 }
 
 async function openDetail(id) {
@@ -145,7 +148,77 @@ async function openDetail(id) {
 
 function addItem() {
     markDirty();
-    items.value.push({ work_type_id: '', description: '', unit: '', quantity: 1, unit_price: null });
+    items.value.push({ work_type_id: '', asset_id: '', asset_code: '', description: '', unit: '', quantity: 1, unit_price: null });
+}
+
+// ---- Misura dalla mappa: la voce si collega a un elemento censito ----
+const collega = reactive({ index: null, q: '', results: [], busy: false, error: '' });
+
+function apriCollega(index) {
+    collega.index = collega.index === index ? null : index;
+    collega.q = '';
+    collega.results = [];
+    collega.error = '';
+}
+
+let attesaElementi = null;
+function cercaElementi() {
+    clearTimeout(attesaElementi);
+    attesaElementi = setTimeout(async () => {
+        if (collega.q.trim().length < 2) {
+            collega.results = [];
+            return;
+        }
+        try {
+            const { data } = await axios.get('/api/v1/assets', { params: { q: collega.q, per_page: 8 } });
+            collega.results = data.data;
+        } catch (err) {
+            collega.error = avvisoCaricamento(err);
+        }
+    }, 250);
+}
+
+async function collegaElemento(item, asset) {
+    // L'unità decide quale misura prendere (mq, m, cad): senza unità il
+    // server non avrebbe la domanda a cui rispondere
+    const unit = (item.unit || '').trim()
+        || props.workTypes.find((w) => w.id === item.work_type_id)?.unit
+        || '';
+    if (! unit) {
+        collega.error = 'Indica prima l\'unità di misura della voce (o scegli una lavorazione).';
+        return;
+    }
+    collega.busy = true;
+    collega.error = '';
+    try {
+        // La regola misura-da-geometria sta sul server, in un posto solo
+        const { data } = await axios.get(`/api/v1/assets/${asset.id}/quantita`, { params: { unit } });
+        item.asset_id = asset.id;
+        item.asset_code = asset.census_code || asset.id.slice(0, 8);
+        if (data.data.quantity != null) {
+            item.quantity = data.data.quantity;
+            if (! item.unit) item.unit = unit;
+            collega.index = null;
+            collega.q = '';
+            collega.results = [];
+        } else {
+            // L'elemento resta collegato, ma l'avviso deve restare in vista:
+            // il riquadro non si chiude da solo su una misura mancante
+            collega.error = `Dalla geometria di ${item.asset_code} non si ricava una misura in "${unit}": la quantità resta da scrivere a mano.`;
+            collega.results = [];
+        }
+        markDirty();
+    } catch (err) {
+        collega.error = firstError(err, 'Misura non disponibile.');
+    } finally {
+        collega.busy = false;
+    }
+}
+
+function scollegaElemento(item) {
+    item.asset_id = '';
+    item.asset_code = '';
+    markDirty();
 }
 
 function removeItem(index) {
@@ -171,6 +244,7 @@ async function saveItems() {
             version: detail.value.version,
             items: items.value.map((i) => ({
                 work_type_id: i.work_type_id || null,
+                asset_id: i.asset_id || null,
                 description: i.description.trim(),
                 unit: i.unit.trim(),
                 quantity: i.quantity,
@@ -375,6 +449,45 @@ defineExpose({ load });
                                 </td>
                                 <td class="py-1.5 pr-2">
                                     <input v-model="item.description" maxlength="300" data-test="est-item-desc" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-50" :disabled="! canManage || detail.status !== 'draft'" @input="markDirty">
+                                    <div class="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                                        <template v-if="item.asset_id">
+                                            <span class="rounded bg-green-50 px-1.5 py-0.5 text-green-800" data-test="est-item-elemento">{{ item.asset_code }} · misura dalla mappa</span>
+                                            <button
+                                                v-if="canManage && detail.status === 'draft'"
+                                                class="text-gray-400 hover:text-gray-600"
+                                                :aria-label="`Scollega ${item.asset_code}`"
+                                                @click="scollegaElemento(item)"
+                                            >✕</button>
+                                        </template>
+                                        <button
+                                            v-else-if="canManage && detail.status === 'draft'"
+                                            class="text-green-800 hover:underline"
+                                            data-test="est-collega"
+                                            @click="apriCollega(index)"
+                                        >Misura da un elemento…</button>
+                                    </div>
+                                    <div v-if="collega.index === index && canManage && detail.status === 'draft'" class="mt-1">
+                                        <input
+                                            v-model="collega.q"
+                                            data-test="est-collega-cerca"
+                                            placeholder="Cerca per codice, specie o area…"
+                                            class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
+                                            @input="cercaElementi"
+                                        >
+                                        <ul v-if="collega.results.length" class="mt-1 max-h-32 divide-y divide-gray-50 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow">
+                                            <li
+                                                v-for="a in collega.results"
+                                                :key="a.id"
+                                                class="cursor-pointer px-2 py-1.5 text-xs hover:bg-green-50"
+                                                data-test="est-collega-voce"
+                                                @click="! collega.busy && collegaElemento(item, a)"
+                                            >
+                                                <span class="font-medium">{{ a.census_code || a.id.slice(0, 8) }}</span>
+                                                <span class="ml-1 text-gray-500">{{ a.object_type?.name }}</span>
+                                            </li>
+                                        </ul>
+                                        <p v-if="collega.error" class="mt-1 text-xs text-amber-700" data-test="est-collega-avviso">{{ collega.error }}</p>
+                                    </div>
                                 </td>
                                 <td class="py-1.5 pr-2">
                                     <input v-model="item.unit" maxlength="20" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-50" :disabled="! canManage || detail.status !== 'draft'" placeholder="mq" @input="markDirty">

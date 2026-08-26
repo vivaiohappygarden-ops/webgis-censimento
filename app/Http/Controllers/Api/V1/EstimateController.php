@@ -155,6 +155,7 @@ class EstimateController extends Controller implements HasMiddleware
             'version' => ['nullable', 'integer'],
             'items' => ['present', 'array', 'max:100'],
             'items.*.work_type_id' => ['nullable', 'uuid'],
+            'items.*.asset_id' => ['nullable', 'uuid'],
             'items.*.description' => ['required', 'string', 'max:300'],
             'items.*.unit' => ['required', 'string', 'max:20'],
             'items.*.quantity' => ['required', 'numeric', 'decimal:0,2', 'gt:0', 'max:999999'],
@@ -176,6 +177,18 @@ class EstimateController extends Controller implements HasMiddleware
                 }
             }
 
+            // L'elemento collegato deve esistere nel tenant: il riferimento
+            // finisce in tabella e da lì si riprende la misura
+            $assetIds = collect($data['items'])->pluck('asset_id')->filter()->unique();
+            if ($assetIds->isNotEmpty()) {
+                $found = \App\Models\Asset::query()->whereIn('id', $assetIds)->count();
+                if ($found !== $assetIds->count()) {
+                    throw ValidationException::withMessages([
+                        'items' => 'Un elemento collegato non esiste.',
+                    ]);
+                }
+            }
+
             EstimateItem::query()->where('estimate_id', $estimate->id)->delete();
             foreach ($data['items'] as $index => $item) {
                 EstimateItem::create([
@@ -183,6 +196,7 @@ class EstimateController extends Controller implements HasMiddleware
                     'estimate_id' => $estimate->id,
                     'sort_order' => $index + 1,
                     'work_type_id' => $item['work_type_id'] ?? null,
+                    'asset_id' => $item['asset_id'] ?? null,
                     'description' => trim($item['description']),
                     'unit' => trim($item['unit']),
                     'quantity' => $item['quantity'],
@@ -330,7 +344,7 @@ class EstimateController extends Controller implements HasMiddleware
     private function presented(string $id): array
     {
         $estimate = Estimate::query()
-            ->with(['client:id,name', 'area:id,name', 'items.workType:id,name'])
+            ->with(['client:id,name', 'area:id,name', 'items.workType:id,name', 'items.asset:id,census_code'])
             ->findOrFail($id);
 
         [$subtotal, $vat] = $this->totals($estimate);

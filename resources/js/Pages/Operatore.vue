@@ -66,7 +66,7 @@ const workPhotoAssetId = ref('');
 // I miei lavori: ordini assegnati all'operatore, replicati sul dispositivo
 const localOrders = ref([]);
 const selectedOrder = ref(null);
-const consuntivo = reactive({ open: false, manHours: null, quantity: null, unit: '', notes: '' });
+const consuntivo = reactive({ open: false, manHours: null, quantity: null, unit: '', notes: '', propostaDallaMappa: false });
 
 // Ispezioni su checklist compilate in campo (modelli dal working set)
 const localTemplates = ref([]);
@@ -1033,12 +1033,22 @@ async function orderTransition(order, to) {
 }
 
 function openConsuntivo(order) {
+    // La quantità si propone dalla mappa: è la somma delle quantità previste
+    // degli elementi collegati, ma solo se parlano tutti la stessa unità.
+    // Funziona anche offline: le righe sono già sul dispositivo
+    const righe = (order.assets ?? []).filter((r) => r.planned_quantity != null);
+    const unita = [...new Set(righe.map((r) => r.unit ?? ''))];
+    const proposta = righe.length && unita.length === 1 && unita[0] !== ''
+        ? Math.round(righe.reduce((somma, r) => somma + Number(r.planned_quantity), 0) * 100) / 100
+        : null;
+
     Object.assign(consuntivo, {
         open: true,
         manHours: null,
-        quantity: null,
-        unit: order.work_type?.unit ?? '',
+        quantity: proposta,
+        unit: proposta !== null ? unita[0] : (order.work_type?.unit ?? ''),
         notes: '',
+        propostaDallaMappa: proposta !== null,
     });
 }
 
@@ -1944,6 +1954,10 @@ onBeforeUnmount(() => {
                             <input v-model="consuntivo.unit" maxlength="20" data-test="wo-unit" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. mq, cad">
                         </label>
                     </div>
+                    <p v-if="consuntivo.propostaDallaMappa" class="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600" data-test="wo-quantita-proposta">
+                        Quantità proposta dalle misure sulla mappa degli elementi collegati:
+                        correggila se il lavoro eseguito è stato diverso.
+                    </p>
                     <label class="mt-3 block text-xs">
                         <span class="text-gray-500">Note di lavoro</span>
                         <textarea v-model="consuntivo.notes" rows="2" data-test="wo-notes" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" />

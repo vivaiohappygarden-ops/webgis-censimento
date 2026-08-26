@@ -174,6 +174,7 @@ Route::prefix('v1')->group(function () {
         Route::get('non-conformities', [\App\Http\Controllers\Api\V1\NonConformityController::class, 'index']);
         Route::patch('non-conformities/{id}', [\App\Http\Controllers\Api\V1\NonConformityController::class, 'update'])->whereUuid('id');
         Route::post('work-orders/{id}/assets', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'attachAsset'])->whereUuid('id');
+        Route::patch('work-orders/{id}/assets/{rowId}', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'updateAsset'])->whereUuid(['id', 'rowId']);
         Route::delete('work-orders/{id}/assets/{rowId}', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'detachAsset'])->whereUuid(['id', 'rowId']);
 
         Route::apiResource('areas', AreaController::class)->whereUuid('area');
@@ -189,6 +190,10 @@ Route::prefix('v1')->group(function () {
 
         // Conto delle richieste a parte: vedi il limite "tiles" in AppServiceProvider
         Route::get('assets/{id}/versioni', [\App\Http\Controllers\Api\V1\AssetController::class, 'versioni'])
+            ->whereUuid('id');
+
+        // La misura che la geometria propone nell'unità chiesta (per i preventivi)
+        Route::get('assets/{id}/quantita', [\App\Http\Controllers\Api\V1\AssetController::class, 'quantita'])
             ->whereUuid('id');
 
         // Viste salvate: filtri con nome, per gli elenchi

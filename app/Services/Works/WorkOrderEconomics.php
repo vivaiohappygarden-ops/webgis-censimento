@@ -53,6 +53,40 @@ class WorkOrderEconomics
             ->groupBy(fn ($log) => $log->unit ?? '')
             ->map(fn ($group) => round((float) $group->sum('quantity'), 2));
 
+        return [
+            'total_man_hours' => round((float) $logs->sum('man_hours'), 2),
+            'quantities' => $quantities,
+            'valued' => $this->valorizza($workOrder, $quantities, $itemsByPair),
+        ];
+    }
+
+    /**
+     * Il previsto dell'ordine: la somma delle quantità previste degli
+     * elementi collegati, per unità di misura, valorizzata con le stesse
+     * regole del consuntivo. È l'altra gamba del confronto previsto/eseguito.
+     *
+     * @param  WorkOrder  $workOrder  con la relazione assets già caricata
+     * @return array{quantities: \Illuminate\Support\Collection, valued: ?array}
+     */
+    public function previsto(WorkOrder $workOrder, $itemsByPair = null): array
+    {
+        $quantities = $workOrder->assets->whereNotNull('planned_quantity')
+            ->groupBy(fn ($row) => $row->unit ?? '')
+            ->map(fn ($group) => round((float) $group->sum('planned_quantity'), 2));
+
+        return [
+            'quantities' => $quantities,
+            'valued' => $this->valorizza($workOrder, $quantities, $itemsByPair),
+        ];
+    }
+
+    /**
+     * Valorizzazione di un insieme di quantità (per unità) con la voce di
+     * listino della lavorazione dell'ordine. Unica per consuntivo e previsto:
+     * due calcoli separati prima o poi darebbero due importi diversi.
+     */
+    private function valorizza(WorkOrder $workOrder, $quantities, $itemsByPair = null): ?array
+    {
         $valued = null;
         if ($workOrder->price_list_id !== null && $workOrder->work_type_id !== null) {
             $items = $itemsByPair !== null
@@ -97,10 +131,6 @@ class WorkOrderEconomics
             }
         }
 
-        return [
-            'total_man_hours' => round((float) $logs->sum('man_hours'), 2),
-            'quantities' => $quantities,
-            'valued' => $valued,
-        ];
+        return $valued;
     }
 }

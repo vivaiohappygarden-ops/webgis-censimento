@@ -357,6 +357,72 @@ async function detachAsset(rowId) {
     }
 }
 
+// --- Quantità previste delle righe elemento ---------------------------------
+const righeQuantita = reactive({});
+
+function preparaRigheQuantita() {
+    Object.keys(righeQuantita).forEach((k) => delete righeQuantita[k]);
+    for (const row of detail.value?.assets ?? []) {
+        righeQuantita[row.id] = {
+            quantity: row.planned_quantity != null ? Number(row.planned_quantity) : null,
+            unit: row.unit ?? '',
+            dirty: false,
+            busy: false,
+        };
+    }
+}
+// Ogni azione sul dettaglio torna dal server con le righe fresche: le
+// caselle ripartono da quelle, perché lo stato vero è quello del server
+watch(() => detail.value?.assets, preparaRigheQuantita);
+
+async function salvaQuantitaRiga(row) {
+    const mod = righeQuantita[row.id];
+    if (! mod) return;
+    mod.busy = true;
+    detailError.value = '';
+    try {
+        const { data } = await axios.patch(`/api/v1/work-orders/${detail.value.id}/assets/${row.id}`, {
+            planned_quantity: mod.quantity === '' || mod.quantity == null ? null : mod.quantity,
+            unit: mod.unit.trim() || null,
+        });
+        detail.value = data.data;
+    } catch (err) {
+        detailError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Errore nel salvataggio della quantità';
+        mod.busy = false;
+    }
+}
+
+// Dopo un ridisegno la quantità agganciata resta quella vecchia: questo
+// pulsante la riallinea alla geometria di oggi (il calcolo sta sul server)
+async function riprendiDallaMappa(row) {
+    detailError.value = '';
+    try {
+        const { data } = await axios.patch(`/api/v1/work-orders/${detail.value.id}/assets/${row.id}`, { ricalcola: true });
+        detail.value = data.data;
+    } catch (err) {
+        detailError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Errore nel ricalcolo';
+    }
+}
+
+// "Riprendi dalla mappa" compare solo quando servirebbe davvero: la geometria
+// dà una misura e la quantità agganciata non le corrisponde già
+function mostraRiprendi(row) {
+    if (row.quantita_geometrica == null) return false;
+    if (row.planned_quantity == null) return true;
+
+    return Number(row.planned_quantity) !== Number(row.quantita_geometrica)
+        || (row.unit ?? '') !== (row.unita_geometrica ?? '');
+}
+
+const ordineChiuso = computed(() => ['completed', 'cancelled'].includes(detail.value?.status));
+
+// Totale previsto per unità di misura: la stessa somma che valorizza l'importo
+const totaliPrevisti = computed(() =>
+    Object.entries(detail.value?.previsto?.quantities ?? {})
+        .map(([unit, qty]) => `${fmtQty(qty)} ${unit || 'senza unità'}`));
+
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '—');
 // Oggi in data locale (mai toISOString: a cavallo della mezzanotte sbaglia giorno)
 const todayLocalYmd = (() => {
@@ -421,6 +487,9 @@ function cercaConAttesa() {
 
 onMounted(async () => {
     await carica(() => Promise.all([load(), loadLookups()]));
+    // Arrivando dalla mappa ("Apri l'ordine") il dettaglio si apre da solo
+    const ordine = new URLSearchParams(window.location.search).get('ordine');
+    if (ordine) await openDetail(ordine);
 });
 </script>
 
@@ -860,20 +929,61 @@ onMounted(async () => {
 
                         <h3 class="mt-5 text-sm font-semibold">Elementi ({{ detail.assets.length }})</h3>
                         <ul class="mt-2 divide-y divide-gray-50 rounded-lg border border-gray-100">
-                            <li v-for="row in detail.assets" :key="row.id" class="flex items-center gap-3 px-3 py-2 text-sm">
-                                <div class="min-w-0 flex-1">
-                                    <span class="font-medium">{{ row.asset?.census_code || row.asset_id.slice(0, 8) }}</span>
-                                    <span class="ml-2 truncate text-xs text-gray-500">{{ row.asset?.object_type?.name }}</span>
+                            <li v-for="row in detail.assets" :key="row.id" class="px-3 py-2 text-sm" data-test="wo-riga-elemento">
+                                <div class="flex items-center gap-3">
+                                    <div class="min-w-0 flex-1">
+                                        <span class="font-medium">{{ row.asset?.census_code || row.asset_id.slice(0, 8) }}</span>
+                                        <span class="ml-2 truncate text-xs text-gray-500">{{ row.asset?.object_type?.name }}</span>
+                                    </div>
+                                    <span v-if="row.work_type" class="text-xs text-gray-500">{{ row.work_type.name }}</span>
+                                    <span v-if="! canManage || ordineChiuso" class="text-xs text-gray-700">
+                                        {{ row.planned_quantity != null ? `${fmtQty(row.planned_quantity)} ${row.unit ?? ''}` : '—' }}
+                                    </span>
+                                    <button
+                                        v-if="canManage && ! ordineChiuso"
+                                        class="text-xs font-medium text-red-600 hover:underline"
+                                        @click="detachAsset(row.id)"
+                                    >Rimuovi</button>
                                 </div>
-                                <span v-if="row.work_type" class="text-xs text-gray-500">{{ row.work_type.name }}</span>
-                                <button
-                                    v-if="canManage"
-                                    class="text-xs font-medium text-red-600 hover:underline"
-                                    @click="detachAsset(row.id)"
-                                >Rimuovi</button>
+                                <div v-if="canManage && ! ordineChiuso && righeQuantita[row.id]" class="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                                    <span class="text-gray-500">Quantità prevista</span>
+                                    <input
+                                        v-model.number="righeQuantita[row.id].quantity"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        data-test="wo-riga-quantita"
+                                        class="w-24 rounded-lg border border-gray-300 px-2 py-1 text-right text-sm"
+                                        @input="righeQuantita[row.id].dirty = true"
+                                    >
+                                    <input
+                                        v-model="righeQuantita[row.id].unit"
+                                        maxlength="20"
+                                        placeholder="unità"
+                                        data-test="wo-riga-unita"
+                                        class="w-16 rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                                        @input="righeQuantita[row.id].dirty = true"
+                                    >
+                                    <button
+                                        v-if="righeQuantita[row.id].dirty"
+                                        class="font-medium text-green-800 hover:underline disabled:opacity-50"
+                                        :disabled="righeQuantita[row.id].busy"
+                                        data-test="wo-riga-salva"
+                                        @click="salvaQuantitaRiga(row)"
+                                    >Salva</button>
+                                    <button
+                                        v-if="mostraRiprendi(row)"
+                                        class="text-gray-500 hover:underline"
+                                        data-test="wo-riga-ricalcola"
+                                        @click="riprendiDallaMappa(row)"
+                                    >Riprendi dalla mappa ({{ fmtQty(row.quantita_geometrica) }} {{ row.unita_geometrica ?? '' }})</button>
+                                </div>
                             </li>
                             <li v-if="! detail.assets.length" class="px-3 py-3 text-sm text-gray-400">Nessun elemento collegato.</li>
                         </ul>
+                        <p v-if="totaliPrevisti.length" class="mt-1.5 text-xs text-gray-600" data-test="wo-totale-previsto">
+                            Totale previsto dagli elementi: {{ totaliPrevisti.join(' · ') }}
+                        </p>
 
                         <!-- Consuntivi ed economia -->
                         <h3 class="mt-5 text-sm font-semibold">Consuntivi ({{ (detail.logs ?? []).length }})</h3>
@@ -925,6 +1035,14 @@ onMounted(async () => {
                             <div v-for="(qty, unit) in detail.consuntivo.quantities" :key="unit" class="mt-1 flex justify-between">
                                 <span class="text-gray-500">Quantità eseguita ({{ unit || 'senza unità' }})</span>
                                 <span class="font-medium">{{ fmtQty(qty) }}</span>
+                            </div>
+                            <div v-if="detail.previsto?.valued && ! detail.previsto.valued.ambiguous && detail.previsto.valued.amount != null" class="mt-2 flex justify-between gap-3 border-t border-gray-200 pt-2">
+                                <span class="text-gray-500">
+                                    Importo previsto dagli elementi collegati
+                                    ({{ fmtQty(detail.previsto.valued.quantity ?? 0) }} {{ detail.previsto.valued.unit }}
+                                    × {{ fmtEuro(detail.previsto.valued.unit_price) }}<template v-if="detail.previsto.valued.overhead_pct"> + spese generali {{ fmtQty(detail.previsto.valued.overhead_pct) }}%</template><template v-if="detail.previsto.valued.safety_cost"> + sicurezza {{ fmtEuro(detail.previsto.valued.safety_cost) }}</template>)
+                                </span>
+                                <span class="font-semibold" data-test="wo-importo-previsto">{{ fmtEuro(detail.previsto.valued.amount) }}</span>
                             </div>
                             <div v-if="detail.consuntivo.valued && ! detail.consuntivo.valued.ambiguous" class="mt-2 flex justify-between gap-3 border-t border-gray-200 pt-2">
                                 <span class="text-gray-500">

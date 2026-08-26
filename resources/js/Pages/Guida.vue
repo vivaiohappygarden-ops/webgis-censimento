@@ -291,6 +291,26 @@ function goTo(id) {
                             L'<strong>agenda</strong> mostra la settimana per squadra; il <strong>rendiconto</strong>
                             riepiloga i lavori completati per cliente e periodo, con i valori calcolati dal listino.
                         </p>
+                        <h3>Quantità dalla mappa</h3>
+                        <p>
+                            Quando si collega un elemento a un ordine, la <strong>quantità prevista</strong> si
+                            propone da sola dalla misura sulla mappa, in base all'unità della lavorazione:
+                            metri quadrati dalla superficie del prato, metri dalla lunghezza della siepe,
+                            "cadauno" per gli alberi. Nel dettaglio dell'ordine ogni riga si può correggere
+                            (la superficie lorda non sempre è quella lavorata) e, se la geometria è stata
+                            ridisegnata dopo, il pulsante "Riprendi dalla mappa" riallinea il numero.
+                            Sotto l'elenco compare il totale previsto e, con un listino collegato,
+                            l'<strong>importo previsto</strong> accanto a quello consuntivato.
+                            Nell'app di campo la stessa somma viene proposta nel consuntivo di chiusura:
+                            l'operatore conferma o corregge, invece di digitare da zero.
+                        </p>
+                        <h3>Creare un ordine dalla mappa</h3>
+                        <p>
+                            Sulla <strong>Mappa</strong>, il riquadro "Elementi per un lavoro" permette di
+                            cliccare gli elementi da lavorare (un clic li aggiunge, un altro li toglie:
+                            si evidenziano in ambra), scegliere lavorazione e committente e creare
+                            l'ordine in bozza: ogni elemento entra già con la sua quantità presa dalla mappa.
+                        </p>
                         <h3>Listini e valore</h3>
                         <p>
                             Nella pagina <strong>Listini</strong> si definiscono le voci (prezzo per unità di misura,
@@ -300,8 +320,9 @@ function goTo(id) {
                         </p>
                         <p class="mt-2">
                             Nella vista <strong>Preventivi</strong> si prepara un'offerta per un cliente: lavorazioni
-                            dal catalogo (o voci libere) con quantità e prezzi indicati a mano, totale con IVA e
-                            PDF pronto da inviare.
+                            dal catalogo (o voci libere) con quantità e prezzi, totale con IVA e
+                            PDF pronto da inviare. Su ogni voce, "Misura da un elemento…" collega un elemento
+                            censito e ne riprende la misura dalla mappa nell'unità della voce.
                             Il flusso è bozza, inviato, accettato o rifiutato: un preventivo accettato diventa
                             un ordine di lavoro con un clic, e ogni documento resta agli atti.
                         </p>

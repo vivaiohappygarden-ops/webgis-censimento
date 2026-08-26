@@ -12,7 +12,7 @@ class EstimateItem extends Model
 
     protected $fillable = [
         'tenant_id', 'estimate_id', 'sort_order', 'work_type_id',
-        'description', 'unit', 'quantity', 'unit_price',
+        'asset_id', 'description', 'unit', 'quantity', 'unit_price',
     ];
 
     protected function casts(): array
@@ -25,5 +25,11 @@ class EstimateItem extends Model
     public function workType()
     {
         return $this->belongsTo(WorkType::class);
+    }
+
+    /** L'elemento censito da cui la voce ha ripreso la misura (facoltativo). */
+    public function asset()
+    {
+        return $this->belongsTo(Asset::class);
     }
 }

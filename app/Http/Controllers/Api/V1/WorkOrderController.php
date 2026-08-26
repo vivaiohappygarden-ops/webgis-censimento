@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderAsset;
+use App\Services\Works\QuantitaDaGeometria;
 use App\Support\RicercaTestuale;
 use App\Support\Audit;
 use App\Support\ListQuery;
@@ -24,7 +25,7 @@ class WorkOrderController extends Controller implements HasMiddleware
     {
         return [
             new Middleware('can:works.view', only: ['index', 'show']),
-            new Middleware('can:works.manage', only: ['store', 'update', 'destroy', 'transition', 'toggleDay', 'attachAsset', 'detachAsset']),
+            new Middleware('can:works.manage', only: ['store', 'update', 'destroy', 'transition', 'toggleDay', 'attachAsset', 'updateAsset', 'detachAsset']),
         ];
     }
 
@@ -91,14 +92,53 @@ class WorkOrderController extends Controller implements HasMiddleware
         $data = $this->validated($request);
         $user = $request->user();
 
-        $workOrder = DB::transaction(function () use ($data, $user) {
-            return WorkOrder::create([
+        // Elementi da collegare subito (selezione sulla mappa): la quantità
+        // prevista di ciascuno si propone dalla geometria, come nell'aggancio
+        $extra = $request->validate([
+            'asset_ids' => ['sometimes', 'array', 'max:200'],
+            'asset_ids.*' => ['uuid'],
+        ]);
+        $assetIds = collect($extra['asset_ids'] ?? [])->unique()->values();
+        $assets = collect();
+        if ($assetIds->isNotEmpty()) {
+            $assets = Asset::query()->whereIn('id', $assetIds)->get();
+            if ($assets->count() !== $assetIds->count()) {
+                throw ValidationException::withMessages([
+                    'asset_ids' => 'Un elemento indicato non esiste.',
+                ]);
+            }
+        }
+
+        $workOrder = DB::transaction(function () use ($data, $user, $assets) {
+            // Se gli elementi scelti stanno tutti nella stessa area e l'area
+            // non è indicata, si eredita: sulla mappa non serve ripeterla
+            if (empty($data['area_id']) && $assets->isNotEmpty()) {
+                $areaIds = $assets->pluck('area_id')->unique();
+                if ($areaIds->count() === 1 && $areaIds->first() !== null) {
+                    $data['area_id'] = $areaIds->first();
+                }
+            }
+
+            $workOrder = WorkOrder::create([
                 ...$data,
                 'code' => WorkOrder::nextCode($user->tenant_id),
                 'status' => 'draft',
                 'created_by' => $user->id,
                 'updated_by' => $user->id,
             ]);
+
+            foreach ($assets as $asset) {
+                [$quantita, $unita] = $this->quantitaProposta($workOrder, $asset, [], null);
+                WorkOrderAsset::create([
+                    'tenant_id' => $workOrder->tenant_id,
+                    'work_order_id' => $workOrder->id,
+                    'asset_id' => $asset->id,
+                    'planned_quantity' => $quantita,
+                    'unit' => $unita,
+                ]);
+            }
+
+            return $workOrder;
         });
 
         Audit::log('work_order.created', $workOrder, ['code' => $workOrder->code]);
@@ -113,7 +153,7 @@ class WorkOrderController extends Controller implements HasMiddleware
                 'team:id,name', 'assignee:id,name', 'workType:id,code,name,unit',
                 'area:id,name,code', 'client:id,name',
                 'priceList:id,code,name,currency',
-                'assets.asset' => fn ($q) => $q->select('assets.id', 'census_code', 'object_type_id', 'status')
+                'assets.asset' => fn ($q) => $q->select('assets.id', 'census_code', 'object_type_id', 'status', 'computed_area_sqm', 'computed_length_m')
                     ->with('objectType:id,code,name'),
                 'assets.workType:id,code,name,unit',
                 'logs' => fn ($q) => $q->with('operator:id,name')->orderByDesc('started_at'),
@@ -122,11 +162,27 @@ class WorkOrderController extends Controller implements HasMiddleware
             ])
             ->findOrFail($id);
 
+        $payload = $workOrder->toArray();
+
+        // Riga per riga, la misura che la geometria darebbe OGGI: l'interfaccia
+        // la confronta con la quantità agganciata e, se il disegno è cambiato
+        // nel frattempo, offre di riprenderla dalla mappa
+        foreach ($workOrder->assets->values() as $i => $row) {
+            $unit = $row->unit ?? $row->workType?->unit ?? $workOrder->workType?->unit;
+            $payload['assets'][$i]['quantita_geometrica'] = $row->asset !== null
+                ? QuantitaDaGeometria::perAsset($unit, $row->asset)
+                : null;
+            $payload['assets'][$i]['unita_geometrica'] = $unit;
+        }
+
+        $economics = app(\App\Services\Works\WorkOrderEconomics::class);
+
         return response()->json([
             'data' => [
-                ...$workOrder->toArray(),
+                ...$payload,
                 'allowed_transitions' => WorkOrder::TRANSITIONS[$workOrder->status] ?? [],
-                'consuntivo' => app(\App\Services\Works\WorkOrderEconomics::class)->consuntivo($workOrder),
+                'consuntivo' => $economics->consuntivo($workOrder),
+                'previsto' => $economics->previsto($workOrder),
             ],
         ]);
     }
@@ -288,9 +344,9 @@ class WorkOrderController extends Controller implements HasMiddleware
         $workOrder = WorkOrder::query()->findOrFail($id);
         $this->assertNotTerminal($workOrder);
         $asset = Asset::query()->findOrFail($data['asset_id']);
-        if (! empty($data['work_type_id'])) {
-            \App\Models\WorkType::query()->findOrFail($data['work_type_id']);
-        }
+        $rowType = ! empty($data['work_type_id'])
+            ? \App\Models\WorkType::query()->findOrFail($data['work_type_id'])
+            : null;
 
         $duplicateMessage = ValidationException::withMessages([
             'asset_id' => 'Elemento già presente nell\'ordine di lavoro con questa lavorazione.',
@@ -307,19 +363,77 @@ class WorkOrderController extends Controller implements HasMiddleware
             throw $duplicateMessage;
         }
 
+        [$quantita, $unita] = $this->quantitaProposta($workOrder, $asset, $data, $rowType);
+
         try {
             WorkOrderAsset::create([
                 'tenant_id' => $workOrder->tenant_id,
                 'work_order_id' => $workOrder->id,
                 'asset_id' => $asset->id,
                 'work_type_id' => $data['work_type_id'] ?? null,
-                'planned_quantity' => $data['planned_quantity'] ?? null,
-                'unit' => $data['unit'] ?? null,
+                'planned_quantity' => $quantita,
+                'unit' => $unita,
                 'notes' => $data['notes'] ?? null,
             ]);
         } catch (\Illuminate\Database\UniqueConstraintViolationException) {
             throw $duplicateMessage;
         }
+
+        return $this->show($id);
+    }
+
+    /**
+     * Quantità e unità della riga: quelle indicate da chi aggancia, oppure la
+     * proposta dalla geometria nell'unità della lavorazione (della riga o
+     * dell'ordine). Regola in QuantitaDaGeometria, una volta sola.
+     *
+     * @return array{0: ?float, 1: ?string}
+     */
+    private function quantitaProposta(WorkOrder $workOrder, Asset $asset, array $data, ?\App\Models\WorkType $rowType): array
+    {
+        if (isset($data['planned_quantity'])) {
+            return [$data['planned_quantity'], $data['unit'] ?? null];
+        }
+
+        $unit = $data['unit'] ?? $rowType?->unit ?? $workOrder->workType?->unit;
+        $quantita = QuantitaDaGeometria::perAsset($unit, $asset);
+
+        return $quantita !== null ? [$quantita, $unit] : [null, $data['unit'] ?? null];
+    }
+
+    /** Quantità, unità e note di una riga elemento: modifica a mano o ricalcolo dalla geometria. */
+    public function updateAsset(Request $request, string $id, string $rowId): JsonResponse
+    {
+        $data = $request->validate([
+            'planned_quantity' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:9999999999'],
+            'unit' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'notes' => ['sometimes', 'nullable', 'string'],
+            'ricalcola' => ['sometimes', 'boolean'],
+        ]);
+
+        $workOrder = WorkOrder::query()->findOrFail($id);
+        $this->assertNotTerminal($workOrder);
+        $row = WorkOrderAsset::query()
+            ->where('work_order_id', $workOrder->id)
+            ->with(['asset', 'workType'])
+            ->findOrFail($rowId);
+
+        if ($request->boolean('ricalcola')) {
+            // Il ricalcolo riparte dalla geometria di OGGI: serve dopo un
+            // ridisegno, quando la quantità agganciata è rimasta quella vecchia
+            $unit = $row->unit ?? $row->workType?->unit ?? $workOrder->workType?->unit;
+            $quantita = $row->asset !== null ? QuantitaDaGeometria::perAsset($unit, $row->asset) : null;
+            if ($quantita === null) {
+                throw ValidationException::withMessages([
+                    'ricalcola' => 'Dalla geometria di questo elemento non si ricava una quantità nell\'unità indicata.',
+                ]);
+            }
+            $row->planned_quantity = $quantita;
+            $row->unit = $unit;
+        } else {
+            $row->fill(collect($data)->only(['planned_quantity', 'unit', 'notes'])->all());
+        }
+        $row->save();
 
         return $this->show($id);
     }
