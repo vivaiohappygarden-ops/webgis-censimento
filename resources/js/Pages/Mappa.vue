@@ -6,6 +6,7 @@ import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import ScegliCommittente from '@/Components/ScegliCommittente.vue';
+import ScegliVoce from '@/Components/ScegliVoce.vue';
 import { usaCaricamento } from '@/caricamento';
 import { avvisoCaricamento } from '@/avvisi';
 import { statusLabel } from '@/assetStatus';
@@ -45,11 +46,13 @@ const localities = ref([]);
 // Tutti i tipi del catalogo, con la geometria che ciascuno richiede:
 // P si posiziona con un clic, L e S si disegnano a punti
 const tipiCensibili = ref([]);
-const tipiPerGeo = computed(() => ({
-    P: tipiCensibili.value.filter((t) => t.geo === 'P'),
-    L: tipiCensibili.value.filter((t) => t.geo === 'L'),
-    S: tipiCensibili.value.filter((t) => t.geo === 'S'),
-}));
+// Le voci della tendina: la geometria da disegnare si legge nel nome
+const tipiVoci = computed(() => tipiCensibili.value.map((t) => ({
+    id: t.id,
+    label: t.label,
+    nome: t.geo === 'P' ? t.label
+        : `${t.label} · ${t.geo === 'L' ? 'linea da disegnare' : 'superficie da disegnare'}`,
+})));
 
 // Vista: di chi guardo il verde e dove. Gli abbattuti restano in archivio
 // ma non sulla mappa di tutti i giorni
@@ -735,15 +738,17 @@ onBeforeUnmount(() => {
                     tutti="Tutti i committenti"
                     @cambia="applyVista()"
                 />
-                <select
+                <ScegliVoce
                     v-model="vista.areaId"
                     data-test="mappa-area"
-                    class="mt-2 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
-                    @change="applyVista()"
-                >
-                    <option value="">Tutte le aree</option>
-                    <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.name }}</option>
-                </select>
+                    class="mt-2 w-full"
+                    campo-classe="px-2 py-1.5 text-xs"
+                    :voci="areas"
+                    :campi-ricerca="['name', 'code']"
+                    tutti="Tutte le aree"
+                    vuoto="Nessuna area trovata."
+                    @cambia="applyVista()"
+                />
                 <label class="mt-2 flex cursor-pointer items-center gap-2 text-xs text-gray-600">
                     <input
                         v-model="vista.showRemoved"
@@ -793,10 +798,14 @@ onBeforeUnmount(() => {
                         <p class="text-xs text-gray-500">
                             Clicca sulla mappa per aggiungere i vertici ({{ drawing.vertices.length }}).
                         </p>
-                        <select v-model="drawing.localityId" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs">
-                            <option value="" disabled>Località…</option>
-                            <option v-for="l in localities" :key="l.id" :value="l.id">{{ l.name }}</option>
-                        </select>
+                        <ScegliVoce
+                            v-model="drawing.localityId"
+                            campo-classe="px-2 py-1.5 text-xs"
+                            :voci="localities"
+                            :campi-ricerca="['name', 'code']"
+                            segnaposto="Località…"
+                            vuoto="Nessuna località trovata."
+                        />
                         <input v-model="drawing.name" placeholder="Nome area *" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs">
                         <input v-model="drawing.code" placeholder="Codice (opzionale)" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs">
                         <div class="flex gap-2">
@@ -820,22 +829,25 @@ onBeforeUnmount(() => {
                         Nuovo elemento
                     </label>
                     <div v-if="creating.active" class="mt-2 space-y-2">
-                        <select v-model="creating.areaId" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs">
-                            <option value="" disabled>Area…</option>
-                            <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.name }}</option>
-                        </select>
-                        <select v-model="creating.typeId" data-test="nuovo-elemento-tipo" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs">
-                            <option value="" disabled>Tipo oggetto…</option>
-                            <optgroup label="A punto (un clic)">
-                                <option v-for="t in tipiPerGeo.P" :key="t.id" :value="t.id">{{ t.label }}</option>
-                            </optgroup>
-                            <optgroup label="A linea (si disegna)">
-                                <option v-for="t in tipiPerGeo.L" :key="t.id" :value="t.id">{{ t.label }}</option>
-                            </optgroup>
-                            <optgroup label="A superficie (si disegna)">
-                                <option v-for="t in tipiPerGeo.S" :key="t.id" :value="t.id">{{ t.label }}</option>
-                            </optgroup>
-                        </select>
+                        <ScegliVoce
+                            v-model="creating.areaId"
+                            data-test="nuovo-elemento-area"
+                            campo-classe="px-2 py-1.5 text-xs"
+                            :voci="areas"
+                            :campi-ricerca="['name', 'code']"
+                            segnaposto="Area…"
+                            vuoto="Nessuna area trovata."
+                        />
+                        <ScegliVoce
+                            v-model="creating.typeId"
+                            data-test="nuovo-elemento-tipo"
+                            campo-classe="px-2 py-1.5 text-xs"
+                            campo-nome="nome"
+                            :voci="tipiVoci"
+                            :campi-ricerca="['label']"
+                            segnaposto="Tipo oggetto (codice o nome)…"
+                            vuoto="Nessun tipo trovato."
+                        />
                         <p class="text-xs text-gray-500">
                             <template v-if="creating.saving">Salvataggio…</template>
                             <template v-else-if="! creating.areaId">Scegli prima l'area: i clic sulla mappa non contano finché manca.</template>

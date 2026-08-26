@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import ScegliVoce from '@/Components/ScegliVoce.vue';
 import { avvisoCaricamento } from '@/avvisi';
 
 const page = usePage();
@@ -37,6 +38,9 @@ const STATUS_BADGE = {
 
 const systems = ref([]);
 const areas = ref([]);
+const areeVoci = computed(() => areas.value.map((a) => ({
+    id: a.id, nome: a.code ? `${a.name} (${a.code})` : a.name, name: a.name, code: a.code,
+})));
 const loading = ref(false);
 
 const creator = reactive({
@@ -454,10 +458,7 @@ onMounted(load);
                         <div class="mt-4 space-y-3">
                             <label class="block text-xs">
                                 <span class="text-gray-500">Area *</span>
-                                <select v-model="creator.form.area_id" data-test="irr-area" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
-                                    <option value="" disabled>Seleziona…</option>
-                                    <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.name }} ({{ a.code }})</option>
-                                </select>
+                                <ScegliVoce v-model="creator.form.area_id" data-test="irr-area" class="mt-1 w-full" campo-classe="px-2.5 py-2 text-sm" campo-nome="nome" :voci="areeVoci" :campi-ricerca="['name', 'code']" vuoto="Nessuna area trovata." />
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Nome impianto *</span>
@@ -500,9 +501,7 @@ onMounted(load);
                         <div class="mt-4 grid grid-cols-2 gap-3">
                             <label class="block text-xs">
                                 <span class="text-gray-500">Area</span>
-                                <select v-model="form.area_id" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm disabled:bg-gray-50" :disabled="! canManage" @change="markDirty">
-                                    <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.name }} ({{ a.code }})</option>
-                                </select>
+                                <ScegliVoce v-model="form.area_id" class="mt-1 w-full" campo-classe="px-2.5 py-2 text-sm" campo-nome="nome" :voci="areeVoci" :campi-ricerca="['name', 'code']" :disabilitato="! canManage" vuoto="Nessuna area trovata." @cambia="markDirty" />
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Nome impianto</span>

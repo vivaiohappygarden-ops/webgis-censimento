@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import axios from 'axios';
+import ScegliVoce from '@/Components/ScegliVoce.vue';
 
 const props = defineProps({ asset: { type: Object, required: true } });
 const emit = defineEmits(['saved', 'close']);
@@ -33,6 +34,16 @@ const areeRaggruppate = computed(() => {
     }
     return [...gruppi.entries()].map(([nome, lista]) => ({ nome, aree: lista }));
 });
+
+// Le stesse aree in un elenco piatto, con la localita' nel nome: serve al
+// campo con la ricerca a parole
+const areeVoci = computed(() => areeRaggruppate.value.flatMap((g) => g.aree.map((a) => ({
+    id: a.id,
+    nome: `${a.name}${a.code ? ` (${a.code})` : ''} · ${g.nome}`,
+    name: a.name,
+    code: a.code,
+    localita: g.nome,
+}))));
 
 onMounted(async () => {
     const { data } = await axios.get('/api/v1/custom-fields', {
@@ -128,17 +139,16 @@ async function save() {
             </label>
             <label class="block text-xs">
                 <span class="text-gray-500">Area</span>
-                <select
+                <ScegliVoce
                     v-model="form.area_id"
                     data-test="modifica-area"
-                    class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-                >
-                    <optgroup v-for="g in areeRaggruppate" :key="g.nome" :label="g.nome">
-                        <option v-for="a in g.aree" :key="a.id" :value="a.id">
-                            {{ a.name }}{{ a.code ? ` (${a.code})` : '' }}
-                        </option>
-                    </optgroup>
-                </select>
+                    class="mt-1 w-full"
+                    campo-classe="px-2 py-1.5 text-sm"
+                    campo-nome="nome"
+                    :voci="areeVoci"
+                    :campi-ricerca="['name', 'code', 'localita']"
+                    vuoto="Nessuna area trovata."
+                />
                 <span class="mt-0.5 block text-[11px] text-gray-400">
                     Cambiandola l'elemento si sposta con tutta la sua storia; il cambio resta nello storico.
                 </span>

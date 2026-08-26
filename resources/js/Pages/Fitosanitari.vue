@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import ScegliVoce from '@/Components/ScegliVoce.vue';
 import { avvisoCaricamento } from '@/avvisi';
 import { fetchPdf } from '@/pdf';
 
@@ -164,6 +165,14 @@ const missingLoadedAsset = computed(() => loaded.asset
     && ! formAssets.value.some((a) => a.id === loaded.asset.id)
     ? loaded.asset : null);
 
+// Le voci dell'elemento censito: l'eventuale voce "storica" resta in cima
+const alberiVoci = computed(() => [
+    ...(missingLoadedAsset.value
+        ? [{ id: missingLoadedAsset.value.id, census_code: `${missingLoadedAsset.value.census_code} (non più in censimento)` }]
+        : []),
+    ...formAssets.value,
+]);
+
 function openCreator() {
     Object.assign(form, blankForm());
     Object.assign(loaded, { areaId: '', asset: null, operatorName: '' });
@@ -313,10 +322,7 @@ onMounted(() => {
                 <select v-model="filters.year" data-test="fito-year" class="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
                     <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
                 </select>
-                <select v-model="filters.area_id" data-test="fito-filter-area" class="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
-                    <option value="">Tutte le aree</option>
-                    <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.name }}</option>
-                </select>
+                <ScegliVoce v-model="filters.area_id" data-test="fito-filter-area" class="w-full sm:w-56" campo-classe="px-2.5 py-1.5 text-sm" :voci="areas" :campi-ricerca="['name', 'code']" tutti="Tutte le aree" vuoto="Nessuna area trovata." />
             </div>
 
             <p v-if="pageError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ pageError }}</p>
@@ -384,18 +390,11 @@ onMounted(() => {
                         <div class="mt-4 grid grid-cols-2 gap-3">
                             <label class="col-span-2 block text-xs">
                                 <span class="text-gray-500">Area *</span>
-                                <select v-model="form.area_id" data-test="fito-area" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" :disabled="! canManage">
-                                    <option value="" disabled>Seleziona…</option>
-                                    <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.name }}</option>
-                                </select>
+                                <ScegliVoce v-model="form.area_id" data-test="fito-area" class="mt-1 w-full" campo-classe="px-2.5 py-2 text-sm" :voci="areas" :campi-ricerca="['name', 'code']" :disabilitato="! canManage" vuoto="Nessuna area trovata." />
                             </label>
                             <label class="col-span-2 block text-xs">
                                 <span class="text-gray-500">Elemento censito (facoltativo, es. albero in endoterapia)</span>
-                                <select v-model="form.asset_id" data-test="fito-asset" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" :disabled="! canManage || ! form.area_id">
-                                    <option value="">Tutta l'area</option>
-                                    <option v-if="missingLoadedAsset" :value="missingLoadedAsset.id">{{ missingLoadedAsset.census_code }} (non più in censimento)</option>
-                                    <option v-for="a in formAssets" :key="a.id" :value="a.id">{{ a.census_code }}</option>
-                                </select>
+                                <ScegliVoce v-model="form.asset_id" data-test="fito-asset" class="mt-1 w-full" campo-classe="px-2.5 py-2 text-sm" campo-nome="census_code" :voci="alberiVoci" :campi-ricerca="['census_code']" :disabilitato="! canManage || ! form.area_id" tutti="Tutta l'area" vuoto="Nessun elemento trovato." />
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Data del trattamento *</span>

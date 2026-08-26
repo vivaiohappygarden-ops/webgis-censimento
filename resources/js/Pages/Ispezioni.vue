@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import ScegliVoce from '@/Components/ScegliVoce.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import { usaCaricamento } from '@/caricamento';
 import { fetchPdf } from '@/pdf';
@@ -645,10 +646,7 @@ onMounted(async () => {
                         <div class="mt-4">
                             <label v-if="runner.template.target === 'area'" class="block text-xs">
                                 <span class="text-gray-500">Area ispezionata *</span>
-                                <select v-model="runner.areaId" data-test="runner-area" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2.5 text-sm">
-                                    <option value="" disabled>Seleziona…</option>
-                                    <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.name }}</option>
-                                </select>
+                                <ScegliVoce v-model="runner.areaId" data-test="runner-area" class="mt-1 w-full" campo-classe="px-2 py-2.5 text-sm" :voci="areas" :campi-ricerca="['name', 'code']" vuoto="Nessuna area trovata." />
                             </label>
                             <label v-else class="block text-xs">
                                 <span class="text-gray-500">Elemento ispezionato * (codice censimento)</span>

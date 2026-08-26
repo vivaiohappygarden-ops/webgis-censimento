@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import ScegliVoce from '@/Components/ScegliVoce.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import VisteSalvate from '@/Components/VisteSalvate.vue';
 import { usaCaricamento } from '@/caricamento';
@@ -367,10 +368,7 @@ onMounted(async () => {
                             <div class="grid grid-cols-2 gap-3">
                                 <label class="block text-xs">
                                     <span class="text-gray-500">Area</span>
-                                    <select v-model="creator.form.area_id" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
-                                        <option value="">—</option>
-                                        <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.name }}</option>
-                                    </select>
+                                    <ScegliVoce v-model="creator.form.area_id" class="mt-1 w-full" campo-classe="px-2 py-2 text-sm" :voci="areas" :campi-ricerca="['name', 'code']" tutti="—" vuoto="Nessuna area trovata." />
                                 </label>
                                 <label class="block text-xs">
                                     <span class="text-gray-500">Elemento (codice censimento)</span>

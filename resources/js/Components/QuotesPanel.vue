@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from 'vue';
 import axios from 'axios';
 import ScegliCommittente from '@/Components/ScegliCommittente.vue';
+import ScegliVoce from '@/Components/ScegliVoce.vue';
 import { avvisoCaricamento } from '@/avvisi';
 import { fetchPdf } from '@/pdf';
 
@@ -370,10 +371,7 @@ defineExpose({ load });
                         <tbody class="divide-y divide-gray-50">
                             <tr v-for="(item, index) in items" :key="index" data-test="est-item">
                                 <td class="py-1.5 pr-2">
-                                    <select v-model="item.work_type_id" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-50" :disabled="! canManage || detail.status !== 'draft'" @change="onWorkTypeChange(item)">
-                                        <option value="">Voce libera</option>
-                                        <option v-for="w in workTypes" :key="w.id" :value="w.id">{{ w.name }}</option>
-                                    </select>
+                                    <ScegliVoce v-model="item.work_type_id" class="w-full" campo-classe="px-2 py-1.5 text-sm" :voci="workTypes" :campi-ricerca="['name', 'code']" :disabilitato="! canManage || detail.status !== 'draft'" tutti="Voce libera" vuoto="Nessuna lavorazione trovata." @cambia="onWorkTypeChange(item)" />
                                 </td>
                                 <td class="py-1.5 pr-2">
                                     <input v-model="item.description" maxlength="300" data-test="est-item-desc" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-50" :disabled="! canManage || detail.status !== 'draft'" @input="markDirty">

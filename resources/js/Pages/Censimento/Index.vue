@@ -5,6 +5,7 @@ import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import ScegliCommittente from '@/Components/ScegliCommittente.vue';
+import ScegliVoce from '@/Components/ScegliVoce.vue';
 import VisteSalvate from '@/Components/VisteSalvate.vue';
 import { usaCaricamento } from '@/caricamento';
 import { STATUS_LABELS, statusLabel } from '@/assetStatus';
@@ -125,6 +126,16 @@ const filters = reactive({ q: '', status: '', clientId: '', areaId: '', page: 1 
 // Committente e area: l'elenco delle aree segue il committente scelto
 const clients = ref([]);
 const areas = ref([]);
+const areeVoci = computed(() => areas.value.map((a) => ({
+    id: a.id,
+    nome: a.locality?.name ? `${a.name} · ${a.locality.name}` : a.name,
+    name: a.name,
+    code: a.code,
+    localita: a.locality?.name,
+})));
+const ordiniVoci = computed(() => ordini.value.map((o) => ({
+    id: o.id, nome: `${o.code} - ${o.title}`, code: o.code, title: o.title,
+})));
 
 /**
  * Un elenco intero, non solo la prima pagina.
@@ -431,16 +442,17 @@ const measure = (row) => {
                     :committenti="clients"
                     tutti="Tutti i committenti"
                 />
-                <select
+                <ScegliVoce
                     v-model="filters.areaId"
                     data-test="filtro-area"
-                    class="w-full max-w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-auto"
-                >
-                    <option value="">Tutte le aree</option>
-                    <option v-for="a in areas" :key="a.id" :value="a.id">
-                        {{ a.name }}<template v-if="a.locality?.name"> · {{ a.locality.name }}</template>
-                    </option>
-                </select>
+                    class="w-full max-w-full sm:w-56"
+                    campo-classe="px-3 py-2 text-sm"
+                    campo-nome="nome"
+                    :voci="areeVoci"
+                    :campi-ricerca="['name', 'code', 'localita']"
+                    tutti="Tutte le aree"
+                    vuoto="Nessuna area trovata."
+                />
                 <select v-model="filters.status" data-test="filtro-stato" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-auto">
                     <option value="">Tutti gli stati</option>
                     <option v-for="(label, value) in STATUS_LABELS" :key="value" :value="value">{{ label }}</option>
@@ -500,10 +512,17 @@ const measure = (row) => {
 
                     <label class="flex items-center gap-2">
                         <span class="text-gray-600">Aggiungi a un lavoro</span>
-                        <select v-model="ordineScelto" class="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" @focus="ordini.length || caricaOrdiniAperti()">
-                            <option value="">Scegli…</option>
-                            <option v-for="o in ordini" :key="o.id" :value="o.id">{{ o.code }} - {{ o.title }}</option>
-                        </select>
+                        <ScegliVoce
+                            v-model="ordineScelto"
+                            class="w-64"
+                            campo-classe="px-2 py-1.5 text-sm"
+                            campo-nome="nome"
+                            :voci="ordiniVoci"
+                            :campi-ricerca="['code', 'title']"
+                            segnaposto="Scegli…"
+                            vuoto="Nessun ordine aperto."
+                            @apre="ordini.length || caricaOrdiniAperti()"
+                        />
                         <button
                             class="rounded-lg border border-green-700 px-2.5 py-1.5 font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
                             :disabled="azioneInCorso || ! ordineScelto"
@@ -662,10 +681,15 @@ const measure = (row) => {
                                 class="w-full text-sm"
                                 @change="(e) => { importer.file = e.target.files?.[0] ?? null; importer.report = null; }"
                             >
-                            <select v-model="importer.areaId" class="w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
-                                <option value="" disabled>Area di destinazione…</option>
-                                <option v-for="a in importAreas" :key="a.id" :value="a.id">{{ a.name }}</option>
-                            </select>
+                            <ScegliVoce
+                                v-model="importer.areaId"
+                                class="w-full"
+                                campo-classe="px-2.5 py-2 text-sm"
+                                :voci="importAreas"
+                                :campi-ricerca="['name', 'code']"
+                                segnaposto="Area di destinazione…"
+                                vuoto="Nessuna area trovata."
+                            />
 
                             <p v-if="importer.error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ importer.error }}</p>
 
