@@ -107,6 +107,19 @@ function goTo(id) {
                             Il pulsante <strong>"Esporta CSV"</strong> scarica l'elenco (con i filtri attivi)
                             in un file da aprire direttamente in Excel.
                         </p>
+                        <h3>Censire dalla mappa: punti, linee e superfici</h3>
+                        <p>
+                            Dalla <strong>Mappa</strong>, con "Nuovo elemento", si censisce qualsiasi
+                            tipo del catalogo: un oggetto <strong>a punto</strong> (albero, panchina,
+                            fontanella) si posiziona con un clic; una <strong>linea</strong> (siepe,
+                            filare, recinzione) e una <strong>superficie</strong> (prato, aiuola,
+                            pavimentazione) si disegnano cliccando i punti sulla mappa e si salvano con
+                            il pulsante — il programma dice subito i metri o i metri quadrati veri,
+                            calcolati dal disegno. Cliccando un elemento sulla mappa si apre il suo
+                            riquadro: da lì il pulsante <strong>"Ridisegna sulla mappa"</strong>
+                            permette di correggerne la posizione o il contorno. Se nel frattempo un
+                            collega ha modificato l'elemento, il salvataggio si ferma e lo dice.
+                        </p>
                         <h3>Le viste salvate (filtri con un nome)</h3>
                         <p>
                             Negli elenchi <strong>Censimento</strong>, <strong>Lavori</strong> e

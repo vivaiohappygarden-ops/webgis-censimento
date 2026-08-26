@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import * as maplibregl from 'maplibre-gl';
 import axios from 'axios';
@@ -7,6 +7,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import { usaCaricamento } from '@/caricamento';
+import { avvisoCaricamento } from '@/avvisi';
 import { statusLabel } from '@/assetStatus';
 
 const page = usePage();
@@ -16,6 +17,7 @@ const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
 // restano vuoti: senza avviso sembrerebbe che non ci sia nulla da scegliere
 const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 const canCreate = computed(() => permissions.value.includes('assets.create'));
+const canUpdate = computed(() => permissions.value.includes('assets.update'));
 const canViewClients = computed(() => permissions.value.includes('clients.view'));
 
 const mapEl = ref(null);
@@ -40,7 +42,14 @@ const selected = ref(null);
 const areas = ref([]);
 const clients = ref([]);
 const localities = ref([]);
-const pointTypes = ref([]);
+// Tutti i tipi del catalogo, con la geometria che ciascuno richiede:
+// P si posiziona con un clic, L e S si disegnano a punti
+const tipiCensibili = ref([]);
+const tipiPerGeo = computed(() => ({
+    P: tipiCensibili.value.filter((t) => t.geo === 'P'),
+    L: tipiCensibili.value.filter((t) => t.geo === 'L'),
+    S: tipiCensibili.value.filter((t) => t.geo === 'S'),
+}));
 
 // Vista: di chi guardo il verde e dove. Gli abbattuti restano in archivio
 // ma non sulla mappa di tutti i giorni
@@ -67,7 +76,14 @@ function applicaChiome() {
 // quindi il motivo del rifiuto va spiegato, non nascosto
 const posizione = reactive({ error: '', located: false, cercando: false });
 let posizioneTimer = null;
-const creating = reactive({ active: false, typeId: '', areaId: '', saving: false, message: '', ok: false });
+const creating = reactive({ active: false, typeId: '', areaId: '', vertices: [], saving: false, message: '', ok: false });
+
+// Ridisegno della geometria di un elemento gia' censito (sposta un punto,
+// corregge il contorno di una siepe o di un prato)
+const redraw = reactive({
+    active: false, id: null, codice: '', geo: 'P', version: null,
+    vertices: [], saving: false, message: '', ok: false,
+});
 const drawing = reactive({
     active: false, vertices: [], name: '', code: '', localityId: '', saving: false, message: '', ok: false,
 });
@@ -102,19 +118,23 @@ function refreshTiles() {
     map.getSource('assets').setTiles([tilesUrl()]);
 }
 
-function updateDrawPreview() {
-    const pts = drawing.vertices;
+/** Anteprima dei vertici sul livello di disegno: chiusa per le superfici, aperta per le linee. */
+function disegnaAnteprima(pts, chiudi) {
     const features = [];
     if (pts.length >= 1) {
         features.push({ type: 'Feature', geometry: { type: 'MultiPoint', coordinates: pts }, properties: {} });
     }
     if (pts.length >= 2) {
-        features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [...pts, pts[0]] }, properties: {} });
+        features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: chiudi ? [...pts, pts[0]] : pts }, properties: {} });
     }
-    if (pts.length >= 3) {
+    if (chiudi && pts.length >= 3) {
         features.push({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [[...pts, pts[0]]] }, properties: {} });
     }
     map.getSource('draw')?.setData({ type: 'FeatureCollection', features });
+}
+
+function updateDrawPreview() {
+    disegnaAnteprima(drawing.vertices, true);
 }
 
 function resetDrawing() {
@@ -222,11 +242,11 @@ async function caricaContorno() {
     localities.value = localita;
     clients.value = committenti;
     areas.value = aree;
-    pointTypes.value = catalogRes.data.data.flatMap((m) =>
+    tipiCensibili.value = catalogRes.data.data.flatMap((m) =>
         m.sub_types.flatMap((s) =>
-            s.object_types
-                .filter((t) => t.allowed_geometry === 'P')
-                .map((t) => ({ id: t.id, label: `${t.code} — ${t.name}` }))
+            s.object_types.map((t) => ({
+                id: t.id, geo: t.allowed_geometry, label: `${t.code} — ${t.name}`,
+            }))
         )
     );
     refreshAreasSource();
@@ -280,13 +300,73 @@ function vaiAllaPosizione() {
     }, 12000);
 }
 
+// La geometria che il tipo scelto richiede: P un clic, L e S un disegno
+const geoScelta = computed(() => tipiCensibili.value.find((t) => t.id === creating.typeId)?.geo ?? 'P');
+
+function anteprimaCreazione() {
+    disegnaAnteprima(creating.vertices, geoScelta.value === 'S');
+}
+
+// Un solo strumento per volta sulla mappa: disegno area, nuovo elemento o
+// ridisegno. Attivarne uno spegne gli altri, o i clic andrebbero a due mani
+watch(() => creating.active, (attivo) => {
+    if (attivo) {
+        drawing.active = false;
+        redraw.active = false;
+    }
+    creating.vertices = [];
+    creating.message = '';
+    anteprimaCreazione();
+});
+watch(() => drawing.active, (attivo) => {
+    if (attivo) {
+        creating.active = false;
+        redraw.active = false;
+    } else {
+        // Spento da un altro strumento: i vertici abbandonati non devono
+        // restare disegnati come un poligono fantasma
+        drawing.vertices = [];
+    }
+    updateDrawPreview();
+});
+
+// Durante un disegno il doppio clic non deve far saltare l'inquadratura
+watch(() => drawing.active || creating.active || redraw.active, (attivo) => {
+    if (! map) return;
+    if (attivo) map.doubleClickZoom.disable();
+    else map.doubleClickZoom.enable();
+});
+// Cambiando tipo cambia la geometria: i punti gia' cliccati non valgono piu'
+watch(() => creating.typeId, () => {
+    creating.vertices = [];
+    anteprimaCreazione();
+});
+
 async function onMapClick(e) {
     if (drawing.active) {
         drawing.vertices.push([e.lngLat.lng, e.lngLat.lat]);
         updateDrawPreview();
         return;
     }
+    if (redraw.active) {
+        if (redraw.saving) return;
+        // Per un punto l'ultimo clic sostituisce il precedente
+        if (redraw.geo === 'P') redraw.vertices = [[e.lngLat.lng, e.lngLat.lat]];
+        else redraw.vertices.push([e.lngLat.lng, e.lngLat.lat]);
+        redraw.message = '';
+        disegnaAnteprima(redraw.vertices, redraw.geo === 'S');
+        return;
+    }
     if (!creating.active || !creating.typeId || !creating.areaId) return;
+
+    // Linee e superfici si disegnano a punti e si salvano con il pulsante
+    if (geoScelta.value !== 'P') {
+        if (creating.saving) return;
+        creating.vertices.push([e.lngLat.lng, e.lngLat.lat]);
+        creating.message = '';
+        anteprimaCreazione();
+        return;
+    }
 
     creating.saving = true;
     creating.message = '';
@@ -308,8 +388,126 @@ async function onMapClick(e) {
     }
 }
 
+/** La misura vera calcolata dal database, per dirla subito a chi ha disegnato. */
+function misuraDi(elemento, geo) {
+    const valore = Number(geo === 'L' ? elemento?.computed_length_m : elemento?.computed_area_sqm);
+    if (! Number.isFinite(valore) || valore <= 0) return null;
+
+    return geo === 'L'
+        ? `${valore.toLocaleString('it-IT', { maximumFractionDigits: 1 })} m`
+        : `${valore.toLocaleString('it-IT', { maximumFractionDigits: 0 })} m²`;
+}
+
+async function salvaElementoDisegnato() {
+    const pts = creating.vertices;
+    const geometry = geoScelta.value === 'L'
+        ? { type: 'LineString', coordinates: pts }
+        : { type: 'Polygon', coordinates: [[...pts, pts[0]]] };
+
+    creating.saving = true;
+    creating.message = '';
+    try {
+        const { data } = await axios.post('/api/v1/assets', {
+            area_id: creating.areaId,
+            object_type_id: creating.typeId,
+            survey_method: 'manual_map',
+            geometry,
+        });
+        creating.ok = true;
+        const misura = misuraDi(data.data, geoScelta.value);
+        creating.message = misura ? `Elemento salvato (${misura})` : 'Elemento salvato';
+        creating.vertices = [];
+        anteprimaCreazione();
+        refreshTiles();
+    } catch (err) {
+        creating.ok = false;
+        creating.message = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Errore nel salvataggio';
+    } finally {
+        creating.saving = false;
+    }
+}
+
+function annullaUltimoPunto() {
+    creating.vertices.pop();
+    anteprimaCreazione();
+}
+
+/** Dal pannello dell'elemento scelto: si ridisegna da capo la sua geometria. */
+async function avviaRidisegno() {
+    if (! selected.value) return;
+    const richiesto = selected.value.id;
+    redraw.message = '';
+    try {
+        const { data } = await axios.get(`/api/v1/assets/${richiesto}`);
+        redraw.id = data.data.id;
+        redraw.codice = data.data.census_code || '';
+        redraw.geo = data.data.object_type?.allowed_geometry ?? 'P';
+        redraw.version = data.data.version;
+        redraw.vertices = [];
+        redraw.ok = false;
+        creating.active = false;
+        drawing.active = false;
+        redraw.active = true;
+        disegnaAnteprima([], false);
+        selected.value = null;
+    } catch (err) {
+        // Nel frattempo la scheda puo' essere stata chiusa o cambiata:
+        // l'errore non deve resuscitarla vuota ne' finire su un altro elemento
+        if (selected.value?.id === richiesto) {
+            selected.value = { ...selected.value, erroreRidisegno: avvisoCaricamento(err) };
+        }
+    }
+}
+
+const minimoPunti = computed(() => ({ P: 1, L: 2, S: 3 }[redraw.geo] ?? 1));
+
+async function salvaRidisegno() {
+    const pts = redraw.vertices;
+    const geometry = redraw.geo === 'P'
+        ? { type: 'Point', coordinates: pts[0] }
+        : redraw.geo === 'L'
+            ? { type: 'LineString', coordinates: pts }
+            : { type: 'Polygon', coordinates: [[...pts, pts[0]]] };
+
+    redraw.saving = true;
+    redraw.message = '';
+    try {
+        const { data } = await axios.patch(`/api/v1/assets/${redraw.id}`, {
+            geometry,
+            // La geometria ora e' disegnata a video: il metodo di rilievo
+            // e la precisione GPS di prima non la descrivono piu'
+            survey_method: 'manual_map',
+            gps_accuracy_m: null,
+            version: redraw.version,
+        });
+        redraw.ok = true;
+        const misura = misuraDi(data.data, redraw.geo);
+        redraw.message = misura ? `Geometria aggiornata (${misura})` : 'Geometria aggiornata';
+        redraw.version = data.data.version;
+        redraw.vertices = [];
+        disegnaAnteprima([], false);
+        refreshTiles();
+    } catch (err) {
+        redraw.ok = false;
+        redraw.message = err.response?.status === 409
+            ? 'Un altro utente ha modificato l\'elemento nel frattempo: chiudi questo riquadro con \u2715, riclicca l\'elemento sulla mappa e premi di nuovo "Ridisegna sulla mappa".'
+            : (Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+                ?? err.response?.data?.message ?? 'Errore nel salvataggio');
+    } finally {
+        redraw.saving = false;
+    }
+}
+
+function chiudiRidisegno() {
+    redraw.active = false;
+    redraw.vertices = [];
+    redraw.message = '';
+    disegnaAnteprima([], false);
+}
+
 function onFeatureClick(e) {
-    if (creating.active || drawing.active) return;
+    if (creating.active || drawing.active || redraw.active) return;
     const f = e.features?.[0];
     if (!f) return;
     selected.value = { ...f.properties };
@@ -626,13 +824,40 @@ onBeforeUnmount(() => {
                             <option value="" disabled>Area…</option>
                             <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.name }}</option>
                         </select>
-                        <select v-model="creating.typeId" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs">
-                            <option value="" disabled>Tipo oggetto (puntuale)…</option>
-                            <option v-for="t in pointTypes" :key="t.id" :value="t.id">{{ t.label }}</option>
+                        <select v-model="creating.typeId" data-test="nuovo-elemento-tipo" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs">
+                            <option value="" disabled>Tipo oggetto…</option>
+                            <optgroup label="A punto (un clic)">
+                                <option v-for="t in tipiPerGeo.P" :key="t.id" :value="t.id">{{ t.label }}</option>
+                            </optgroup>
+                            <optgroup label="A linea (si disegna)">
+                                <option v-for="t in tipiPerGeo.L" :key="t.id" :value="t.id">{{ t.label }}</option>
+                            </optgroup>
+                            <optgroup label="A superficie (si disegna)">
+                                <option v-for="t in tipiPerGeo.S" :key="t.id" :value="t.id">{{ t.label }}</option>
+                            </optgroup>
                         </select>
                         <p class="text-xs text-gray-500">
-                            {{ creating.saving ? 'Salvataggio…' : 'Clicca sulla mappa per posizionare l\'elemento.' }}
+                            <template v-if="creating.saving">Salvataggio…</template>
+                            <template v-else-if="! creating.areaId">Scegli prima l'area: i clic sulla mappa non contano finché manca.</template>
+                            <template v-else-if="geoScelta === 'P'">Clicca sulla mappa per posizionare l'elemento.</template>
+                            <template v-else>
+                                Clicca sulla mappa per aggiungere i punti
+                                {{ geoScelta === 'L' ? 'della linea' : 'del contorno' }} ({{ creating.vertices.length }}).
+                            </template>
                         </p>
+                        <div v-if="geoScelta !== 'P'" class="flex gap-2">
+                            <button
+                                data-test="salva-elemento-disegnato"
+                                class="flex-1 rounded-lg bg-green-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                                :disabled="creating.saving || ! creating.areaId || creating.vertices.length < (geoScelta === 'L' ? 2 : 3)"
+                                @click="salvaElementoDisegnato"
+                            >{{ creating.saving ? 'Salvataggio…' : 'Salva elemento' }}</button>
+                            <button
+                                class="rounded-lg border border-gray-300 px-2 py-1.5 text-xs disabled:opacity-50"
+                                :disabled="! creating.vertices.length"
+                                @click="annullaUltimoPunto"
+                            >← Ultimo punto</button>
+                        </div>
                         <p v-if="creating.message" class="text-xs font-medium" :class="creating.ok ? 'text-green-700' : 'text-red-600'">
                             {{ creating.message }}
                         </p>
@@ -659,6 +884,50 @@ onBeforeUnmount(() => {
                 >
                     Apri scheda
                 </a>
+                <button
+                    v-if="canUpdate"
+                    data-test="ridisegna-elemento"
+                    class="mt-2 block w-full rounded-lg border border-green-700 px-3 py-2 text-center text-sm font-medium text-green-700 hover:bg-green-50"
+                    @click="avviaRidisegno"
+                >
+                    Ridisegna sulla mappa
+                </button>
+                <p v-if="selected.erroreRidisegno" class="mt-2 text-xs font-medium text-red-600">{{ selected.erroreRidisegno }}</p>
+            </div>
+
+            <!-- Ridisegno della geometria -->
+            <div v-if="redraw.active" class="absolute bottom-4 left-4 w-72 rounded-xl bg-white p-4 shadow-lg" data-test="pannello-ridisegno">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <div class="text-xs uppercase tracking-wide text-gray-400">Ridisegno</div>
+                        <div class="font-semibold">{{ redraw.codice || 'Elemento' }}</div>
+                    </div>
+                    <button class="text-gray-400 hover:text-gray-600" @click="chiudiRidisegno">✕</button>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">
+                    <template v-if="redraw.geo === 'P'">Clicca sulla mappa la nuova posizione (l'ultimo clic vale).</template>
+                    <template v-else>
+                        Clicca i punti della nuova {{ redraw.geo === 'L' ? 'linea' : 'superficie' }}
+                        ({{ redraw.vertices.length }}): il disegno vecchio resta visibile finché non salvi.
+                    </template>
+                </p>
+                <div class="mt-2 flex gap-2">
+                    <button
+                        data-test="salva-ridisegno"
+                        class="flex-1 rounded-lg bg-green-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                        :disabled="redraw.saving || redraw.vertices.length < minimoPunti"
+                        @click="salvaRidisegno"
+                    >{{ redraw.saving ? 'Salvataggio…' : 'Salva la nuova geometria' }}</button>
+                    <button
+                        v-if="redraw.geo !== 'P'"
+                        class="rounded-lg border border-gray-300 px-2 py-1.5 text-xs disabled:opacity-50"
+                        :disabled="! redraw.vertices.length"
+                        @click="redraw.vertices.pop(); disegnaAnteprima(redraw.vertices, redraw.geo === 'S')"
+                    >← Ultimo punto</button>
+                </div>
+                <p v-if="redraw.message" class="mt-2 text-xs font-medium" :class="redraw.ok ? 'text-green-700' : 'text-red-600'">
+                    {{ redraw.message }}
+                </p>
             </div>
         </div>
     </AppLayout>

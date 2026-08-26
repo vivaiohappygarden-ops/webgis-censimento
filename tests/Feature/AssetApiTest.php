@@ -82,6 +82,61 @@ class AssetApiTest extends TestCase
         $this->assertLessThan(150_000, $area);
     }
 
+    public function test_line_asset_computes_length_from_geometry(): void
+    {
+        // Una siepe disegnata dalla mappa: il database ne calcola i metri
+        $siepe = $this->makeObjectType($this->organization, 'L', 'L103107');
+
+        $response = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $siepe->id,
+            'census_code' => 'SIE-0001',
+            'survey_method' => 'manual_map',
+            'geometry' => ['type' => 'LineString', 'coordinates' => [
+                [9.1890, 45.4640], [9.1930, 45.4640],
+            ]],
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.geom_geojson.type', 'LineString');
+
+        // ~0,004° di longitudine a Milano: circa 310 metri
+        $lunghezza = (float) $response->json('data.computed_length_m');
+        $this->assertGreaterThan(200, $lunghezza);
+        $this->assertLessThan(450, $lunghezza);
+    }
+
+    public function test_geometry_can_be_redrawn_with_version_check(): void
+    {
+        $id = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $this->surfaceType->id,
+            'census_code' => 'PRT-0002',
+            'geometry' => $this->squarePolygon(),
+        ])->assertCreated()->json('data.id');
+        $prima = (float) $this->getJson("/api/v1/assets/{$id}")->json('data.computed_area_sqm');
+
+        // Il ridisegno dalla mappa: contorno piu' piccolo, misura ricalcolata
+        $dopo = $this->patchJson("/api/v1/assets/{$id}", [
+            'version' => 1,
+            'geometry' => ['type' => 'Polygon', 'coordinates' => [[
+                [9.1890, 45.4640], [9.1910, 45.4640], [9.1910, 45.46525],
+                [9.1890, 45.46525], [9.1890, 45.4640],
+            ]]],
+        ])->assertOk();
+
+        $this->assertSame(2, $dopo->json('data.version'));
+        $areaNuova = (float) $dopo->json('data.computed_area_sqm');
+        $this->assertGreaterThan(10_000, $areaNuova);
+        $this->assertLessThan($prima, $areaNuova);
+
+        // Una versione vecchia non sovrascrive il disegno di un altro
+        $this->patchJson("/api/v1/assets/{$id}", [
+            'version' => 1,
+            'geometry' => $this->squarePolygon(),
+        ])->assertStatus(409);
+    }
+
     public function test_geometry_type_must_match_catalog(): void
     {
         $this->postJson('/api/v1/assets', [
