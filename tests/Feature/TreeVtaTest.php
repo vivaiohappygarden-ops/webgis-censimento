@@ -211,6 +211,159 @@ class TreeVtaTest extends TestCase
             ->assertSee('non si possono leggere', false);
     }
 
+    public function test_bulk_validation_counts_first_then_validates(): void
+    {
+        $pronto = $this->createTreeAsset();
+        $senzaClasse = $this->createTreeAsset();
+        $giaValidato = $this->createTreeAsset();
+
+        $this->postJson("/api/v1/assets/{$pronto}/assessments", [
+            'assessment_type' => 'vta_visual', 'assessed_on' => '2026-06-01', 'failure_class' => 'B',
+        ])->assertCreated();
+        $this->postJson("/api/v1/assets/{$senzaClasse}/assessments", [
+            'assessment_type' => 'vta_visual', 'assessed_on' => '2026-06-02',
+        ])->assertCreated();
+        $valido = $this->postJson("/api/v1/assets/{$giaValidato}/assessments", [
+            'assessment_type' => 'vta_visual', 'assessed_on' => '2026-06-03', 'failure_class' => 'A',
+        ])->assertCreated()->json('data.id');
+        $this->postJson("/api/v1/assessments/{$valido}/valida")->assertOk();
+
+        // La prova conta senza scrivere: una da validare, una esclusa
+        // (la già validata non è una bozza, quindi non compare)
+        $prova = $this->postJson('/api/v1/vta/valida', [
+            'asset_ids' => [$pronto, $senzaClasse, $giaValidato], 'prova' => 1,
+        ])->assertOk()->json('data');
+        $this->assertTrue($prova['prova']);
+        $this->assertCount(1, $prova['validate']);
+        $this->assertCount(1, $prova['saltate']);
+        $this->assertStringContainsString('classe di propensione', $prova['saltate'][0]['motivo']);
+        $this->assertSame(0, \App\Models\TreeAssessment::query()
+            ->where('tree_id', $pronto)->whereNotNull('validated_at')->count());
+
+        // Una bozza nata DOPO l'anteprima non deve entrare nella conferma:
+        // si valida esattamente ciò che è stato mostrato
+        $tardiva = $this->postJson("/api/v1/assets/{$pronto}/assessments", [
+            'assessment_type' => 'vta_visual', 'assessed_on' => '2026-06-05', 'failure_class' => 'C',
+        ])->assertCreated()->json('data.id');
+
+        // La conferma rimanda gli id contati in anteprima
+        $esito = $this->postJson('/api/v1/vta/valida', [
+            'assessment_ids' => array_column($prova['validate'], 'id'),
+        ])->assertOk()->json('data');
+        $this->assertCount(1, $esito['validate']);
+        $this->assertNotNull($esito['validate'][0]['protocollo']);
+
+        $perizia = \App\Models\TreeAssessment::query()->findOrFail($prova['validate'][0]['id']);
+        $this->assertNotNull($perizia->validated_at);
+        $this->assertNotNull($perizia->report_number);
+        $this->assertNotNull($perizia->content_hash);
+
+        // La bozza senza classe e quella tardiva sono rimaste bozze
+        $this->assertNull(\App\Models\TreeAssessment::query()
+            ->where('tree_id', $senzaClasse)->firstOrFail()->validated_at);
+        $this->assertNull(\App\Models\TreeAssessment::query()->findOrFail($tardiva)->validated_at);
+
+        // Confermare un id non validabile lo riporta fra le saltate
+        $inconfermabile = \App\Models\TreeAssessment::query()
+            ->where('tree_id', $senzaClasse)->firstOrFail()->id;
+        $riprova = $this->postJson('/api/v1/vta/valida', [
+            'assessment_ids' => [$inconfermabile],
+        ])->assertOk()->json('data');
+        $this->assertCount(0, $riprova['validate']);
+        $this->assertCount(1, $riprova['saltate']);
+    }
+
+    public function test_bulk_validation_by_client_touches_only_that_client(): void
+    {
+        $altraArea = $this->createArea($this->organization);
+
+        $qui = $this->createTreeAsset();
+        $la = $this->postJson('/api/v1/assets', [
+            'area_id' => $altraArea->id,
+            'object_type_id' => $this->treeType->id,
+            'census_code' => 'ALT-0002',
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated()->json('data.id');
+
+        // Terzo albero dello stesso committente, con bozza ma abbattuto: le
+        // azioni collettive seguono la pagina, che gli abbattuti non li mostra
+        $abbattuto = $this->postJson('/api/v1/assets', [
+            'area_id' => $altraArea->id,
+            'object_type_id' => $this->treeType->id,
+            'census_code' => 'ALT-0009',
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated()->json('data.id');
+
+        foreach ([$qui, $la, $abbattuto] as $albero) {
+            $this->postJson("/api/v1/assets/{$albero}/assessments", [
+                'assessment_type' => 'vta_visual', 'assessed_on' => '2026-06-01', 'failure_class' => 'C',
+            ])->assertCreated();
+        }
+        $this->patchJson("/api/v1/assets/{$abbattuto}", [
+            'tree' => ['removed_on' => now('Europe/Rome')->toDateString(), 'removal_reason' => 'abbattimento'],
+        ])->assertOk();
+
+        $clienteLa = $altraArea->locality->site->client_id;
+        $esito = $this->postJson('/api/v1/vta/valida', ['client_id' => $clienteLa])
+            ->assertOk()->json('data');
+
+        $this->assertCount(1, $esito['validate']);
+        $this->assertSame('ALT-0002', $esito['validate'][0]['codice']);
+        $this->assertNull(\App\Models\TreeAssessment::query()
+            ->where('tree_id', $abbattuto)->firstOrFail()->validated_at);
+        $this->assertNull(\App\Models\TreeAssessment::query()->where('tree_id', $qui)->firstOrFail()->validated_at);
+        $this->assertNotNull(\App\Models\TreeAssessment::query()->where('tree_id', $la)->firstOrFail()->validated_at);
+
+        // Senza permesso di modifica non si valida niente
+        $cliente = \App\Models\User::factory()->create(['tenant_id' => $this->organization->id]);
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($this->organization->id);
+        $cliente->assignRole('cliente');
+        $this->actingAsTenantUser($cliente);
+        $this->postJson('/api/v1/vta/valida', ['client_id' => $clienteLa])->assertForbidden();
+    }
+
+    public function test_vta_register_csv_lists_every_assessment(): void
+    {
+        $id = $this->createTreeAsset();
+        $this->patchJson("/api/v1/assets/{$id}", [
+            'tree' => ['genus' => 'Tilia', 'species' => 'Tilia cordata'],
+        ])->assertOk();
+
+        // Due valutazioni sullo stesso albero: nel registro escono entrambe
+        $prima = $this->postJson("/api/v1/assets/{$id}/assessments", [
+            'assessment_type' => 'vta_visual', 'assessed_on' => '2024-05-10',
+            'failure_class' => 'B', 'outcome' => 'monitor',
+        ])->assertCreated()->json('data.id');
+        $this->postJson("/api/v1/assessments/{$prima}/valida")->assertOk();
+        $this->postJson("/api/v1/assets/{$id}/assessments", [
+            'assessment_type' => 'vta_instrumental', 'assessed_on' => '2026-06-01',
+            'failure_class' => 'C', 'outcome' => 'prescriptions',
+            'prescriptions' => 'Potatura di alleggerimento',
+        ])->assertCreated();
+
+        $risposta = $this->post('/api/v1/vta/registro', ['asset_ids' => [$id]])->assertOk();
+        $csv = $risposta->streamedContent();
+
+        $this->assertStringContainsString('Codice albero', $csv);
+        $this->assertStringContainsString('Tilia cordata', $csv);
+        $this->assertStringContainsString('10/05/2024', $csv);
+        $this->assertStringContainsString('01/06/2026', $csv);
+        $this->assertStringContainsString('Validata', $csv);
+        $this->assertStringContainsString('Bozza', $csv);
+        $this->assertStringContainsString('VTA strumentale', $csv);
+        $this->assertStringContainsString('Potatura di alleggerimento', $csv);
+        // Due righe di dati piu' l'intestazione
+        $this->assertCount(3, array_filter(explode("\n", trim($csv))));
+
+        // Per committente: stesso registro passando dal cliente dell'area
+        $cliente = $this->area->locality->site->client_id;
+        $perCliente = $this->post('/api/v1/vta/registro', ['client_id' => $cliente])->assertOk();
+        $this->assertStringContainsString('Tilia cordata', $perCliente->streamedContent());
+
+        // Senza selezione né committente la richiesta non parte
+        $this->postJson('/api/v1/vta/registro', [])->assertUnprocessable();
+    }
+
     public function test_assessment_can_be_corrected_without_losing_its_analyses(): void
     {
         $id = $this->createTreeAsset();

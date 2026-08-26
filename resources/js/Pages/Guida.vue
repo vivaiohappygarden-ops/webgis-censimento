@@ -168,17 +168,27 @@ function goTo(id) {
                             e il bilancio arboreo (messi a dimora, abbattuti, sostituiti).
                         </p>
                         <p>
-                            Al centro della pagina c'è l'elenco <strong>Alberi e valutazioni</strong>: ogni
-                            riga è un albero con l'ultima VTA, la classe, l'esito e la data del prossimo
-                            controllo, in ordine di urgenza (prima i ricontrolli scaduti, poi quelli in
-                            scadenza, poi gli alberi mai valutati). Un clic sui <strong>riquadri dei
-                            conteggi</strong> in alto o sulle <strong>classi</strong> filtra l'elenco:
-                            ad esempio "Mai valutati" diventa la lista degli alberi su cui programmare la
-                            prima valutazione. Il filtro <strong>Committente</strong> in testata restringe
-                            contatori, elenco e alberi tutelati a un solo committente; il Bilancio
-                            arboreo ha invece il suo filtro a parte, perché il documento si prepara per
-                            l'ente che lo riceve. Da ogni riga si apre la scheda o si registra subito
-                            una nuova valutazione.
+                            La pagina si apre sul lavoro da fare, a fasce in ordine di urgenza:
+                            <strong>ricontrolli scaduti</strong>, <strong>in scadenza entro 30
+                            giorni</strong> e <strong>prime valutazioni da programmare</strong>; in alto
+                            una fascia di stato riassume i numeri con la barra colorata delle classi
+                            (un clic su una classe filtra l'elenco). Sotto c'è l'elenco completo
+                            <strong>Alberi e valutazioni</strong>: ogni riga è un albero con l'ultima
+                            VTA, quante valutazioni ha e quante sono ancora in bozza. Il filtro
+                            <strong>Committente</strong> in testata restringe tutta la parte di lavoro a
+                            un solo committente; il Bilancio arboreo, nella colonna di destra, ha il suo
+                            filtro a parte perché il documento si prepara per l'ente che lo riceve.
+                        </p>
+                        <p>
+                            Con le <strong>caselle di selezione</strong> dell'elenco si agisce su più
+                            alberi in una volta: <strong>Valida le bozze</strong> trasforma in atti tutte
+                            le perizie in bozza degli alberi scelti (o dell'intero committente), dopo
+                            un'anteprima che dice quante verranno validate e quali restano fuori e
+                            perché — la validazione assegna il protocollo e blocca il contenuto, quindi
+                            non si torna indietro. <strong>Esporta il registro</strong> scarica invece un
+                            CSV con tutte le valutazioni degli alberi scelti o del committente (data,
+                            classe, esito, prescrizioni, protocollo, stato), pronto per Excel o da
+                            consegnare.
                         </p>
                         <h3>La perizia di stabilità in PDF</h3>
                         <p>

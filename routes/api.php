@@ -89,6 +89,9 @@ Route::prefix('v1')->group(function () {
         Route::put('perizia/settings', [\App\Http\Controllers\Api\V1\PeriziaController::class, 'updateSettings']);
         Route::get('vta/dashboard', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'index']);
         Route::get('vta/alberi', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'alberi']);
+        Route::post('vta/valida', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'valida']);
+        // POST e non GET: fino a 500 id selezionati non stanno in un indirizzo
+        Route::post('vta/registro', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'registro']);
         Route::get('vta/tutelati', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'tutelati']);
         Route::get('vta/bilancio', [\App\Http\Controllers\Api\V1\TreeBalanceController::class, 'index']);
         Route::get('vta/bilancio/pdf', [\App\Http\Controllers\Api\V1\TreeBalanceController::class, 'pdf']);
