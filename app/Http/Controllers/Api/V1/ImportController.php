@@ -100,6 +100,9 @@ class ImportController extends Controller implements HasMiddleware
         $report = $importer->importa($geojson, $area, $data['mappatura'], $defaultType, $esistenti, $dryRun);
 
         if (! $dryRun) {
+            // Il gettone si consuma con l'import vero: un secondo clic non
+            // deve poter duplicare gli elementi appena importati
+            $importer->dimentica($data['file_token'], $request->user()->tenant_id);
             Audit::log('import.generico', $area, [
                 'imported' => $report['imported'],
                 'updated' => $report['updated'],
@@ -127,6 +130,9 @@ class ImportController extends Controller implements HasMiddleware
             'mapping.*' => ['string', 'max:40'],
             'default_object_type_id' => ['nullable', 'uuid'],
         ]);
+        // Le destinazioni valgono anche qui: una mappatura salvata storta
+        // fallirebbe a ogni riuso senza dire perché
+        app(\App\Services\Import\ImportGenerico::class)->validaMappatura($data['mapping']);
         if (! empty($data['default_object_type_id'])) {
             CatalogObjectType::findOrFail($data['default_object_type_id']);
         }

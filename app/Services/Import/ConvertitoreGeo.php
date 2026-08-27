@@ -20,6 +20,9 @@ class ConvertitoreGeo
     /** Estensioni accettate quando non viene passato un elenco più stretto. */
     public const FORMATI = ['zip', 'json', 'geojson', 'gpkg', 'kml'];
 
+    /** Tetto sui byte estratti dallo zip, verificato durante l'estrazione. */
+    public const MAX_ESTRATTO = 200 * 1024 * 1024;
+
     /**
      * @param  list<string>|null  $formati  estensioni ammesse (default: tutte)
      */
@@ -81,12 +84,16 @@ class ConvertitoreGeo
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $totalUncompressed += (int) ($zip->statIndex($i)['size'] ?? 0);
         }
-        if ($totalUncompressed > 200 * 1024 * 1024) {
+        if ($totalUncompressed > self::MAX_ESTRATTO) {
             throw ValidationException::withMessages([
                 'file' => 'Archivio troppo grande una volta estratto (oltre 200 MB).',
             ]);
         }
 
+        // La dimensione dichiarata nell'archivio la scrive chi lo confeziona:
+        // il tetto vero si applica sui byte davvero scritti durante
+        // l'estrazione, o un archivio che mente riempirebbe il disco
+        $scritti = 0;
         $shpNames = [];
         for ($i = 0; $i < $zip->numFiles; $i++) {
             // Solo i componenti shapefile, senza percorsi (protezione zip-slip);
@@ -99,12 +106,22 @@ class ConvertitoreGeo
 
             $stream = $zip->getStream($zip->getNameIndex($i));
             $out = fopen("{$dir}/{$name}", 'wb');
-            if ($stream === false || $out === false || stream_copy_to_stream($stream, $out) === false) {
+            $budget = self::MAX_ESTRATTO - $scritti + 1;
+            $copiati = ($stream === false || $out === false)
+                ? false
+                : stream_copy_to_stream($stream, $out, $budget);
+            if ($copiati === false) {
                 throw ValidationException::withMessages(['file' => 'Estrazione dello zip non riuscita.']);
             }
             fclose($out);
             if (is_resource($stream)) {
                 fclose($stream);
+            }
+            $scritti += $copiati;
+            if ($scritti > self::MAX_ESTRATTO) {
+                throw ValidationException::withMessages([
+                    'file' => 'Archivio troppo grande una volta estratto (oltre 200 MB).',
+                ]);
             }
 
             if ($ext === 'shp') {

@@ -54,6 +54,16 @@ class ImportGenerico
     ];
 
     /**
+     * La scheda albero viaggia sempre con TUTTE le chiavi (null comprese):
+     * l'insert a blocchi prende le colonne dalla prima riga, e righe con
+     * insiemi diversi farebbero slittare i valori di colonna.
+     */
+    private const ALBERO_VUOTO = [
+        'plant_number' => null, 'genus' => null, 'species' => null, 'cultivar' => null,
+        'height_m' => null, 'dbh_cm' => null, 'crown_diameter_m' => null,
+    ];
+
+    /**
      * Nomi di colonna che suggeriscono da soli la destinazione (normalizzati
      * senza maiuscole né separatori). La proposta è solo un punto di
      * partenza: l'ultima parola resta a chi importa.
@@ -115,7 +125,9 @@ class ImportGenerico
         foreach (array_slice($features, 0, self::RIGHE_ANTEPRIMA) as $feature) {
             $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
             $anteprima[] = array_map(
-                fn ($v) => $v === null ? null : mb_substr((string) $v, 0, 60),
+                // Il GeoJSON ammette valori annidati: in anteprima si dichiara
+                // il dato composto invece di far esplodere il cast a stringa
+                fn ($v) => $v === null ? null : (is_scalar($v) ? mb_substr((string) $v, 0, 60) : '[dato composto]'),
                 $props,
             );
         }
@@ -127,6 +139,13 @@ class ImportGenerico
             'colonne' => array_values($colonne),
             'anteprima' => $anteprima,
             'proposta' => $this->proposta(array_values($colonne)),
+            // Le destinazioni le detta il server: l'interfaccia non ne tiene
+            // una copia sua che prima o poi divergerebbe
+            'destinazioni' => array_map(
+                fn ($chiave, $def) => ['valore' => $chiave, 'etichetta' => $def['label']],
+                array_keys(self::DESTINAZIONI),
+                self::DESTINAZIONI,
+            ),
             'limite' => self::MAX_FEATURES,
         ];
     }
@@ -190,18 +209,79 @@ class ImportGenerico
         $errors = [];
         $warnings = [];
         $daInserire = [];
-        $alberiNuovi = [];
         $daAggiornare = [];
         $censusInFile = [];
+        // Valori mappati che il tipo scelto non sa dove mettere: contati,
+        // non persi in silenzio
+        $ignorati = [];
 
         // colonna per destinazione (una sola colonna per destinazione)
         $col = array_flip($mappatura);
+
+        // Per aggiornare serve la colonna del codice censimento: senza,
+        // le schede esistenti non si riconoscono e ogni reimport
+        // duplicherebbe tutto in silenzio
+        if ($esistenti === 'aggiorna' && ! isset($col['codice_censimento'])) {
+            throw ValidationException::withMessages([
+                'mappatura' => 'Per aggiornare le schede esistenti serve una colonna mappata su "Codice censimento": senza, le schede non si riconoscono.',
+            ]);
+        }
+
+        // Le schede esistenti si caricano PRIMA del giro: con "aggiorna" la
+        // geometria e i campi si valutano contro il tipo VERO della scheda,
+        // non contro quello dedotto dal file (che potrebbe essere un altro)
+        $esistentiDb = collect();
+        if (isset($col['codice_censimento'])) {
+            $codici = [];
+            foreach ($features as $feature) {
+                $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
+                $codice = LetturaValori::testo($props[$col['codice_censimento']] ?? null);
+                if ($codice !== null) {
+                    $codici[] = $codice;
+                }
+            }
+            if ($codici !== []) {
+                $esistentiDb = Asset::query()->with('objectType')
+                    ->whereIn('census_code', array_unique($codici))
+                    ->get()->keyBy('census_code');
+            }
+        }
 
         foreach ($features as $index => $feature) {
             $label = 'riga #'.($index + 1);
             $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
 
-            $valore = fn (string $dest) => isset($col[$dest]) ? ($props[$col[$dest]] ?? null) : null;
+            // Un valore composto (lista o oggetto del GeoJSON) non è un dato
+            // per la scheda: si avvisa e si ignora, qualunque sia il campo
+            $valore = function (string $dest) use ($col, $props, $label, &$warnings) {
+                $v = isset($col[$dest]) ? ($props[$col[$dest]] ?? null) : null;
+                if ($v !== null && ! is_scalar($v)) {
+                    $warnings[] = "{$label}: ".$col[$dest].': valore composto (lista o oggetto), ignorato.';
+
+                    return null;
+                }
+
+                return $v;
+            };
+
+            $censusCode = LetturaValori::testo($valore('codice_censimento'));
+            if ($censusCode !== null) {
+                if (isset($censusInFile[$censusCode])) {
+                    $errors[] = ['index' => $index, 'error' => "{$label}: codice censimento '{$censusCode}' duplicato nel file."];
+
+                    continue;
+                }
+                $censusInFile[$censusCode] = $index;
+            }
+
+            // Codice già in banca dati: si salta (come il canale CAM) o si
+            // aggiorna la scheda esistente, secondo la scelta fatta
+            $esistente = $censusCode !== null ? $esistentiDb->get($censusCode) : null;
+            if ($esistente !== null && $esistenti === 'salta') {
+                $errors[] = ['index' => $index, 'error' => "{$label}: codice censimento '{$censusCode}' già presente nel censimento."];
+
+                continue;
+            }
 
             // Tipo: dalla colonna del codice catalogo se mappata, altrimenti
             // dal tipo predefinito. Un codice scritto ma sconosciuto è un
@@ -216,8 +296,21 @@ class ImportGenerico
                     continue;
                 }
             }
+            // Una scheda esistente tiene il SUO tipo: l'aggiornamento non lo
+            // cambia, e geometria e campi vanno giudicati contro quello
+            if ($esistente !== null) {
+                $type = $esistente->objectType;
+            }
             if ($type === null) {
                 $errors[] = ['index' => $index, 'error' => "{$label}: nessun codice catalogo nella riga e nessun tipo predefinito scelto."];
+
+                continue;
+            }
+
+            // I perimetri delle aree di gestione non diventano elementi
+            // (stessa regola del canale CAM: si gestiscono nel Territorio)
+            if ($type->code === 'S325500') {
+                $warnings[] = "{$label}: S325500 (limite area di gestione) ignorato: i perimetri si gestiscono nel Territorio.";
 
                 continue;
             }
@@ -246,21 +339,14 @@ class ImportGenerico
                 continue;
             }
 
-            $censusCode = LetturaValori::testo($valore('codice_censimento'));
-            if ($censusCode !== null) {
-                if (isset($censusInFile[$censusCode])) {
-                    $errors[] = ['index' => $index, 'error' => "{$label}: codice censimento '{$censusCode}' duplicato nel file."];
-
-                    continue;
-                }
-                $censusInFile[$censusCode] = $index;
-            }
-
             $note = LetturaValori::testo($valore('note'));
             $dataRilievo = LetturaValori::data($valore('data_rilievo'), "{$label}: data rilievo", $warnings);
 
             // Valori della vegetazione: scheda albero per i tipi arborei,
-            // attributi standard MD per siepi e superfici verdi
+            // attributi standard MD per siepi e superfici verdi. Le chiavi
+            // dell'albero sono SEMPRE tutte presenti: righe con insiemi di
+            // colonne diversi nello stesso insert farebbero slittare i
+            // valori di colonna
             $albero = null;
             $attributi = [];
             foreach (self::DESTINAZIONI as $dest => $def) {
@@ -268,6 +354,13 @@ class ImportGenerico
                     continue;
                 }
                 $grezzo = $props[$col[$dest]] ?? null;
+                // Il GeoJSON ammette liste e oggetti dentro le proprietà:
+                // non sono un valore per la scheda e non si perdono zitti
+                if ($grezzo !== null && ! is_scalar($grezzo)) {
+                    $warnings[] = "{$label}: ".$col[$dest].': valore composto (lista o oggetto), ignorato.';
+
+                    continue;
+                }
                 $letto = ! empty($def['numero'])
                     ? LetturaValori::numero($grezzo, "{$label}: ".$col[$dest], $warnings)
                     : LetturaValori::testo($grezzo);
@@ -275,9 +368,13 @@ class ImportGenerico
                     continue;
                 }
                 if ($type->requires_tree_record && isset($def['albero'])) {
+                    $albero ??= self::ALBERO_VUOTO;
                     $albero[$def['albero']] = $letto;
                 } elseif (! $type->requires_tree_record && isset($def['attributo'])) {
                     $attributi[$def['attributo']] = $letto;
+                } else {
+                    $ignorati[$dest] ??= ['colonna' => $col[$dest], 'righe' => 0];
+                    $ignorati[$dest]['righe']++;
                 }
             }
 
@@ -296,33 +393,21 @@ class ImportGenerico
                 'data_rilievo' => $dataRilievo,
                 'albero' => $albero,
                 'attributi' => $attributi,
+                'esistente_id' => $esistente?->id,
                 'index' => $index,
                 'label' => $label,
             ];
 
-            $daInserire[] = $riga;
+            if ($esistente !== null) {
+                $daAggiornare[] = $riga;
+            } else {
+                $daInserire[] = $riga;
+            }
         }
 
-        // Codici già presenti in banca dati: si saltano (come il canale CAM)
-        // o si aggiornano, secondo la scelta fatta
-        $esistentiDb = collect();
-        if ($censusInFile !== []) {
-            $esistentiDb = Asset::query()
-                ->whereIn('census_code', array_keys($censusInFile))
-                ->pluck('id', 'census_code');
-        }
-        if ($esistentiDb->isNotEmpty()) {
-            [$daInserire, $daAggiornare] = collect($daInserire)->partition(
-                fn ($riga) => $riga['census_code'] === null || ! $esistentiDb->has($riga['census_code']),
-            );
-            $daInserire = $daInserire->values()->all();
-            $daAggiornare = $daAggiornare->values()->all();
-            if ($esistenti === 'salta') {
-                foreach ($daAggiornare as $riga) {
-                    $errors[] = ['index' => $riga['index'], 'error' => "{$riga['label']}: codice censimento '{$riga['census_code']}' già presente nel censimento."];
-                }
-                $daAggiornare = [];
-            }
+        foreach ($ignorati as $dest => $info) {
+            $warnings[] = "Colonna '{$info['colonna']}' (".self::DESTINAZIONI[$dest]['label'].'): il tipo della riga non ha questo campo, valore ignorato su '
+                .($info['righe'] === 1 ? '1 riga.' : "{$info['righe']} righe.");
         }
 
         // Righe pronte per l'insert (fuori dal partition: servono gli id)
@@ -352,7 +437,7 @@ class ImportGenerico
                 $treeRows[] = [
                     'asset_id' => $assetId,
                     'tenant_id' => $tenantId,
-                    ...($riga['albero'] ?? []),
+                    ...($riga['albero'] ?? self::ALBERO_VUOTO),
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];
@@ -374,7 +459,7 @@ class ImportGenerico
         $imported = 0;
         $aggiornati = 0;
         if (! $dryRun && ($assetRows !== [] || $daAggiornare !== [])) {
-            DB::transaction(function () use ($assetRows, $treeRows, $daAggiornare, $esistentiDb, $customFieldNeeds, $tenantId, &$imported, &$aggiornati, &$errors) {
+            DB::transaction(function () use ($assetRows, $treeRows, $daAggiornare, $customFieldNeeds, $tenantId, &$imported, &$aggiornati) {
                 CamImporter::assicuraCampiMd($customFieldNeeds, $tenantId);
 
                 foreach (array_chunk($assetRows, 200) as $chunk) {
@@ -386,7 +471,7 @@ class ImportGenerico
                 }
 
                 foreach ($daAggiornare as $riga) {
-                    $this->aggiorna($riga, $esistentiDb->get($riga['census_code']));
+                    $this->aggiorna($riga);
                     $aggiornati++;
                 }
             });
@@ -416,16 +501,18 @@ class ImportGenerico
      * scheda albero senza salvarla, poi si salva assets (lì scatta la
      * fotografia di versione), e solo dopo si salva l'albero.
      */
-    private function aggiorna(array $riga, string $assetId): void
+    private function aggiorna(array $riga): void
     {
-        $asset = Asset::query()->with('tree')->lockForUpdate()->find($assetId);
+        $asset = Asset::query()->with('tree')->lockForUpdate()->find($riga['esistente_id']);
         if ($asset === null) {
             return;
         }
 
         $treeDirty = false;
         if ($riga['albero'] !== null && $asset->tree) {
-            $asset->tree->fill($riga['albero']);
+            // Solo i valori davvero letti dal file: le chiavi rimaste a null
+            // non devono cancellare le misure già in scheda
+            $asset->tree->fill(array_filter($riga['albero'], fn ($v) => $v !== null));
             $treeDirty = $asset->tree->isDirty();
         }
 
@@ -490,7 +577,7 @@ class ImportGenerico
         return $albero;
     }
 
-    private function validaMappatura(array $mappatura): void
+    public function validaMappatura(array $mappatura): void
     {
         $viste = [];
         foreach ($mappatura as $colonna => $destinazione) {
@@ -548,6 +635,15 @@ class ImportGenerico
         }
 
         return $decoded;
+    }
+
+    /** Butta via l'analisi consumata: dopo l'import vero il gettone non deve
+     * restare buono, o un secondo clic duplicherebbe gli elementi. */
+    public function dimentica(string $token, string $tenantId): void
+    {
+        if (preg_match('/^[0-9a-f]{40}$/', $token)) {
+            @unlink($this->cartella()."/{$tenantId}-{$token}.json");
+        }
     }
 
     private function puliziaScaduti(): void

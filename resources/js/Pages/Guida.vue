@@ -789,7 +789,7 @@ function goTo(id) {
                             La mappatura si può <strong>salvare con un nome</strong> e riusare al prossimo
                             file dello stesso fornitore. Come sempre: prima la verifica a vuoto con il
                             conteggio di importabili, da aggiornare e scartati (con i motivi), poi l'import
-                            vero, tutto o niente.
+                            vero, tutto o niente. Il limite è di 20.000 elementi per volta.
                         </p>
                     </section>
 

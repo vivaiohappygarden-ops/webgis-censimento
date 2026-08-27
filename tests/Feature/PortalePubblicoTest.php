@@ -260,7 +260,9 @@ class PortalePubblicoTest extends TestCase
         $this->artisan('censimento:rinumera', ['committente' => $this->client->name, '--conferma' => true])
             ->assertSuccessful();
 
-        $codici = Asset::withoutGlobalScopes()->orderBy('created_at')->pluck('census_code')->all();
+        // Stesso ordinamento del comando (id come spareggio): due inserimenti
+        // nello stesso istante non devono rendere ambiguo chi è MEN-0001
+        $codici = Asset::withoutGlobalScopes()->orderBy('created_at')->orderBy('id')->pluck('census_code')->all();
         $this->assertSame(['MEN-0001', 'MEN-0002'], $codici);
 
         // Il codice precedente resta scritto sulla scheda

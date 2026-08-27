@@ -200,24 +200,8 @@ const importer = reactive({
     // Import generico: analisi del file, mappatura colonna -> campo nostro,
     // tipo predefinito, gestione dei codici già presenti, mappature salvate
     analisi: null, mappatura: {}, tipoDefaultId: '', esistenti: 'salta',
-    mappature: [], nomeMappatura: '', mappaturaSceltaId: '',
+    mappature: [], nomeMappatura: '', mappaturaSceltaId: '', avvisoMappatura: '',
 });
-
-// Le destinazioni possibili di una colonna (stesse chiavi del server)
-const DESTINAZIONI_IMPORT = [
-    ['codice_censimento', 'Codice censimento (etichetta)'],
-    ['codice_catalogo', 'Codice del nostro catalogo'],
-    ['note', 'Note'],
-    ['data_rilievo', 'Data del rilievo'],
-    ['numero_pianta', 'Numero pianta'],
-    ['genere', 'Genere'],
-    ['specie', 'Specie'],
-    ['varieta', 'Varietà / cultivar'],
-    ['altezza_m', 'Altezza (m)'],
-    ['diametro_tronco_cm', 'Diametro tronco (cm)'],
-    ['diametro_chioma_m', 'Diametro chioma (m)'],
-    ['larghezza_m', 'Larghezza (m)'],
-];
 
 // Tipi del catalogo per il "tipo predefinito" (caricati alla prima analisi)
 const tipiImport = ref([]);
@@ -226,6 +210,9 @@ function azzeraGenerico() {
     importer.analisi = null;
     importer.mappatura = {};
     importer.report = null;
+    importer.error = '';
+    importer.mappaturaSceltaId = '';
+    importer.avvisoMappatura = '';
 }
 
 async function analizzaGenerico() {
@@ -280,6 +267,11 @@ async function runImportGenerico(dryRun) {
         });
         importer.report = data.data;
         if (! dryRun) {
+            // Il gettone è consumato: si chiude il giro (resta il rapporto),
+            // per un altro import si riparte dal file
+            importer.analisi = null;
+            importer.mappatura = {};
+            importer.file = null;
             await load();
         }
     } catch (err) {
@@ -299,10 +291,15 @@ function applicaMappaturaSalvata() {
     const salvata = importer.mappature.find((m) => m.id === importer.mappaturaSceltaId);
     if (! salvata || ! importer.analisi) return;
     // Solo le colonne davvero presenti nel file: una mappatura pensata per
-    // un altro tracciato non deve inventare colonne
+    // un altro tracciato non deve inventare colonne. Le assenti si dicono,
+    // non si tacciono
     const presenti = new Set(importer.analisi.colonne.map((c) => c.nome));
+    const mancanti = Object.keys(salvata.mapping).filter((colonna) => ! presenti.has(colonna));
     importer.mappatura = Object.fromEntries(
         Object.entries(salvata.mapping).filter(([colonna]) => presenti.has(colonna)));
+    importer.avvisoMappatura = mancanti.length
+        ? `Nel file mancano le colonne ${mancanti.join(', ')} della mappatura salvata: quelle corrispondenze non sono state applicate.`
+        : '';
     if (salvata.default_object_type_id) importer.tipoDefaultId = salvata.default_object_type_id;
     importer.report = null;
 }
@@ -411,8 +408,10 @@ async function downloadCam(url, baseName, extension) {
 
 async function openImporter() {
     importer.open = true;
-    importer.report = null;
-    importer.error = '';
+    importer.file = null;
+    // L'analisi del giro precedente non deve restare a schermo con il
+    // campo del file ormai vuoto
+    azzeraGenerico();
     if (! importAreas.value.length) {
         const { data } = await axios.get('/api/v1/areas', { params: { per_page: 100 } });
         importAreas.value = data.data;
@@ -805,10 +804,10 @@ const measure = (row) => {
                                     ]"
                                     :key="opt.value"
                                     class="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm"
-                                    :class="importer.format === opt.value ? 'border-green-700 bg-green-50 font-medium' : 'border-gray-300'"
+                                    :class="[importer.format === opt.value ? 'border-green-700 bg-green-50 font-medium' : 'border-gray-300', importer.busy ? 'pointer-events-none opacity-50' : '']"
                                     :data-test="`imp-formato-${opt.value}`"
                                 >
-                                    <input v-model="importer.format" type="radio" :value="opt.value" class="hidden" @change="azzeraGenerico()">
+                                    <input v-model="importer.format" type="radio" :value="opt.value" class="hidden" :disabled="importer.busy" @change="azzeraGenerico()">
                                     {{ opt.label }}
                                 </label>
                             </div>
@@ -817,7 +816,8 @@ const measure = (row) => {
                                 data-test="imp-file"
                                 :accept="importer.format === 'generico' ? '.zip,.json,.geojson,.gpkg,.kml'
                                     : importer.format === 'cam' ? '.zip,.json,.geojson' : '.json,.geojson,application/json,application/geo+json'"
-                                class="w-full text-sm"
+                                class="w-full text-sm disabled:opacity-50"
+                                :disabled="importer.busy"
                                 @change="(e) => { importer.file = e.target.files?.[0] ?? null; azzeraGenerico(); }"
                             >
                             <ScegliVoce
@@ -828,6 +828,7 @@ const measure = (row) => {
                                 :campi-ricerca="['name', 'code']"
                                 segnaposto="Area di destinazione…"
                                 vuoto="Nessuna area trovata."
+                                @cambia="importer.report = null"
                             />
 
                             <!-- Passo 1 del generico: analisi del file -->
@@ -853,6 +854,7 @@ const measure = (row) => {
                                             <option v-for="m in importer.mappature" :key="m.id" :value="m.id">{{ m.name }}</option>
                                         </select>
                                     </div>
+                                    <p v-if="importer.avvisoMappatura" class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900" data-test="imp-avviso-mappatura">{{ importer.avvisoMappatura }}</p>
 
                                     <div class="overflow-x-auto rounded-xl border border-gray-200">
                                         <table class="w-full text-sm">
@@ -875,7 +877,7 @@ const measure = (row) => {
                                                             @change="(e) => { importer.mappatura[colonna.nome] = e.target.value; importer.report = null; }"
                                                         >
                                                             <option value="">Non importare</option>
-                                                            <option v-for="[valore, etichetta] in DESTINAZIONI_IMPORT" :key="valore" :value="valore">{{ etichetta }}</option>
+                                                            <option v-for="d in importer.analisi.destinazioni" :key="d.valore" :value="d.valore">{{ d.etichetta }}</option>
                                                         </select>
                                                     </td>
                                                 </tr>
@@ -911,6 +913,7 @@ const measure = (row) => {
                                                 :campi-ricerca="['name']"
                                                 tutti="Nessuno"
                                                 vuoto="Nessun tipo trovato."
+                                                @cambia="importer.report = null"
                                             />
                                         </label>
                                         <div class="text-xs">
@@ -946,9 +949,15 @@ const measure = (row) => {
                                 </div>
                                 <ul v-if="importer.report.errors.length" class="mt-2 max-h-32 space-y-0.5 overflow-y-auto text-xs text-red-700">
                                     <li v-for="(e, i) in importer.report.errors" :key="i">• {{ e.error }}</li>
+                                    <li v-if="importer.report.errors_total > importer.report.errors.length" class="font-medium">
+                                        … e altri {{ importer.report.errors_total - importer.report.errors.length }} scarti non mostrati.
+                                    </li>
                                 </ul>
                                 <ul v-if="importer.report.warnings?.length" class="mt-2 max-h-24 space-y-0.5 overflow-y-auto text-xs text-amber-700">
                                     <li v-for="(w, i) in importer.report.warnings" :key="i">• {{ w }}</li>
+                                    <li v-if="importer.report.warnings_total > importer.report.warnings.length" class="font-medium">
+                                        … e altri {{ importer.report.warnings_total - importer.report.warnings.length }} avvisi non mostrati.
+                                    </li>
                                 </ul>
                                 <p v-if="importer.report.dropped_properties?.length" class="mt-2 text-xs text-gray-500">
                                     Proprietà ignorate (non definite come campi del tipo): {{ importer.report.dropped_properties.join(', ') }}

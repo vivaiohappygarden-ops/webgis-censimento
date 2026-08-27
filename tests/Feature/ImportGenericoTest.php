@@ -263,6 +263,172 @@ class ImportGenericoTest extends TestCase
         $this->assertSame(0, ImportMapping::query()->count());
     }
 
+    public function test_nested_property_values_do_not_crash_analysis_or_import(): void
+    {
+        $albero = $this->makeObjectType($this->organization, 'P', 'P103108');
+        $conListe = [
+            'type' => 'FeatureCollection',
+            'features' => [[
+                'type' => 'Feature',
+                'geometry' => ['type' => 'Point', 'coordinates' => [9.19, 45.464]],
+                'properties' => ['ID' => 'NST-1', 'TAGS' => ['filare', 'viale'], 'EXTRA' => ['a' => 1], 'H' => '10'],
+            ]],
+        ];
+
+        // L'analisi non esplode e dichiara il dato composto in anteprima
+        $analisi = $this->analizza($conListe);
+        $this->assertSame('[dato composto]', $analisi['anteprima'][0]['TAGS']);
+
+        // L'import con una colonna composta mappata avvisa, non crolla
+        $report = $this->postJson('/api/v1/imports/generico', [
+            'file_token' => $analisi['token'],
+            'area_id' => $this->area->id,
+            'mappatura' => ['ID' => 'codice_censimento', 'TAGS' => 'note', 'H' => 'altezza_m'],
+            'default_object_type_id' => $albero->id,
+            'dry_run' => false,
+        ])->assertOk()->json('data');
+
+        $this->assertSame(1, $report['imported']);
+        $this->assertStringContainsString('valore composto', implode(' ', $report['warnings']));
+    }
+
+    public function test_tree_rows_with_different_filled_columns_do_not_shift_values(): void
+    {
+        $albero = $this->makeObjectType($this->organization, 'P', 'P103108');
+        $analisi = $this->analizza([
+            'type' => 'FeatureCollection',
+            'features' => [
+                // Riga 1: solo specie e altezza; riga 2: solo genere e diametro.
+                // Con chiavi disomogenee l'insert a blocchi farebbe slittare
+                // i valori di colonna
+                ['type' => 'Feature', 'geometry' => ['type' => 'Point', 'coordinates' => [9.19, 45.464]],
+                    'properties' => ['ID' => 'SHF-1', 'GEN' => null, 'SPE' => 'Tilia cordata', 'H' => '12', 'DIA' => null]],
+                ['type' => 'Feature', 'geometry' => ['type' => 'Point', 'coordinates' => [9.191, 45.465]],
+                    'properties' => ['ID' => 'SHF-2', 'GEN' => 'Acer', 'SPE' => null, 'H' => null, 'DIA' => '35']],
+            ],
+        ]);
+
+        $this->postJson('/api/v1/imports/generico', [
+            'file_token' => $analisi['token'],
+            'area_id' => $this->area->id,
+            'mappatura' => ['ID' => 'codice_censimento', 'GEN' => 'genere', 'SPE' => 'specie', 'H' => 'altezza_m', 'DIA' => 'diametro_tronco_cm'],
+            'default_object_type_id' => $albero->id,
+            'dry_run' => false,
+        ])->assertOk()->assertJsonPath('data.imported', 2);
+
+        $primo = Asset::query()->with('tree')->where('census_code', 'SHF-1')->firstOrFail()->tree;
+        $secondo = Asset::query()->with('tree')->where('census_code', 'SHF-2')->firstOrFail()->tree;
+        $this->assertSame('Tilia cordata', $primo->species);
+        $this->assertEqualsWithDelta(12.0, (float) $primo->height_m, 0.001);
+        $this->assertNull($primo->dbh_cm);
+        $this->assertSame('Acer', $secondo->genus);
+        $this->assertEqualsWithDelta(35.0, (float) $secondo->dbh_cm, 0.001);
+        $this->assertNull($secondo->height_m);
+        $this->assertNull($secondo->species);
+    }
+
+    public function test_update_judges_geometry_against_the_existing_type(): void
+    {
+        // Scheda esistente a superficie; il file porta un punto con lo stesso
+        // codice: con "aggiorna" la geometria va giudicata contro il tipo
+        // VERO della scheda, e la riga scartata già in verifica
+        $prato = $this->makeObjectType($this->organization, 'S');
+        $alberoTipo = $this->makeObjectType($this->organization, 'P', 'P103108');
+        $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $prato->id,
+            'census_code' => 'MIX-1',
+            'geometry' => $this->squarePolygon(),
+        ])->assertCreated();
+
+        $analisi = $this->analizza([
+            'type' => 'FeatureCollection',
+            'features' => [[
+                'type' => 'Feature',
+                'geometry' => ['type' => 'Point', 'coordinates' => [9.19, 45.464]],
+                'properties' => ['ID' => 'MIX-1'],
+            ]],
+        ]);
+        $payload = [
+            'file_token' => $analisi['token'],
+            'area_id' => $this->area->id,
+            'mappatura' => ['ID' => 'codice_censimento'],
+            'default_object_type_id' => $alberoTipo->id,
+            'esistenti' => 'aggiorna',
+        ];
+
+        $prova = $this->postJson('/api/v1/imports/generico', [...$payload, 'dry_run' => true])
+            ->assertOk()->json('data');
+        $this->assertSame(0, $prova['updatable']);
+        $this->assertStringContainsString('non ammessa', $prova['errors'][0]['error']);
+
+        // L'import vero dà lo stesso esito della verifica: nessun errore 500
+        $this->postJson('/api/v1/imports/generico', [...$payload, 'dry_run' => false])
+            ->assertOk()->assertJsonPath('data.updated', 0);
+    }
+
+    public function test_update_mode_requires_a_census_code_column(): void
+    {
+        $analisi = $this->analizza($this->fileFornitore());
+
+        $this->postJson('/api/v1/imports/generico', [
+            'file_token' => $analisi['token'],
+            'area_id' => $this->area->id,
+            'mappatura' => ['SPECIE_ALB' => 'specie'],
+            'esistenti' => 'aggiorna',
+            'dry_run' => true,
+        ])->assertUnprocessable();
+    }
+
+    public function test_area_boundary_code_is_skipped_like_the_cam_channel(): void
+    {
+        $confine = $this->makeObjectType($this->organization, 'S', 'S325500');
+        $analisi = $this->analizza([
+            'type' => 'FeatureCollection',
+            'features' => [[
+                'type' => 'Feature',
+                'geometry' => $this->squarePolygon(),
+                'properties' => ['COD' => 'S325500'],
+            ]],
+        ]);
+
+        $report = $this->postJson('/api/v1/imports/generico', [
+            'file_token' => $analisi['token'],
+            'area_id' => $this->area->id,
+            'mappatura' => ['COD' => 'codice_catalogo'],
+            'dry_run' => true,
+        ])->assertOk()->json('data');
+
+        $this->assertSame(0, $report['importable']);
+        $this->assertStringContainsString('Territorio', implode(' ', $report['warnings']));
+    }
+
+    public function test_token_is_burned_after_a_real_import(): void
+    {
+        $albero = $this->makeObjectType($this->organization, 'P', 'P103108');
+        $analisi = $this->analizza($this->fileFornitore());
+        $payload = [
+            'file_token' => $analisi['token'],
+            'area_id' => $this->area->id,
+            'mappatura' => ['ID_PIANTA' => 'codice_censimento'],
+            'default_object_type_id' => $albero->id,
+            'dry_run' => false,
+        ];
+
+        $this->postJson('/api/v1/imports/generico', $payload)->assertOk();
+        // Un secondo clic sullo stesso gettone non duplica: l'analisi è consumata
+        $this->postJson('/api/v1/imports/generico', $payload)->assertUnprocessable();
+        $this->assertSame(2, Asset::query()->count());
+    }
+
+    public function test_saved_mapping_rejects_unknown_destinations(): void
+    {
+        $this->postJson('/api/v1/imports/mappature', [
+            'name' => 'Storta',
+            'mapping' => ['COL' => 'destinazione_inventata'],
+        ])->assertUnprocessable();
+    }
+
     public function test_any_shapefile_roundtrip_with_custom_columns(): void
     {
         if (! (new \App\Services\Export\CamExporter)->ogr2ogrAvailable()) {
