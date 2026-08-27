@@ -297,8 +297,11 @@ function goTo(id) {
                             propone da sola dalla misura sulla mappa, in base all'unità della lavorazione:
                             metri quadrati dalla superficie del prato, metri dalla lunghezza della siepe,
                             "cadauno" per gli alberi. Nel dettaglio dell'ordine ogni riga si può correggere
-                            (la superficie lorda non sempre è quella lavorata) e, se la geometria è stata
-                            ridisegnata dopo, il pulsante "Riprendi dalla mappa" riallinea il numero.
+                            (la superficie lorda non sempre è quella lavorata). Quando il numero della riga
+                            non coincide con la misura attuale della mappa — perché corretto a mano o perché
+                            la geometria è stata ridisegnata — compare "Riprendi dalla mappa", che riporta
+                            la riga alla misura del disegno: si usa dopo un ridisegno, non per annullare
+                            una correzione voluta.
                             Sotto l'elenco compare il totale previsto e, con un listino collegato,
                             l'<strong>importo previsto</strong> accanto a quello consuntivato.
                             Nell'app di campo la stessa somma viene proposta nel consuntivo di chiusura:

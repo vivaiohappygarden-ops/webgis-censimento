@@ -122,7 +122,9 @@ function openDetailData(estimate) {
     items.value = (estimate.items ?? []).map((i) => ({
         work_type_id: i.work_type_id ?? '',
         asset_id: i.asset_id ?? '',
-        asset_code: i.asset?.census_code ?? '',
+        // Ripiego sull'id abbreviato: senza codice censimento (o con
+        // l'elemento non più leggibile) il distintivo non deve restare muto
+        asset_code: i.asset?.census_code ?? (i.asset_id ? String(i.asset_id).slice(0, 8) : ''),
         description: i.description,
         unit: i.unit,
         quantity: Number(i.quantity),
@@ -224,6 +226,12 @@ function scollegaElemento(item) {
 function removeItem(index) {
     markDirty();
     items.value.splice(index, 1);
+    // Il riquadro "Misura da un elemento" è agganciato alla posizione: se
+    // una riga sopra sparisce, finirebbe sotto la voce sbagliata
+    if (collega.index !== null) {
+        if (collega.index === index) collega.index = null;
+        else if (collega.index > index) collega.index -= 1;
+    }
 }
 
 function onWorkTypeChange(item) {

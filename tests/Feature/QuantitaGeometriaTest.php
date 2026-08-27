@@ -256,6 +256,88 @@ class QuantitaGeometriaTest extends TestCase
         $this->assertSame('QG-PREV', $salvato['items'][0]['asset']['census_code']);
     }
 
+    public function test_bulk_attach_proposes_quantities_too(): void
+    {
+        $prato = $this->makeAsset('S', $this->squarePolygon(), 'QG-BLK1');
+        $albero = $this->makeAsset('P', $this->pointGeometry(), 'QG-BLK2');
+        $sfalcio = $this->makeWorkType('mq', 'SFG');
+        $woId = $this->postJson('/api/v1/work-orders', ['title' => 'In blocco', 'work_type_id' => $sfalcio->id])
+            ->json('data.id');
+
+        // L'azione multipla "Collega a lavoro" deve proporre come i percorsi uno-a-uno
+        $this->postJson("/api/v1/azioni/lavori/{$woId}/collega-elementi", [
+            'ids' => [$prato['id'], $albero['id']],
+        ])->assertOk();
+
+        $detail = $this->getJson("/api/v1/work-orders/{$woId}")->json('data');
+        $righe = collect($detail['assets'])->keyBy(fn ($r) => $r['asset']['census_code']);
+        $this->assertEqualsWithDelta((float) $prato['computed_area_sqm'], (float) $righe['QG-BLK1']['planned_quantity'], 0.01);
+        $this->assertSame('mq', $righe['QG-BLK1']['unit']);
+        // Il punto non ha superficie: resta senza quantità, come dall'aggancio singolo
+        $this->assertNull($righe['QG-BLK2']['planned_quantity']);
+    }
+
+    public function test_a_corpo_is_not_multiplied_per_element(): void
+    {
+        $ceppaia = $this->makeAsset('P', $this->pointGeometry(), 'QG-CORPO');
+        $forfait = $this->makeWorkType('a corpo', 'FRF');
+        $woId = $this->postJson('/api/v1/work-orders', ['title' => 'Forfait', 'work_type_id' => $forfait->id])
+            ->json('data.id');
+
+        // Un forfait per l'intervento non è un prezzo per pezzo: nessuna proposta
+        $row = $this->postJson("/api/v1/work-orders/{$woId}/assets", ['asset_id' => $ceppaia['id']])
+            ->assertOk()->json('data.assets.0');
+        $this->assertNull($row['planned_quantity']);
+    }
+
+    public function test_row_update_checks_order_version_and_decimals(): void
+    {
+        $prato = $this->makeAsset('S', $this->squarePolygon(), 'QG-VER');
+        $sfalcio = $this->makeWorkType('mq', 'SFH');
+        $detail = $this->postJson('/api/v1/work-orders', [
+            'title' => 'Concorrenza righe', 'work_type_id' => $sfalcio->id, 'asset_ids' => [$prato['id']],
+        ])->json('data');
+        $rowId = $detail['assets'][0]['id'];
+
+        // Più di 2 decimali: il DB arrotonderebbe in silenzio, meglio rifiutare
+        $this->patchJson("/api/v1/work-orders/{$detail['id']}/assets/{$rowId}", [
+            'planned_quantity' => 12.345, 'version' => $detail['version'],
+        ])->assertUnprocessable();
+
+        // Salvataggio valido: la versione dell'ordine avanza
+        $dopo = $this->patchJson("/api/v1/work-orders/{$detail['id']}/assets/{$rowId}", [
+            'planned_quantity' => 800, 'version' => $detail['version'],
+        ])->assertOk()->json('data');
+        $this->assertSame($detail['version'] + 1, $dopo['version']);
+
+        // Chi ha ancora la versione vecchia riceve un conflitto, non sovrascrive
+        $this->patchJson("/api/v1/work-orders/{$detail['id']}/assets/{$rowId}", [
+            'planned_quantity' => 950, 'version' => $detail['version'],
+        ])->assertConflict();
+    }
+
+    public function test_asset_referenced_by_estimate_cannot_be_deleted(): void
+    {
+        $prato = $this->makeAsset('S', $this->squarePolygon(), 'QG-DEL');
+        $client = \App\Models\Client::create([
+            'tenant_id' => $this->organization->id, 'name' => 'Comune QG3', 'client_type' => 'public',
+        ]);
+        $estimate = $this->postJson('/api/v1/estimates', [
+            'client_id' => $client->id, 'title' => 'Blocca eliminazione',
+        ])->json('data');
+        $this->putJson("/api/v1/estimates/{$estimate['id']}/items", [
+            'version' => $estimate['version'],
+            'items' => [[
+                'asset_id' => $prato['id'], 'description' => 'Sfalcio QG-DEL',
+                'unit' => 'mq', 'quantity' => 100, 'unit_price' => 0.4,
+            ]],
+        ])->assertOk();
+
+        // La voce di preventivo blocca l'eliminazione, come gli ordini di lavoro
+        $risposta = $this->deleteJson("/api/v1/assets/{$prato['id']}")->assertUnprocessable();
+        $this->assertStringContainsString('voce di preventivo', $risposta->json('errors.asset.0'));
+    }
+
     public function test_estimate_item_rejects_unknown_asset(): void
     {
         $client = \App\Models\Client::create([

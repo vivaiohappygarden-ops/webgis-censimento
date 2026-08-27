@@ -369,11 +369,24 @@ watch(() => selezione.active, (attivo) => {
         svuotaSelezione();
         selezione.message = '';
         selezione.creato = null;
+        // Il precompilato non deve sopravvivere a un cambio di filtro: alla
+        // prossima attivazione si riparte dal committente della vista
+        selezione.clientId = '';
     }
 });
 
-// Durante un disegno il doppio clic non deve far saltare l'inquadratura
-watch(() => drawing.active || creating.active || redraw.active, (attivo) => {
+// Il ridisegno può essere spento da un altro strumento: i suoi punti non
+// devono restare disegnati come un'anteprima fantasma
+watch(() => redraw.active, (attivo) => {
+    if (! attivo) {
+        redraw.vertices = [];
+        disegnaAnteprima([], false);
+    }
+});
+
+// Durante un disegno o una selezione il doppio clic non deve far saltare
+// l'inquadratura
+watch(() => drawing.active || creating.active || redraw.active || selezione.active, (attivo) => {
     if (! map) return;
     if (attivo) map.doubleClickZoom.disable();
     else map.doubleClickZoom.enable();

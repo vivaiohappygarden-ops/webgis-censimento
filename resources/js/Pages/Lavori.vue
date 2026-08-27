@@ -12,6 +12,7 @@ import ScegliVoce from '@/Components/ScegliVoce.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import VisteSalvate from '@/Components/VisteSalvate.vue';
 import { usaCaricamento } from '@/caricamento';
+import { avvisoCaricamento } from '@/avvisi';
 import { WORK_STATUS_LABELS } from '@/workStatus';
 
 const page = usePage();
@@ -269,8 +270,11 @@ async function openDetail(id) {
         detailError.value = '';
         assetSearch.q = '';
         assetSearch.results = [];
-    } catch {
-        detailError.value = 'Ordine non trovato o non accessibile.';
+    } catch (err) {
+        // Il dettaglio può non aprirsi affatto (link vecchio, ordine
+        // eliminato): l'avviso deve comparire anche senza pannello, con il
+        // numero dell'errore, o il link sembrerebbe "non fare niente"
+        detailError.value = avvisoCaricamento(err);
     }
 }
 
@@ -361,8 +365,15 @@ async function detachAsset(rowId) {
 const righeQuantita = reactive({});
 
 function preparaRigheQuantita() {
-    Object.keys(righeQuantita).forEach((k) => delete righeQuantita[k]);
+    const correnti = new Set((detail.value?.assets ?? []).map((r) => r.id));
+    for (const k of Object.keys(righeQuantita)) {
+        if (! correnti.has(k)) delete righeQuantita[k];
+    }
     for (const row of detail.value?.assets ?? []) {
+        // Una modifica in corso su un'altra riga non si butta: salvare la
+        // riga A non deve azzerare in silenzio quello che si stava
+        // scrivendo sulla riga B
+        if (righeQuantita[row.id]?.dirty) continue;
         righeQuantita[row.id] = {
             quantity: row.planned_quantity != null ? Number(row.planned_quantity) : null,
             unit: row.unit ?? '',
@@ -372,7 +383,7 @@ function preparaRigheQuantita() {
     }
 }
 // Ogni azione sul dettaglio torna dal server con le righe fresche: le
-// caselle ripartono da quelle, perché lo stato vero è quello del server
+// caselle non in modifica ripartono da quelle
 watch(() => detail.value?.assets, preparaRigheQuantita);
 
 async function salvaQuantitaRiga(row) {
@@ -384,12 +395,20 @@ async function salvaQuantitaRiga(row) {
         const { data } = await axios.patch(`/api/v1/work-orders/${detail.value.id}/assets/${row.id}`, {
             planned_quantity: mod.quantity === '' || mod.quantity == null ? null : mod.quantity,
             unit: mod.unit.trim() || null,
+            version: detail.value.version,
         });
+        // Prima di rimpiazzare il dettaglio la riga torna "pulita", così la
+        // ricostruzione la riallinea al valore appena confermato dal server
+        mod.dirty = false;
         detail.value = data.data;
     } catch (err) {
-        detailError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+        const message = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
             ?? err.response?.data?.message ?? 'Errore nel salvataggio della quantità';
-        mod.busy = false;
+        // Su conflitto di versione si ricarica l'ordine, ma il messaggio va
+        // rimesso DOPO: openDetail lo azzererebbe
+        if (err.response?.status === 409) await openDetail(detail.value.id);
+        detailError.value = message;
+        if (righeQuantita[row.id]) righeQuantita[row.id].busy = false;
     }
 }
 
@@ -398,11 +417,17 @@ async function salvaQuantitaRiga(row) {
 async function riprendiDallaMappa(row) {
     detailError.value = '';
     try {
-        const { data } = await axios.patch(`/api/v1/work-orders/${detail.value.id}/assets/${row.id}`, { ricalcola: true });
+        const { data } = await axios.patch(`/api/v1/work-orders/${detail.value.id}/assets/${row.id}`, {
+            ricalcola: true,
+            version: detail.value.version,
+        });
+        if (righeQuantita[row.id]) righeQuantita[row.id].dirty = false;
         detail.value = data.data;
     } catch (err) {
-        detailError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+        const message = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
             ?? err.response?.data?.message ?? 'Errore nel ricalcolo';
+        if (err.response?.status === 409) await openDetail(detail.value.id);
+        detailError.value = message;
     }
 }
 
@@ -499,6 +524,9 @@ onMounted(async () => {
     <AppLayout>
         <div class="p-6">
             <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
+            <!-- Apertura del dettaglio fallita senza pannello (es. link "Apri
+                 l'ordine" verso un ordine nel frattempo eliminato) -->
+            <p v-if="detailError && ! detail" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="wo-apertura-errore">{{ detailError }}</p>
 
             <div class="mb-4 flex items-center justify-between">
                 <div>

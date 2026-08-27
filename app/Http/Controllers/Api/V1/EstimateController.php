@@ -178,13 +178,19 @@ class EstimateController extends Controller implements HasMiddleware
             }
 
             // L'elemento collegato deve esistere nel tenant: il riferimento
-            // finisce in tabella e da lì si riprende la misura
+            // finisce in tabella e da lì si riprende la misura. Se manca, il
+            // messaggio dice QUALE voce scollegare: un rifiuto generico
+            // bloccherebbe l'intero preventivo senza via d'uscita
             $assetIds = collect($data['items'])->pluck('asset_id')->filter()->unique();
             if ($assetIds->isNotEmpty()) {
-                $found = \App\Models\Asset::query()->whereIn('id', $assetIds)->count();
-                if ($found !== $assetIds->count()) {
+                $trovati = \App\Models\Asset::query()->whereIn('id', $assetIds)->pluck('id');
+                $mancanti = $assetIds->diff($trovati);
+                if ($mancanti->isNotEmpty()) {
+                    $voce = collect($data['items'])
+                        ->first(fn ($item) => $mancanti->contains($item['asset_id'] ?? null));
                     throw ValidationException::withMessages([
-                        'items' => 'Un elemento collegato non esiste.',
+                        'items' => 'L\'elemento collegato alla voce "'.trim($voce['description'] ?? '')
+                            .'" non è più nel censimento: scollegalo dalla voce (✕ sul codice) e salva di nuovo.',
                     ]);
                 }
             }

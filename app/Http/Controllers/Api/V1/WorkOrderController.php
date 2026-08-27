@@ -336,7 +336,7 @@ class WorkOrderController extends Controller implements HasMiddleware
         $data = $request->validate([
             'asset_id' => ['required', 'uuid'],
             'work_type_id' => ['nullable', 'uuid'],
-            'planned_quantity' => ['nullable', 'numeric', 'min:0'],
+            'planned_quantity' => ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999'],
             'unit' => ['nullable', 'string', 'max:20'],
             'notes' => ['nullable', 'string'],
         ]);
@@ -405,35 +405,48 @@ class WorkOrderController extends Controller implements HasMiddleware
     public function updateAsset(Request $request, string $id, string $rowId): JsonResponse
     {
         $data = $request->validate([
-            'planned_quantity' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:9999999999'],
+            // decimal:0,2: la colonna è numeric(12,2), senza questa regola il
+            // DB arrotonderebbe in silenzio un valore con più decimali
+            'planned_quantity' => ['sometimes', 'nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999'],
             'unit' => ['sometimes', 'nullable', 'string', 'max:20'],
             'notes' => ['sometimes', 'nullable', 'string'],
             'ricalcola' => ['sometimes', 'boolean'],
+            'version' => ['sometimes', 'integer', 'min:1'],
         ]);
 
-        $workOrder = WorkOrder::query()->findOrFail($id);
-        $this->assertNotTerminal($workOrder);
-        $row = WorkOrderAsset::query()
-            ->where('work_order_id', $workOrder->id)
-            ->with(['asset', 'workType'])
-            ->findOrFail($rowId);
+        // Come le altre modifiche all'ordine: blocco della riga e confronto
+        // di versione, o due tecnici con il dettaglio aperto si
+        // sovrascriverebbero la quantità prevista senza accorgersene
+        DB::transaction(function () use ($request, $id, $rowId, $data) {
+            $workOrder = WorkOrder::query()->lockForUpdate()->findOrFail($id);
+            $this->assertVersion($request, $workOrder);
+            $this->assertNotTerminal($workOrder);
+            $row = WorkOrderAsset::query()
+                ->where('work_order_id', $workOrder->id)
+                ->with(['asset', 'workType'])
+                ->findOrFail($rowId);
 
-        if ($request->boolean('ricalcola')) {
-            // Il ricalcolo riparte dalla geometria di OGGI: serve dopo un
-            // ridisegno, quando la quantità agganciata è rimasta quella vecchia
-            $unit = $row->unit ?? $row->workType?->unit ?? $workOrder->workType?->unit;
-            $quantita = $row->asset !== null ? QuantitaDaGeometria::perAsset($unit, $row->asset) : null;
-            if ($quantita === null) {
-                throw ValidationException::withMessages([
-                    'ricalcola' => 'Dalla geometria di questo elemento non si ricava una quantità nell\'unità indicata.',
-                ]);
+            if ($request->boolean('ricalcola')) {
+                // Il ricalcolo riparte dalla geometria di OGGI: serve dopo un
+                // ridisegno, quando la quantità agganciata è rimasta quella vecchia
+                $unit = $row->unit ?? $row->workType?->unit ?? $workOrder->workType?->unit;
+                $quantita = $row->asset !== null ? QuantitaDaGeometria::perAsset($unit, $row->asset) : null;
+                if ($quantita === null) {
+                    throw ValidationException::withMessages([
+                        'ricalcola' => 'Dalla geometria di questo elemento non si ricava una quantità nell\'unità indicata.',
+                    ]);
+                }
+                $row->planned_quantity = $quantita;
+                $row->unit = $unit;
+            } else {
+                $row->fill(collect($data)->only(['planned_quantity', 'unit', 'notes'])->all());
             }
-            $row->planned_quantity = $quantita;
-            $row->unit = $unit;
-        } else {
-            $row->fill(collect($data)->only(['planned_quantity', 'unit', 'notes'])->all());
-        }
-        $row->save();
+            $row->save();
+
+            $workOrder->version += 1;
+            $workOrder->updated_by = $request->user()->id;
+            $workOrder->save();
+        });
 
         return $this->show($id);
     }

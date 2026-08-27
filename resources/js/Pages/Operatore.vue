@@ -1955,8 +1955,9 @@ onBeforeUnmount(() => {
                         </label>
                     </div>
                     <p v-if="consuntivo.propostaDallaMappa" class="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600" data-test="wo-quantita-proposta">
-                        Quantità proposta dalle misure sulla mappa degli elementi collegati:
-                        correggila se il lavoro eseguito è stato diverso.
+                        Quantità proposta dalle quantità previste degli elementi collegati
+                        (di norma la misura sulla mappa): correggila se il lavoro eseguito
+                        è stato diverso.
                     </p>
                     <label class="mt-3 block text-xs">
                         <span class="text-gray-500">Note di lavoro</span>

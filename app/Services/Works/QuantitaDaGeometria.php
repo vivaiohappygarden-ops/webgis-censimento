@@ -18,7 +18,10 @@ class QuantitaDaGeometria
 
     private const LUNGHEZZA = ['m', 'ml', 'm.l', 'metri', 'metro', 'metri lineari', 'metro lineare'];
 
-    private const CADAUNO = ['cad', 'cadauno', 'cadauna', 'n', 'nr', 'pz', 'pezzo', 'pezzi', 'corpo', 'a corpo'];
+    // "A corpo" resta fuori apposta: e' un forfait per l'intero intervento,
+    // non un prezzo per pezzo. Proporre 1 per elemento moltiplicherebbe il
+    // forfait per quanti elementi si collegano
+    private const CADAUNO = ['cad', 'cadauno', 'cadauna', 'n', 'nr', 'pz', 'pezzo', 'pezzi'];
 
     /** 'superficie', 'lunghezza', 'cadauno' o null se l'unità non è geometrica (es. ore). */
     public static function tipoMisura(?string $unit): ?string

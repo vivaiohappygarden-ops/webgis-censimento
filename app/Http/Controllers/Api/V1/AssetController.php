@@ -426,6 +426,7 @@ class AssetController extends Controller implements HasMiddleware
         // tabella => [colonna, singolare, plurale]
         $sources = [
             'work_order_assets' => ['asset_id', 'ordine di lavoro', 'ordini di lavoro'],
+            'estimate_items' => ['asset_id', 'voce di preventivo', 'voci di preventivo'],
             'work_logs' => ['asset_id', 'rapportino di lavoro', 'rapportini di lavoro'],
             'inspections' => ['asset_id', 'ispezione', 'ispezioni'],
             'issues' => ['asset_id', 'segnalazione', 'segnalazioni'],

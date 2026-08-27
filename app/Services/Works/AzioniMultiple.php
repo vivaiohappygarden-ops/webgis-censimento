@@ -144,6 +144,14 @@ class AzioniMultiple
                 ->where('work_type_id', $workTypeId)
                 ->pluck('asset_id')->all();
 
+            // Anche l'aggancio in blocco propone la quantità dalla geometria,
+            // come i percorsi uno-a-uno: senza, trenta prati collegati insieme
+            // resterebbero fuori dal previsto e dalla proposta del consuntivo
+            $lavorazione = $workTypeId !== null
+                ? \App\Models\WorkType::query()->find($workTypeId)
+                : null;
+            $unita = $lavorazione?->unit ?? $ordine->workType?->unit;
+
             foreach ($elementi as $elemento) {
                 if (in_array($elemento->id, $gia, true)) {
                     $saltati[] = ['id' => $elemento->id, 'codice' => $elemento->census_code,
@@ -153,11 +161,14 @@ class AzioniMultiple
                 }
 
                 if (! $prova) {
+                    $quantita = $unita !== null ? QuantitaDaGeometria::perAsset($unita, $elemento) : null;
                     WorkOrderAsset::create([
                         'tenant_id' => $ordine->tenant_id,
                         'work_order_id' => $ordine->id,
                         'asset_id' => $elemento->id,
                         'work_type_id' => $workTypeId,
+                        'planned_quantity' => $quantita,
+                        'unit' => $quantita !== null ? $unita : null,
                     ]);
                 }
 

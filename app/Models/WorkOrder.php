@@ -102,7 +102,11 @@ class WorkOrder extends Model
 
     public function assets()
     {
-        return $this->hasMany(WorkOrderAsset::class);
+        // Ordine stabile: senza, un UPDATE su una riga (salvataggio della
+        // quantità) la sposterebbe in fondo allo heap di Postgres e l'elenco
+        // si rimescolerebbe sotto gli occhi di chi lo sta modificando
+        return $this->hasMany(WorkOrderAsset::class)
+            ->orderBy('created_at')->orderBy('id');
     }
 
     public function logs()
