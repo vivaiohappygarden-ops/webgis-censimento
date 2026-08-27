@@ -775,6 +775,22 @@ function goTo(id) {
                             L'import fa il percorso inverso e accetta i file di altri sistemi nello stesso formato,
                             con una prova a vuoto (analisi) prima di scrivere qualunque cosa.
                         </p>
+                        <h3>Importare un file qualsiasi</h3>
+                        <p>
+                            Se il censimento arriva da un altro programma, con colonne dai nomi diversi
+                            (ID_PIANTA, SPECIE_ALB, ALTEZZA…), si usa "Importa" scegliendo
+                            <strong>"Qualsiasi file"</strong>: shapefile zippato, GeoJSON, GeoPackage o KML.
+                            Il programma legge il file e mostra le colonne con gli esempi e l'anteprima
+                            delle prime righe; per ciascuna colonna dici a quale nostro campo corrisponde
+                            (codice censimento, specie, altezza…), con una proposta automatica già pronta.
+                            Per le righe senza codice di catalogo si sceglie un <strong>tipo predefinito</strong>;
+                            i codici censimento già presenti si possono saltare oppure
+                            <strong>aggiornare</strong> (geometria, misure e note della scheda esistente).
+                            La mappatura si può <strong>salvare con un nome</strong> e riusare al prossimo
+                            file dello stesso fornitore. Come sempre: prima la verifica a vuoto con il
+                            conteggio di importabili, da aggiornare e scartati (con i motivi), poi l'import
+                            vero, tutto o niente.
+                        </p>
                     </section>
 
                     <section id="utenti">

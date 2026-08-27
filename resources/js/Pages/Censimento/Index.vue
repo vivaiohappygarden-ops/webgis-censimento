@@ -195,7 +195,134 @@ function applicaVista(filtri) {
 const hideRemoved = computed(() => ! showRemoved.value && filters.status !== 'removed');
 
 // Import GeoJSON / CAM
-const importer = reactive({ open: false, format: 'geojson', areaId: '', file: null, report: null, busy: false, error: '' });
+const importer = reactive({
+    open: false, format: 'generico', areaId: '', file: null, report: null, busy: false, error: '',
+    // Import generico: analisi del file, mappatura colonna -> campo nostro,
+    // tipo predefinito, gestione dei codici già presenti, mappature salvate
+    analisi: null, mappatura: {}, tipoDefaultId: '', esistenti: 'salta',
+    mappature: [], nomeMappatura: '', mappaturaSceltaId: '',
+});
+
+// Le destinazioni possibili di una colonna (stesse chiavi del server)
+const DESTINAZIONI_IMPORT = [
+    ['codice_censimento', 'Codice censimento (etichetta)'],
+    ['codice_catalogo', 'Codice del nostro catalogo'],
+    ['note', 'Note'],
+    ['data_rilievo', 'Data del rilievo'],
+    ['numero_pianta', 'Numero pianta'],
+    ['genere', 'Genere'],
+    ['specie', 'Specie'],
+    ['varieta', 'Varietà / cultivar'],
+    ['altezza_m', 'Altezza (m)'],
+    ['diametro_tronco_cm', 'Diametro tronco (cm)'],
+    ['diametro_chioma_m', 'Diametro chioma (m)'],
+    ['larghezza_m', 'Larghezza (m)'],
+];
+
+// Tipi del catalogo per il "tipo predefinito" (caricati alla prima analisi)
+const tipiImport = ref([]);
+
+function azzeraGenerico() {
+    importer.analisi = null;
+    importer.mappatura = {};
+    importer.report = null;
+}
+
+async function analizzaGenerico() {
+    if (! importer.file) {
+        importer.error = 'Scegli prima il file da caricare.';
+        return;
+    }
+    importer.busy = true;
+    importer.error = '';
+    importer.report = null;
+    try {
+        const form = new FormData();
+        form.append('file', importer.file);
+        const { data } = await axios.post('/api/v1/imports/analizza', form);
+        importer.analisi = data.data;
+        // La proposta automatica è un punto di partenza: si può cambiare tutto
+        importer.mappatura = { ...data.data.proposta };
+        importer.mappaturaSceltaId = '';
+        if (! tipiImport.value.length) {
+            const cat = await axios.get('/api/v1/catalog');
+            tipiImport.value = cat.data.data.flatMap((m) => m.sub_types.flatMap((s) =>
+                s.object_types.map((t) => ({ id: t.id, name: `${t.code} — ${t.name}` }))));
+        }
+        await caricaMappature();
+    } catch (err) {
+        importer.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Analisi del file non riuscita';
+    } finally {
+        importer.busy = false;
+    }
+}
+
+function mappaturaPulita() {
+    return Object.fromEntries(Object.entries(importer.mappatura).filter(([, v]) => v));
+}
+
+async function runImportGenerico(dryRun) {
+    if (! importer.analisi || ! importer.areaId) {
+        importer.error = 'Analizza il file e scegli un\'area di destinazione.';
+        return;
+    }
+    importer.busy = true;
+    importer.error = '';
+    try {
+        const { data } = await axios.post('/api/v1/imports/generico', {
+            file_token: importer.analisi.token,
+            area_id: importer.areaId,
+            mappatura: mappaturaPulita(),
+            default_object_type_id: importer.tipoDefaultId || null,
+            esistenti: importer.esistenti,
+            dry_run: dryRun,
+        });
+        importer.report = data.data;
+        if (! dryRun) {
+            await load();
+        }
+    } catch (err) {
+        importer.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Errore durante l\'import';
+    } finally {
+        importer.busy = false;
+    }
+}
+
+async function caricaMappature() {
+    const { data } = await axios.get('/api/v1/imports/mappature');
+    importer.mappature = data.data;
+}
+
+function applicaMappaturaSalvata() {
+    const salvata = importer.mappature.find((m) => m.id === importer.mappaturaSceltaId);
+    if (! salvata || ! importer.analisi) return;
+    // Solo le colonne davvero presenti nel file: una mappatura pensata per
+    // un altro tracciato non deve inventare colonne
+    const presenti = new Set(importer.analisi.colonne.map((c) => c.nome));
+    importer.mappatura = Object.fromEntries(
+        Object.entries(salvata.mapping).filter(([colonna]) => presenti.has(colonna)));
+    if (salvata.default_object_type_id) importer.tipoDefaultId = salvata.default_object_type_id;
+    importer.report = null;
+}
+
+async function salvaMappatura() {
+    if (! importer.nomeMappatura.trim()) return;
+    importer.error = '';
+    try {
+        await axios.post('/api/v1/imports/mappature', {
+            name: importer.nomeMappatura.trim(),
+            mapping: mappaturaPulita(),
+            default_object_type_id: importer.tipoDefaultId || null,
+        });
+        importer.nomeMappatura = '';
+        await caricaMappature();
+    } catch (err) {
+        importer.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? 'Salvataggio della mappatura non riuscito';
+    }
+}
 const importAreas = ref([]);
 
 // Export CAM: un layer del Modello Dati per volta (P/L/S + macro-categoria)
@@ -409,8 +536,9 @@ const measure = (row) => {
                     <button
                         v-if="canCreate"
                         class="rounded-lg bg-green-700 px-3 py-2 text-sm font-medium text-white hover:bg-green-800"
+                        data-test="apri-import"
                         @click="openImporter"
-                    >Importa GeoJSON</button>
+                    >Importa</button>
                 </div>
             </div>
 
@@ -648,38 +776,49 @@ const measure = (row) => {
             <!-- Modal import GeoJSON -->
             <Teleport to="body">
                 <div v-if="importer.open" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" @click.self="importer.open = false">
-                    <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+                    <div class="max-h-[92vh] w-full overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" :class="importer.format === 'generico' && importer.analisi ? 'max-w-3xl' : 'max-w-lg'">
                         <div class="flex items-start justify-between">
                             <h2 class="font-semibold">Importa censimento</h2>
                             <button class="text-gray-400 hover:text-gray-600" @click="importer.open = false">✕</button>
                         </div>
                         <p class="mt-1 text-xs text-gray-500">
-                            {{ importer.format === 'cam'
-                                ? 'Shapefile zippato o GeoJSON nel formato ministeriale (Modello Dati v2.1), tutte le macro-categorie: campi CODICE, OBJ_ID, GENERE/SPECIE, H_m, LARG_m, DATA_RIL…'
-                                : 'FeatureCollection con proprietà codice (codice catalogo, es. P103108) per ogni feature.' }}
+                            <template v-if="importer.format === 'generico'">
+                                File di qualunque provenienza (shapefile zippato, GeoJSON, GeoPackage, KML):
+                                il programma legge le colonne e tu dici a quale nostro campo corrisponde ciascuna.
+                            </template>
+                            <template v-else-if="importer.format === 'cam'">
+                                Shapefile zippato o GeoJSON nel formato ministeriale (Modello Dati v2.1), tutte le macro-categorie: campi CODICE, OBJ_ID, GENERE/SPECIE, H_m, LARG_m, DATA_RIL…
+                            </template>
+                            <template v-else>
+                                FeatureCollection con proprietà codice (codice catalogo, es. P103108) per ogni feature.
+                            </template>
                             Prima l'analisi, poi l'import: nulla viene importato silenziosamente.
                         </p>
 
                         <div class="mt-4 space-y-3">
-                            <div class="grid grid-cols-2 gap-2">
+                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
                                 <label
                                     v-for="opt in [
-                                        { value: 'geojson', label: 'GeoJSON generico' },
+                                        { value: 'generico', label: 'Qualsiasi file (scegli tu le colonne)' },
                                         { value: 'cam', label: 'Formato CAM (shapefile/GeoJSON)' },
+                                        { value: 'geojson', label: 'GeoJSON campi nostri' },
                                     ]"
                                     :key="opt.value"
                                     class="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm"
                                     :class="importer.format === opt.value ? 'border-green-700 bg-green-50 font-medium' : 'border-gray-300'"
+                                    :data-test="`imp-formato-${opt.value}`"
                                 >
-                                    <input v-model="importer.format" type="radio" :value="opt.value" class="hidden" @change="importer.report = null">
+                                    <input v-model="importer.format" type="radio" :value="opt.value" class="hidden" @change="azzeraGenerico()">
                                     {{ opt.label }}
                                 </label>
                             </div>
                             <input
                                 type="file"
-                                :accept="importer.format === 'cam' ? '.zip,.json,.geojson' : '.json,.geojson,application/json,application/geo+json'"
+                                data-test="imp-file"
+                                :accept="importer.format === 'generico' ? '.zip,.json,.geojson,.gpkg,.kml'
+                                    : importer.format === 'cam' ? '.zip,.json,.geojson' : '.json,.geojson,application/json,application/geo+json'"
                                 class="w-full text-sm"
-                                @change="(e) => { importer.file = e.target.files?.[0] ?? null; importer.report = null; }"
+                                @change="(e) => { importer.file = e.target.files?.[0] ?? null; azzeraGenerico(); }"
                             >
                             <ScegliVoce
                                 v-model="importer.areaId"
@@ -691,12 +830,118 @@ const measure = (row) => {
                                 vuoto="Nessuna area trovata."
                             />
 
+                            <!-- Passo 1 del generico: analisi del file -->
+                            <template v-if="importer.format === 'generico'">
+                                <button
+                                    v-if="! importer.analisi"
+                                    class="w-full rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+                                    :disabled="importer.busy || ! importer.file"
+                                    data-test="imp-analizza"
+                                    @click="analizzaGenerico"
+                                >{{ importer.busy ? 'Lettura del file…' : '1 · Leggi il file (colonne e anteprima)' }}</button>
+
+                                <div v-if="importer.analisi" class="space-y-3">
+                                    <p class="text-xs text-gray-600" data-test="imp-analisi-riassunto">
+                                        {{ importer.analisi.totale }} elementi nel file
+                                        ({{ Object.entries(importer.analisi.geometrie).map(([t, n]) => `${n} ${t}`).join(', ') }}).
+                                    </p>
+
+                                    <div v-if="importer.mappature.length" class="flex flex-wrap items-center gap-2 text-xs">
+                                        <span class="text-gray-500">Mappatura salvata</span>
+                                        <select v-model="importer.mappaturaSceltaId" data-test="imp-mappatura-salvata" class="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" @change="applicaMappaturaSalvata">
+                                            <option value="">—</option>
+                                            <option v-for="m in importer.mappature" :key="m.id" :value="m.id">{{ m.name }}</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="overflow-x-auto rounded-xl border border-gray-200">
+                                        <table class="w-full text-sm">
+                                            <thead>
+                                                <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
+                                                    <th class="px-3 py-2 font-medium">Colonna del file</th>
+                                                    <th class="px-3 py-2 font-medium">Esempi</th>
+                                                    <th class="px-3 py-2 font-medium">Diventa il nostro campo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-50">
+                                                <tr v-for="colonna in importer.analisi.colonne" :key="colonna.nome" data-test="imp-colonna">
+                                                    <td class="px-3 py-1.5 font-medium">{{ colonna.nome }}</td>
+                                                    <td class="max-w-40 truncate px-3 py-1.5 text-xs text-gray-500" :title="colonna.esempi.join(' · ')">{{ colonna.esempi.join(' · ') || '—' }}</td>
+                                                    <td class="px-3 py-1.5">
+                                                        <select
+                                                            :value="importer.mappatura[colonna.nome] ?? ''"
+                                                            class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                                                            data-test="imp-destinazione"
+                                                            @change="(e) => { importer.mappatura[colonna.nome] = e.target.value; importer.report = null; }"
+                                                        >
+                                                            <option value="">Non importare</option>
+                                                            <option v-for="[valore, etichetta] in DESTINAZIONI_IMPORT" :key="valore" :value="valore">{{ etichetta }}</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div class="overflow-x-auto rounded-xl border border-gray-200 p-2">
+                                        <p class="mb-1 px-1 text-xs font-medium text-gray-500">Anteprima delle prime righe</p>
+                                        <table class="w-full text-xs">
+                                            <thead>
+                                                <tr class="text-left text-gray-400">
+                                                    <th v-for="colonna in importer.analisi.colonne" :key="colonna.nome" class="px-2 py-1 font-medium">{{ colonna.nome }}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-50">
+                                                <tr v-for="(riga, i) in importer.analisi.anteprima" :key="i" data-test="imp-anteprima-riga">
+                                                    <td v-for="colonna in importer.analisi.colonne" :key="colonna.nome" class="max-w-32 truncate px-2 py-1">{{ riga[colonna.nome] ?? '—' }}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <label class="block text-xs">
+                                            <span class="text-gray-500">Tipo predefinito (per le righe senza codice catalogo)</span>
+                                            <ScegliVoce
+                                                v-model="importer.tipoDefaultId"
+                                                data-test="imp-tipo-default"
+                                                class="mt-1 w-full"
+                                                campo-classe="px-2.5 py-2 text-sm"
+                                                :voci="tipiImport"
+                                                :campi-ricerca="['name']"
+                                                tutti="Nessuno"
+                                                vuoto="Nessun tipo trovato."
+                                            />
+                                        </label>
+                                        <div class="text-xs">
+                                            <span class="text-gray-500">Codici censimento già presenti</span>
+                                            <div class="mt-1.5 flex gap-3">
+                                                <label class="flex items-center gap-1.5 text-sm">
+                                                    <input v-model="importer.esistenti" type="radio" value="salta" class="border-gray-300" @change="importer.report = null">
+                                                    Salta
+                                                </label>
+                                                <label class="flex items-center gap-1.5 text-sm">
+                                                    <input v-model="importer.esistenti" type="radio" value="aggiorna" data-test="imp-aggiorna" class="border-gray-300" @change="importer.report = null">
+                                                    Aggiorna le schede
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex flex-wrap items-center gap-2 text-xs">
+                                        <input v-model="importer.nomeMappatura" data-test="imp-nome-mappatura" placeholder="Salva questa mappatura col nome…" maxlength="80" class="w-56 rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
+                                        <button class="font-medium text-green-800 hover:underline disabled:opacity-50" :disabled="! importer.nomeMappatura.trim()" data-test="imp-salva-mappatura" @click="salvaMappatura">Salva mappatura</button>
+                                    </div>
+                                </div>
+                            </template>
+
                             <p v-if="importer.error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ importer.error }}</p>
 
-                            <div v-if="importer.report" class="rounded-xl border border-gray-200 p-3 text-sm">
-                                <div class="grid grid-cols-3 gap-2 text-center">
+                            <div v-if="importer.report" class="rounded-xl border border-gray-200 p-3 text-sm" data-test="imp-report">
+                                <div class="grid gap-2 text-center" :class="importer.report.updatable !== undefined ? 'grid-cols-4' : 'grid-cols-3'">
                                     <div><div class="text-lg font-semibold">{{ importer.report.total }}</div><div class="text-xs text-gray-500">nel file</div></div>
                                     <div><div class="text-lg font-semibold text-green-700">{{ importer.report.dry_run ? importer.report.importable : importer.report.imported }}</div><div class="text-xs text-gray-500">{{ importer.report.dry_run ? 'importabili' : 'importati' }}</div></div>
+                                    <div v-if="importer.report.updatable !== undefined"><div class="text-lg font-semibold text-green-700">{{ importer.report.dry_run ? importer.report.updatable : importer.report.updated }}</div><div class="text-xs text-gray-500">{{ importer.report.dry_run ? 'da aggiornare' : 'aggiornati' }}</div></div>
                                     <div><div class="text-lg font-semibold text-red-600">{{ importer.report.errors_total }}</div><div class="text-xs text-gray-500">scartati</div></div>
                                 </div>
                                 <ul v-if="importer.report.errors.length" class="mt-2 max-h-32 space-y-0.5 overflow-y-auto text-xs text-red-700">
@@ -711,7 +956,7 @@ const measure = (row) => {
                                 <p v-if="! importer.report.dry_run" class="mt-2 font-medium text-green-700">Import completato</p>
                             </div>
 
-                            <div class="flex gap-2">
+                            <div v-if="importer.format !== 'generico'" class="flex gap-2">
                                 <button
                                     class="flex-1 rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
                                     :disabled="importer.busy"
@@ -722,6 +967,20 @@ const measure = (row) => {
                                     :disabled="importer.busy || ! importer.report || ! importer.report.dry_run || importer.report.importable === 0"
                                     @click="runImport(false)"
                                 >2 · Importa {{ importer.report?.dry_run ? importer.report.importable : '' }}</button>
+                            </div>
+                            <div v-else-if="importer.analisi" class="flex gap-2">
+                                <button
+                                    class="flex-1 rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+                                    :disabled="importer.busy"
+                                    data-test="imp-verifica"
+                                    @click="runImportGenerico(true)"
+                                >{{ importer.busy ? 'Verifica…' : '2 · Verifica (senza importare)' }}</button>
+                                <button
+                                    class="flex-1 rounded-lg bg-green-700 px-3 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                                    :disabled="importer.busy || ! importer.report || ! importer.report.dry_run || (importer.report.importable === 0 && importer.report.updatable === 0)"
+                                    data-test="imp-importa"
+                                    @click="runImportGenerico(false)"
+                                >3 · Importa{{ importer.report?.dry_run ? ` ${importer.report.importable + importer.report.updatable}` : '' }}</button>
                             </div>
                         </div>
                     </div>

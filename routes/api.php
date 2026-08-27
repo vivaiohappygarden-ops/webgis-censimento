@@ -62,6 +62,12 @@ Route::prefix('v1')->group(function () {
 
         Route::post('imports/geojson', [ImportController::class, 'geojson']);
         Route::post('imports/cam', [ImportController::class, 'cam']);
+        // Import generico con mappatura delle colonne: analisi, poi import
+        Route::post('imports/analizza', [ImportController::class, 'analizza']);
+        Route::post('imports/generico', [ImportController::class, 'generico']);
+        Route::get('imports/mappature', [ImportController::class, 'mappature']);
+        Route::post('imports/mappature', [ImportController::class, 'salvaMappatura']);
+        Route::delete('imports/mappature/{id}', [ImportController::class, 'eliminaMappatura'])->whereUuid('id');
         Route::get('portal/overview', [\App\Http\Controllers\Api\V1\PortalController::class, 'overview']);
         Route::get('portal/requests', [\App\Http\Controllers\Api\V1\PortalController::class, 'requests']);
         Route::post('portal/requests', [\App\Http\Controllers\Api\V1\PortalController::class, 'storeRequest'])->middleware('throttle:5,1');

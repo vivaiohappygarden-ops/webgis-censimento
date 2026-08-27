@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\Process\Process;
 
 /**
  * Import censimenti nel formato "Modello dati censimento verde urbano" v2.1:
@@ -32,8 +31,9 @@ class CamImporter
      * Campi standard del Modello Dati che viaggiano negli attributi: se il
      * tipo non li ha ancora tra i campi personalizzati, l'import li
      * definisce, così la scheda li mostra e li valida come gli altri.
+     * Pubblici: li usa anche l'import generico con mappatura delle colonne.
      */
-    private const MD_CUSTOM_FIELDS = [
+    public const MD_CUSTOM_FIELDS = [
         'genere' => ['label' => 'Genere', 'field_type' => 'text', 'cam_field' => 'GENERE'],
         'specie' => ['label' => 'Specie', 'field_type' => 'text', 'cam_field' => 'SPECIE'],
         'varieta' => ['label' => 'Varietà', 'field_type' => 'text', 'cam_field' => 'VARIETA'],
@@ -53,125 +53,9 @@ class CamImporter
     /** Converte l'upload (zip shapefile o GeoJSON) in FeatureCollection WGS84. */
     public function toGeoJson(UploadedFile $file): array
     {
-        $extension = strtolower($file->getClientOriginalExtension());
-
-        if (in_array($extension, ['json', 'geojson'], true)) {
-            $decoded = json_decode($file->get(), true);
-            if (! is_array($decoded)) {
-                throw ValidationException::withMessages(['file' => 'Il file non è un JSON valido.']);
-            }
-
-            return $decoded;
-        }
-
-        if ($extension !== 'zip') {
-            throw ValidationException::withMessages([
-                'file' => 'Formato non riconosciuto: caricare uno shapefile zippato (.zip) o un GeoJSON.',
-            ]);
-        }
-
-        if (! (new \App\Services\Export\CamExporter)->ogr2ogrAvailable()) {
-            throw ValidationException::withMessages([
-                'file' => "Import shapefile non disponibile: sul server manca GDAL (ogr2ogr). Usa il formato GeoJSON.",
-            ]);
-        }
-
-        $dir = sys_get_temp_dir().'/cam-import-'.bin2hex(random_bytes(6));
-        mkdir($dir, 0700, true);
-
-        try {
-            $zip = new \ZipArchive;
-            if ($zip->open($file->getRealPath()) !== true) {
-                throw ValidationException::withMessages(['file' => 'Archivio zip non leggibile.']);
-            }
-
-            // Tetto sulla dimensione DECOMPRESSA: il limite dell'upload vale solo
-            // per lo zip compresso, e con DEFLATE una bomba da 50 MB può
-            // espandersi a decine di GB saturando memoria e disco
-            $totalUncompressed = 0;
-            for ($i = 0; $i < $zip->numFiles; $i++) {
-                $totalUncompressed += (int) ($zip->statIndex($i)['size'] ?? 0);
-            }
-            if ($totalUncompressed > 200 * 1024 * 1024) {
-                throw ValidationException::withMessages([
-                    'file' => 'Archivio troppo grande una volta estratto (oltre 200 MB).',
-                ]);
-            }
-
-            $shpNames = [];
-            for ($i = 0; $i < $zip->numFiles; $i++) {
-                // Solo i componenti shapefile, senza percorsi (protezione zip-slip);
-                // nomi normalizzati in minuscolo (gli archivi ESRI storici usano .SHP/.PRJ)
-                $name = strtolower(basename($zip->getNameIndex($i)));
-                $ext = pathinfo($name, PATHINFO_EXTENSION);
-                if (! in_array($ext, ['shp', 'shx', 'dbf', 'prj', 'cpg'], true)) {
-                    continue;
-                }
-
-                $stream = $zip->getStream($zip->getNameIndex($i));
-                $out = fopen("{$dir}/{$name}", 'wb');
-                if ($stream === false || $out === false || stream_copy_to_stream($stream, $out) === false) {
-                    throw ValidationException::withMessages(['file' => 'Estrazione dello zip non riuscita.']);
-                }
-                fclose($out);
-                if (is_resource($stream)) {
-                    fclose($stream);
-                }
-
-                if ($ext === 'shp') {
-                    $shpNames[] = $name;
-                }
-            }
-            $zip->close();
-
-            if ($shpNames === []) {
-                throw ValidationException::withMessages(['file' => 'Nessun file .shp trovato nello zip.']);
-            }
-            if (count($shpNames) > 1) {
-                throw ValidationException::withMessages([
-                    'file' => 'Lo zip contiene più shapefile ('.implode(', ', $shpNames).'): caricane uno alla volta.',
-                ]);
-            }
-            $shpName = $shpNames[0];
-            if (! file_exists("{$dir}/".substr($shpName, 0, -4).'.prj')) {
-                throw ValidationException::withMessages([
-                    'file' => 'Manca il file .prj (sistema di coordinate): impossibile riproiettare con certezza.',
-                ]);
-            }
-
-            $jsonPath = "{$dir}/import.geojson";
-            $process = new Process([
-                'ogr2ogr', '-f', 'GeoJSON',
-                '-t_srs', 'EPSG:4326',
-                $jsonPath, "{$dir}/{$shpName}",
-            ]);
-
-            try {
-                $process->setTimeout(120)->run();
-            } catch (\Symfony\Component\Process\Exception\ExceptionInterface $e) {
-                throw ValidationException::withMessages([
-                    'file' => 'Conversione shapefile interrotta (file troppo complesso o strumento non disponibile).',
-                ]);
-            }
-
-            if (! $process->isSuccessful() || ! file_exists($jsonPath)) {
-                throw ValidationException::withMessages([
-                    'file' => 'Conversione shapefile fallita: '.substr($process->getErrorOutput(), 0, 300),
-                ]);
-            }
-
-            $decoded = json_decode(file_get_contents($jsonPath), true);
-            if (! is_array($decoded)) {
-                throw ValidationException::withMessages(['file' => 'Conversione shapefile non valida.']);
-            }
-
-            return $decoded;
-        } finally {
-            foreach (glob("{$dir}/*") ?: [] as $f) {
-                @unlink($f);
-            }
-            @rmdir($dir);
-        }
+        // Il tracciato CAM viaggia solo come shapefile zippato o GeoJSON:
+        // gli altri formati passano dall'import generico
+        return (new ConvertitoreGeo)->aGeoJson($file, ['zip', 'json', 'geojson']);
     }
 
     public function run(array $geojson, Area $area, bool $dryRun = true): array
@@ -274,8 +158,8 @@ class CamImporter
 
             // Le date devono rispettare il vincolo del DB (fine >= inizio):
             // scoprirlo all'insert romperebbe il contratto dry-run/import
-            $validFrom = $this->fromCamDate($props['DATA_INI'] ?? null) ?? now()->toDateString();
-            $validTo = $this->fromCamDate($props['DATA_FINE'] ?? null);
+            $validFrom = LetturaValori::dataCam($props['DATA_INI'] ?? null) ?? now()->toDateString();
+            $validTo = LetturaValori::dataCam($props['DATA_FINE'] ?? null);
             if ($validTo !== null && $validTo < $validFrom) {
                 $errors[] = ['index' => $index, 'error' => "{$label}: DATA_FINE ({$validTo}) precedente a DATA_INI ({$validFrom})."];
 
@@ -299,7 +183,7 @@ class CamImporter
                 'status' => self::STATO_MAP[strtolower(trim((string) ($props['STATO'] ?? '')))] ?? 'active',
                 'geom' => $ewkb,
                 'survey_method' => 'shapefile_import',
-                'surveyed_at' => $this->surveyDate($props['DATA_RIL'] ?? null, $label, $warnings),
+                'surveyed_at' => LetturaValori::data($props['DATA_RIL'] ?? null, "{$label}: DATA_RIL", $warnings),
                 'valid_from' => $validFrom,
                 'valid_to' => $validTo,
                 'attributes' => $attributes === [] ? '{}' : (json_encode($attributes) ?: '{}'),
@@ -356,27 +240,7 @@ class CamImporter
         $imported = 0;
         if (! $dryRun && $assetRows !== []) {
             DB::transaction(function () use ($assetRows, $treeRows, $customFieldNeeds, $tenantId, &$imported) {
-                foreach ($customFieldNeeds as $need) {
-                    $field = \App\Models\CustomField::query()
-                        ->withoutGlobalScope(\App\Models\Scopes\TenantScope::class)
-                        ->withTrashed()
-                        ->where('tenant_id', $tenantId)
-                        ->where('object_type_id', $need['object_type_id'])
-                        ->where('key', $need['key'])
-                        ->first();
-                    if ($field !== null && $field->trashed()) {
-                        // Un campo eliminato torna in vita: la scheda deve
-                        // mostrare e accettare il valore appena importato
-                        $field->restore();
-                    } elseif ($field === null) {
-                        \App\Models\CustomField::create([
-                            'tenant_id' => $tenantId,
-                            'object_type_id' => $need['object_type_id'],
-                            'key' => $need['key'],
-                            ...self::MD_CUSTOM_FIELDS[$need['key']], 'required' => false, 'sort_order' => 90,
-                        ]);
-                    }
-                }
+                self::assicuraCampiMd($customFieldNeeds, $tenantId);
                 foreach (array_chunk($assetRows, 200) as $chunk) {
                     Asset::insert($chunk);
                     $imported += count($chunk);
@@ -401,6 +265,36 @@ class CamImporter
     }
 
     /**
+     * Crea (o ripristina, se eliminati) i campi personalizzati standard del
+     * Modello Dati necessari alle righe importate. Da chiamare dentro la
+     * transazione dell'import: lo usano il percorso CAM e quello generico.
+     */
+    public static function assicuraCampiMd(array $needs, string $tenantId): void
+    {
+        foreach ($needs as $need) {
+            $field = \App\Models\CustomField::query()
+                ->withoutGlobalScope(\App\Models\Scopes\TenantScope::class)
+                ->withTrashed()
+                ->where('tenant_id', $tenantId)
+                ->where('object_type_id', $need['object_type_id'])
+                ->where('key', $need['key'])
+                ->first();
+            if ($field !== null && $field->trashed()) {
+                // Un campo eliminato torna in vita: la scheda deve
+                // mostrare e accettare il valore appena importato
+                $field->restore();
+            } elseif ($field === null) {
+                \App\Models\CustomField::create([
+                    'tenant_id' => $tenantId,
+                    'object_type_id' => $need['object_type_id'],
+                    'key' => $need['key'],
+                    ...self::MD_CUSTOM_FIELDS[$need['key']], 'required' => false, 'sort_order' => 90,
+                ]);
+            }
+        }
+    }
+
+    /**
      * Campi specifici di layer -> attributi dell'elemento (inverso di
      * CamExporter): vegetazione per siepi e superfici verdi non arboree,
      * larghezza per gli elementi lineari. Le misure calcolate (LUNG_m,
@@ -421,10 +315,10 @@ class CamImporter
             }
         }
         if ($layer === 'L1') {
-            $attributes['altezza_m'] = $this->numeric($props['H_M'] ?? null, "{$label}: H_m", $warnings);
+            $attributes['altezza_m'] = LetturaValori::numero($props['H_M'] ?? null, "{$label}: H_m", $warnings);
         }
         if (in_array($layer, ['L1', 'L2', 'L3'], true)) {
-            $attributes['larghezza_m'] = $this->numeric($props['LARG_M'] ?? null, "{$label}: LARG_m", $warnings);
+            $attributes['larghezza_m'] = LetturaValori::numero($props['LARG_M'] ?? null, "{$label}: LARG_m", $warnings);
         }
 
         return array_filter($attributes, fn ($v) => $v !== null);
@@ -469,31 +363,6 @@ class CamImporter
         return $attributes;
     }
 
-    /**
-     * DATA_RIL: oltre al GGMMAAAA dei tracciati si accettano le rese comuni
-     * dei campi data DBF nei GeoJSON (ogr2ogr usa AAAA/MM/GG); un valore
-     * non riconosciuto viene segnalato, non perso in silenzio.
-     */
-    private function surveyDate(mixed $value, string $label, array &$warnings): ?string
-    {
-        $raw = trim((string) ($value ?? ''));
-        if ($raw === '') {
-            return null;
-        }
-        if (($cam = $this->fromCamDate($raw)) !== null) {
-            return $cam;
-        }
-        foreach (['Y/m/d', 'Y-m-d', 'd/m/Y'] as $format) {
-            $parsed = \DateTimeImmutable::createFromFormat('!'.$format, $raw);
-            if ($parsed !== false && $parsed->format($format) === $raw) {
-                return $parsed->format('Y-m-d');
-            }
-        }
-        $warnings[] = "{$label}: DATA_RIL '{$raw}' non riconosciuta (atteso GGMMAAAA), ignorata.";
-
-        return null;
-    }
-
     /** Campi vegetazione delle Master P1/L1/S1 -> scheda albero. */
     private function treeData(array $props, int $index, string $label, array &$errors, array &$warnings): array|false
     {
@@ -502,9 +371,9 @@ class CamImporter
             'genus' => ($v = trim((string) ($props['GENERE'] ?? ''))) !== '' ? $v : null,
             'species' => ($v = trim((string) ($props['SPECIE'] ?? ''))) !== '' ? $v : null,
             'cultivar' => ($v = trim((string) ($props['VARIETA'] ?? ''))) !== '' ? $v : null,
-            'height_m' => $this->numeric($props['H_M'] ?? null, "{$label}: H_m", $warnings),
-            'dbh_cm' => $this->numeric($props['DIAM_TRONC'] ?? null, "{$label}: DIAM_TRONC", $warnings),
-            'crown_diameter_m' => $this->numeric($props['DIAM_CHIOM'] ?? null, "{$label}: DIAM_CHIOM", $warnings),
+            'height_m' => LetturaValori::numero($props['H_M'] ?? null, "{$label}: H_m", $warnings),
+            'dbh_cm' => LetturaValori::numero($props['DIAM_TRONC'] ?? null, "{$label}: DIAM_TRONC", $warnings),
+            'crown_diameter_m' => LetturaValori::numero($props['DIAM_CHIOM'] ?? null, "{$label}: DIAM_CHIOM", $warnings),
         ];
 
         $validator = Validator::make($candidate, [
@@ -524,36 +393,5 @@ class CamImporter
         }
 
         return $candidate;
-    }
-
-    private function numeric(mixed $value, string $context, array &$warnings): ?float
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-        $normalized = str_replace(',', '.', (string) $value);
-        // is_finite: '1e999' passa is_numeric ma diventa INF, che jsonb
-        // non sa rappresentare (json_encode fallirebbe silenziosamente)
-        if (! is_numeric($normalized) || ! is_finite((float) $normalized)) {
-            $warnings[] = "{$context}: valore '{$value}' non numerico, ignorato.";
-
-            return null;
-        }
-
-        return (float) $normalized;
-    }
-
-    /** Data GGMMAAAA dei tracciati record MD -> data ISO. */
-    private function fromCamDate(mixed $value): ?string
-    {
-        $value = trim((string) ($value ?? ''));
-        if (! preg_match('/^(\d{2})(\d{2})(\d{4})$/', $value, $m)) {
-            return null;
-        }
-        if (! checkdate((int) $m[2], (int) $m[1], (int) $m[3])) {
-            return null;
-        }
-
-        return sprintf('%s-%s-%s', $m[3], $m[2], $m[1]);
     }
 }
