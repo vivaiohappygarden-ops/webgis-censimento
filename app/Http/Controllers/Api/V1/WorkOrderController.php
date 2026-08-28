@@ -90,6 +90,7 @@ class WorkOrderController extends Controller implements HasMiddleware
     public function store(Request $request): JsonResponse
     {
         $data = $this->validated($request);
+        $this->assertImpresaDelCommittente($data['team_id'] ?? null, $data['client_id'] ?? null);
         $user = $request->user();
 
         // Elementi da collegare subito (selezione sulla mappa): la quantità
@@ -207,6 +208,9 @@ class WorkOrderController extends Controller implements HasMiddleware
             }
 
             $workOrder->fill($data);
+            // Un'impresa esterna lavora solo per il suo committente: il
+            // controllo avviene sui valori EFFETTIVI dopo la modifica
+            $this->assertImpresaDelCommittente($workOrder->team_id, $workOrder->client_id);
 
             // L'invariante della macchina a stati vale anche qui: un ordine
             // assegnato o in corso non può restare senza squadra né responsabile
@@ -485,6 +489,32 @@ class WorkOrderController extends Controller implements HasMiddleware
         Audit::log('work_order.deleted', $workOrder, ['code' => $workOrder->code]);
 
         return response()->noContent();
+    }
+
+    /**
+     * Un'impresa esterna appartiene a un committente (indicazione 28/08/2026):
+     * le si affidano solo ordini di QUEL committente. Le squadre interne
+     * lavorano per chiunque.
+     */
+    private function assertImpresaDelCommittente(?string $teamId, ?string $clientId): void
+    {
+        if ($teamId === null) {
+            return;
+        }
+        $team = \App\Models\Team::query()->with('client:id,name')->find($teamId);
+        if ($team === null || ! $team->is_external) {
+            return;
+        }
+        if ($team->client_id === null) {
+            throw ValidationException::withMessages([
+                'team_id' => "L'impresa \"{$team->name}\" non è ancora collegata a un committente: collegala dalla pagina Utenti prima di affidarle lavori.",
+            ]);
+        }
+        if ($clientId !== $team->client_id) {
+            throw ValidationException::withMessages([
+                'team_id' => "L'impresa \"{$team->name}\" lavora per {$team->client->name}: le si affidano solo ordini di quel committente.",
+            ]);
+        }
     }
 
     private function validated(Request $request, bool $required = true): array

@@ -24,11 +24,16 @@ class PortaleImpreseTest extends TestCase
 
     private $area;
 
+    private $cliente;
+
     protected function setUp(): void
     {
         parent::setUp();
         [$this->organizzazione, $this->amministratore] = $this->createTenantUser();
         $this->area = $this->createArea($this->organizzazione);
+        // Il committente dell'area di prova: le imprese esterne gli appartengono
+        $this->cliente = \App\Models\Client::withoutGlobalScopes()
+            ->where('tenant_id', $this->organizzazione->id)->firstOrFail();
         $this->actingAsTenantUser($this->amministratore);
     }
 
@@ -36,7 +41,7 @@ class PortaleImpreseTest extends TestCase
     private function creaImpresa(string $nome = 'Verde Vivo snc'): array
     {
         $teamId = $this->postJson('/api/v1/teams', [
-            'name' => $nome, 'is_external' => true,
+            'name' => $nome, 'is_external' => true, 'client_id' => $this->cliente->id,
         ])->assertCreated()->json('data.id');
 
         $utenteId = $this->postJson('/api/v1/users', [
@@ -54,6 +59,7 @@ class PortaleImpreseTest extends TestCase
     {
         $id = $this->postJson('/api/v1/work-orders', array_merge([
             'title' => 'Potatura viale', 'area_id' => $this->area->id, 'team_id' => $teamId,
+            'client_id' => $this->cliente->id,
             'planned_start' => '2026-09-07', 'planned_end' => '2026-09-11',
         ], $campi))->assertCreated()->json('data.id');
 
@@ -75,6 +81,7 @@ class PortaleImpreseTest extends TestCase
         $altrui = $this->creaOrdine($altroTeam);
         $bozza = $this->postJson('/api/v1/work-orders', [
             'title' => 'Bozza non visibile', 'area_id' => $this->area->id, 'team_id' => $teamId,
+            'client_id' => $this->cliente->id,
         ])->assertCreated()->json('data.id');
 
         $this->actingAsTenantUser($utente);
@@ -281,6 +288,72 @@ class PortaleImpreseTest extends TestCase
         // Per lui quell'ordine non esiste proprio
         $this->postJson("/api/v1/impresa/ordini/{$ordine}/riprogrammazione", ['reason' => 'maltempo'])
             ->assertNotFound();
+    }
+
+    public function test_un_impresa_esterna_appartiene_a_un_committente(): void
+    {
+        // Senza committente non si registra
+        $this->postJson('/api/v1/teams', ['name' => 'Senza Padrone srl', 'is_external' => true])
+            ->assertUnprocessable()->assertJsonValidationErrors(['client_id']);
+
+        // A una squadra interna il committente non si attacca
+        $interna = $this->postJson('/api/v1/teams', [
+            'name' => 'Squadra interna', 'client_id' => $this->cliente->id,
+        ])->assertCreated()->json('data');
+        $this->assertNull($interna['client_id']);
+
+        // L'impresa nasce con il suo committente e lo mostra
+        [$teamId] = $this->creaImpresa('Con Padrone snc');
+        $this->assertSame($this->cliente->name,
+            collect($this->getJson('/api/v1/teams')->json('data'))
+                ->firstWhere('id', $teamId)['client']['name']);
+
+        // Togliendo la spunta "esterna", il committente si azzera
+        $spenta = $this->patchJson("/api/v1/teams/{$teamId}", ['is_external' => false])
+            ->assertOk()->json('data');
+        $this->assertNull($spenta['client_id']);
+    }
+
+    public function test_a_un_impresa_si_affidano_solo_ordini_del_suo_committente(): void
+    {
+        [$teamId] = $this->creaImpresa();
+        $altro = \App\Models\Client::create([
+            'tenant_id' => $this->organizzazione->id, 'name' => 'Altro Comune', 'client_type' => 'public',
+        ]);
+
+        // Ordine di un altro committente: respinto
+        $this->postJson('/api/v1/work-orders', [
+            'title' => 'Sfalcio abusivo', 'team_id' => $teamId, 'client_id' => $altro->id,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['team_id']);
+
+        // Ordine senza committente: idem
+        $this->postJson('/api/v1/work-orders', [
+            'title' => 'Sfalcio orfano', 'team_id' => $teamId,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['team_id']);
+
+        // Ordine del suo committente: va
+        $ordine = $this->creaOrdine($teamId);
+
+        // E nemmeno cambiando committente a posteriori si scavalca la regola
+        $this->patchJson("/api/v1/work-orders/{$ordine}", ['client_id' => $altro->id])
+            ->assertUnprocessable()->assertJsonValidationErrors(['team_id']);
+    }
+
+    public function test_un_impresa_d_epoca_senza_committente_va_prima_collegata(): void
+    {
+        // Squadra esterna nata prima della regola (scritta direttamente in base)
+        $vecchia = \App\Models\Team::create([
+            'tenant_id' => $this->organizzazione->id,
+            'name' => 'Vecchia Ditta', 'is_external' => true,
+        ]);
+
+        $risposta = $this->postJson('/api/v1/work-orders', [
+            'title' => 'Potatura', 'team_id' => $vecchia->id, 'client_id' => $this->cliente->id,
+        ])->assertUnprocessable();
+        $this->assertStringContainsString('collegala', $risposta->json('errors.team_id.0'));
+
+        // I membri restano comunque gestibili (la si sistema con calma)
+        $this->patchJson("/api/v1/teams/{$vecchia->id}", ['member_ids' => []])->assertOk();
     }
 
     public function test_una_squadra_interna_non_apre_il_portale(): void

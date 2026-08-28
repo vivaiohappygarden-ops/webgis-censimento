@@ -195,6 +195,20 @@ function resetForm() {
 }
 resetForm();
 
+// Un'impresa esterna appartiene a un committente: nella tendina del nuovo
+// ordine compare solo scegliendo quel committente (le interne per tutti)
+const squadreAmmesse = computed(() => teams.value.filter((t) =>
+    ! t.is_external || (t.client_id && t.client_id === creator.form.client_id)));
+const etichettaSquadra = (t) => t.is_external
+    ? `${t.name} — impresa${t.client ? ' di ' + t.client.name : ''}`
+    : t.name;
+watch(() => creator.form.client_id, () => {
+    // Cambiando committente, un'impresa non piu' ammessa esce dalla scelta
+    if (creator.form.team_id && ! squadreAmmesse.value.some((t) => t.id === creator.form.team_id)) {
+        creator.form.team_id = '';
+    }
+});
+
 async function load() {
     selezionati.value = [];
     loading.value = true;
@@ -895,7 +909,7 @@ onMounted(async () => {
                                 <span class="text-gray-500">Squadra</span>
                                 <select v-model="creator.form.team_id" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
                                     <option value="">—</option>
-                                    <option v-for="t in teams" :key="t.id" :value="t.id">{{ t.name }}</option>
+                                    <option v-for="t in squadreAmmesse" :key="t.id" :value="t.id">{{ etichettaSquadra(t) }}</option>
                                 </select>
                             </label>
                             <label class="block text-xs">

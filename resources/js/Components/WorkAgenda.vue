@@ -194,6 +194,14 @@ const planner = reactive({
     form: { planned_start: '', planned_end: '', team_id: '', assigned_to: '' },
 });
 
+// Un'impresa esterna appartiene a un committente: nella tendina compare
+// solo per gli ordini di quel committente (le interne per tutti)
+const squadrePlanner = computed(() => props.teams.filter((t) =>
+    ! t.is_external || (t.client_id && t.client_id === planner.order?.client_id)));
+const etichettaSquadra = (t) => t.is_external
+    ? `${t.name} — impresa${t.client ? ' di ' + t.client.name : ''}`
+    : t.name;
+
 function openPlanner(order) {
     Object.assign(planner, { open: true, busy: false, error: '', order });
     planner.form = {
@@ -381,7 +389,7 @@ onMounted(reload);
                             <span class="text-gray-500">Squadra</span>
                             <select v-model="planner.form.team_id" data-test="plan-team" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
                                 <option value="">—</option>
-                                <option v-for="t in teams" :key="t.id" :value="t.id">{{ t.name }}</option>
+                                <option v-for="t in squadrePlanner" :key="t.id" :value="t.id">{{ etichettaSquadra(t) }}</option>
                             </select>
                         </label>
                         <label class="block text-xs">

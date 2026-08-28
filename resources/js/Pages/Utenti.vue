@@ -333,13 +333,35 @@ async function ripristinaIntervalli() {
 // ordini dal portale dedicato /impresa
 const squadre = reactive({
     elenco: [],
-    form: { name: '', code: '', is_external: false },
+    form: { name: '', code: '', is_external: false, client_id: '' },
     apertaId: null,   // squadra di cui si stanno scegliendo i membri
     membri: [],       // id selezionati per la squadra aperta
     busy: false,
     message: '',
     messageOk: false,
 });
+
+// Un'impresa esterna appartiene a UN committente: spuntando la casella su
+// una squadra esistente, prima si sceglie il committente e solo allora si
+// salva. Le squadre esterne d'epoca senza committente mostrano la tendina
+// finche' non vengono collegate.
+const esternaInScelta = ref(null);
+
+function commutaEsterna(team, evento) {
+    if (evento.target.checked) {
+        esternaInScelta.value = team.id;
+    } else {
+        esternaInScelta.value = null;
+        aggiornaSquadra(team, { is_external: false });
+    }
+}
+
+async function collegaCommittente(team, clientId) {
+    if (! clientId) return;
+    if (await aggiornaSquadra(team, { is_external: true, client_id: clientId })) {
+        esternaInScelta.value = null;
+    }
+}
 
 async function loadSquadre() {
     try {
@@ -359,8 +381,9 @@ async function creaSquadra() {
             name: squadre.form.name,
             code: squadre.form.code || null,
             is_external: squadre.form.is_external,
+            client_id: squadre.form.is_external ? (squadre.form.client_id || null) : null,
         });
-        squadre.form = { name: '', code: '', is_external: false };
+        squadre.form = { name: '', code: '', is_external: false, client_id: '' };
         await loadSquadre();
         squadre.message = 'Squadra creata.';
         squadre.messageOk = true;
@@ -594,12 +617,28 @@ onMounted(() => {
                             <label class="flex items-center gap-1.5 text-xs text-gray-600">
                                 <input
                                     type="checkbox"
-                                    :checked="team.is_external"
+                                    :checked="team.is_external || esternaInScelta === team.id"
                                     class="rounded border-gray-300"
                                     data-test="squadra-esterna"
-                                    @change="aggiornaSquadra(team, { is_external: $event.target.checked })"
+                                    @change="commutaEsterna(team, $event)"
                                 > impresa esterna
                             </label>
+                            <span v-if="team.is_external && team.client" class="text-xs text-gray-500" data-test="squadra-committente">
+                                per {{ team.client.name }}
+                            </span>
+                            <span v-else-if="team.is_external && ! team.client" class="text-xs font-medium text-amber-700">
+                                senza committente
+                            </span>
+                            <ScegliCommittente
+                                v-if="esternaInScelta === team.id || (team.is_external && ! team.client)"
+                                model-value=""
+                                :committenti="clients"
+                                segnaposto="Committente dell'impresa…"
+                                class="w-full sm:w-64"
+                                campo-classe="px-2.5 py-1.5 text-xs"
+                                data-test="squadra-scegli-committente"
+                                @update:model-value="collegaCommittente(team, $event)"
+                            />
                             <button class="text-xs font-medium text-green-700 hover:underline" data-test="squadra-membri" @click="apriMembri(team)">
                                 Membri ({{ (team.members ?? []).length }})
                             </button>
@@ -633,6 +672,15 @@ onMounted(() => {
                     <label class="flex items-center gap-1.5 text-xs text-gray-600">
                         <input v-model="squadre.form.is_external" type="checkbox" class="rounded border-gray-300" data-test="nuova-esterna"> impresa esterna
                     </label>
+                    <ScegliCommittente
+                        v-if="squadre.form.is_external"
+                        v-model="squadre.form.client_id"
+                        :committenti="clients"
+                        segnaposto="Committente dell'impresa *"
+                        class="w-full sm:w-64"
+                        campo-classe="px-2.5 py-2 text-sm"
+                        data-test="nuova-esterna-committente"
+                    />
                     <button type="submit" :disabled="squadre.busy" data-test="crea-squadra" class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50">Crea</button>
                 </form>
                 <p v-if="squadre.message" class="mt-3 rounded-lg px-3 py-2 text-sm" :class="squadre.messageOk ? 'bg-green-100 text-green-900' : 'bg-red-50 text-red-700'" data-test="squadre-msg">{{ squadre.message }}</p>
