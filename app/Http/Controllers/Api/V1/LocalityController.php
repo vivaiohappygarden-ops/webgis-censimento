@@ -65,15 +65,22 @@ class LocalityController extends Controller implements HasMiddleware
         // una volta sola. Su uno stesso foglio mai due date diverse
         $adesso = \Illuminate\Support\Carbon::now('Europe/Rome');
 
+        // Stampa componibile: testata e superfici escono sempre
+        $sezioni = \App\Services\Pdf\SezioniStampa::da($request,
+            ['planimetrie', 'tipi', 'piante', 'imprese', 'lavori', 'documenti']);
+
         $pdf = $renderer->render('pdf.locality', [
             'scheda' => \App\Services\Territorio\LocalitySheet::per($localita),
             'comune' => $localita->site?->municipality,
             'organization' => \App\Models\Organization::find($localita->tenant_id),
             'stampatoIl' => $adesso,
             'statiLavoro' => \App\Models\WorkOrder::STATUS_LABELS,
-            // Stampa componibile: testata e superfici escono sempre
-            'sezioni' => \App\Services\Pdf\SezioniStampa::da($request,
-                ['tipi', 'piante', 'imprese', 'lavori', 'documenti']),
+            'sezioni' => $sezioni,
+            // Le planimetrie si preparano solo se la sezione e' richiesta:
+            // e' il pezzo piu' costoso della stampa
+            'planimetrie' => in_array('planimetrie', $sezioni)
+                ? app(\App\Services\Pdf\Planimetria::class)->perLocalita($localita)
+                : null,
         ]);
 
         $nome = 'scheda-localita-'.\Illuminate\Support\Str::slug($localita->name ?: 'senza-nome')

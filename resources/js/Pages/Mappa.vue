@@ -835,9 +835,11 @@ onMounted(async () => {
             paint: { 'line-color': colorExpr, 'line-width': 2.5 },
         });
         /*
-         * Chioma a dimensione reale: un cerchio con il raggio vero in metri,
-         * calcolato dal diametro censito. Da vicino la mappa diventa una
-         * carta della copertura arborea.
+         * Chioma a dimensione reale e sagomata: non un cerchio piatto ma una
+         * macchia lobata con la luce a nord-ovest, disegnata su tre stampini
+         * (canvas) e ruotata per albero, cosi' due chiome vicine non escono
+         * mai identiche. Da vicino la mappa diventa una carta della
+         * copertura arborea.
          *
          * La conversione metri -> pixel dipende dallo zoom e dalla latitudine:
          * a MapLibre un metro vale 2^zoom / (78271,517 x cos(lat)) pixel. Con
@@ -846,37 +848,83 @@ onMounted(async () => {
          * (ricalcolato a fine spostamento oltre una soglia): fissarlo su un
          * punto qualsiasi disegnerebbe chiome ~12% piu' grandi a Palermo.
          */
-        const raggioChiome = () => {
+        const spriteChioma = (seme) => {
+            const c = document.createElement('canvas');
+            c.width = 256;
+            c.height = 256;
+            const ctx = c.getContext('2d');
+            const lobi = 5 + (seme % 3);
+            const f1 = seme * 1.7;
+            const f2 = seme * 2.9;
+            ctx.beginPath();
+            for (let i = 0; i <= 48; i++) {
+                const t = (i / 48) * 2 * Math.PI;
+                const r = 100 * (1 + 0.11 * Math.sin(lobi * t + f1)
+                    + 0.05 * Math.sin((lobi + 4) * t + f2)
+                    + 0.028 * Math.sin((lobi + 8) * t + f1 + 1.3));
+                const x = 128 + r * Math.cos(t);
+                const y = 128 + r * Math.sin(t);
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            const luce = ctx.createRadialGradient(104, 104, 16, 128, 128, 120);
+            luce.addColorStop(0, 'rgba(150, 205, 130, 0.55)');
+            luce.addColorStop(0.55, 'rgba(58, 125, 68, 0.38)');
+            luce.addColorStop(1, 'rgba(30, 86, 46, 0.46)');
+            ctx.fillStyle = luce;
+            ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = 'rgba(28, 92, 45, 0.55)';
+            ctx.stroke();
+
+            return ctx.getImageData(0, 0, 256, 256);
+        };
+        // Nello stampino la macchia ha diametro 200 su 256: con pixelRatio 2
+        // a icon-size 1 la chioma vale 100 pixel a schermo
+        [0, 1, 2].forEach((v) => map.addImage(`chioma-${v}`, spriteChioma(v * 7 + 3), { pixelRatio: 2 }));
+
+        const tagliaChiome = () => {
             const cosLat = Math.cos((map.getCenter().lat * Math.PI) / 180);
             const pixelPerMetro = (zoom) => (2 ** zoom) / (78271.517 * cosLat);
 
             return ['interpolate', ['exponential', 2], ['zoom'],
-                15, ['*', ['/', ['to-number', ['get', 'chioma_m']], 2], pixelPerMetro(15)],
-                22, ['*', ['/', ['to-number', ['get', 'chioma_m']], 2], pixelPerMetro(22)],
+                15, ['*', ['to-number', ['get', 'chioma_m']], pixelPerMetro(15) / 100],
+                22, ['*', ['to-number', ['get', 'chioma_m']], pixelPerMetro(22) / 100],
             ];
         };
+        // Stampino e rotazione scelti dai primi caratteri del codice
+        // dell'elemento: stabili per lo stesso albero, diversi fra vicini
+        const esadecimale = '0123456789abcdef';
+        const varianteChioma = ['%', ['max', 0,
+            ['index-of', ['slice', ['coalesce', ['get', 'id'], '0'], 0, 1], esadecimale]], 3];
+        const rotazioneChioma = ['*', ['max', 0,
+            ['index-of', ['slice', ['coalesce', ['get', 'id'], '00'], 1, 2], esadecimale]], 22.5];
         let latChiome = map.getCenter().lat;
         map.addLayer({
-            id: 'chiome', type: 'circle', source: 'assets', 'source-layer': 'assets',
+            id: 'chiome', type: 'symbol', source: 'assets', 'source-layer': 'assets',
             minzoom: 15.5,
             filter: ['all',
                 ['==', ['geometry-type'], 'Point'],
                 ['>', ['coalesce', ['to-number', ['get', 'chioma_m']], 0], 0],
             ],
-            paint: {
-                'circle-color': '#16a34a',
-                'circle-opacity': 0.16,
-                'circle-stroke-color': '#15803d',
-                'circle-stroke-opacity': 0.4,
-                'circle-stroke-width': 1,
-                'circle-radius': raggioChiome(),
+            layout: {
+                'icon-image': ['concat', 'chioma-', ['to-string', varianteChioma]],
+                'icon-size': tagliaChiome(),
+                'icon-rotate': rotazioneChioma,
+                // La chioma e' un oggetto al suolo: si aggancia alla mappa
+                // (ruota e si inclina con lei) e non sparisce mai per
+                // collisione con le etichette
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+                'icon-rotation-alignment': 'map',
+                'icon-pitch-alignment': 'map',
             },
         });
         map.on('moveend', () => {
             // 0,1 grado sono ~11 km: sotto, l'errore del coseno non si vede
             if (Math.abs(map.getCenter().lat - latChiome) < 0.1) return;
             latChiome = map.getCenter().lat;
-            map.setPaintProperty('chiome', 'circle-radius', raggioChiome());
+            map.setLayoutProperty('chiome', 'icon-size', tagliaChiome());
         });
         map.addLayer({
             id: 'assets-point', type: 'circle', source: 'assets', 'source-layer': 'assets',

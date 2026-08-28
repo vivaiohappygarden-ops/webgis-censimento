@@ -15,6 +15,7 @@
     tr.totale td { background: #f4f4f4; font-weight: bold; }
     .nota { margin-top: 12px; font-size: 8.5px; color: #555; }
     .nota li { margin-bottom: 2px; }
+    .didascalia { font-size: 8.5px; color: #333; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -69,6 +70,29 @@
             <td class="num">{{ $n($elementi) }}</td>
         </tr>
     </table>
+
+    @if (in_array('planimetrie', $sezioni) && $planimetrie !== null)
+    <h2>Planimetrie delle aree</h2>
+    @if ($planimetrie['quadro'])
+        <img src="data:image/png;base64,{{ $planimetrie['quadro']['png'] }}" style="width: 100%; margin-top: 4px; border: 1px solid #bbb;">
+        <div class="didascalia">Quadro d'insieme — le aree della località, numerate come le planimetrie che seguono. Nord in alto.</div>
+    @endif
+    @foreach ($planimetrie['aree'] as $tavola)
+        <img src="data:image/png;base64,{{ $tavola['png'] }}" style="width: 100%; margin-top: 10px; border: 1px solid #bbb;">
+        <div class="didascalia">
+            Area {{ $tavola['numero'] }} — {{ $tavola['nome'] }}@if ($tavola['codice']) ({{ $tavola['codice'] }})@endif{{ $tavola['stato'] !== 'active' ? ' — non attiva' : '' }}
+            · {{ number_format($tavola['mq'], 2, ',', '.') }} m² · {{ $tavola['conteggi'] }}{{ $tavola['etichette'] ? '' : ' · etichette omesse per leggibilità' }}
+        </div>
+    @endforeach
+    <div class="didascalia" style="margin-top: 6px;">
+        Legenda: perimetro dell'area in verde scuro; alberi con chioma sagomata (in scala quando il
+        diametro è misurato, simbolo convenzionale più tenue quando non lo è) e punto del fusto;
+        superfici campite; elementi lineari in verde oliva; il numero sotto l'elemento è il codice del censimento.
+        @if ($planimetrie['sfondo_usato'])
+            {{ $planimetrie['attribuzione'] }}.
+        @endif
+    </div>
+    @endif
 
     @if (in_array('tipi', $sezioni))
     <h2>Elementi censiti per tipo</h2>
@@ -186,6 +210,17 @@
                 delle aree interne (che possono lasciare vuoti o sovrapporsi).</li>
             <li>La superficie gestita è la somma delle sole aree attive: è quella
                 che conta per i lavori e per il corrispettivo.</li>
+            @if (in_array('planimetrie', $sezioni) && $planimetrie !== null)
+            <li>Le planimetrie sono disegnate dalle geometrie registrate sulla mappa
+                alla data di stampa; nord in alto, barra della scala su ogni tavola.
+                @if ($planimetrie['sfondo_usato'])
+                    Lo sfondo cartografico è quello disponibile al momento della stampa.
+                @else
+                    Senza collegamento alla rete lo sfondo cartografico si omette e resta
+                    il disegno tecnico.
+                @endif
+            </li>
+            @endif
             @if (in_array('piante', $sezioni))
             <li>Le piante contano gli alberi censiti non abbattuti, raggruppati per
                 nome scientifico (specie o, in mancanza, genere).</li>

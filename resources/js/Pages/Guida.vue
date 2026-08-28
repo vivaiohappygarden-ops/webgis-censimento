@@ -160,13 +160,16 @@ function goTo(id) {
                         <h3>Le chiome a dimensione reale sulla mappa</h3>
                         <p>
                             Sulla pagina <strong>Mappa</strong>, la casella <strong>"Chiome a dimensione
-                            reale"</strong> disegna attorno a ogni albero un cerchio verde largo quanto il
+                            reale"</strong> disegna attorno a ogni albero la sua chioma larga quanto il
                             <strong>diametro di chioma</strong> scritto nella sua scheda, in metri veri:
-                            avvicinandoti la mappa le chiome crescono con le case e le strade. Si vede
-                            solo dai livelli di ingrandimento piu' spinti, dove un metro e' distinguibile,
-                            e serve a capire a colpo d'occhio coperture, sovrapposizioni e spazi liberi
-                            per nuove piante. Gli alberi senza diametro di chioma compilato non
-                            disegnano nulla.
+                            avvicinandoti la mappa le chiome crescono con le case e le strade. La chioma
+                            non è un cerchio piatto ma una <strong>macchia dal contorno naturale</strong>,
+                            con la luce da un lato, sempre uguale per lo stesso albero e diversa fra
+                            alberi vicini: l'insieme si legge come una vera carta della copertura
+                            arborea. Si vede solo dai livelli di ingrandimento più spinti, dove un metro
+                            è distinguibile, e serve a capire a colpo d'occhio coperture, sovrapposizioni
+                            e spazi liberi per nuove piante. Gli alberi senza diametro di chioma
+                            compilato non disegnano nulla.
                         </p>
                         <h3>Stampe e pagina pubblica</h3>
                         <p>
@@ -818,9 +821,14 @@ function goTo(id) {
                             all'elenco; per il <strong>committente</strong> le sue sedi, il portale pubblico
                             e i vincoli. Il pulsante <strong>"Scheda PDF"</strong> stampa il dossier della
                             località pronto da allegare a un capitolato: superfici con il metodo di calcolo
-                            dichiarato, classificazione ISTAT, elementi per tipo, piante con quantità, chi
-                            ci lavora, lavori recenti e documenti allegati; prima della stampa scegli con
-                            le spunte quali sezioni includere (testata e superfici escono sempre).
+                            dichiarato, classificazione ISTAT, <strong>planimetrie delle aree</strong>
+                            (un quadro d'insieme con le aree numerate e una tavola zoomata per area, con
+                            perimetri, prati, siepi e alberi con la chioma in scala, nord e barra della
+                            scala; con il collegamento a internet sotto al disegno c'è la mappa vera,
+                            senza esce comunque il disegno tecnico), elementi per tipo, piante con
+                            quantità, chi ci lavora, lavori recenti e documenti allegati; prima della
+                            stampa scegli con le spunte quali sezioni includere (testata e superfici
+                            escono sempre).
                             Nella scheda <strong>Cartografia</strong> del committente si registrano i suoi
                             <strong>sfondi di mappa</strong> (ortofoto comunale, carta tecnica regionale),
                             come indirizzo a riquadri {z}/{x}/{y} oppure <strong>WMS</strong>: compaiono

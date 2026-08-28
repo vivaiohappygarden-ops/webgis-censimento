@@ -212,6 +212,7 @@ const erroreStampa = ref('');
 const stampaInCorso = ref(false);
 const stampaAperta = ref(false);
 const SEZIONI_LOCALITA = {
+    planimetrie: 'Planimetrie delle aree',
     tipi: 'Elementi per tipo',
     piante: 'Piante presenti',
     imprese: 'Chi ci lavora',
