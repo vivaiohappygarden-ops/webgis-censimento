@@ -172,14 +172,29 @@ class DisegnoPlanimetria
         $miny = min($ys);
         $maxy = max($ys);
 
-        // Respiro attorno al perimetro: il 8% per lato, mai meno delle
-        // chiome che sporgono e mai meno di 6 metri
-        $margine = max(($maxx - $minx) * 0.08, ($maxy - $miny) * 0.08,
-            ($margineChiomeM + 6) / max($this->cosLat, 0.01));
+        // Respiro attorno al perimetro: il 10% per lato, mai meno delle
+        // chiome che sporgono e mai meno di 8 metri
+        $margine = max(($maxx - $minx) * 0.10, ($maxy - $miny) * 0.10,
+            ($margineChiomeM + 8) / max($this->cosLat, 0.01));
         $minx -= $margine;
         $maxx += $margine;
         $miny -= $margine;
         $maxy += $margine;
+
+        // Un'inquadratura minima di ~170 metri: un'area piccola senza le
+        // strade e le case attorno e' un poligono che galleggia nel nulla,
+        // e ai livelli di zoom piu' spinti lo sfondo non ha dettagli
+        $minimo = 170 / max($this->cosLat, 0.01);
+        if ($maxx - $minx < $minimo) {
+            $extra = ($minimo - ($maxx - $minx)) / 2;
+            $minx -= $extra;
+            $maxx += $extra;
+        }
+        if ($maxy - $miny < $minimo * 0.6) {
+            $extra = ($minimo * 0.6 - ($maxy - $miny)) / 2;
+            $miny -= $extra;
+            $maxy += $extra;
+        }
 
         $larghezza = (int) config('planimetrie.larghezza_px', 1100);
         $altezza = (int) round($larghezza * ($maxy - $miny) / max($maxx - $minx, 0.01));
@@ -294,12 +309,12 @@ class DisegnoPlanimetria
             }
             if ($fill) {
                 imagefilledpolygon($this->im, array_map(intval(...), $piatti),
-                    $this->colore(47, 107, 58, $this->conSfondo ? 112 : 104));
+                    $this->colore(56, 122, 68, $this->conSfondo ? 100 : 96));
             }
             if ($this->conSfondo) {
-                $this->polilinea($anello, $this->colore(255, 255, 255, 40), 9, true);
+                $this->polilinea($anello, $this->colore(255, 255, 255, 28), 12, true);
             }
-            $this->polilinea($anello, $this->colore(38, 92, 49), 5, true);
+            $this->polilinea($anello, $this->colore(27, 84, 40), 6, true);
         }
     }
 
@@ -382,9 +397,9 @@ class DisegnoPlanimetria
                 $linee = $e['tipo'] === 'LINESTRING' ? [$geo['coordinates']] : $geo['coordinates'];
                 foreach ($linee as $linea) {
                     if ($this->conSfondo) {
-                        $this->polilinea($linea, $this->colore(255, 255, 255, 50), 9);
+                        $this->polilinea($linea, $this->colore(255, 255, 255, 36), 11);
                     }
-                    $this->polilinea($linea, $this->colore(77, 124, 15), 5);
+                    $this->polilinea($linea, $this->colore(74, 118, 27), 6);
                 }
                 break;
             case 'POLYGON':
@@ -397,8 +412,8 @@ class DisegnoPlanimetria
                         $piatti[] = (int) $y;
                     }
                     if (count($piatti) >= 6) {
-                        imagefilledpolygon($this->im, $piatti, $this->colore(127, 174, 116, $this->conSfondo ? 100 : 84));
-                        $this->polilinea($anello, $this->colore(107, 148, 92), 3, true);
+                        imagefilledpolygon($this->im, $piatti, $this->colore(124, 176, 108, $this->conSfondo ? 84 : 74));
+                        $this->polilinea($anello, $this->colore(95, 138, 78), 4, true);
                     }
                 }
                 break;
@@ -421,18 +436,18 @@ class DisegnoPlanimetria
         $tenue = ! $misurata;
         // Corpo della chioma
         imagefilledpolygon($this->im, $this->contornoChioma($cx, $cy, $r, $caso, 1.0, 0.0),
-            $this->colore(40, 120, 60, $tenue ? 100 : ($this->conSfondo ? 76 : 68)));
+            $this->colore(44, 112, 58, $tenue ? 96 : ($this->conSfondo ? 58 : 52)));
         // Velatura di luce verso nord-ovest: toglie l'effetto "bollo piatto"
         imagefilledpolygon($this->im, $this->contornoChioma($cx, $cy, $r, $caso, 0.58, 0.16),
-            $this->colore(150, 205, 130, $tenue ? 104 : 80));
+            $this->colore(158, 210, 134, $tenue ? 100 : 62));
         // Contorno
         $bordo = $this->contornoChioma($cx, $cy, $r, $caso, 1.0, 0.0);
         $anello = [];
         for ($i = 0; $i < count($bordo); $i += 2) {
             $anello[] = [$bordo[$i], $bordo[$i + 1]];
         }
-        imagesetthickness($this->im, $tenue ? 1 : 2);
-        $c = $this->colore(28, 92, 45, $tenue ? 60 : 20);
+        imagesetthickness($this->im, $tenue ? 1 : 3);
+        $c = $this->colore(24, 80, 40, $tenue ? 60 : 10);
         $prev = end($anello);
         foreach ($anello as $p) {
             imageline($this->im, (int) $prev[0], (int) $prev[1], (int) $p[0], (int) $p[1], $c);
@@ -541,32 +556,37 @@ class DisegnoPlanimetria
 
     private function cartiglio(): void
     {
-        // Barra della scala, in metri veri, con lunghezza "bella"
+        // Barra della scala, in metri veri, con lunghezza "bella", dentro
+        // un riquadro bianco pieno e bordato come nei cartigli veri
         $larghezzaVera = ($this->bbox[2] - $this->bbox[0]) * $this->cosLat;
         $lunghezza = $this->passoBello($larghezzaVera / 5);
         $lunghezzaPx = $this->metri($lunghezza);
 
-        $x0 = 30;
-        $y0 = $this->h - 34;
-        imagefilledrectangle($this->im, $x0 - 14, $y0 - 40, (int) ($x0 + $lunghezzaPx + 64), $y0 + 20,
-            $this->colore(255, 255, 255, 32));
-        // Due tratti alternati, come nei cartigli veri
-        $nero = $this->colore(17, 17, 17);
-        imagerectangle($this->im, $x0, $y0 - 8, (int) ($x0 + $lunghezzaPx), $y0 + 4, $nero);
-        imagefilledrectangle($this->im, $x0, $y0 - 8, (int) ($x0 + $lunghezzaPx / 2), $y0 + 4, $nero);
-        $et = fn (float $v) => rtrim(rtrim(number_format($v, 1, ',', '.'), '0'), ',');
-        $this->testo('0', $x0, $y0 - 16, 17, centrato: true);
-        $this->testo($et($lunghezza / 2), $x0 + $lunghezzaPx / 2, $y0 - 16, 17, centrato: true);
-        $this->testo($et($lunghezza).' m', $x0 + $lunghezzaPx + 8, $y0 + 2, 17);
+        $nero = $this->colore(25, 30, 26);
+        $bordo = $this->colore(150, 155, 148);
 
-        // Il nord, in alto a destra
-        $x = $this->w - 52;
-        $y = 56;
-        imagefilledellipse($this->im, $x, $y, 76, 76, $this->colore(255, 255, 255, 32));
+        $x0 = 36;
+        $y0 = $this->h - 40;
+        imagefilledrectangle($this->im, $x0 - 18, $y0 - 46, (int) ($x0 + $lunghezzaPx + 88), $y0 + 22,
+            $this->colore(255, 255, 255, 14));
+        imagerectangle($this->im, $x0 - 18, $y0 - 46, (int) ($x0 + $lunghezzaPx + 88), $y0 + 22, $bordo);
+        // Due tratti alternati
+        imagerectangle($this->im, $x0, $y0 - 8, (int) ($x0 + $lunghezzaPx), $y0 + 5, $nero);
+        imagefilledrectangle($this->im, $x0, $y0 - 8, (int) ($x0 + $lunghezzaPx / 2), $y0 + 5, $nero);
+        $et = fn (float $v) => rtrim(rtrim(number_format($v, 1, ',', '.'), '0'), ',');
+        $this->testo('0', $x0, $y0 - 18, 17, centrato: true);
+        $this->testo($et($lunghezza / 2), $x0 + $lunghezzaPx / 2, $y0 - 18, 17, centrato: true);
+        $this->testo($et($lunghezza).' m', $x0 + $lunghezzaPx + 12, $y0 + 3, 17);
+
+        // Il nord, in alto a destra, in un tondo bianco bordato
+        $x = $this->w - 58;
+        $y = 60;
+        imagefilledellipse($this->im, $x, $y, 84, 84, $this->colore(255, 255, 255, 14));
+        imageellipse($this->im, $x, $y, 84, 84, $bordo);
         imagesetthickness($this->im, 3);
-        imageline($this->im, $x, $y + 22, $x, $y - 12, $nero);
+        imageline($this->im, $x, $y + 20, $x, $y - 12, $nero);
         imagesetthickness($this->im, 1);
         imagefilledpolygon($this->im, [$x, $y - 28, $x - 9, $y - 8, $x + 9, $y - 8], $nero);
-        $this->testo('N', $x, $y + 44, 19, centrato: true, grassetto: true);
+        $this->testo('N', $x, $y + 36, 18, centrato: true, grassetto: true);
     }
 }

@@ -23,6 +23,13 @@ class SfondoCartografico
     private const MASSIMO_RIQUADRI = 25;
 
     /**
+     * Zoom piu' fitto che si chiede al servizio: oltre il 18 OpenStreetMap
+     * non aggiunge dettagli (fuori citta' i riquadri sono quasi vuoti) e la
+     * tavola uscirebbe bianca e sgranata.
+     */
+    private const ZOOM_MASSIMO = 18;
+
+    /**
      * Al primo intoppo il servizio si spegne per il resto della stampa: se la
      * rete non risponde per la prima tavola non rispondera' nemmeno per le
      * altre, e ogni tavola in piu' sarebbe solo attesa buttata.
@@ -51,7 +58,7 @@ class SfondoCartografico
         // chiedere troppi riquadri
         $risoluzione = ($maxx - $minx) / $larghezza;   // metri di Mercatore per pixel
         $z = (int) floor(log(2 * self::MONDO / (self::LATO * $risoluzione), 2));
-        $z = max(1, min(19, $z));
+        $z = max(1, min(self::ZOOM_MASSIMO, $z));
 
         do {
             $n = 2 ** $z;
@@ -101,13 +108,13 @@ class SfondoCartografico
         imagedestroy($mosaico);
 
         // Un filo piu' chiaro: il disegno del verde deve restare protagonista
-        imagefilter($fuori, IMG_FILTER_BRIGHTNESS, 22);
+        imagefilter($fuori, IMG_FILTER_BRIGHTNESS, 12);
 
         return $fuori;
     }
 
     /** Un riquadro, dalla cache su disco o dalla rete. */
-    private function riquadro(int $z, int $x, int $y): ?\GdImage
+    protected function riquadro(int $z, int $x, int $y): ?\GdImage
     {
         // La cache e' per fornitore: cambiando l'indirizzo dei riquadri non
         // si mischiano immagini di servizi diversi
