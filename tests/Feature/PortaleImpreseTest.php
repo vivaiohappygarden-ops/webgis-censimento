@@ -158,6 +158,86 @@ class PortaleImpreseTest extends TestCase
             ->assertStatus(409);
     }
 
+    public function test_un_ordine_chiuso_nel_frattempo_non_si_riprogramma(): void
+    {
+        [$teamId, $utente] = $this->creaImpresa();
+        $ordine = $this->creaOrdine($teamId);
+
+        $this->actingAsTenantUser($utente);
+        $this->postJson("/api/v1/impresa/ordini/{$ordine}/riprogrammazione", [
+            'reason' => 'maltempo', 'proposed_start' => '2026-09-14',
+        ])->assertCreated();
+
+        // L'ordine si chiude prima della decisione
+        $this->actingAsTenantUser($this->amministratore);
+        foreach (['assigned', 'in_progress', 'completed'] as $passo) {
+            $this->postJson("/api/v1/work-orders/{$ordine}/transition", ['status' => $passo])->assertOk();
+        }
+
+        $id = RescheduleRequest::query()->firstOrFail()->id;
+        // Accettare non si può: la storia di un ordine chiuso non si riscrive
+        $this->postJson("/api/v1/riprogrammazioni/{$id}/decidi", ['esito' => 'accettata'])
+            ->assertStatus(409);
+        $dopo = WorkOrder::withoutGlobalScopes()->findOrFail($ordine);
+        $this->assertSame('2026-09-07', $dopo->planned_start->toDateString());
+
+        // Non accogliere invece sì, con la risposta per l'impresa
+        $this->postJson("/api/v1/riprogrammazioni/{$id}/decidi", [
+            'esito' => 'rifiutata', 'response_note' => 'Il lavoro è già stato eseguito.',
+        ])->assertOk();
+    }
+
+    public function test_con_la_sola_data_di_fine_il_periodo_non_si_capovolge(): void
+    {
+        [$teamId, $utente] = $this->creaImpresa();
+        // Ordine con la sola fine prevista: la validazione lo ammette
+        $ordine = $this->creaOrdine($teamId, 'planned', [
+            'planned_start' => null, 'planned_end' => '2026-09-10',
+        ]);
+
+        $this->actingAsTenantUser($utente);
+        $this->postJson("/api/v1/impresa/ordini/{$ordine}/riprogrammazione", [
+            'reason' => 'mezzi', 'proposed_start' => '2026-09-20',
+        ])->assertCreated();
+
+        $this->actingAsTenantUser($this->amministratore);
+        $id = RescheduleRequest::query()->firstOrFail()->id;
+        $this->postJson("/api/v1/riprogrammazioni/{$id}/decidi", ['esito' => 'accettata'])->assertOk();
+
+        $dopo = WorkOrder::withoutGlobalScopes()->findOrFail($ordine);
+        $this->assertSame('2026-09-20', $dopo->planned_start->toDateString());
+        // La fine non precede mai l'inizio
+        $this->assertSame('2026-09-20', $dopo->planned_end->toDateString());
+    }
+
+    public function test_l_esito_arriva_anche_se_l_ordine_esce_dall_elenco(): void
+    {
+        [$teamId, $utente] = $this->creaImpresa();
+        $ordine = $this->creaOrdine($teamId);
+
+        $this->actingAsTenantUser($utente);
+        $this->postJson("/api/v1/impresa/ordini/{$ordine}/riprogrammazione", [
+            'reason' => 'accesso',
+        ])->assertCreated();
+
+        // L'ordine viene annullato: sparisce dall'elenco dell'impresa
+        $this->actingAsTenantUser($this->amministratore);
+        $this->postJson("/api/v1/work-orders/{$ordine}/transition", ['status' => 'cancelled'])->assertOk();
+        $id = RescheduleRequest::query()->firstOrFail()->id;
+        $this->postJson("/api/v1/riprogrammazioni/{$id}/decidi", [
+            'esito' => 'rifiutata', 'response_note' => 'Il lavoro è stato annullato dal committente.',
+        ])->assertOk();
+
+        // Ma la richiesta e la risposta restano leggibili, fuori elenco
+        $this->actingAsTenantUser($utente);
+        $risposta = $this->getJson('/api/v1/impresa/ordini')->assertOk();
+        $this->assertCount(0, $risposta->json('data'));
+        $fuori = $risposta->json('fuori_elenco.0');
+        $this->assertSame('rifiutata', $fuori['status']);
+        $this->assertSame('Il lavoro è stato annullato dal committente.', $fuori['response_note']);
+        $this->assertNotEmpty($fuori['ordine_code']);
+    }
+
     public function test_il_rifiuto_non_tocca_le_date(): void
     {
         [$teamId, $utente] = $this->creaImpresa();

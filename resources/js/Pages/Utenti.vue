@@ -389,11 +389,25 @@ async function aggiornaSquadra(team, campi) {
         await loadSquadre();
         squadre.message = 'Squadra aggiornata.';
         squadre.messageOk = true;
+
+        return true;
     } catch (err) {
         squadre.message = firstError(err, 'Aggiornamento non riuscito');
         squadre.messageOk = false;
+        // Le caselle a video devono tornare com'erano davvero sul server:
+        // senza rilettura, una spunta fallita resterebbe mezza cambiata
+        await loadSquadre();
+
+        return false;
     } finally {
         squadre.busy = false;
+    }
+}
+
+/** Il pannello dei membri si chiude solo se il salvataggio e' riuscito. */
+async function salvaMembri(team) {
+    if (await aggiornaSquadra(team, { member_ids: squadre.membri })) {
+        squadre.apertaId = null;
     }
 }
 
@@ -606,7 +620,7 @@ onMounted(() => {
                                 class="mt-2 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50"
                                 :disabled="squadre.busy"
                                 data-test="salva-membri"
-                                @click="aggiornaSquadra(team, { member_ids: squadre.membri }); squadre.apertaId = null"
+                                @click="salvaMembri(team)"
                             >Salva i membri</button>
                         </div>
                     </li>

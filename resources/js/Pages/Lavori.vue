@@ -634,9 +634,17 @@ onMounted(async () => {
                 <ul class="mt-2 space-y-2">
                     <li v-for="r in richieste" :key="r.id" class="rounded-lg bg-white p-3 text-sm">
                         <div class="flex flex-wrap items-center gap-2">
-                            <button class="font-mono text-xs text-green-700 hover:underline" @click="openDetail(r.ordine.id)">{{ r.ordine?.code }}</button>
+                            <button v-if="r.ordine" class="font-mono text-xs text-green-700 hover:underline" @click="openDetail(r.ordine.id)">{{ r.ordine.code }}</button>
+                            <span v-else class="text-xs text-gray-400">ordine eliminato</span>
                             <span class="font-medium">{{ r.ordine?.title }}</span>
                             <span class="text-gray-500">— {{ r.impresa }}</span>
+                            <!-- Un ordine chiuso nel frattempo si vede subito: accettare
+                                 lo spostamento non è più possibile -->
+                            <span
+                                v-if="r.ordine && ['completed', 'cancelled'].includes(r.ordine.status)"
+                                class="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-700"
+                                data-test="richiesta-ordine-chiuso"
+                            >{{ WORK_STATUS_LABELS[r.ordine.status] ?? r.ordine.status }}</span>
                         </div>
                         <p class="mt-1 text-xs text-gray-600">
                             Motivo: <strong>{{ r.motivo }}</strong><template v-if="r.proposed_start"> · data proposta {{ r.proposed_start.split('-').reverse().join('/') }}</template>

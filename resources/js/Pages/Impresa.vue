@@ -47,13 +47,17 @@ async function inviaRichiesta(ordine) {
             proposed_start: richiesta.proposed_start || null,
             notes: richiesta.notes || null,
         });
-        richiesta.ordineId = null;
-        await caricaOrdini();
     } catch (err) {
         richiesta.errore = messaggioErrore(err, 'Invio non riuscito');
-    } finally {
         richiesta.busy = false;
+
+        return;
     }
+    richiesta.busy = false;
+    richiesta.ordineId = null;
+    // La ricarica passa dal solito avviso con "Riprova": se fallisse in
+    // silenzio, l'elenco vecchio farebbe credere che l'invio non sia andato
+    await carica(caricaOrdini);
 }
 
 const fmt = (d) => (d ? d.split('-').reverse().join('/') : '—');
@@ -167,6 +171,24 @@ onMounted(() => carica(caricaOrdini));
                 <p v-if="! inCorso.length" class="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-400">
                     Nessun lavoro in programma al momento.
                 </p>
+
+                <!-- Esiti di richieste su ordini usciti dall'elenco: l'esito
+                     arriva sempre, anche se il lavoro è stato chiuso o riassegnato -->
+                <template v-if="(dati.fuori_elenco ?? []).length">
+                    <h2 class="pt-2 text-sm font-semibold text-gray-600">Richieste su lavori non più in elenco</h2>
+                    <div
+                        v-for="r in dati.fuori_elenco"
+                        :key="r.id"
+                        class="rounded-xl border border-gray-200 bg-white px-4 py-3 text-xs"
+                        :class="r.status === 'aperta' ? 'text-blue-900' : 'text-gray-600'"
+                        data-test="richiesta-fuori-elenco"
+                    >
+                        <span class="font-mono text-gray-400">{{ r.ordine_code }}</span>
+                        {{ r.ordine_title }} — riprogrammazione ({{ r.motivo }}):
+                        <strong>{{ { aperta: 'in attesa di risposta', accettata: 'accettata', rifiutata: 'non accolta' }[r.status] }}</strong>.
+                        <span v-if="r.response_note" class="block">Risposta: {{ r.response_note }}</span>
+                    </div>
+                </template>
 
                 <template v-if="completati.length">
                     <h2 class="pt-2 text-sm font-semibold text-gray-600">Completati di recente</h2>

@@ -52,12 +52,37 @@ class ImpresaPortalController extends Controller implements HasMiddleware
             ->orderBy('planned_start')
             ->get();
 
+        // TUTTE le richieste recenti delle mie squadre, non solo quelle degli
+        // ordini ancora in elenco: l'esito deve arrivare anche se l'ordine è
+        // stato chiuso, riassegnato o è uscito per la visibilità a tempo
         $richieste = RescheduleRequest::query()
-            ->whereIn('work_order_id', $ordini->pluck('id'))
             ->whereIn('team_id', $squadre->pluck('id'))
+            ->where(fn ($q) => $q->where('status', 'aperta')
+                ->orWhere('created_at', '>=', now()->subDays(90)))
+            ->with(['workOrder' => fn ($q) => $q->withTrashed()->select('id', 'code', 'title')])
             ->orderByDesc('created_at')
             ->get()
             ->groupBy('work_order_id');
+
+        $idVisibili = $ordini->pluck('id')->flip();
+        $formattaRichiesta = fn ($r) => [
+            'id' => $r->id,
+            'reason' => $r->reason,
+            'motivo' => RescheduleRequest::MOTIVI[$r->reason] ?? $r->reason,
+            'proposed_start' => $r->proposed_start?->toDateString(),
+            'notes' => $r->notes,
+            'status' => $r->status,
+            'response_note' => $r->response_note,
+            'created_at' => $r->created_at?->toDateTimeString(),
+        ];
+        $fuoriElenco = $richieste
+            ->reject(fn ($gruppo, $workOrderId) => $idVisibili->has($workOrderId))
+            ->flatten(1)
+            ->map(fn ($r) => $formattaRichiesta($r) + [
+                'ordine_code' => $r->workOrder?->code,
+                'ordine_title' => $r->workOrder?->title,
+            ])
+            ->values();
 
         return response()->json([
             'data' => $ordini->map(fn (WorkOrder $o) => [
@@ -75,17 +100,9 @@ class ImpresaPortalController extends Controller implements HasMiddleware
                 'comune' => $o->area?->locality?->site?->municipality,
                 'risks' => $o->risks,
                 'ppe' => $o->ppe,
-                'richieste' => ($richieste[$o->id] ?? collect())->map(fn ($r) => [
-                    'id' => $r->id,
-                    'reason' => $r->reason,
-                    'motivo' => RescheduleRequest::MOTIVI[$r->reason] ?? $r->reason,
-                    'proposed_start' => $r->proposed_start?->toDateString(),
-                    'notes' => $r->notes,
-                    'status' => $r->status,
-                    'response_note' => $r->response_note,
-                    'created_at' => $r->created_at?->toDateTimeString(),
-                ])->values(),
+                'richieste' => ($richieste[$o->id] ?? collect())->map($formattaRichiesta)->values(),
             ])->values(),
+            'fuori_elenco' => $fuoriElenco,
             'squadre' => $squadre->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->values(),
             'stati' => WorkOrder::STATUS_LABELS,
             'motivi' => RescheduleRequest::MOTIVI,

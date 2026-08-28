@@ -79,18 +79,30 @@ class RiprogrammazioneController extends Controller implements HasMiddleware
                 abort(409, 'La richiesta è già stata decisa.');
             }
 
-            if ($data['esito'] === 'accettata' && $richiesta->proposed_start !== null) {
+            if ($data['esito'] === 'accettata') {
                 $ordine = WorkOrder::query()->lockForUpdate()->findOrFail($richiesta->work_order_id);
-                // La fine si trascina della stessa distanza: la durata
-                // concordata non cambia per uno slittamento
-                if ($ordine->planned_start !== null && $ordine->planned_end !== null) {
-                    $giorni = $ordine->planned_start->diffInDays($ordine->planned_end, false);
-                    $ordine->planned_end = $richiesta->proposed_start->copy()->addDays($giorni);
+                // Gli stati terminali sono immutabili anche da qui: la
+                // storia di un ordine completato o annullato non si riscrive
+                if (in_array($ordine->status, ['completed', 'cancelled'], true)) {
+                    abort(409, 'L\'ordine è stato nel frattempo chiuso: la richiesta si può solo non accogliere.');
                 }
-                $ordine->planned_start = $richiesta->proposed_start;
-                $ordine->version += 1;
-                $ordine->updated_by = $request->user()->id;
-                $ordine->save();
+                if ($richiesta->proposed_start !== null) {
+                    // La fine si trascina della stessa distanza: la durata
+                    // concordata non cambia per uno slittamento
+                    if ($ordine->planned_start !== null && $ordine->planned_end !== null) {
+                        $giorni = $ordine->planned_start->diffInDays($ordine->planned_end, false);
+                        $ordine->planned_end = $richiesta->proposed_start->copy()->addDays($giorni);
+                    }
+                    $ordine->planned_start = $richiesta->proposed_start;
+                    // Un ordine nato con la sola data di fine non deve uscire
+                    // col periodo capovolto: la fine non precede mai l'inizio
+                    if ($ordine->planned_end !== null && $ordine->planned_end->lt($ordine->planned_start)) {
+                        $ordine->planned_end = $ordine->planned_start->copy();
+                    }
+                    $ordine->version += 1;
+                    $ordine->updated_by = $request->user()->id;
+                    $ordine->save();
+                }
             }
 
             $richiesta->forceFill([
