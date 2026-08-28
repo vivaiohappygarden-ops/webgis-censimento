@@ -84,6 +84,12 @@ class ClientController extends Controller implements HasMiddleware
             );
         }
 
+        // Gli sfondi si salvano come elenco a chiavi numerate, qualunque
+        // forma avesse il payload: gli id degli sfondi sono posizionali
+        if (array_key_exists('basemaps', $data) && is_array($data['basemaps'])) {
+            $data['basemaps'] = array_values($data['basemaps']);
+        }
+
         // Il profilo pubblico si aggiorna per chiavi: chi modifica il testo di
         // benvenuto non deve perdere colore e contatti
         if (array_key_exists('public_profile', $data)) {

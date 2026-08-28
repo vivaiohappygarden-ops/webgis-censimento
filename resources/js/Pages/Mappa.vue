@@ -81,24 +81,34 @@ function rimuoviLivelliCommittente() {
     livelliCommittente.clear();
 }
 
+const sfondiErrore = ref('');
+
 async function caricaSfondiCommittente() {
     rimuoviLivelliCommittente();
-    if (! vista.clientId) {
-        sfondiCommittente.value = [];
-    } else {
-        try {
-            const { data } = await axios.get(`/api/v1/clients/${vista.clientId}/sfondi`);
-            sfondiCommittente.value = data.data;
-        } catch {
-            // Senza gli sfondi propri restano quelli di serie: la mappa
-            // non deve fermarsi per questo
-            sfondiCommittente.value = [];
-        }
-    }
-    // Uno sfondo del committente precedente non vale più: si torna alle strade
-    if (! ['strade', 'satellite'].includes(sfondoMappa.value)
-        && ! sfondiCommittente.value.some((s) => s.id === sfondoMappa.value)) {
+    sfondiErrore.value = '';
+    // Uno sfondo del committente precedente non vale più: si torna SUBITO
+    // alle strade, senza guardare gli id del nuovo elenco (sono posizionali:
+    // "committente-0" di un altro committente è una carta diversa)
+    if (! ['strade', 'satellite'].includes(sfondoMappa.value)) {
         sfondoMappa.value = 'strade';
+    }
+    const richiesto = vista.clientId;
+    if (! richiesto) {
+        sfondiCommittente.value = [];
+        applicaSfondo();
+        return;
+    }
+    try {
+        const { data } = await axios.get(`/api/v1/clients/${richiesto}/sfondi`);
+        // Una risposta arrivata dopo un altro cambio di filtro non vale più
+        if (vista.clientId !== richiesto) return;
+        sfondiCommittente.value = data.data;
+    } catch (err) {
+        if (vista.clientId !== richiesto) return;
+        // La mappa resta sugli sfondi di serie, ma l'errore si dice: un
+        // selettore vuoto per errore e uno senza sfondi si somigliano troppo
+        sfondiCommittente.value = [];
+        sfondiErrore.value = 'Sfondi del committente non caricati. ' + avvisoCaricamento(err);
     }
     applicaSfondo();
 }
@@ -120,8 +130,11 @@ function applicaSfondo() {
                 type: 'raster', tiles: [s.url], tileSize: 256,
                 maxzoom: s.zoom_massimo ?? 19, attribution: s.attribuzione ?? '',
             });
+            // Sotto TUTTO quello che si disegna: il primo livello di
+            // sovrapposizione è aree-fill (aree e anteprime di disegno
+            // stanno prima di assets-fill nell'ordine dei livelli)
             map.addLayer({ id, type: 'raster', source: id },
-                map.getLayer('assets-fill') ? 'assets-fill' : undefined);
+                ['aree-fill', 'assets-fill'].find((l) => map.getLayer(l)));
             livelliCommittente.add(id);
         }
         if (map.getLayer(id)) {
@@ -1002,6 +1015,7 @@ onBeforeUnmount(() => {
                         Satellite
                     </label>
                 </div>
+                <p v-if="sfondiErrore" class="mt-1.5 text-xs text-red-600" data-test="sfondi-errore">{{ sfondiErrore }}</p>
                 <div v-if="sfondiCommittente.length" class="mt-1.5 flex flex-col gap-1 text-sm text-gray-600" data-test="sfondi-committente">
                     <label v-for="s in sfondiCommittente" :key="s.id" class="flex items-center gap-1.5">
                         <input v-model="sfondoMappa" type="radio" :value="s.id" :data-test="`sfondo-${s.id}`" class="border-gray-300" @change="applicaSfondo">

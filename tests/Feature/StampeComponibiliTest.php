@@ -108,6 +108,17 @@ class StampeComponibiliTest extends TestCase
         $this->assertStringNotContainsString('Documentazione fotografica', $html);
     }
 
+    public function test_la_forma_a_elenco_del_parametro_non_rompe_la_stampa(): void
+    {
+        $id = $this->alberoCompleto();
+
+        // ?sezioni[]=foto: forma insolita ma legittima, non deve dare errore
+        $this->get("/api/v1/assets/{$id}/pdf?sezioni[]=foto")->assertOk();
+        $html = $this->stampe->html['pdf.asset'];
+        $this->assertStringContainsString('Documentazione fotografica', $html);
+        $this->assertStringNotContainsString('Dati dendrometrici', $html);
+    }
+
     public function test_anche_la_scheda_della_localita_e_componibile(): void
     {
         $id = $this->postJson('/api/v1/assets', [

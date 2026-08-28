@@ -26,9 +26,16 @@ class SezioniStampa
             return $ammesse;
         }
 
+        // Anche la forma ?sezioni[]=a&sezioni[]=b si accetta: un cast cieco
+        // a stringa su un array farebbe esplodere la stampa
+        $valore = $query['sezioni'] ?? '';
+        if (is_array($valore)) {
+            $valore = implode(',', array_filter($valore, 'is_string'));
+        }
+
         return array_values(array_intersect(
             $ammesse,
-            array_filter(array_map('trim', explode(',', (string) ($query['sezioni'] ?? '')))),
+            array_filter(array_map('trim', explode(',', (string) $valore))),
         ));
     }
 }

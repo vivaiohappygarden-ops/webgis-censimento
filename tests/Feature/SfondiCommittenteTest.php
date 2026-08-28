@@ -102,6 +102,34 @@ class SfondiCommittenteTest extends TestCase
             ->assertStatus(422)->assertJsonValidationErrors(['basemaps']);
     }
 
+    public function test_l_attribuzione_non_accetta_marcatura(): void
+    {
+        // L'attribuzione finisce nel riquadro della mappa come marcatura,
+        // anche sul portale pubblico: i tag non entrano
+        $this->patchJson("/api/v1/clients/{$this->committente->id}", [
+            'basemaps' => [[
+                'nome' => 'X', 'tipo' => 'xyz', 'url' => 'https://t.example/{z}/{x}/{y}.png',
+                'attribuzione' => 'Comune <img src=x onerror=alert(1)>',
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors(['basemaps.0.attribuzione']);
+    }
+
+    public function test_le_chiavi_non_numeriche_non_aggirano_i_controlli(): void
+    {
+        // Lo stesso contenuto respinto a indice 0 va respinto anche sotto
+        // una chiave testuale: il controllo legge il tipo della stessa voce
+        $this->patchJson("/api/v1/clients/{$this->committente->id}", [
+            'basemaps' => ['a' => ['nome' => 'X', 'tipo' => 'xyz', 'url' => 'https://t.example/orto.png']],
+        ])->assertStatus(422);
+
+        // Una voce valida sotto chiave testuale si salva rinumerata da zero
+        $this->patchJson("/api/v1/clients/{$this->committente->id}", [
+            'basemaps' => ['a' => ['nome' => 'Orto', 'tipo' => 'xyz', 'url' => 'https://t.example/{z}/{x}/{y}.png']],
+        ])->assertOk();
+        $this->getJson("/api/v1/clients/{$this->committente->id}/sfondi")
+            ->assertOk()->assertJsonPath('data.0.id', 'committente-0');
+    }
+
     public function test_la_mappa_pubblica_elenca_anche_gli_sfondi_del_comune(): void
     {
         $this->committente->forceFill([

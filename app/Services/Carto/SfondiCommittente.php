@@ -31,9 +31,11 @@ class SfondiCommittente
             'basemaps.*.tipo' => ['required', Rule::in(['xyz', 'wms'])],
             'basemaps.*.url' => ['required', 'string', 'max:500', 'starts_with:https://',
                 function (string $attribute, mixed $value, \Closure $fail) {
-                    // Un modello z/x/y senza i segnaposto non disegna niente
-                    $indice = (int) explode('.', $attribute)[1];
-                    $tipo = request()->input("basemaps.{$indice}.tipo");
+                    // Un modello z/x/y senza i segnaposto non disegna niente.
+                    // Il tipo si legge dal fratello della STESSA voce (vale
+                    // anche con chiavi non numeriche), non da un indice
+                    // ricalcolato che si potrebbe aggirare
+                    $tipo = request()->input(preg_replace('/\.url$/', '.tipo', $attribute));
                     if ($tipo === 'xyz' && (! str_contains((string) $value, '{z}')
                         || ! str_contains((string) $value, '{x}') || ! str_contains((string) $value, '{y}'))) {
                         $fail('L\'indirizzo a riquadri deve contenere i segnaposto {z}, {x} e {y}.');
@@ -41,7 +43,9 @@ class SfondiCommittente
                 },
             ],
             'basemaps.*.layer' => ['required_if:basemaps.*.tipo,wms', 'nullable', 'string', 'max:200'],
-            'basemaps.*.attribuzione' => ['sometimes', 'nullable', 'string', 'max:200'],
+            // Niente HTML: l'attribuzione finisce nel riquadro della mappa
+            // (anche pubblica) come marcatura, non come testo
+            'basemaps.*.attribuzione' => ['sometimes', 'nullable', 'string', 'max:200', 'not_regex:/[<>]/'],
         ];
     }
 
@@ -62,7 +66,10 @@ class SfondiCommittente
                 'id' => 'committente-'.$i,
                 'nome' => (string) $voce['nome'],
                 'url' => ($voce['tipo'] ?? 'xyz') === 'wms' ? self::modelloWms($voce) : (string) $voce['url'],
-                'attribuzione' => (string) ($voce['attribuzione'] ?? ''),
+                // Cintura oltre alla validazione: l'attribuzione entra nel
+                // riquadro della mappa come marcatura, quindi qui i tag non
+                // passano comunque, nemmeno da dati salvati per altre vie
+                'attribuzione' => str_replace(['<', '>'], '', (string) ($voce['attribuzione'] ?? '')),
                 'zoom_massimo' => 19,
                 'scuro' => false,
             ];
