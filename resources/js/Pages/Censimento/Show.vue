@@ -32,6 +32,7 @@ const streetView = computed(() => {
     const g = asset.value?.geom_geojson;
     const p = ! g ? null
         : g.type === 'Point' ? g.coordinates
+        : g.type === 'MultiPoint' ? g.coordinates[0]
         : g.type === 'LineString' ? g.coordinates[0]
         : g.type === 'Polygon' ? g.coordinates[0]?.[0]
         : g.type === 'MultiLineString' ? g.coordinates[0]?.[0]

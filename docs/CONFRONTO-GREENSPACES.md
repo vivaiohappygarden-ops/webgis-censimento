@@ -514,11 +514,11 @@ Se il tecnico preferisce, puo' scrivere una data a mano e quella resta: il calco
 
 Le date cosi' prodotte non restano ferme sulla scheda: alimentano il cruscotto VTA (pagina "VTA" con gli elenchi "Ricontrolli scaduti" e "In scadenza nei prossimi 30 giorni", ognuno con il pulsante "Valuta" per aprire subito la nuova scheda), la email riepilogativa giornaliera (ricontrolli scaduti o dovuti entro 30 giorni), la perizia e la scheda albero in PDF ("Prossima verifica entro") e, se il committente lo pubblica, la cronologia sul portale pubblico. Gli alberi abbattuti o usciti dal censimento sono esclusi dagli elenchi. Tutto questo e' coperto da test automatici.
 
-Gli intervalli sono gia' predisposti per essere diversi da un committente all'altro: se nelle impostazioni dell'organizzazione e' presente la voce "vta_recheck_months", i suoi valori sostituiscono quelli predefiniti classe per classe.
+Gli intervalli si possono personalizzare, ma per l'intera organizzazione (la ditta): la voce "vta_recheck_months" nelle impostazioni dell'organizzazione sostituisce i predefiniti classe per classe, e vale identica per tutti i committenti seguiti. Una personalizzazione per singolo committente (due Comuni con capitolati diversi) oggi non esiste.
 
 **Cosa manca**
 
-Manca la schermata per cambiare gli intervalli. Oggi i mesi per ogni classe sono scritti nel programma e la possibilita' di personalizzarli per singolo committente esiste solo "dietro le quinte": il programma legge la voce vta_recheck_months nelle impostazioni dell'organizzazione, ma nessuna pagina dell'interfaccia permette di scriverla (le pagine Utenti e Territorio salvano altre impostazioni, non questa). In pratica, per passare per esempio la classe B da 36 a 24 mesi serve oggi un intervento tecnico sul database.
+AGGIORNAMENTO 28/08/2026: la schermata ora c'e'. Nella pagina Utenti, riquadro "Intervalli di ricontrollo VTA" (solo amministratore), i mesi per classe si cambiano e si riportano ai predefiniti; il cambio vale per le prossime valutazioni. Restano fuori, di proposito: la personalizzazione per singolo committente (gli intervalli valgono per tutta l'organizzazione) e le mancanze minori qui sotto.
 
 Altre due mancanze minori: la scadenza proposta non si vede a video mentre si compila (compare solo dopo il salvataggio, quindi non e' una vera "proposta da confermare"); e i ricontrolli VTA non compaiono nel cruscotto "Oggi" insieme alle altre scadenze (controlli ricorrenti, segnalazioni, patentini), dove sarebbero comodi. Infine il programma propone la data ma non crea da solo un ordine di lavoro o un appuntamento in agenda per eseguirla.
 
@@ -526,7 +526,7 @@ Altre due mancanze minori: la scadenza proposta non si vede a video mentre si co
 - `app/Models/TreeAssessment.php — costante DEFAULT_RECHECK_MONTHS (riga 18): A=60 mesi, B=36, C=24, C/D=12, D=nessun ricontrollo`
 - `app/Http/Controllers/Api/V1/TreeAssessmentController.php — metodo store(), righe 62-68: se il tecnico lascia vuota la data del prossimo controllo, la calcola sommando i mesi della classe alla data del sopralluogo`
 - `app/Http/Controllers/Api/V1/TreeAssessmentController.php — metodo update(), righe 124-134: correggendo la classe e svuotando il campo, la scadenza viene ricalcolata (una classe peggiorata accorcia la data)`
-- `app/Http/Controllers/Api/V1/TreeAssessmentController.php — metodo recheckMonths(), righe 241-249: i mesi predefiniti possono essere sostituiti per singolo committente con la voce 'vta_recheck_months' nelle impostazioni dell'organizzazione`
+- `app/Http/Controllers/Api/V1/TreeAssessmentController.php — metodo recheckMonths(): i mesi predefiniti possono essere sostituiti per l'intera organizzazione con la voce 'vta_recheck_months' nelle sue impostazioni (identici per tutti i committenti)`
 
 **Secondo controllo:** Verifica confermata: la funzione c'e' davvero e ho controllato ogni prova, eseguendo il programma e non solo leggendo il codice.
 
@@ -534,7 +534,7 @@ COSA HO TROVATO NEL CODICE
 - app/Models/TreeAssessment.php, riga 18: gli intervalli sono scritti esattamente come dichiarato (A=60 mesi, B=36, C=24, C/D=12, D nessun ricontrollo).
 - app/Http/Controllers/Api/V1/TreeAssessmentController.php, righe 63-69 (nuova scheda) e 128-135 (correzione): se il campo "Prossimo controllo" e' vuoto, la data viene calcolata sommando i mesi della classe alla data del sopralluogo; se il tecnico scrive una data a mano, non viene mai sovrascritta.
 - Righe 144-149 e riga 206: la data precedente o uguale al sopralluogo viene rifiutata.
-- Righe 241-249: gli intervalli si possono cambiare committente per committente con la voce vta_recheck_months.
+- Gli intervalli si possono cambiare per l'intera organizzazione (non per singolo committente) con la voce vta_recheck_months.
 - resources/js/Components/TreeVtaPanel.vue, riga 529: l'etichetta dice davvero "Prossimo controllo (vuoto = automatico dalla classe)".
 - Colonna next_check_due e indice per lo scadenzario presenti nella migrazione.
 - La data alimenta davvero il cruscotto VTA (VtaDashboardController + Vta.vue con i due elenchi e il pulsante "Valuta"), la email delle 6:30 (DailyDigest riga 113, programmata

@@ -58,20 +58,31 @@ class GestionaleController extends Controller implements HasMiddleware
             }
         }
 
-        $organization = Organization::query()->findOrFail($request->user()->tenant_id);
-        $settings = $organization->settings ?? [];
-        $current = $settings['gestionale'] ?? [];
+        // Sotto lock e rileggendo dentro la transazione, come gli altri
+        // scrittori di "settings": nella stessa colonna vivono il contatore
+        // dei protocolli, gli intervalli VTA e i dati del professionista, e
+        // una copia letta prima li riscriverebbe con valori stantii
+        $settings = DB::transaction(function () use ($request, $data) {
+            $organization = Organization::query()
+                ->lockForUpdate()
+                ->findOrFail($request->user()->tenant_id);
 
-        $settings['gestionale'] = [
-            'endpoint' => $data['endpoint'] ?? null,
-            // Gettone vuoto = conserva quello già salvato; per rimuoverlo
-            // basta svuotare l'indirizzo
-            'token' => ($data['token'] ?? '') !== '' ? trim($data['token']) : ($current['token'] ?? null),
-        ];
-        if (empty($settings['gestionale']['endpoint'])) {
-            $settings['gestionale'] = ['endpoint' => null, 'token' => null];
-        }
-        $organization->forceFill(['settings' => $settings])->save();
+            $settings = $organization->settings ?? [];
+            $current = $settings['gestionale'] ?? [];
+
+            $settings['gestionale'] = [
+                'endpoint' => $data['endpoint'] ?? null,
+                // Gettone vuoto = conserva quello già salvato; per rimuoverlo
+                // basta svuotare l'indirizzo
+                'token' => ($data['token'] ?? '') !== '' ? trim($data['token']) : ($current['token'] ?? null),
+            ];
+            if (empty($settings['gestionale']['endpoint'])) {
+                $settings['gestionale'] = ['endpoint' => null, 'token' => null];
+            }
+            $organization->forceFill(['settings' => $settings])->save();
+
+            return $settings;
+        });
 
         Audit::log('gestionale.settings_updated', null, [
             'configured' => ! empty($settings['gestionale']['endpoint']),

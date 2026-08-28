@@ -53,7 +53,9 @@ class TreeAssessmentController extends Controller implements HasMiddleware
     {
         $data = $request->validate([
             'ripristina' => ['sometimes', 'boolean'],
-            'mesi' => ['required_without:ripristina', 'array'],
+            // Rule::requiredIf e non required_without: "ripristina: false"
+            // deve pretendere i mesi (422), non passare e poi esplodere
+            'mesi' => [Rule::requiredIf(fn () => ! $request->boolean('ripristina')), 'array'],
             'mesi.A' => ['required_with:mesi', 'integer', 'min:1', 'max:240'],
             'mesi.B' => ['required_with:mesi', 'integer', 'min:1', 'max:240'],
             'mesi.C' => ['required_with:mesi', 'integer', 'min:1', 'max:240'],
@@ -74,7 +76,7 @@ class TreeAssessmentController extends Controller implements HasMiddleware
                 ->findOrFail($request->user()->tenant_id);
 
             $settings = $organization->settings ?? [];
-            if ($data['ripristina'] ?? false) {
+            if ($request->boolean('ripristina')) {
                 unset($settings['vta_recheck_months']);
             } else {
                 $settings['vta_recheck_months'] = [
@@ -88,7 +90,7 @@ class TreeAssessmentController extends Controller implements HasMiddleware
         });
 
         Audit::log('vta.intervalli_updated', null, [
-            'ripristina' => (bool) ($data['ripristina'] ?? false),
+            'ripristina' => $request->boolean('ripristina'),
             'mesi' => $data['mesi'] ?? null,
         ]);
 

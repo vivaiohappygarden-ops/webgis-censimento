@@ -112,6 +112,11 @@ class IntervalliRicontrolloTest extends TestCase
         $this->putJson('/api/v1/vta/intervalli', [
             'mesi' => ['A' => 60, 'B' => 36, 'C' => 24],
         ])->assertStatus(422)->assertJsonValidationErrors(['mesi.C/D']);
+
+        // "ripristina: false" senza mesi non è né un ripristino né un
+        // salvataggio: rifiuto pulito, non un errore del server
+        $this->putJson('/api/v1/vta/intervalli', ['ripristina' => false])
+            ->assertStatus(422)->assertJsonValidationErrors(['mesi']);
     }
 
     public function test_serve_il_permesso_di_gestione_utenti(): void

@@ -183,8 +183,9 @@ async function loadGestionale() {
         gest.form.token = '';
         gest.tokenHint = data.data.token_hint;
         gest.configured = data.data.configured;
-    } catch {
-        // La scheda resta compilabile anche se la lettura fallisce
+    } catch (err) {
+        gest.message = avvisoCaricamento(err);
+        gest.messageOk = false;
     }
 }
 
@@ -242,8 +243,9 @@ async function loadPerizia() {
             recapiti: data.data.recapiti ?? '',
             luogo: data.data.luogo ?? '',
         });
-    } catch {
-        // La scheda resta compilabile anche se la lettura fallisce
+    } catch (err) {
+        perizia.message = avvisoCaricamento(err);
+        perizia.messageOk = false;
     }
 }
 
@@ -285,8 +287,11 @@ async function loadIntervalli() {
     try {
         const { data } = await axios.get('/api/v1/vta/intervalli');
         applicaIntervalli(data);
-    } catch {
-        // Il pannello resta compilabile anche se la lettura fallisce
+    } catch (err) {
+        // Caselle vuote per errore e caselle mai compilate si somigliano
+        // troppo: il mancato caricamento si dice, col numero dell'errore
+        intervalli.message = avvisoCaricamento(err);
+        intervalli.messageOk = false;
     }
 }
 
