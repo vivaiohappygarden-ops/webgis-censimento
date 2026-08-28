@@ -14,6 +14,9 @@ Route::get('/', function () {
 Route::middleware('guest')->group(function () {
     Route::get('/login', [WebAuthController::class, 'show'])->name('login');
     Route::post('/login', [WebAuthController::class, 'login'])->middleware('throttle:10,1');
+    // La porta d'ingresso delle imprese appaltatrici: stessa serratura
+    // (il POST resta /login), parole pensate per la ditta
+    Route::get('/impresa/login', [WebAuthController::class, 'showImpresa'])->name('impresa.login');
 });
 
 // Pagina pubblica dell'elemento (QR sul cartellino): nessun accesso richiesto.

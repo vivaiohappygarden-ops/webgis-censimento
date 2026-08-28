@@ -356,6 +356,23 @@ class PortaleImpreseTest extends TestCase
         $this->patchJson("/api/v1/teams/{$vecchia->id}", ['member_ids' => []])->assertOk();
     }
 
+    public function test_l_impresa_ha_la_sua_porta_d_ingresso(): void
+    {
+        [, $utente] = $this->creaImpresa();
+        $utente->forceFill(['password' => \Illuminate\Support\Facades\Hash::make('segretissima1')])->save();
+        $this->post('/logout');
+
+        // Da ospite, il portale rimanda alla porta dedicata (non al login
+        // del gestionale) e la pagina risponde
+        $this->get('/impresa')->assertRedirect(route('impresa.login'));
+        $this->get('/impresa/login')->assertOk();
+
+        // La serratura è la stessa: dall'ingresso dedicato si entra e si
+        // atterra dritti sui lavori affidati
+        $this->post('/login', ['email' => $utente->email, 'password' => 'segretissima1'])
+            ->assertRedirect(route('impresa'));
+    }
+
     public function test_una_squadra_interna_non_apre_il_portale(): void
     {
         // Squadra NON esterna: anche se l'utente impresa ne fa parte,

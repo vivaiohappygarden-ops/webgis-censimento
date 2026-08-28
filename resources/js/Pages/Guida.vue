@@ -339,7 +339,9 @@ function goTo(id) {
                             lavora</strong>: le imprese non sono una lista unica del gestionale, ognuna
                             appartiene a un committente e le si possono affidare solo ordini di quel
                             committente (nelle tendine compare soltanto lì). Alla squadra si assegnano
-                            poi gli account col ruolo <strong>"Impresa esterna (portale)"</strong>. Quegli utenti, entrando, vedono
+                            poi gli account col ruolo <strong>"Impresa esterna (portale)"</strong>. L'impresa
+                            entra dalla sua porta dedicata, <strong>/impresa/login</strong> (è l'indirizzo da
+                            comunicarle insieme alle credenziali; anche l'accesso comune funziona), e vede
                             solo la pagina <strong>"I lavori affidati"</strong>: gli ordini delle loro
                             squadre con dove, quando, rischi e DPI — niente censimento, niente altri
                             committenti. I completati restano visibili trenta giorni, poi escono.

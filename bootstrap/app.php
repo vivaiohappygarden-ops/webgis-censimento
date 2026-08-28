@@ -23,6 +23,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->statefulApi();
         // La radice smista per permesso (mappa, portale o guida)
         $middleware->redirectUsersTo('/');
+        // Chi bussa al portale dell'impresa da ospite trova la SUA porta
+        // d'ingresso, non quella del gestionale
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('impresa')
+            ? route('impresa.login')
+            : route('login'));
         $middleware->web(append: [
             \App\Http\Middleware\InvalidateStaleSessions::class,
             \App\Http\Middleware\EnsureUserIsActive::class,

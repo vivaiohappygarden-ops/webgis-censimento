@@ -23,6 +23,12 @@ class WebAuthController extends Controller
         return Inertia::render('Auth/Login');
     }
 
+    /** La pagina d'accesso dedicata alle imprese appaltatrici. */
+    public function showImpresa(): Response
+    {
+        return Inertia::render('Auth/LoginImpresa');
+    }
+
     public function login(Request $request): RedirectResponse
     {
         $data = $request->validate([
