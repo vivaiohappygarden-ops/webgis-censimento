@@ -382,6 +382,27 @@ function goTo(id) {
                             Il flusso è bozza, inviato, accettato o rifiutato: un preventivo accettato diventa
                             un ordine di lavoro con un clic, e ogni documento resta agli atti.
                         </p>
+                        <h3>SAL — stati di avanzamento lavori</h3>
+                        <p>
+                            Nella vista <strong>SAL</strong> della pagina Lavori si prepara il documento
+                            da mandare in fattura: si sceglie il committente e il periodo, e il programma
+                            raccoglie da solo gli <strong>ordini completati</strong> in quelle date con le
+                            quantità consuntivate e i prezzi del listino. Ogni ordine può stare
+                            <strong>in un solo SAL</strong>: preparandone un altro, i lavori già
+                            rendicontati non compaiono più. L'IVA si sceglie <strong>riga per riga</strong>
+                            (aliquote anche diverse nello stesso documento) e le righe senza listino
+                            entrano comunque, segnate "importo da definire", così niente resta fuori
+                            in silenzio.
+                        </p>
+                        <p class="mt-2">
+                            Finché è in <strong>bozza</strong> si può correggere o eliminare (gli ordini
+                            tornano liberi). Con <strong>Valida</strong> il documento riceve il numero
+                            (SAL-anno-numero) e diventa <strong>immutabile</strong>: si corregge solo
+                            preparandone un altro. Il pulsante <strong>Fatturato</strong> annota che è
+                            stato mandato in fattura, con il riferimento della fattura; i pagamenti non
+                            si gestiscono qui. La stampa PDF riporta lavori, riepilogo IVA per aliquota
+                            e firma; in bozza porta la scritta "BOZZA" ben visibile.
+                        </p>
                     </section>
 
                     <section id="fitosanitari">

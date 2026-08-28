@@ -111,6 +111,17 @@ Route::prefix('v1')->group(function () {
         Route::patch('users/{id}', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'update'])->whereUuid('id');
         Route::post('users/{id}/reset-password', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'resetPassword'])->whereUuid('id');
 
+        // Stati di avanzamento lavori (SAL)
+        Route::get('sals', [\App\Http\Controllers\Api\V1\SalController::class, 'index']);
+        Route::post('sals', [\App\Http\Controllers\Api\V1\SalController::class, 'store']);
+        Route::get('sals/{id}', [\App\Http\Controllers\Api\V1\SalController::class, 'show'])->whereUuid('id');
+        Route::patch('sals/{id}', [\App\Http\Controllers\Api\V1\SalController::class, 'update'])->whereUuid('id');
+        Route::delete('sals/{id}', [\App\Http\Controllers\Api\V1\SalController::class, 'destroy'])->whereUuid('id');
+        Route::delete('sals/{id}/items/{itemId}', [\App\Http\Controllers\Api\V1\SalController::class, 'rimuoviRiga'])->whereUuid(['id', 'itemId']);
+        Route::post('sals/{id}/valida', [\App\Http\Controllers\Api\V1\SalController::class, 'valida'])->whereUuid('id');
+        Route::post('sals/{id}/fatturato', [\App\Http\Controllers\Api\V1\SalController::class, 'fatturato'])->whereUuid('id');
+        Route::get('sals/{id}/pdf', [\App\Http\Controllers\Api\V1\SalController::class, 'pdf'])->whereUuid('id');
+
         // Portale dell'impresa appaltatrice: solo gli ordini delle sue squadre
         Route::get('impresa/ordini', [\App\Http\Controllers\Api\V1\ImpresaPortalController::class, 'ordini']);
         Route::post('impresa/ordini/{id}/riprogrammazione', [\App\Http\Controllers\Api\V1\ImpresaPortalController::class, 'chiediRiprogrammazione'])->whereUuid('id');

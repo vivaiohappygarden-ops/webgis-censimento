@@ -7,6 +7,7 @@ import WorkAgenda from '@/Components/WorkAgenda.vue';
 import WorkReport from '@/Components/WorkReport.vue';
 import QualityBoard from '@/Components/QualityBoard.vue';
 import QuotesPanel from '@/Components/QuotesPanel.vue';
+import SalPanel from '@/Components/SalPanel.vue';
 import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import ScegliVoce from '@/Components/ScegliVoce.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
@@ -109,9 +110,11 @@ function applicaVista(filtri) {
 const loading = ref(false);
 // La vista iniziale può arrivare dall'URL (es. il cruscotto Oggi linka
 // direttamente la Qualità): valori sconosciuti ricadono sull'elenco
-const VIEWS = ['elenco', 'agenda', 'rendiconto', 'qualita', 'preventivi'];
+const VIEWS = ['elenco', 'agenda', 'rendiconto', 'qualita', 'preventivi', 'sal'];
 const requested = new URLSearchParams(window.location.search).get('vista');
-const view = ref(VIEWS.includes(requested) ? requested : 'elenco');
+// I SAL sono riservati a chi gestisce i lavori: senza permesso si ricade sull'elenco
+const vistaAmmessa = (v) => VIEWS.includes(v) && (v !== 'sal' || canManage.value);
+const view = ref(vistaAmmessa(requested) ? requested : 'elenco');
 // La predefinita delle viste salvate si applica solo alla prima apertura
 // dell'elenco: tornando dall'Agenda il componente si rimonta e non deve
 // scartare i filtri che l'utente ha impostato a mano nel frattempo
@@ -614,6 +617,13 @@ onMounted(async () => {
                     data-test="view-preventivi"
                     @click="view = 'preventivi'"
                 >Preventivi</button>
+                <button
+                    v-if="canManage"
+                    class="whitespace-nowrap border-l border-gray-300 px-4 py-1.5 font-medium"
+                    :class="view === 'sal' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    data-test="view-sal"
+                    @click="view = 'sal'"
+                >SAL</button>
             </div>
 
             <p
@@ -708,6 +718,11 @@ onMounted(async () => {
                 :work-types="workTypes"
                 :can-manage="canManage"
                 @created-order="load"
+            />
+
+            <SalPanel
+                v-if="view === 'sal' && canManage"
+                :clients="clients"
             />
 
             <div
