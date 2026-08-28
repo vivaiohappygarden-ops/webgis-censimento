@@ -82,6 +82,10 @@
         <div class="didascalia">
             Area {{ $tavola['numero'] }} — {{ $tavola['nome'] }}@if ($tavola['codice']) ({{ $tavola['codice'] }})@endif{{ $tavola['stato'] !== 'active' ? ' — non attiva' : '' }}
             · {{ number_format($tavola['mq'], 2, ',', '.') }} m² · {{ $tavola['conteggi'] }}{{ $tavola['etichette'] ? '' : ' · etichette omesse per leggibilità' }}
+            @if (($tavola['fuori_inquadratura'] ?? 0) > 0)
+                · {{ $tavola['fuori_inquadratura'] }} {{ $tavola['fuori_inquadratura'] === 1 ? 'elemento con coordinate lontane' : 'elementi con coordinate lontane' }}
+                dall'area, fuori dall'inquadratura: da verificare nel censimento
+            @endif
         </div>
     @endforeach
     @if (($planimetrie['omesse'] ?? 0) > 0)

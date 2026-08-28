@@ -48,16 +48,34 @@ class DisegnoPlanimetria
      */
     public function area(array $area): array
     {
-        // L'inquadratura comprende TUTTE le geometrie assegnate all'area:
-        // una siepe censita oltre il perimetro deve entrare nel foglio,
-        // non sparire in silenzio mentre la didascalia la conta
+        // L'inquadratura comprende le geometrie assegnate all'area, anche
+        // quelle poco oltre il perimetro (una siepe sul confine deve entrare
+        // nel foglio). MA un elemento con coordinate LONTANE — un errore di
+        // rilievo, un punto creato con la mappa altrove — non deve ridurre
+        // l'area a un francobollo su mezza regione: resta fuori
+        // dall'inquadratura e la didascalia lo dichiara.
         $punti = [];
         foreach ($area['anelli'] as $anello) {
             $punti = array_merge($punti, $anello);
         }
+        $xs = array_column($punti, 0);
+        $ys = array_column($punti, 1);
+        $diagonale = hypot(max($xs) - min($xs), max($ys) - min($ys));
+        $soglia = max($diagonale * 0.5, 60 / max(cos(deg2rad($area['lat'])), 0.01));
+        $recinto = [min($xs) - $soglia, min($ys) - $soglia, max($xs) + $soglia, max($ys) + $soglia];
+        $dentro = fn (array $p): bool => $p[0] >= $recinto[0] && $p[0] <= $recinto[2]
+            && $p[1] >= $recinto[1] && $p[1] <= $recinto[3];
+
+        $fuori = 0;
         $margineChiome = 0.0;
         foreach ($area['elementi'] as $e) {
-            $punti = array_merge($punti, self::verticiDi($e));
+            $vicini = array_values(array_filter(self::verticiDi($e), $dentro));
+            if ($vicini === []) {
+                $fuori++;
+
+                continue;
+            }
+            $punti = array_merge($punti, $vicini);
             if (in_array($e['tipo'], ['POINT', 'MULTIPOINT'], true)) {
                 $margineChiome = max($margineChiome, (float) ($e['chioma_m'] ?? 0) / 2);
             }
@@ -78,7 +96,12 @@ class DisegnoPlanimetria
 
         $this->cartiglio();
 
-        return ['png' => $this->chiudi(), 'sfondo' => $this->conSfondo, 'etichette' => $conEtichette];
+        return [
+            'png' => $this->chiudi(),
+            'sfondo' => $this->conSfondo,
+            'etichette' => $conEtichette,
+            'fuori_inquadratura' => $fuori,
+        ];
     }
 
     /**

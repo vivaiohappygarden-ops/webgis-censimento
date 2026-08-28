@@ -56,6 +56,7 @@ class Planimetria
                 'mq' => $area['mq'],
                 'conteggi' => self::conteggi($area['elementi']),
                 'etichette' => $esito['etichette'],
+                'fuori_inquadratura' => $esito['fuori_inquadratura'],
                 'png' => base64_encode($esito['png']),
             ];
         }

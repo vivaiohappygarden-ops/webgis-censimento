@@ -234,6 +234,22 @@ class PlanimetrieTest extends TestCase
         $this->assertCount(1, Http::recorded());
     }
 
+    public function test_un_elemento_con_coordinate_lontane_non_stravolge_la_tavola(): void
+    {
+        // Caso visto in produzione: un punto creato con la mappa su
+        // un'altra citta'. La tavola resta zoomata sull'area e la
+        // didascalia dichiara l'elemento fuori inquadratura
+        $this->creaElemento('P', $this->pointGeometry(9.1900, 45.4650), ['crown_diameter_m' => 8]);
+        $this->creaElemento('P', $this->pointGeometry(12.4964, 41.9028));   // Roma, area a Milano
+
+        $this->get("/api/v1/localities/{$this->localita()->id}/pdf")->assertOk();
+        $html = $this->stampe->html['pdf.locality'];
+
+        $this->assertStringContainsString('2 elementi (2 alberi)', $html);
+        $this->assertStringContainsString('1 elemento con coordinate lontane', $html);
+        $this->assertStringContainsString("fuori dall'inquadratura: da verificare nel censimento", $html);
+    }
+
     public function test_il_disegno_e_riproducibile_a_parita_di_dati(): void
     {
         $this->popolaArea();
