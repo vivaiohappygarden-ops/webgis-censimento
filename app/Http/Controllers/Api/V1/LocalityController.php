@@ -19,7 +19,7 @@ class LocalityController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:areas.view', only: ['index', 'scheda']),
+            new Middleware('can:areas.view', only: ['index', 'scheda', 'pdf']),
             new Middleware('can:clients.manage', only: ['store', 'update', 'destroy', 'documento', 'eliminaDocumento']),
         ];
     }
@@ -48,6 +48,37 @@ class LocalityController extends Controller implements HasMiddleware
         return response()->json([
             'data' => \App\Services\Territorio\LocalitySheet::per($localita),
             'meta' => ['classificazioni' => config('istat.verde_urbano', [])],
+        ]);
+    }
+
+    /**
+     * La scheda della località in PDF: il dossier d'area che gli uffici
+     * tecnici allegano ai capitolati. Stessi dati della scheda a video
+     * (LocalitySheet, una fonte sola): superfici col metodo dichiarato,
+     * elementi per tipo, piante con quantità, chi ci lavora, documenti.
+     */
+    public function pdf(Request $request, \App\Services\Pdf\PdfRenderer $renderer, string $id)
+    {
+        $localita = Locality::with(['site:id,name,client_id,municipality', 'site.client:id,name'])->findOrFail($id);
+
+        // La scheda non ha una data propria: vale la data di stampa, letta
+        // una volta sola. Su uno stesso foglio mai due date diverse
+        $adesso = \Illuminate\Support\Carbon::now('Europe/Rome');
+
+        $pdf = $renderer->render('pdf.locality', [
+            'scheda' => \App\Services\Territorio\LocalitySheet::per($localita),
+            'comune' => $localita->site?->municipality,
+            'organization' => \App\Models\Organization::find($localita->tenant_id),
+            'stampatoIl' => $adesso,
+            'statiLavoro' => \App\Models\WorkOrder::STATUS_LABELS,
+        ]);
+
+        $nome = 'scheda-localita-'.\Illuminate\Support\Str::slug($localita->name ?: 'senza-nome')
+            .'-'.$adesso->format('Ymd').'.pdf';
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$nome.'"',
         ]);
     }
 

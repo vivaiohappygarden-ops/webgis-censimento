@@ -14,6 +14,17 @@ class WorkOrder extends Model
     /** Flusso di default (configurabile per tenant nelle fasi successive). */
     public const STATUSES = ['draft', 'planned', 'assigned', 'in_progress', 'suspended', 'completed', 'cancelled'];
 
+    /** Etichette italiane degli stati, per le stampe (a video: workStatus.js). */
+    public const STATUS_LABELS = [
+        'draft' => 'Bozza',
+        'planned' => 'Pianificato',
+        'assigned' => 'Assegnato',
+        'in_progress' => 'In corso',
+        'suspended' => 'Sospeso',
+        'completed' => 'Completato',
+        'cancelled' => 'Annullato',
+    ];
+
     public const TRANSITIONS = [
         'draft' => ['planned', 'cancelled'],
         'planned' => ['assigned', 'draft', 'cancelled'],

@@ -9,6 +9,7 @@ import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import { usaCaricamento } from '@/caricamento';
 import { corrisponde } from '@/ricerca';
 import { workStatusLabel } from '@/workStatus';
+import { fetchPdf } from '@/pdf';
 
 /*
  * Territorio come albero unico (decisione committente 25/08/2026, dalla bozza
@@ -197,10 +198,26 @@ async function selezionaSede(cliente, sede) {
 
 async function selezionaLocalita(cliente, sede, localita) {
     error.value = '';
+    erroreStampa.value = '';
     selezione.value = { tipo: 'localita', cliente, sede, localita };
     schedaLocalitaAttiva.value = 'aree';
     scheda.value = null;
     await Promise.all([ricaricaScheda(), caricaAreeLocalita(localita.id)]);
+}
+
+// Il dossier d'area in PDF: la stessa scheda, pronta da allegare a un capitolato
+const erroreStampa = ref('');
+const stampaInCorso = ref(false);
+
+async function stampaScheda() {
+    erroreStampa.value = '';
+    stampaInCorso.value = true;
+    try {
+        const res = await fetchPdf(`/api/v1/localities/${localitaScelta.value.id}/pdf`);
+        if (res?.error) erroreStampa.value = res.error;
+    } finally {
+        stampaInCorso.value = false;
+    }
 }
 
 // --- Scheda della località --------------------------------------------------
@@ -1200,12 +1217,21 @@ onMounted(() => carica(loadClients));
                                     <span v-if="selezione.localita.code" class="font-mono text-sm text-gray-500">{{ selezione.localita.code }}</span>
                                 </div>
                             </div>
-                            <button
-                                v-if="canManage && selezione.localita.areas_count === 0"
-                                class="text-xs text-red-500 hover:underline"
-                                @click="eliminaLocalita(selezione.localita)"
-                            >elimina località</button>
+                            <div class="flex items-center gap-3">
+                                <button
+                                    class="rounded-lg border border-green-700 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+                                    :disabled="stampaInCorso"
+                                    data-test="localita-pdf"
+                                    @click="stampaScheda"
+                                >{{ stampaInCorso ? 'Stampa…' : 'Scheda PDF' }}</button>
+                                <button
+                                    v-if="canManage && selezione.localita.areas_count === 0"
+                                    class="text-xs text-red-500 hover:underline"
+                                    @click="eliminaLocalita(selezione.localita)"
+                                >elimina località</button>
+                            </div>
                         </div>
+                        <p v-if="erroreStampa" class="mx-5 mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="localita-pdf-errore">{{ erroreStampa }}</p>
 
                         <!-- I numeri della località -->
                         <div v-if="scheda" class="grid grid-cols-2 gap-3 px-5 py-3 sm:grid-cols-4">

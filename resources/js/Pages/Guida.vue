@@ -732,7 +732,10 @@ function goTo(id) {
                             numeri in alto (aree, elementi, superficie gestita, portale) e le schede interne
                             Aree, Scheda località e Documenti — con l'anteprima geografica delle aree accanto
                             all'elenco; per il <strong>committente</strong> le sue sedi, il portale pubblico
-                            e i vincoli. Le aree si disegnano dalla <strong>Mappa</strong>; da qui
+                            e i vincoli. Il pulsante <strong>"Scheda PDF"</strong> stampa il dossier della
+                            località pronto da allegare a un capitolato: superfici con il metodo di calcolo
+                            dichiarato, classificazione ISTAT, elementi per tipo, piante con quantità, chi
+                            ci lavora, lavori recenti e documenti allegati. Le aree si disegnano dalla <strong>Mappa</strong>; da qui
                             l'amministratore può <strong>eliminare un'area vuota</strong>. Un'area con
                             elementi censiti (o impianti di irrigazione) non si elimina: prima vanno spostati
                             o eliminati, e il programma lo dice chiaramente. È una protezione, non un

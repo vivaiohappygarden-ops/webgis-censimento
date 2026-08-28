@@ -116,7 +116,9 @@ class LuogoFirmaTest extends TestCase
 
     public function test_il_luogo_di_un_altra_impresa_non_finisce_nei_miei_documenti(): void
     {
-        $this->impostaLuogo('Roma');
+        // Un luogo inconfondibile: "Roma" e' anche dentro cognomi e ragioni
+        // sociali a caso ("Romano e figli"), e il controllo diventerebbe cieco
+        $this->impostaLuogo('Roccacannuccia di Sopra');
 
         [$altra, $altroUtente] = $this->createTenantUser();
         $this->actingAsTenantUser($altroUtente);
@@ -129,7 +131,7 @@ class LuogoFirmaTest extends TestCase
         $this->get('/api/v1/vta/bilancio/pdf?from=2026-01-01&to=2026-12-31')->assertOk();
 
         $html = $this->stampe->html['pdf.tree-balance'];
-        $this->assertStringNotContainsString('Roma', $html);
+        $this->assertStringNotContainsString('Roccacannuccia', $html);
         $this->assertStringContainsString($this->oggi(), $html);
     }
 

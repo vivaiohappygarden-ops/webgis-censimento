@@ -143,5 +143,50 @@ class SchedaLocalitaTest extends TestCase
         $areaEstranea = $this->createArea($altra);
 
         $this->getJson("/api/v1/localities/{$areaEstranea->locality_id}/scheda")->assertNotFound();
+        // Vale anche per la stampa: il dossier di un'altra impresa non esiste
+        $this->getJson("/api/v1/localities/{$areaEstranea->locality_id}/pdf")->assertNotFound();
+    }
+
+    public function test_la_scheda_si_stampa_in_pdf_con_una_sola_data(): void
+    {
+        $stampe = new \Tests\Support\RaccoglitorePdf;
+        $this->app->instance(\App\Services\Pdf\PdfRenderer::class, $stampe);
+
+        $this->creaAlbero(['species' => 'Tilia cordata', 'common_name' => 'Tiglio selvatico']);
+
+        // Un lavoro nella localita': deve comparire nel dossier con lo stato in italiano
+        $woId = $this->postJson('/api/v1/work-orders', [
+            'title' => 'Sfalcio del parco', 'area_id' => $this->area->id,
+        ])->assertCreated()->json('data.id');
+
+        $this->get("/api/v1/localities/{$this->localita()->id}/pdf", ['Accept' => 'application/pdf'])
+            ->assertOk();
+
+        $html = $stampe->html['pdf.locality'];
+        $this->assertStringContainsString('Scheda della localit', $html);
+        $this->assertStringContainsString('Tilia cordata', $html);
+        $this->assertStringContainsString('Tiglio selvatico', $html);
+        $this->assertStringContainsString('P103108', $html);
+        $this->assertStringContainsString('Superficie gestita', $html);
+        $this->assertStringContainsString('Sfalcio del parco', $html);
+        $this->assertStringContainsString('Bozza', $html);
+        // Il nome può contenere un apostrofo: nell'HTML esce come entità
+        $this->assertStringContainsString(e($this->organizzazione->name), $html);
+
+        // Una sola data sul foglio: quella di stampa, in nessun'altra forma
+        $oggi = $stampe->dati['pdf.locality']['stampatoIl']->format('d/m/Y');
+        $this->assertStringContainsString('stampato il '.$oggi, $html);
+    }
+
+    public function test_la_stampa_richiede_il_permesso_sulle_aree(): void
+    {
+        $localitaId = $this->localita()->id;
+
+        // Stesso tenant, ma senza alcun ruolo: il dossier non si stampa
+        $senzaRuoli = \App\Models\User::factory()->create(['tenant_id' => $this->organizzazione->id]);
+        $this->actingAsTenantUser($senzaRuoli);
+
+        $this->get("/api/v1/localities/{$localitaId}/pdf", ['Accept' => 'application/json'])
+            ->assertForbidden();
     }
 }
