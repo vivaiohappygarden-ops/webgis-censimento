@@ -50,13 +50,20 @@
     </table>
 
     @if ($asset->tree)
-    <h2>Dati dendrometrici</h2>
+    <h2>Dati dendrometrici e agronomici</h2>
     <table>
         <tr><th>Genere e specie</th><td>{{ trim(($asset->tree->genus ?? '').' '.($asset->tree->species ?? '')) ?: '-' }}@if ($asset->tree->cultivar) '{{ $asset->tree->cultivar }}'@endif</td></tr>
         @if ($asset->tree->plant_number)<tr><th>Numero pianta</th><td>{{ $asset->tree->plant_number }}</td></tr>@endif
         <tr><th>Altezza</th><td>{{ $asset->tree->height_m !== null ? $asset->tree->height_m.' m' : '-' }}</td></tr>
         <tr><th>Diametro del fusto</th><td>{{ $asset->tree->dbh_cm !== null ? $asset->tree->dbh_cm.' cm' : '-' }}</td></tr>
         <tr><th>Diametro della chioma</th><td>{{ $asset->tree->crown_diameter_m !== null ? $asset->tree->crown_diameter_m.' m' : '-' }}</td></tr>
+        <tr><th>Altezza del primo palco</th><td>{{ $asset->tree->crown_insertion_m !== null ? $asset->tree->crown_insertion_m.' m' : '-' }}</td></tr>
+        @if ($asset->tree->age_years_est !== null)<tr><th>Età</th><td>{{ $asset->tree->age_years_est }} anni{{ $asset->tree->age_qualifier ? ' ('.$asset->tree->age_qualifier.')' : '' }}</td></tr>@endif
+        @if ($asset->tree->age_class)<tr><th>Fase fisiologica</th><td>{{ $asset->tree->age_class }}</td></tr>@endif
+        @if ($asset->tree->vegetative_state)<tr><th>Stato vegetativo</th><td>{{ $asset->tree->vegetative_state }}</td></tr>@endif
+        @if ($asset->tree->social_position)<tr><th>Posizione sociale</th><td>{{ $asset->tree->social_position }}</td></tr>@endif
+        @if ($asset->tree->growth_site)<tr><th>Sito di crescita</th><td>{{ $asset->tree->growth_site }}</td></tr>@endif
+        @if ($asset->tree->target)<tr><th>Bersaglio (frequentazione)</th><td>{{ $asset->tree->target }}</td></tr>@endif
         @if ($asset->tree->is_monumental)<tr><th>Monumentale</th><td>sì @if ($asset->tree->monumental_ref)({{ $asset->tree->monumental_ref }})@endif</td></tr>@endif
         @if ($asset->tree->is_dedicated && ($asset->tree->dedicated_to['name'] ?? null))<tr><th>Dedicato a</th><td>{{ $asset->tree->dedicated_to['name'] }}@if ($asset->tree->dedicated_to['occasion'] ?? null) ({{ $asset->tree->dedicated_to['occasion'] }})@endif</td></tr>@endif
     </table>

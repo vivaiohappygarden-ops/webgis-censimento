@@ -35,6 +35,9 @@ class HandleInertiaRequests extends Middleware
             'portale' => [
                 'base_host' => config('portal.base_host'),
             ],
+            // Dizionari agronomici della scheda albero: le tendine leggono
+            // le stesse voci che il server accetta, senza copie nel JS
+            'agronomia' => config('agronomia'),
         ];
     }
 }

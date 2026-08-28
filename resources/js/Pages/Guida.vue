@@ -192,6 +192,20 @@ function goTo(id) {
                             un solo committente; il Bilancio arboreo, nella colonna di destra, ha il suo
                             filtro a parte perché il documento si prepara per l'ente che lo riceve.
                         </p>
+                        <h3>L'anagrafica agronomica dell'albero</h3>
+                        <p>
+                            Nella scheda albero, oltre alle misure, ci sono le classificazioni a
+                            tendina: <strong>fase fisiologica</strong> a sei stadi (da "giovane" a
+                            "veterano"), <strong>stato vegetativo</strong>, <strong>posizione
+                            sociale</strong> (isolato, filare, gruppo), <strong>sito di
+                            crescita</strong> (dal prato alla buca nell'asfalto),
+                            <strong>bersaglio</strong> (quanto è frequentato il posto sotto la
+                            chioma) e, accanto all'età in anni, se l'età è <strong>precisa o
+                            stimata</strong>. Le voci sono fisse per tutti: così i dati si
+                            confrontano e si filtrano, e finiscono uguali nella scheda PDF e nello
+                            storico delle modifiche. I bersagli puntuali (l'area giochi, il
+                            marciapiede) restano invece nella valutazione di stabilità.
+                        </p>
                         <p>
                             Con le <strong>caselle di selezione</strong> dell'elenco si agisce su più
                             alberi in una volta: <strong>Valida le bozze</strong> trasforma in atti tutte

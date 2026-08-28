@@ -14,6 +14,17 @@ const props = defineProps({
 });
 const emit = defineEmits(['saved']);
 
+// Le voci delle tendine agronomiche arrivano dal server (config/agronomia.php):
+// un'unica fonte per tendine, validazione e stampe, senza copie nel JS
+const agronomia = usePage().props.agronomia ?? {};
+// Un valore fuori dizionario (per esempio da un vecchio import) resta
+// visibile come voce in piu', invece di sparire dalla tendina
+const conValoreAttuale = (voci, attuale) => {
+    const base = voci ?? [];
+
+    return attuale && ! base.includes(attuale) ? [attuale, ...base] : base;
+};
+
 // Eliminare una bozza chiede un permesso piu' alto della correzione:
 // l'operatore in campo registra e corregge, ma non butta via
 const canDelete = computed(() => (usePage().props.auth?.user?.permissions ?? []).includes('assets.delete'));
@@ -260,6 +271,10 @@ async function saveTree() {
                 family: tree.family || null,
                 common_name: tree.common_name || null,
                 age_years_est: tree.age_years_est || null,
+                age_qualifier: tree.age_qualifier || null,
+                social_position: tree.social_position || null,
+                growth_site: tree.growth_site || null,
+                target: tree.target || null,
                 height_m: tree.height_m || null,
                 dbh_cm: tree.dbh_cm || null,
                 trunk_circumference_cm: tree.trunk_circumference_cm || null,
@@ -433,7 +448,7 @@ onMounted(async () => {
                 <span class="text-gray-500">Stato vegetativo</span>
                 <select v-model="tree.vegetative_state" :disabled="! canUpdate" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
                     <option :value="null">—</option>
-                    <option>buono</option><option>medio</option><option>scarso</option><option>deperiente</option><option>secco</option>
+                    <option v-for="voce in conValoreAttuale(agronomia.stato_vegetativo, tree.vegetative_state)" :key="voce">{{ voce }}</option>
                 </select>
             </label>
             <label class="block text-xs">
@@ -457,19 +472,47 @@ onMounted(async () => {
                 <input v-model.number="tree.crown_insertion_m" type="number" step="0.1" :disabled="! canUpdate" data-test="crown-insertion" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
             </label>
             <label class="block text-xs">
-                <span class="text-gray-500">Età stimata (anni)</span>
+                <span class="text-gray-500">Età (anni)</span>
                 <input v-model.number="tree.age_years_est" type="number" step="1" min="0" :disabled="! canUpdate" data-test="age-years" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
             </label>
             <label class="block text-xs">
-                <span class="text-gray-500">Classe di età</span>
+                <span class="text-gray-500">Età: precisa o stimata</span>
+                <select v-model="tree.age_qualifier" :disabled="! canUpdate" data-test="age-qualifier" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
+                    <option :value="null">—</option>
+                    <option v-for="voce in agronomia.qualificatore_eta ?? []" :key="voce">{{ voce }}</option>
+                </select>
+            </label>
+            <label class="block text-xs">
+                <span class="text-gray-500">Fase fisiologica</span>
                 <select v-model="tree.age_class" :disabled="! canUpdate" data-test="age-class" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
                     <option :value="null">—</option>
-                    <option>giovane</option><option>adulto</option><option>maturo</option><option>senescente</option>
+                    <option v-for="voce in conValoreAttuale(agronomia.fase_fisiologica, tree.age_class)" :key="voce">{{ voce }}</option>
                 </select>
             </label>
             <label class="block text-xs">
                 <span class="text-gray-500">Numero di fusti</span>
                 <input v-model.number="tree.trunk_count" type="number" step="1" min="1" :disabled="! canUpdate" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+            </label>
+            <label class="block text-xs">
+                <span class="text-gray-500">Posizione sociale</span>
+                <select v-model="tree.social_position" :disabled="! canUpdate" data-test="social-position" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
+                    <option :value="null">—</option>
+                    <option v-for="voce in agronomia.posizione_sociale ?? []" :key="voce">{{ voce }}</option>
+                </select>
+            </label>
+            <label class="block text-xs">
+                <span class="text-gray-500">Sito di crescita</span>
+                <select v-model="tree.growth_site" :disabled="! canUpdate" data-test="growth-site" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
+                    <option :value="null">—</option>
+                    <option v-for="voce in agronomia.sito_di_crescita ?? []" :key="voce">{{ voce }}</option>
+                </select>
+            </label>
+            <label class="block text-xs">
+                <span class="text-gray-500">Bersaglio (frequentazione)</span>
+                <select v-model="tree.target" :disabled="! canUpdate" data-test="target" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
+                    <option :value="null">—</option>
+                    <option v-for="voce in agronomia.bersaglio ?? []" :key="voce">{{ voce }}</option>
+                </select>
             </label>
         </div>
         <p class="mt-1 text-xs text-gray-500">
