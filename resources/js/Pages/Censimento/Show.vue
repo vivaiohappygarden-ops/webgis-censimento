@@ -51,11 +51,25 @@ const editing = ref(false);
 const pdfBusy = ref(false);
 const pdfError = ref('');
 
+// Stampa componibile: prima di stampare si scelgono le sezioni della scheda
+const stampaAperta = ref(false);
+const SEZIONI_SCHEDA = {
+    dendro: 'Dati dendrometrici e agronomici',
+    vta: 'Ultima valutazione di stabilità',
+    attributi: 'Attributi del tipo',
+    foto: 'Documentazione fotografica',
+};
+const stampaSezioni = reactive(Object.fromEntries(Object.keys(SEZIONI_SCHEDA).map((k) => [k, true])));
+
 async function openPdf() {
     pdfBusy.value = true;
     pdfError.value = '';
-    const { error } = await fetchPdf(`/api/v1/assets/${props.assetId}/pdf`);
+    const scelte = Object.keys(stampaSezioni).filter((k) => stampaSezioni[k]);
+    const query = scelte.length === Object.keys(stampaSezioni).length
+        ? '' : `?sezioni=${scelte.join(',')}`;
+    const { error } = await fetchPdf(`/api/v1/assets/${props.assetId}/pdf${query}`);
     if (error) pdfError.value = error;
+    else stampaAperta.value = false;
     pdfBusy.value = false;
 }
 
@@ -412,7 +426,7 @@ onBeforeUnmount(() => map?.remove());
                                     class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
                                     :disabled="pdfBusy"
                                     data-test="asset-pdf"
-                                    @click="openPdf"
+                                    @click="stampaAperta = ! stampaAperta"
                                 >Scheda PDF</button>
                                 <button
                                     v-if="asset.public_token"
@@ -448,6 +462,20 @@ onBeforeUnmount(() => map?.remove());
                             </div>
                         </div>
 
+                        <div v-if="stampaAperta" class="mb-3 rounded-lg border border-gray-200 bg-gray-50 p-3" data-test="stampa-sezioni">
+                            <p class="text-xs font-medium text-gray-600">Sezioni della scheda PDF (testata e dati generali escono sempre)</p>
+                            <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+                                <label v-for="(etichetta, chiave) in SEZIONI_SCHEDA" :key="chiave" class="flex items-center gap-1.5">
+                                    <input v-model="stampaSezioni[chiave]" type="checkbox" class="rounded border-gray-300" :data-test="`sezione-${chiave}`"> {{ etichetta }}
+                                </label>
+                            </div>
+                            <button
+                                class="mt-2 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                                :disabled="pdfBusy"
+                                data-test="stampa-avvia"
+                                @click="openPdf"
+                            >{{ pdfBusy ? 'Stampa…' : 'Stampa' }}</button>
+                        </div>
                         <p v-if="pdfError" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ pdfError }}</p>
 
                         <p

@@ -25,7 +25,12 @@ class MappaController extends Controller
         return view('portale.mappa', [
             'portale' => $portale,
             'estensione' => \App\Services\Portale\PortalExtent::per($portale->client),
-            'sfondi' => \App\Services\Portale\PortalExtent::sfondi(),
+            // Dopo i tre sfondi di serie vengono quelli propri del Comune
+            // (ortofoto, carta tecnica): l'ordine tiene ferma l'anteprima
+            'sfondi' => array_merge(
+                \App\Services\Portale\PortalExtent::sfondi(),
+                \App\Services\Carto\SfondiCommittente::perMappa($portale->client),
+            ),
             'stati' => collect(PortalState::ETICHETTE)
                 ->map(fn ($etichetta, $codice) => [
                     'codice' => $codice,

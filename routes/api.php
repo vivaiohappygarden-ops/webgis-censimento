@@ -32,6 +32,7 @@ Route::prefix('v1')->group(function () {
         Route::get('search', [SearchController::class, 'index']);
 
         Route::apiResource('clients', ClientController::class)->whereUuid('client');
+        Route::get('clients/{id}/sfondi', [ClientController::class, 'sfondi'])->whereUuid('id');
         Route::post('clients/{id}/stemma', [ClientController::class, 'stemma'])->whereUuid('id');
 
         // Vincoli del territorio e loro collegamento agli elementi

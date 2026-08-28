@@ -20,7 +20,7 @@ class ClientController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:clients.view', only: ['index', 'show']),
+            new Middleware('can:clients.view', only: ['index', 'show', 'sfondi']),
             new Middleware('can:clients.manage', only: ['store', 'update', 'destroy', 'stemma', 'rimuoviStemma']),
         ];
     }
@@ -168,6 +168,16 @@ class ClientController extends Controller implements HasMiddleware
         return response()->noContent();
     }
 
+    /** Gli sfondi del committente pronti per la mappa del gestionale. */
+    public function sfondi(string $id): JsonResponse
+    {
+        $client = Client::findOrFail($id);
+
+        return response()->json([
+            'data' => \App\Services\Carto\SfondiCommittente::perMappa($client),
+        ]);
+    }
+
     private function validated(Request $request, ?Client $existing = null): array
     {
         $required = $existing ? 'sometimes' : 'required';
@@ -203,6 +213,11 @@ class ClientController extends Controller implements HasMiddleware
                     ->where(fn ($q) => $q->whereNull('deleted_at'))->ignore($existing?->id),
             ],
             'public_enabled' => ['sometimes', 'boolean'],
+
+            // Sfondi cartografici del committente (z/x/y o WMS): le regole
+            // stanno con la loro logica, in SfondiCommittente
+            ...\App\Services\Carto\SfondiCommittente::regole(),
+
             'public_profile' => ['sometimes', 'array'],
             'public_profile.display_name' => ['sometimes', 'nullable', 'string', 'max:120'],
             'public_profile.welcome_text' => ['sometimes', 'nullable', 'string', 'max:2000'],

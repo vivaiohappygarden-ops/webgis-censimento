@@ -70,6 +70,7 @@
         </tr>
     </table>
 
+    @if (in_array('tipi', $sezioni))
     <h2>Elementi censiti per tipo</h2>
     @if (count($scheda['per_tipo']))
         <table>
@@ -89,7 +90,9 @@
     @else
         <p class="muted">Nessun elemento censito in questa località.</p>
     @endif
+    @endif
 
+    @if (in_array('piante', $sezioni))
     <h2>Piante presenti</h2>
     @if (count($scheda['piante']))
         <table>
@@ -109,7 +112,9 @@
     @else
         <p class="muted">Nessuna pianta viva censita in questa località.</p>
     @endif
+    @endif
 
+    @if (in_array('imprese', $sezioni))
     <h2>Chi ci lavora</h2>
     @if (count($scheda['imprese']))
         <table>
@@ -127,7 +132,9 @@
     @else
         <p class="muted">Nessun lavoro assegnato.</p>
     @endif
+    @endif
 
+    @if (in_array('lavori', $sezioni))
     <h2>Lavori recenti</h2>
     @if (count($scheda['lavori']))
         <table>
@@ -149,7 +156,9 @@
     @else
         <p class="muted">Nessun lavoro registrato in questa località.</p>
     @endif
+    @endif
 
+    @if (in_array('documenti', $sezioni))
     <h2>Documenti allegati</h2>
     @if (count($scheda['documenti']))
         <table>
@@ -167,6 +176,7 @@
     @else
         <p class="muted">Nessun documento allegato (per esempio il piano di gestione).</p>
     @endif
+    @endif
 
     <div class="nota">
         <strong>Nota sul metodo</strong>
@@ -176,10 +186,14 @@
                 delle aree interne (che possono lasciare vuoti o sovrapporsi).</li>
             <li>La superficie gestita è la somma delle sole aree attive: è quella
                 che conta per i lavori e per il corrispettivo.</li>
+            @if (in_array('piante', $sezioni))
             <li>Le piante contano gli alberi censiti non abbattuti, raggruppati per
                 nome scientifico (specie o, in mancanza, genere).</li>
+            @endif
+            @if (in_array('lavori', $sezioni) || in_array('imprese', $sezioni))
             <li>L'elenco dei lavori riporta i 20 più recenti; il conteggio per
                 squadra considera tutti gli ordini non annullati.</li>
+            @endif
             <li>La scheda riflette i dati registrati alla data di stampa.</li>
         </ul>
     </div>

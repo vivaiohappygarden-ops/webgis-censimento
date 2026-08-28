@@ -71,6 +71,9 @@ class LocalityController extends Controller implements HasMiddleware
             'organization' => \App\Models\Organization::find($localita->tenant_id),
             'stampatoIl' => $adesso,
             'statiLavoro' => \App\Models\WorkOrder::STATUS_LABELS,
+            // Stampa componibile: testata e superfici escono sempre
+            'sezioni' => \App\Services\Pdf\SezioniStampa::da($request,
+                ['tipi', 'piante', 'imprese', 'lavori', 'documenti']),
         ]);
 
         $nome = 'scheda-localita-'.\Illuminate\Support\Str::slug($localita->name ?: 'senza-nome')

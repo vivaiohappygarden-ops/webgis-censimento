@@ -16,6 +16,7 @@ class Client extends Model
         'tenant_id', 'code', 'name', 'client_type', 'vat_number', 'fiscal_code',
         'sdi_code', 'pec', 'ipa_code', 'address', 'contacts', 'notes', 'is_active',
         'public_slug', 'public_enabled', 'public_profile', 'label_prefix',
+        'basemaps',
     ];
 
     protected function casts(): array
@@ -24,6 +25,7 @@ class Client extends Model
             'address' => 'array',
             'contacts' => 'array',
             'public_profile' => 'array',
+            'basemaps' => 'array',
             'is_active' => 'boolean',
             'public_enabled' => 'boolean',
         ];

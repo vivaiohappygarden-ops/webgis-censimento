@@ -182,6 +182,7 @@ async function selezionaCliente(c) {
     schedaCliente.value = 'sedi';
     apertoCliente[c.id] = true;
     caricaPortale(c);
+    caricaCarto(c);
     // I vincoli del committente precedente non devono restare a video se il
     // caricamento dei nuovi fallisce
     vincoli.value = [];
@@ -205,16 +206,30 @@ async function selezionaLocalita(cliente, sede, localita) {
     await Promise.all([ricaricaScheda(), caricaAreeLocalita(localita.id)]);
 }
 
-// Il dossier d'area in PDF: la stessa scheda, pronta da allegare a un capitolato
+// Il dossier d'area in PDF: la stessa scheda, pronta da allegare a un capitolato.
+// La stampa è componibile: prima di stampare si scelgono le sezioni
 const erroreStampa = ref('');
 const stampaInCorso = ref(false);
+const stampaAperta = ref(false);
+const SEZIONI_LOCALITA = {
+    tipi: 'Elementi per tipo',
+    piante: 'Piante presenti',
+    imprese: 'Chi ci lavora',
+    lavori: 'Lavori recenti',
+    documenti: 'Documenti allegati',
+};
+const stampaSezioni = reactive(Object.fromEntries(Object.keys(SEZIONI_LOCALITA).map((k) => [k, true])));
 
 async function stampaScheda() {
     erroreStampa.value = '';
     stampaInCorso.value = true;
     try {
-        const res = await fetchPdf(`/api/v1/localities/${localitaScelta.value.id}/pdf`);
+        const scelte = Object.keys(stampaSezioni).filter((k) => stampaSezioni[k]);
+        const query = scelte.length === Object.keys(stampaSezioni).length
+            ? '' : `?sezioni=${scelte.join(',')}`;
+        const res = await fetchPdf(`/api/v1/localities/${localitaScelta.value.id}/pdf${query}`);
         if (res?.error) erroreStampa.value = res.error;
+        else stampaAperta.value = false;
     } finally {
         stampaInCorso.value = false;
     }
@@ -554,6 +569,42 @@ const indirizzoAnteprima = computed(() => {
         : `${window.location.origin}/comune/${nome}`;
 });
 
+// Sfondi cartografici del committente (ortofoto comunale, carta tecnica, WMS)
+const carto = reactive({ righe: [], salvato: '', errore: '', busy: false });
+
+function caricaCarto(client) {
+    carto.righe = (client.basemaps ?? []).map((s) => ({
+        nome: s.nome ?? '', tipo: s.tipo ?? 'xyz', url: s.url ?? '',
+        layer: s.layer ?? '', attribuzione: s.attribuzione ?? '',
+    }));
+    carto.salvato = '';
+    carto.errore = '';
+}
+
+async function salvaCarto() {
+    carto.errore = '';
+    carto.salvato = '';
+    carto.busy = true;
+    try {
+        const { data } = await axios.patch(`/api/v1/clients/${selectedClient.value.id}`, {
+            basemaps: carto.righe.map((r) => ({
+                nome: r.nome.trim(),
+                tipo: r.tipo,
+                url: r.url.trim(),
+                layer: r.tipo === 'wms' ? (r.layer.trim() || null) : null,
+                attribuzione: r.attribuzione.trim() || null,
+            })),
+        });
+        aggiornaClienteInElenco(data.data);
+        caricaCarto(data.data);
+        carto.salvato = 'Sfondi salvati: valgono per la Mappa del gestionale e per il portale pubblico.';
+    } catch (err) {
+        carto.errore = firstError(err);
+    } finally {
+        carto.busy = false;
+    }
+}
+
 function caricaPortale(client) {
     const profilo = client.public_profile ?? {};
     Object.assign(portale, {
@@ -868,6 +919,7 @@ onMounted(() => carica(loadClients));
                             <button class="whitespace-nowrap px-3 py-2" :class="schedaCliente === 'sedi' ? 'border-b-2 border-green-700 text-green-800' : 'text-gray-500 hover:text-gray-800'" @click="schedaCliente = 'sedi'">Sedi</button>
                             <button v-if="canManage" class="whitespace-nowrap px-3 py-2" :class="schedaCliente === 'portale' ? 'border-b-2 border-green-700 text-green-800' : 'text-gray-500 hover:text-gray-800'" data-test="scheda-portale" @click="schedaCliente = 'portale'">Portale pubblico</button>
                             <button v-if="canManage" class="whitespace-nowrap px-3 py-2" :class="schedaCliente === 'vincoli' ? 'border-b-2 border-green-700 text-green-800' : 'text-gray-500 hover:text-gray-800'" data-test="scheda-vincoli" @click="schedaCliente = 'vincoli'">Vincoli ({{ vincoli.length }})</button>
+                            <button v-if="canManage" class="whitespace-nowrap px-3 py-2" :class="schedaCliente === 'carto' ? 'border-b-2 border-green-700 text-green-800' : 'text-gray-500 hover:text-gray-800'" data-test="scheda-carto" @click="schedaCliente = 'carto'">Cartografia</button>
                         </div>
 
                         <!-- Sedi del committente -->
@@ -1101,6 +1153,38 @@ onMounted(() => carica(loadClients));
                         </div>
 
                         <!-- Vincoli del committente -->
+                        <!-- Sfondi cartografici del committente -->
+                        <div v-else-if="schedaCliente === 'carto' && canManage" class="p-5">
+                            <p class="text-xs text-gray-500">
+                                Sfondi di mappa propri del committente, per esempio l'ortofoto comunale o la
+                                carta tecnica regionale. Compaiono nel selettore della Mappa del gestionale
+                                (quando il filtro è su questo committente) e fra gli sfondi della mappa del suo
+                                portale pubblico. Si accettano servizi a riquadri (indirizzo con
+                                {z}/{x}/{y}) o WMS che rispondano in EPSG:3857, raggiungibili in https e
+                                senza password.
+                            </p>
+                            <div v-for="(riga, i) in carto.righe" :key="i" class="mt-3 space-y-2 rounded-lg bg-gray-50 p-3" :data-test="`sfondo-riga-${i}`">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <input v-model="riga.nome" placeholder="Nome (es. Ortofoto comunale) *" class="w-full flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm sm:w-auto" :data-test="`sfondo-nome-${i}`">
+                                    <select v-model="riga.tipo" class="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" :data-test="`sfondo-tipo-${i}`">
+                                        <option value="xyz">Riquadri z/x/y</option>
+                                        <option value="wms">WMS</option>
+                                    </select>
+                                    <button type="button" class="px-1 text-gray-400 hover:text-red-500" title="Togli questo sfondo" @click="carto.righe.splice(i, 1)">✕</button>
+                                </div>
+                                <input v-model="riga.url" :placeholder="riga.tipo === 'wms' ? 'Indirizzo del servizio WMS (https://…) *' : 'Modello dei riquadri (https://…/{z}/{x}/{y}.png) *'" class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" :data-test="`sfondo-url-${i}`">
+                                <input v-if="riga.tipo === 'wms'" v-model="riga.layer" placeholder="Nome del livello WMS (LAYERS) *" class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" :data-test="`sfondo-layer-${i}`">
+                                <input v-model="riga.attribuzione" placeholder="Attribuzione (es. Comune di …)" class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                            </div>
+                            <p v-if="! carto.righe.length" class="mt-3 text-sm text-gray-400">Nessuno sfondo proprio: le mappe usano quelli di serie.</p>
+                            <div class="mt-3 flex flex-wrap items-center gap-2">
+                                <button v-if="carto.righe.length < 6" type="button" class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50" data-test="aggiungi-sfondo" @click="carto.righe.push({ nome: '', tipo: 'xyz', url: '', layer: '', attribuzione: '' })">+ Aggiungi sfondo</button>
+                                <button type="button" class="rounded-lg bg-green-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50" :disabled="carto.busy" data-test="salva-sfondi" @click="salvaCarto">{{ carto.busy ? 'Salvataggio…' : 'Salva sfondi' }}</button>
+                            </div>
+                            <p v-if="carto.errore" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="sfondi-errore">{{ carto.errore }}</p>
+                            <p v-if="carto.salvato" class="mt-2 rounded-lg bg-green-100 px-3 py-2 text-sm text-green-900" data-test="sfondi-salvati">{{ carto.salvato }}</p>
+                        </div>
+
                         <div v-else-if="schedaCliente === 'vincoli' && canManage">
                             <div class="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
                                 <p class="text-xs text-gray-500">
@@ -1222,14 +1306,28 @@ onMounted(() => carica(loadClients));
                                     class="rounded-lg border border-green-700 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
                                     :disabled="stampaInCorso"
                                     data-test="localita-pdf"
-                                    @click="stampaScheda"
-                                >{{ stampaInCorso ? 'Stampa…' : 'Scheda PDF' }}</button>
+                                    @click="stampaAperta = ! stampaAperta"
+                                >Scheda PDF</button>
                                 <button
                                     v-if="canManage && selezione.localita.areas_count === 0"
                                     class="text-xs text-red-500 hover:underline"
                                     @click="eliminaLocalita(selezione.localita)"
                                 >elimina località</button>
                             </div>
+                        </div>
+                        <div v-if="stampaAperta" class="mx-5 mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3" data-test="stampa-sezioni">
+                            <p class="text-xs font-medium text-gray-600">Sezioni della scheda (testata e superfici escono sempre)</p>
+                            <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+                                <label v-for="(etichetta, chiave) in SEZIONI_LOCALITA" :key="chiave" class="flex items-center gap-1.5">
+                                    <input v-model="stampaSezioni[chiave]" type="checkbox" class="rounded border-gray-300" :data-test="`sezione-${chiave}`"> {{ etichetta }}
+                                </label>
+                            </div>
+                            <button
+                                class="mt-2 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                                :disabled="stampaInCorso"
+                                data-test="stampa-avvia"
+                                @click="stampaScheda"
+                            >{{ stampaInCorso ? 'Stampa…' : 'Stampa' }}</button>
                         </div>
                         <p v-if="erroreStampa" class="mx-5 mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="localita-pdf-errore">{{ erroreStampa }}</p>
 

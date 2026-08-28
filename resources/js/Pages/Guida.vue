@@ -172,7 +172,9 @@ function goTo(id) {
                         <p>
                             Dalla scheda di un elemento si scaricano la <strong>scheda PDF</strong> (per
                             fascicoli e consegne, con la documentazione fotografica completa: tutte le
-                            foto dell'elemento, con categoria e data di scatto) e, per gli alberi, il
+                            foto dell'elemento, con categoria e data di scatto — il pulsante apre prima
+                            le <strong>spunte delle sezioni</strong>, così stampi solo le parti che
+                            servono: testata e dati generali escono sempre) e, per gli alberi, il
                             <strong>cartellino con codice QR</strong>
                             da stampare e fissare in campo. Attivando la <strong>pagina pubblica</strong>,
                             chi inquadra il QR vede una pagina informativa con foto e dati essenziali,
@@ -780,7 +782,15 @@ function goTo(id) {
                             e i vincoli. Il pulsante <strong>"Scheda PDF"</strong> stampa il dossier della
                             località pronto da allegare a un capitolato: superfici con il metodo di calcolo
                             dichiarato, classificazione ISTAT, elementi per tipo, piante con quantità, chi
-                            ci lavora, lavori recenti e documenti allegati. Le aree si disegnano dalla <strong>Mappa</strong>; da qui
+                            ci lavora, lavori recenti e documenti allegati; prima della stampa scegli con
+                            le spunte quali sezioni includere (testata e superfici escono sempre).
+                            Nella scheda <strong>Cartografia</strong> del committente si registrano i suoi
+                            <strong>sfondi di mappa</strong> (ortofoto comunale, carta tecnica regionale),
+                            come indirizzo a riquadri {z}/{x}/{y} oppure <strong>WMS</strong>: compaiono
+                            nel selettore "Sfondo" della Mappa quando il filtro è su quel committente e fra
+                            gli sfondi della mappa del suo portale pubblico. Il servizio deve rispondere in
+                            coordinate web (EPSG:3857), in https e senza password: è il caso normale dei
+                            servizi pubblici degli enti. Le aree si disegnano dalla <strong>Mappa</strong>; da qui
                             l'amministratore può <strong>eliminare un'area vuota</strong>. Un'area con
                             elementi censiti (o impianti di irrigazione) non si elimina: prima vanno spostati
                             o eliminati, e il programma lo dice chiaramente. È una protezione, non un

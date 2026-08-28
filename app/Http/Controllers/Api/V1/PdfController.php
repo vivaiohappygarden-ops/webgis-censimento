@@ -108,16 +108,22 @@ class PdfController extends Controller implements HasMiddleware
             ])
             ->findOrFail($id);
 
+        // Stampa componibile: senza parametro escono tutte le sezioni
+        $sezioni = \App\Services\Pdf\SezioniStampa::da($request, ['dendro', 'vta', 'attributi', 'foto']);
+
         $fields = \App\Models\CustomField::query()
             ->where('object_type_id', $asset->object_type_id)
             ->get()->keyBy('key');
 
-        $assessment = $asset->tree?->assessments()
-            ->orderByDesc('assessed_on')->orderByDesc('created_at')->first();
+        $assessment = in_array('vta', $sezioni, true)
+            ? $asset->tree?->assessments()->orderByDesc('assessed_on')->orderByDesc('created_at')->first()
+            : null;
 
         // Tutte le fotografie dell'elemento, non solo quella di riferimento:
         // una scheda con una foto su dieci racconterebbe un decimo del vero
-        $fotografie = \App\Services\Photos\FotoStampa::perScheda($asset->id);
+        $fotografie = in_array('foto', $sezioni, true)
+            ? \App\Services\Photos\FotoStampa::perScheda($asset->id)
+            : ['foto' => [], 'nota' => null];
 
         $pdf = $renderer->render('pdf.asset', [
             'organization' => Organization::find($request->user()->tenant_id),
@@ -126,6 +132,7 @@ class PdfController extends Controller implements HasMiddleware
             'fotoNota' => $fotografie['nota'],
             'fields' => $fields,
             'assessment' => $assessment,
+            'sezioni' => $sezioni,
         ]);
 
         $name = preg_replace('/[^A-Za-z0-9_-]/', '_', $asset->census_code ?? substr($asset->id, 0, 8));

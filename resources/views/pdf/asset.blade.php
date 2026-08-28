@@ -49,7 +49,7 @@
         @endif
     </table>
 
-    @if ($asset->tree)
+    @if ($asset->tree && in_array('dendro', $sezioni))
     <h2>Dati dendrometrici e agronomici</h2>
     <table>
         <tr><th>Genere e specie</th><td>{{ trim(($asset->tree->genus ?? '').' '.($asset->tree->species ?? '')) ?: '-' }}@if ($asset->tree->cultivar) '{{ $asset->tree->cultivar }}'@endif</td></tr>
@@ -79,7 +79,7 @@
     </table>
     @endif
 
-    @if (! empty($asset->attributes) && count($asset->attributes))
+    @if (in_array('attributi', $sezioni) && ! empty($asset->attributes) && count($asset->attributes))
     <h2>Attributi del tipo</h2>
     <table>
         @foreach ($asset->attributes as $key => $value)

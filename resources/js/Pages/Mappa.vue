@@ -68,10 +68,71 @@ const chiomeVisibili = ref(true);
 // quasi sempre sul satellite
 const sfondoMappa = ref(localStorage.getItem('webgis:sfondo-mappa') === 'satellite' ? 'satellite' : 'strade');
 
+// Sfondi propri del committente scelto nel filtro (ortofoto comunale, carta
+// tecnica, WMS): arrivano dal server già pronti come modelli di riquadri
+const sfondiCommittente = ref([]);
+const livelliCommittente = new Set();
+
+function rimuoviLivelliCommittente() {
+    for (const id of livelliCommittente) {
+        if (map?.getLayer(id)) map.removeLayer(id);
+        if (map?.getSource(id)) map.removeSource(id);
+    }
+    livelliCommittente.clear();
+}
+
+async function caricaSfondiCommittente() {
+    rimuoviLivelliCommittente();
+    if (! vista.clientId) {
+        sfondiCommittente.value = [];
+    } else {
+        try {
+            const { data } = await axios.get(`/api/v1/clients/${vista.clientId}/sfondi`);
+            sfondiCommittente.value = data.data;
+        } catch {
+            // Senza gli sfondi propri restano quelli di serie: la mappa
+            // non deve fermarsi per questo
+            sfondiCommittente.value = [];
+        }
+    }
+    // Uno sfondo del committente precedente non vale più: si torna alle strade
+    if (! ['strade', 'satellite'].includes(sfondoMappa.value)
+        && ! sfondiCommittente.value.some((s) => s.id === sfondoMappa.value)) {
+        sfondoMappa.value = 'strade';
+    }
+    applicaSfondo();
+}
+
+watch(() => vista.clientId, caricaSfondiCommittente);
+
 function applicaSfondo() {
-    map?.setLayoutProperty('osm', 'visibility', sfondoMappa.value === 'strade' ? 'visible' : 'none');
-    map?.setLayoutProperty('satellite', 'visibility', sfondoMappa.value === 'satellite' ? 'visible' : 'none');
-    localStorage.setItem('webgis:sfondo-mappa', sfondoMappa.value);
+    if (! map) return;
+    const scelto = sfondoMappa.value;
+    const proprio = sfondiCommittente.value.find((s) => s.id === scelto) ?? null;
+    map.setLayoutProperty('osm', 'visibility', scelto === 'strade' || (! proprio && scelto !== 'satellite') ? 'visible' : 'none');
+    map.setLayoutProperty('satellite', 'visibility', scelto === 'satellite' ? 'visible' : 'none');
+    // I livelli del committente si creano al bisogno, sotto gli elementi
+    // disegnati, e si spengono tutti tranne quello scelto
+    for (const s of sfondiCommittente.value) {
+        const id = `sfondo-${s.id}`;
+        if (proprio?.id === s.id && ! map.getSource(id)) {
+            map.addSource(id, {
+                type: 'raster', tiles: [s.url], tileSize: 256,
+                maxzoom: s.zoom_massimo ?? 19, attribution: s.attribuzione ?? '',
+            });
+            map.addLayer({ id, type: 'raster', source: id },
+                map.getLayer('assets-fill') ? 'assets-fill' : undefined);
+            livelliCommittente.add(id);
+        }
+        if (map.getLayer(id)) {
+            map.setLayoutProperty(id, 'visibility', proprio?.id === s.id ? 'visible' : 'none');
+        }
+    }
+    // Si ricorda solo la scelta fra strade e satellite: gli sfondi del
+    // committente dipendono dal filtro e non avrebbero senso su altre viste
+    if (['strade', 'satellite'].includes(scelto)) {
+        localStorage.setItem('webgis:sfondo-mappa', scelto);
+    }
 }
 
 function applicaChiome() {
@@ -939,6 +1000,12 @@ onBeforeUnmount(() => {
                     <label class="flex items-center gap-1.5">
                         <input v-model="sfondoMappa" type="radio" value="satellite" data-test="sfondo-satellite" class="border-gray-300" @change="applicaSfondo">
                         Satellite
+                    </label>
+                </div>
+                <div v-if="sfondiCommittente.length" class="mt-1.5 flex flex-col gap-1 text-sm text-gray-600" data-test="sfondi-committente">
+                    <label v-for="s in sfondiCommittente" :key="s.id" class="flex items-center gap-1.5">
+                        <input v-model="sfondoMappa" type="radio" :value="s.id" :data-test="`sfondo-${s.id}`" class="border-gray-300" @change="applicaSfondo">
+                        {{ s.nome }}
                     </label>
                 </div>
 
