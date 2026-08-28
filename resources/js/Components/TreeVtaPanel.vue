@@ -479,7 +479,7 @@ onMounted(async () => {
                 <span class="text-gray-500">Età: precisa o stimata</span>
                 <select v-model="tree.age_qualifier" :disabled="! canUpdate" data-test="age-qualifier" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
                     <option :value="null">—</option>
-                    <option v-for="voce in agronomia.qualificatore_eta ?? []" :key="voce">{{ voce }}</option>
+                    <option v-for="voce in conValoreAttuale(agronomia.qualificatore_eta, tree.age_qualifier)" :key="voce">{{ voce }}</option>
                 </select>
             </label>
             <label class="block text-xs">
@@ -497,21 +497,21 @@ onMounted(async () => {
                 <span class="text-gray-500">Posizione sociale</span>
                 <select v-model="tree.social_position" :disabled="! canUpdate" data-test="social-position" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
                     <option :value="null">—</option>
-                    <option v-for="voce in agronomia.posizione_sociale ?? []" :key="voce">{{ voce }}</option>
+                    <option v-for="voce in conValoreAttuale(agronomia.posizione_sociale, tree.social_position)" :key="voce">{{ voce }}</option>
                 </select>
             </label>
             <label class="block text-xs">
                 <span class="text-gray-500">Sito di crescita</span>
                 <select v-model="tree.growth_site" :disabled="! canUpdate" data-test="growth-site" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
                     <option :value="null">—</option>
-                    <option v-for="voce in agronomia.sito_di_crescita ?? []" :key="voce">{{ voce }}</option>
+                    <option v-for="voce in conValoreAttuale(agronomia.sito_di_crescita, tree.growth_site)" :key="voce">{{ voce }}</option>
                 </select>
             </label>
             <label class="block text-xs">
                 <span class="text-gray-500">Bersaglio (frequentazione)</span>
                 <select v-model="tree.target" :disabled="! canUpdate" data-test="target" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
                     <option :value="null">—</option>
-                    <option v-for="voce in agronomia.bersaglio ?? []" :key="voce">{{ voce }}</option>
+                    <option v-for="voce in conValoreAttuale(agronomia.bersaglio, tree.target)" :key="voce">{{ voce }}</option>
                 </select>
             </label>
         </div>

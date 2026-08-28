@@ -77,9 +77,12 @@ class DizionariAgronomiciTest extends TestCase
                 'growth_site' => 'iperspazio',
                 'target' => 'ovunque',
                 'age_qualifier' => 'inventata',
+                'age_class' => 'rinsecchito',
+                'vegetative_state' => 'splendido',
             ],
         ])->assertStatus(422)->assertJsonValidationErrors([
             'tree.social_position', 'tree.growth_site', 'tree.target', 'tree.age_qualifier',
+            'tree.age_class', 'tree.vegetative_state',
         ]);
 
         // Il messaggio parla della "posizione sociale", non di "tree.social position"
@@ -168,7 +171,7 @@ class DizionariAgronomiciTest extends TestCase
 
         $html = $stampe->html['pdf.asset'];
         $this->assertStringContainsString('Dati dendrometrici e agronomici', $html);
-        $this->assertStringContainsString('Altezza del primo palco', $html);
+        $this->assertStringContainsString('Altezza primo palco', $html);
         $this->assertStringContainsString('3.50 m', $html);
         $this->assertStringContainsString('30 anni (stimata)', $html);
         $this->assertStringContainsString('Fase fisiologica', $html);
@@ -196,6 +199,6 @@ class DizionariAgronomiciTest extends TestCase
         $this->assertStringNotContainsString('Posizione sociale', $html);
         $this->assertStringNotContainsString('Sito di crescita', $html);
         $this->assertStringNotContainsString('Bersaglio', $html);
-        $this->assertStringContainsString('Altezza del primo palco', $html);
+        $this->assertStringContainsString('Altezza primo palco', $html);
     }
 }

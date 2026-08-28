@@ -57,7 +57,7 @@
         <tr><th>Altezza</th><td>{{ $asset->tree->height_m !== null ? $asset->tree->height_m.' m' : '-' }}</td></tr>
         <tr><th>Diametro del fusto</th><td>{{ $asset->tree->dbh_cm !== null ? $asset->tree->dbh_cm.' cm' : '-' }}</td></tr>
         <tr><th>Diametro della chioma</th><td>{{ $asset->tree->crown_diameter_m !== null ? $asset->tree->crown_diameter_m.' m' : '-' }}</td></tr>
-        <tr><th>Altezza del primo palco</th><td>{{ $asset->tree->crown_insertion_m !== null ? $asset->tree->crown_insertion_m.' m' : '-' }}</td></tr>
+        <tr><th>Altezza primo palco</th><td>{{ $asset->tree->crown_insertion_m !== null ? $asset->tree->crown_insertion_m.' m' : '-' }}</td></tr>
         @if ($asset->tree->age_years_est !== null)<tr><th>Età</th><td>{{ $asset->tree->age_years_est }} anni{{ $asset->tree->age_qualifier ? ' ('.$asset->tree->age_qualifier.')' : '' }}</td></tr>@endif
         @if ($asset->tree->age_class)<tr><th>Fase fisiologica</th><td>{{ $asset->tree->age_class }}</td></tr>@endif
         @if ($asset->tree->vegetative_state)<tr><th>Stato vegetativo</th><td>{{ $asset->tree->vegetative_state }}</td></tr>@endif

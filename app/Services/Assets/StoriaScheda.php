@@ -47,7 +47,7 @@ class StoriaScheda
         'trunk_circumference_cm' => 'Circonferenza (cm)',
         'trunk_count' => 'Numero di fusti',
         'crown_diameter_m' => 'Diametro chioma (m)',
-        'crown_insertion_m' => 'Inserzione chioma (m)',
+        'crown_insertion_m' => 'Altezza primo palco (m)',
         'age_years_est' => 'Età (anni)',
         'age_qualifier' => 'Qualificatore dell\'età',
         'age_class' => 'Fase fisiologica',

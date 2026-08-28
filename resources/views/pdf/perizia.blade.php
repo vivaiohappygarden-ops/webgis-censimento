@@ -136,7 +136,7 @@
     <table class="cols">
         <tr>
             <th>Altezza (m)</th><th>Diametro a 1,30 m (cm)</th><th>Circonferenza (cm)</th>
-            <th>Diametro chioma (m)</th><th>Altezza primo palco (m)</th><th>Classe di età</th>
+            <th>Diametro chioma (m)</th><th>Altezza primo palco (m)</th><th>Fase fisiologica (anagrafica)</th>
         </tr>
         <tr>
             @foreach ([$tree->height_m, $tree->dbh_cm, $tree->trunk_circumference_cm,

@@ -79,7 +79,13 @@
             <div class="riga"><dt>Diametro della chioma</dt><dd>{{ $misura($albero->crown_diameter_m, 'm') }}</dd></div>
         @endif
         @if ($albero?->age_years_est)
-            <div class="riga"><dt>Età stimata</dt><dd>circa {{ $albero->age_years_est }} anni</dd></div>
+            {{-- Un'età registrata come precisa (data di impianto nota, conteggio
+                 degli anelli) non si presenta al pubblico come una stima --}}
+            @if ($albero->age_qualifier === 'precisa')
+                <div class="riga"><dt>Età</dt><dd>{{ $albero->age_years_est }} anni</dd></div>
+            @else
+                <div class="riga"><dt>Età stimata</dt><dd>circa {{ $albero->age_years_est }} anni</dd></div>
+            @endif
         @endif
         @if ($albero?->planted_on)
             <div class="riga"><dt>Messo a dimora</dt><dd>{{ $albero->planted_on->format('Y') }}</dd></div>

@@ -18,6 +18,8 @@ class UpdateAssetRequest extends FormRequest
         // Nei messaggi di errore i campi a dizionario escono col loro nome
         // italiano, non come "tree.social position"
         return [
+            'tree.age_class' => 'fase fisiologica',
+            'tree.vegetative_state' => 'stato vegetativo',
             'tree.age_qualifier' => 'qualificatore dell\'età',
             'tree.social_position' => 'posizione sociale',
             'tree.target' => 'bersaglio',
@@ -65,11 +67,12 @@ class UpdateAssetRequest extends FormRequest
             'tree.crown_diameter_m' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
             'tree.crown_insertion_m' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
             'tree.age_years_est' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:3000'],
-            // Fase fisiologica e stato vegetativo restano testo libero per
-            // compatibilita' con gli import; i quattro campi nuovi nascono
-            // vincolati alle voci di config/agronomia.php (la fonte unica)
-            'tree.age_class' => ['sometimes', 'nullable', 'string', 'max:50'],
-            'tree.vegetative_state' => ['sometimes', 'nullable', 'string', 'max:50'],
+            // Tutti i campi a dizionario sono vincolati alle voci di
+            // config/agronomia.php (la fonte unica). Nessun import scrive
+            // queste colonne e il sync dell'app di campo ha la sua
+            // validazione: qui passa solo la scheda, che offre le stesse voci
+            'tree.age_class' => ['sometimes', 'nullable', Rule::in(config('agronomia.fase_fisiologica'))],
+            'tree.vegetative_state' => ['sometimes', 'nullable', Rule::in(config('agronomia.stato_vegetativo'))],
             'tree.age_qualifier' => ['sometimes', 'nullable', Rule::in(config('agronomia.qualificatore_eta'))],
             'tree.social_position' => ['sometimes', 'nullable', Rule::in(config('agronomia.posizione_sociale'))],
             'tree.target' => ['sometimes', 'nullable', Rule::in(config('agronomia.bersaglio'))],

@@ -41,7 +41,12 @@
             <div class="row"><dt>Altezza</dt><dd>{{ rtrim(rtrim(number_format((float) $asset->tree->height_m, 1, ',', ''), '0'), ',') }} metri</dd></div>
             @endif
             @if ($asset->tree?->age_years_est)
+            {{-- Come sul portale: l'età precisa non si spaccia per una stima --}}
+            @if ($asset->tree->age_qualifier === 'precisa')
+            <div class="row"><dt>Età</dt><dd>{{ $asset->tree->age_years_est }} anni</dd></div>
+            @else
             <div class="row"><dt>Età stimata</dt><dd>circa {{ $asset->tree->age_years_est }} anni</dd></div>
+            @endif
             @endif
             @if ($asset->tree?->planted_on)
             <div class="row"><dt>Messo a dimora</dt><dd>{{ $asset->tree->planted_on->format('Y') }}</dd></div>

@@ -197,7 +197,7 @@ function goTo(id) {
                             Nella scheda albero, oltre alle misure, ci sono le classificazioni a
                             tendina: <strong>fase fisiologica</strong> a sei stadi (da "giovane" a
                             "veterano"), <strong>stato vegetativo</strong>, <strong>posizione
-                            sociale</strong> (isolato, filare, gruppo), <strong>sito di
+                            sociale</strong> (isolato, filare, gruppo, area boscata), <strong>sito di
                             crescita</strong> (dal prato alla buca nell'asfalto),
                             <strong>bersaglio</strong> (quanto è frequentato il posto sotto la
                             chioma) e, accanto all'età in anni, se l'età è <strong>precisa o
