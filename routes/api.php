@@ -111,6 +111,13 @@ Route::prefix('v1')->group(function () {
         Route::patch('users/{id}', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'update'])->whereUuid('id');
         Route::post('users/{id}/reset-password', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'resetPassword'])->whereUuid('id');
 
+        // Portale dell'impresa appaltatrice: solo gli ordini delle sue squadre
+        Route::get('impresa/ordini', [\App\Http\Controllers\Api\V1\ImpresaPortalController::class, 'ordini']);
+        Route::post('impresa/ordini/{id}/riprogrammazione', [\App\Http\Controllers\Api\V1\ImpresaPortalController::class, 'chiediRiprogrammazione'])->whereUuid('id');
+        // Le richieste delle imprese, viste e decise dal gestionale
+        Route::get('riprogrammazioni', [\App\Http\Controllers\Api\V1\RiprogrammazioneController::class, 'index']);
+        Route::post('riprogrammazioni/{id}/decidi', [\App\Http\Controllers\Api\V1\RiprogrammazioneController::class, 'decidi'])->whereUuid('id');
+
         Route::get('teams', [\App\Http\Controllers\Api\V1\TeamController::class, 'index']);
         Route::post('teams', [\App\Http\Controllers\Api\V1\TeamController::class, 'store']);
         Route::patch('teams/{id}', [\App\Http\Controllers\Api\V1\TeamController::class, 'update'])->whereUuid('id');

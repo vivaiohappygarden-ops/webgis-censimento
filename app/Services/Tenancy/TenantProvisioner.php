@@ -21,6 +21,7 @@ class TenantProvisioner
         'works.view', 'works.manage',
         'users.manage',
         'portal.view',
+        'impresa.view',
     ];
 
     public const ROLES = [
@@ -34,6 +35,10 @@ class TenantProvisioner
         // Il cliente vede solo il SUO territorio, dal portale dedicato:
         // la lettura generale del censimento mostrerebbe gli altri clienti
         'cliente' => ['portal.view'],
+        // L'impresa appaltatrice vede solo gli ordini affidati alle squadre
+        // di cui fa parte, dal portale dedicato: niente censimento, niente
+        // altri lavori, niente dati degli altri committenti
+        'impresa' => ['impresa.view'],
     ];
 
     public function ensurePermissions(): void

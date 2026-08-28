@@ -1,0 +1,222 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\RescheduleRequest;
+use App\Models\User;
+use App\Models\WorkOrder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\InteractsWithTenant;
+use Tests\TestCase;
+
+/**
+ * Portale delle imprese appaltatrici: la ditta vede solo gli ordini delle
+ * sue squadre, con visibilita' a tempo, e chiede formalmente la
+ * riprogrammazione con motivo codificato. Il gestionale decide.
+ */
+class PortaleImpreseTest extends TestCase
+{
+    use InteractsWithTenant, RefreshDatabase;
+
+    private $organizzazione;
+
+    private $amministratore;
+
+    private $area;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        [$this->organizzazione, $this->amministratore] = $this->createTenantUser();
+        $this->area = $this->createArea($this->organizzazione);
+        $this->actingAsTenantUser($this->amministratore);
+    }
+
+    /** @return array{0: string, 1: User} id squadra e utente dell'impresa */
+    private function creaImpresa(string $nome = 'Verde Vivo snc'): array
+    {
+        $teamId = $this->postJson('/api/v1/teams', [
+            'name' => $nome, 'is_external' => true,
+        ])->assertCreated()->json('data.id');
+
+        $utenteId = $this->postJson('/api/v1/users', [
+            'name' => 'Referente '.$nome,
+            'email' => str_replace(' ', '', strtolower($nome)).'@example.com',
+            'role' => 'impresa',
+        ])->assertCreated()->json('data.id');
+
+        $this->patchJson("/api/v1/teams/{$teamId}", ['member_ids' => [$utenteId]])->assertOk();
+
+        return [$teamId, User::withoutGlobalScopes()->findOrFail($utenteId)];
+    }
+
+    private function creaOrdine(string $teamId, string $stato = 'planned', array $campi = []): string
+    {
+        $id = $this->postJson('/api/v1/work-orders', array_merge([
+            'title' => 'Potatura viale', 'area_id' => $this->area->id, 'team_id' => $teamId,
+            'planned_start' => '2026-09-07', 'planned_end' => '2026-09-11',
+        ], $campi))->assertCreated()->json('data.id');
+
+        $percorso = ['planned' => ['planned'], 'assigned' => ['planned', 'assigned'],
+            'completed' => ['planned', 'assigned', 'in_progress', 'completed']][$stato] ?? [];
+        foreach ($percorso as $passo) {
+            $this->postJson("/api/v1/work-orders/{$id}/transition", ['status' => $passo])->assertOk();
+        }
+
+        return $id;
+    }
+
+    public function test_l_impresa_vede_solo_gli_ordini_delle_sue_squadre(): void
+    {
+        [$teamId, $utente] = $this->creaImpresa();
+        [$altroTeam] = $this->creaImpresa('Altra Ditta srl');
+
+        $mio = $this->creaOrdine($teamId);
+        $altrui = $this->creaOrdine($altroTeam);
+        $bozza = $this->postJson('/api/v1/work-orders', [
+            'title' => 'Bozza non visibile', 'area_id' => $this->area->id, 'team_id' => $teamId,
+        ])->assertCreated()->json('data.id');
+
+        $this->actingAsTenantUser($utente);
+        $risposta = $this->getJson('/api/v1/impresa/ordini')->assertOk();
+        $ids = collect($risposta->json('data'))->pluck('id');
+
+        $this->assertTrue($ids->contains($mio));
+        $this->assertFalse($ids->contains($altrui), 'Gli ordini di un\'altra impresa non si vedono');
+        $this->assertFalse($ids->contains($bozza), 'Le bozze non si vedono');
+        // La risposta porta anche i motivi codificati per la tendina
+        $this->assertArrayHasKey('maltempo', $risposta->json('motivi'));
+    }
+
+    public function test_i_completati_escono_dopo_trenta_giorni(): void
+    {
+        [$teamId, $utente] = $this->creaImpresa();
+        $recente = $this->creaOrdine($teamId, 'completed');
+        $vecchio = $this->creaOrdine($teamId, 'completed');
+        WorkOrder::withoutGlobalScopes()->whereKey($vecchio)
+            ->update(['completed_at' => now()->subDays(45)]);
+
+        $this->actingAsTenantUser($utente);
+        $ids = collect($this->getJson('/api/v1/impresa/ordini')->assertOk()->json('data'))->pluck('id');
+
+        $this->assertTrue($ids->contains($recente));
+        $this->assertFalse($ids->contains($vecchio), 'Un completato vecchio esce dall\'elenco');
+    }
+
+    public function test_la_richiesta_si_registra_e_una_sola_resta_aperta(): void
+    {
+        [$teamId, $utente] = $this->creaImpresa();
+        $ordine = $this->creaOrdine($teamId);
+
+        $this->actingAsTenantUser($utente);
+        $this->postJson("/api/v1/impresa/ordini/{$ordine}/riprogrammazione", [
+            'reason' => 'maltempo', 'proposed_start' => now()->addDays(10)->toDateString(),
+            'notes' => 'Allerta meteo per tutta la settimana',
+        ])->assertCreated();
+
+        // La seconda, con la prima ancora aperta, viene respinta
+        $this->postJson("/api/v1/impresa/ordini/{$ordine}/riprogrammazione", [
+            'reason' => 'mezzi',
+        ])->assertStatus(422);
+
+        // E il motivo inventato pure
+        $this->postJson("/api/v1/impresa/ordini/{$ordine}/riprogrammazione", [
+            'reason' => 'non-mi-va',
+        ])->assertStatus(422)->assertJsonValidationErrors(['reason']);
+    }
+
+    public function test_l_accettazione_sposta_le_date_e_conserva_la_durata(): void
+    {
+        [$teamId, $utente] = $this->creaImpresa();
+        $ordine = $this->creaOrdine($teamId);   // dal 07/09 all'11/09: 4 giorni
+
+        $this->actingAsTenantUser($utente);
+        $this->postJson("/api/v1/impresa/ordini/{$ordine}/riprogrammazione", [
+            'reason' => 'maltempo', 'proposed_start' => '2026-09-14',
+        ])->assertCreated();
+
+        $this->actingAsTenantUser($this->amministratore);
+        $richiesta = $this->getJson('/api/v1/riprogrammazioni?stato=aperta')->assertOk()->json('data.0');
+        $this->assertSame('Maltempo', $richiesta['motivo']);
+
+        $this->postJson("/api/v1/riprogrammazioni/{$richiesta['id']}/decidi", [
+            'esito' => 'accettata', 'response_note' => 'Va bene, ci vediamo lunedì.',
+        ])->assertOk();
+
+        $aggiornato = WorkOrder::withoutGlobalScopes()->findOrFail($ordine);
+        $this->assertSame('2026-09-14', $aggiornato->planned_start->toDateString());
+        $this->assertSame('2026-09-18', $aggiornato->planned_end->toDateString());
+
+        // L'impresa rilegge l'esito con la risposta
+        $this->actingAsTenantUser($utente);
+        $dati = $this->getJson('/api/v1/impresa/ordini')->assertOk()->json('data.0');
+        $this->assertSame('accettata', $dati['richieste'][0]['status']);
+        $this->assertSame('Va bene, ci vediamo lunedì.', $dati['richieste'][0]['response_note']);
+        // E una richiesta gia' decisa non si decide due volte
+        $this->actingAsTenantUser($this->amministratore);
+        $this->postJson("/api/v1/riprogrammazioni/{$richiesta['id']}/decidi", ['esito' => 'rifiutata'])
+            ->assertStatus(409);
+    }
+
+    public function test_il_rifiuto_non_tocca_le_date(): void
+    {
+        [$teamId, $utente] = $this->creaImpresa();
+        $ordine = $this->creaOrdine($teamId);
+
+        $this->actingAsTenantUser($utente);
+        $this->postJson("/api/v1/impresa/ordini/{$ordine}/riprogrammazione", [
+            'reason' => 'personale', 'proposed_start' => '2026-10-01',
+        ])->assertCreated();
+
+        $this->actingAsTenantUser($this->amministratore);
+        $id = RescheduleRequest::query()->firstOrFail()->id;
+        $this->postJson("/api/v1/riprogrammazioni/{$id}/decidi", [
+            'esito' => 'rifiutata', 'response_note' => 'La data è vincolata dal committente.',
+        ])->assertOk();
+
+        $ordineDb = WorkOrder::withoutGlobalScopes()->findOrFail($ordine);
+        $this->assertSame('2026-09-07', $ordineDb->planned_start->toDateString());
+    }
+
+    public function test_i_permessi_recintano_il_portale(): void
+    {
+        [$teamId, $utente] = $this->creaImpresa();
+        $ordine = $this->creaOrdine($teamId);
+
+        // L'impresa non legge il censimento ne' decide le richieste
+        $this->actingAsTenantUser($utente);
+        $this->getJson('/api/v1/assets')->assertForbidden();
+        $this->getJson('/api/v1/riprogrammazioni')->assertForbidden();
+        // E all'accesso atterra sul suo portale
+        $this->get('/')->assertRedirect(route('impresa'));
+
+        // L'amministratore ha tutti i permessi e puo' aprire il portale,
+        // ma non essendo membro di squadre esterne non vi vede ordini
+        $this->actingAsTenantUser($this->amministratore);
+        $this->getJson('/api/v1/impresa/ordini')->assertOk()->assertJsonCount(0, 'data');
+
+        // Un'impresa di un'altra organizzazione non vede niente di questo tenant
+        [, $estraneo] = $this->createTenantUser();
+        $this->actingAsTenantUser($estraneo);
+        // Per lui quell'ordine non esiste proprio
+        $this->postJson("/api/v1/impresa/ordini/{$ordine}/riprogrammazione", ['reason' => 'maltempo'])
+            ->assertNotFound();
+    }
+
+    public function test_una_squadra_interna_non_apre_il_portale(): void
+    {
+        // Squadra NON esterna: anche se l'utente impresa ne fa parte,
+        // il portale non mostra i suoi ordini
+        $teamId = $this->postJson('/api/v1/teams', ['name' => 'Squadra interna'])
+            ->assertCreated()->json('data.id');
+        $utenteId = $this->postJson('/api/v1/users', [
+            'name' => 'X', 'email' => 'interna@example.com', 'role' => 'impresa',
+        ])->assertCreated()->json('data.id');
+        $this->patchJson("/api/v1/teams/{$teamId}", ['member_ids' => [$utenteId]])->assertOk();
+        $this->creaOrdine($teamId);
+
+        $this->actingAsTenantUser(User::withoutGlobalScopes()->findOrFail($utenteId));
+        $this->getJson('/api/v1/impresa/ordini')
+            ->assertOk()->assertJsonCount(0, 'data');
+    }
+}

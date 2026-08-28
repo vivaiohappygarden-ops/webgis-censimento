@@ -58,6 +58,7 @@ const gruppi = computed(() =>
                 { label: 'Catalogo', href: '/catalogo', show: can('catalog.view') },
                 { label: 'Utenti', href: '/utenti', show: can('users.manage') },
                 { label: 'Portale', href: '/portale', show: can('portal.view') },
+                { label: 'I lavori affidati', href: '/impresa', show: can('impresa.view') },
             ],
         },
     ]

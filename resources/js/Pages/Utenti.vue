@@ -14,6 +14,7 @@ const ROLE_LABELS = {
     tecnico: 'Tecnico',
     operatore: 'Operatore',
     cliente: 'Cliente (portale)',
+    impresa: 'Impresa esterna (portale)',
 };
 
 const users = ref([]);
@@ -327,11 +328,81 @@ async function ripristinaIntervalli() {
     }
 }
 
+// Squadre e imprese esterne: chi lavora insieme, e chi e' una ditta terza.
+// I membri delle squadre "impresa esterna" (col ruolo impresa) vedono i loro
+// ordini dal portale dedicato /impresa
+const squadre = reactive({
+    elenco: [],
+    form: { name: '', code: '', is_external: false },
+    apertaId: null,   // squadra di cui si stanno scegliendo i membri
+    membri: [],       // id selezionati per la squadra aperta
+    busy: false,
+    message: '',
+    messageOk: false,
+});
+
+async function loadSquadre() {
+    try {
+        const { data } = await axios.get('/api/v1/teams');
+        squadre.elenco = data.data;
+    } catch (err) {
+        squadre.message = avvisoCaricamento(err);
+        squadre.messageOk = false;
+    }
+}
+
+async function creaSquadra() {
+    squadre.busy = true;
+    squadre.message = '';
+    try {
+        await axios.post('/api/v1/teams', {
+            name: squadre.form.name,
+            code: squadre.form.code || null,
+            is_external: squadre.form.is_external,
+        });
+        squadre.form = { name: '', code: '', is_external: false };
+        await loadSquadre();
+        squadre.message = 'Squadra creata.';
+        squadre.messageOk = true;
+    } catch (err) {
+        squadre.message = firstError(err, 'Creazione non riuscita');
+        squadre.messageOk = false;
+    } finally {
+        squadre.busy = false;
+    }
+}
+
+function apriMembri(team) {
+    if (squadre.apertaId === team.id) {
+        squadre.apertaId = null;
+        return;
+    }
+    squadre.apertaId = team.id;
+    squadre.membri = (team.members ?? []).map((m) => m.id);
+}
+
+async function aggiornaSquadra(team, campi) {
+    squadre.busy = true;
+    squadre.message = '';
+    try {
+        await axios.patch(`/api/v1/teams/${team.id}`, campi);
+        await loadSquadre();
+        squadre.message = 'Squadra aggiornata.';
+        squadre.messageOk = true;
+    } catch (err) {
+        squadre.message = firstError(err, 'Aggiornamento non riuscito');
+        squadre.messageOk = false;
+    } finally {
+        squadre.busy = false;
+    }
+}
+
 onMounted(() => {
     load();
     loadGestionale();
     loadPerizia();
     loadIntervalli();
+    loadSquadre();
 });
 </script>
 
@@ -489,6 +560,68 @@ onMounted(() => {
                         @click="ripristinaIntervalli"
                     >Torna ai predefiniti</button>
                 </div>
+            </section>
+
+            <!-- Squadre e imprese esterne -->
+            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" data-test="squadre">
+                <h2 class="text-sm font-semibold">Squadre e imprese esterne</h2>
+                <p class="mt-1 text-xs text-gray-500">
+                    Le squadre raggruppano chi lavora insieme e ricevono gli ordini di lavoro.
+                    Una squadra segnata come <strong>impresa esterna</strong> è una ditta terza:
+                    i suoi membri (utenti col ruolo "Impresa esterna") vedono i lavori affidati
+                    dal portale dedicato e da lì possono chiedere una riprogrammazione.
+                </p>
+
+                <ul class="mt-3 divide-y divide-gray-100">
+                    <li v-for="team in squadre.elenco" :key="team.id" class="py-2" :data-test="`squadra-${team.name}`">
+                        <div class="flex flex-wrap items-center gap-3 text-sm">
+                            <span class="font-medium" :class="team.is_active === false ? 'text-gray-400 line-through' : ''">{{ team.name }}</span>
+                            <span v-if="team.code" class="font-mono text-xs text-gray-400">{{ team.code }}</span>
+                            <label class="flex items-center gap-1.5 text-xs text-gray-600">
+                                <input
+                                    type="checkbox"
+                                    :checked="team.is_external"
+                                    class="rounded border-gray-300"
+                                    data-test="squadra-esterna"
+                                    @change="aggiornaSquadra(team, { is_external: $event.target.checked })"
+                                > impresa esterna
+                            </label>
+                            <button class="text-xs font-medium text-green-700 hover:underline" data-test="squadra-membri" @click="apriMembri(team)">
+                                Membri ({{ (team.members ?? []).length }})
+                            </button>
+                            <button
+                                class="ml-auto text-xs text-gray-500 hover:underline"
+                                @click="aggiornaSquadra(team, { is_active: ! (team.is_active ?? true) })"
+                            >{{ (team.is_active ?? true) ? 'Disattiva' : 'Riattiva' }}</button>
+                        </div>
+                        <div v-if="squadre.apertaId === team.id" class="mt-2 rounded-lg bg-gray-50 p-3">
+                            <p class="text-xs text-gray-500">Chi fa parte della squadra:</p>
+                            <div class="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+                                <label v-for="u in users" :key="u.id" class="flex items-center gap-1.5">
+                                    <input v-model="squadre.membri" type="checkbox" :value="u.id" class="rounded border-gray-300" :data-test="`membro-${u.email}`">
+                                    {{ u.name }} <span class="text-xs text-gray-400">({{ ROLE_LABELS[u.role] ?? u.role }})</span>
+                                </label>
+                            </div>
+                            <button
+                                class="mt-2 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                                :disabled="squadre.busy"
+                                data-test="salva-membri"
+                                @click="aggiornaSquadra(team, { member_ids: squadre.membri }); squadre.apertaId = null"
+                            >Salva i membri</button>
+                        </div>
+                    </li>
+                    <li v-if="! squadre.elenco.length" class="py-3 text-sm text-gray-400">Nessuna squadra ancora.</li>
+                </ul>
+
+                <form class="mt-3 flex flex-wrap items-center gap-2" @submit.prevent="creaSquadra">
+                    <input v-model="squadre.form.name" required placeholder="Nome squadra o impresa *" data-test="squadra-nome" class="w-full flex-1 rounded-lg border border-gray-300 px-2.5 py-2 text-sm sm:w-auto">
+                    <input v-model="squadre.form.code" placeholder="Codice" class="w-24 rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    <label class="flex items-center gap-1.5 text-xs text-gray-600">
+                        <input v-model="squadre.form.is_external" type="checkbox" class="rounded border-gray-300" data-test="nuova-esterna"> impresa esterna
+                    </label>
+                    <button type="submit" :disabled="squadre.busy" data-test="crea-squadra" class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50">Crea</button>
+                </form>
+                <p v-if="squadre.message" class="mt-3 rounded-lg px-3 py-2 text-sm" :class="squadre.messageOk ? 'bg-green-100 text-green-900' : 'bg-red-50 text-red-700'" data-test="squadre-msg">{{ squadre.message }}</p>
             </section>
 
             <!-- Collegamento al gestionale WordPress -->

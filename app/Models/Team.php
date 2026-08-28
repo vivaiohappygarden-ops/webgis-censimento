@@ -11,11 +11,11 @@ class Team extends Model
 {
     use BelongsToTenant, HasUuids, SoftDeletes;
 
-    protected $fillable = ['tenant_id', 'code', 'name', 'leader_id', 'is_active'];
+    protected $fillable = ['tenant_id', 'code', 'name', 'leader_id', 'is_active', 'is_external'];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return ['is_active' => 'boolean', 'is_external' => 'boolean'];
     }
 
     public function leader()

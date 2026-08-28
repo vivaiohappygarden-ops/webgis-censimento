@@ -328,6 +328,22 @@ function goTo(id) {
                             L'<strong>agenda</strong> mostra la settimana per squadra; il <strong>rendiconto</strong>
                             riepiloga i lavori completati per cliente e periodo, con i valori calcolati dal listino.
                         </p>
+                        <h3>Le imprese appaltatrici</h3>
+                        <p>
+                            Se un lavoro lo esegue una ditta terza, dalla pagina <strong>Utenti</strong>
+                            (riquadro "Squadre e imprese esterne") si crea una squadra segnata come
+                            <strong>impresa esterna</strong> e le si assegnano gli account col ruolo
+                            <strong>"Impresa esterna (portale)"</strong>. Quegli utenti, entrando, vedono
+                            solo la pagina <strong>"I lavori affidati"</strong>: gli ordini delle loro
+                            squadre con dove, quando, rischi e DPI — niente censimento, niente altri
+                            committenti. I completati restano visibili trenta giorni, poi escono.
+                            Se una data non va bene, l'impresa <strong>chiede la riprogrammazione</strong>
+                            con un motivo a tendina (maltempo, mezzi, personale, accesso, materiale) e
+                            un'eventuale data proposta: la richiesta compare in cima alla pagina
+                            <strong>Lavori</strong>, dove si accetta (le date si spostano da sole,
+                            la durata non cambia) o non si accoglie, con una risposta che l'impresa
+                            legge dal suo portale. Tutto resta agli atti.
+                        </p>
                         <h3>Quantità dalla mappa</h3>
                         <p>
                             Quando si collega un elemento a un ordine, la <strong>quantità prevista</strong> si

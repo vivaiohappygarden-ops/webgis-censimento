@@ -12,6 +12,7 @@ class HomeRoute
         return match (true) {
             $user->can('assets.view') => 'mappa',
             $user->can('portal.view') => 'portale',
+            $user->can('impresa.view') => 'impresa',
             default => 'guida',
         };
     }

@@ -42,6 +42,7 @@ class TeamController extends Controller implements HasMiddleware
                 'code' => $data['code'] ?? null,
                 'name' => $data['name'],
                 'leader_id' => $data['leader_id'] ?? null,
+                'is_external' => (bool) ($data['is_external'] ?? false),
             ]);
             $this->syncMembers($team, $data);
 
@@ -59,7 +60,7 @@ class TeamController extends Controller implements HasMiddleware
         $data = $this->validated($request, required: false);
 
         DB::transaction(function () use ($team, $data) {
-            $team->update(array_intersect_key($data, array_flip(['code', 'name', 'leader_id', 'is_active'])));
+            $team->update(array_intersect_key($data, array_flip(['code', 'name', 'leader_id', 'is_active', 'is_external'])));
             $this->syncMembers($team, $data);
         });
 
@@ -77,6 +78,9 @@ class TeamController extends Controller implements HasMiddleware
             'code' => ['nullable', 'string', 'max:30'],
             'leader_id' => ['nullable', 'uuid'],
             'is_active' => ['sometimes', 'boolean'],
+            // Impresa esterna: i membri (ruolo "impresa") vedono i suoi
+            // ordini dal portale dedicato
+            'is_external' => ['sometimes', 'boolean'],
             'member_ids' => ['sometimes', 'array', 'max:50'],
             'member_ids.*' => ['uuid'],
         ]);

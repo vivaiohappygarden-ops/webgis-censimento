@@ -118,4 +118,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/portale', fn () => Inertia::render('Portale'))
         ->middleware('can:portal.view')->name('portale');
+    // Il portale dell'impresa appaltatrice: i lavori affidati alle sue squadre
+    Route::get('/impresa', fn () => Inertia::render('Impresa'))
+        ->middleware('can:impresa.view')->name('impresa');
 });

@@ -12,7 +12,7 @@ import ScegliVoce from '@/Components/ScegliVoce.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import VisteSalvate from '@/Components/VisteSalvate.vue';
 import { usaCaricamento } from '@/caricamento';
-import { avvisoCaricamento } from '@/avvisi';
+import { avvisoCaricamento, messaggioErrore } from '@/avvisi';
 import { WORK_STATUS_LABELS } from '@/workStatus';
 
 const page = usePage();
@@ -240,6 +240,41 @@ async function loadLookups() {
     if (p) personnel.value = p.data.data;
     if (c) clients.value = c;
     if (a) areas.value = a.data.data;
+}
+
+// Richieste di riprogrammazione delle imprese esterne, in attesa di risposta
+const richieste = ref([]);
+const richiesteErrore = ref('');
+const rispostaNota = reactive({});
+const erroriRichieste = reactive({});
+const decisioneInCorso = ref(null);
+
+async function caricaRichieste() {
+    if (! canManage.value) return;
+    richiesteErrore.value = '';
+    try {
+        const { data } = await axios.get('/api/v1/riprogrammazioni', { params: { stato: 'aperta' } });
+        richieste.value = data.data;
+    } catch (err) {
+        // Il riquadro non deve sembrare "nessuna richiesta" per un errore
+        richiesteErrore.value = 'Richieste delle imprese non caricate. ' + avvisoCaricamento(err);
+    }
+}
+
+async function decidiRichiesta(r, esito) {
+    decisioneInCorso.value = r.id;
+    erroriRichieste[r.id] = '';
+    try {
+        await axios.post(`/api/v1/riprogrammazioni/${r.id}/decidi`, {
+            esito,
+            response_note: rispostaNota[r.id] || null,
+        });
+        await Promise.all([caricaRichieste(), load()]);
+    } catch (err) {
+        erroriRichieste[r.id] = messaggioErrore(err, 'Decisione non registrata');
+    } finally {
+        decisioneInCorso.value = null;
+    }
 }
 
 async function createOrder() {
@@ -512,6 +547,7 @@ function cercaConAttesa() {
 
 onMounted(async () => {
     await carica(() => Promise.all([load(), loadLookups()]));
+    await caricaRichieste();
     // Arrivando dalla mappa ("Apri l'ordine") il dettaglio si apre da solo
     const ordine = new URLSearchParams(window.location.search).get('ordine');
     if (ordine) await openDetail(ordine);
@@ -578,6 +614,60 @@ onMounted(async () => {
                     data-test="view-preventivi"
                     @click="view = 'preventivi'"
                 >Preventivi</button>
+            </div>
+
+            <p
+                v-if="view === 'elenco' && richiesteErrore"
+                class="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700"
+                data-test="richieste-errore"
+            >{{ richiesteErrore }}</p>
+
+            <!-- Richieste di riprogrammazione delle imprese esterne -->
+            <div
+                v-if="view === 'elenco' && canManage && richieste.length"
+                class="mb-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4"
+                data-test="richieste-imprese"
+            >
+                <h2 class="text-sm font-semibold text-blue-900">
+                    Richieste di riprogrammazione dalle imprese ({{ richieste.length }})
+                </h2>
+                <ul class="mt-2 space-y-2">
+                    <li v-for="r in richieste" :key="r.id" class="rounded-lg bg-white p-3 text-sm">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button class="font-mono text-xs text-green-700 hover:underline" @click="openDetail(r.ordine.id)">{{ r.ordine?.code }}</button>
+                            <span class="font-medium">{{ r.ordine?.title }}</span>
+                            <span class="text-gray-500">— {{ r.impresa }}</span>
+                        </div>
+                        <p class="mt-1 text-xs text-gray-600">
+                            Motivo: <strong>{{ r.motivo }}</strong><template v-if="r.proposed_start"> · data proposta {{ r.proposed_start.split('-').reverse().join('/') }}</template>
+                            <template v-if="r.ordine?.planned_start"> (oggi prevista dal {{ r.ordine.planned_start.split('-').reverse().join('/') }})</template>
+                            <span v-if="r.notes" class="block">Note: {{ r.notes }}</span>
+                        </p>
+                        <div class="mt-2 flex flex-wrap items-center gap-2">
+                            <input
+                                v-model="rispostaNota[r.id]"
+                                placeholder="Risposta per l'impresa (facoltativa)"
+                                maxlength="1000"
+                                class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs sm:w-72"
+                                :data-test="`risposta-${r.id}`"
+                            >
+                            <button
+                                class="rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                                :disabled="decisioneInCorso === r.id"
+                                data-test="richiesta-accetta"
+                                :title="r.proposed_start ? 'Sposta l\'inizio alla data proposta (la durata non cambia)' : 'Accetta: le date si concordano a parte'"
+                                @click="decidiRichiesta(r, 'accettata')"
+                            >{{ r.proposed_start ? 'Accetta e sposta le date' : 'Accetta' }}</button>
+                            <button
+                                class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                                :disabled="decisioneInCorso === r.id"
+                                data-test="richiesta-rifiuta"
+                                @click="decidiRichiesta(r, 'rifiutata')"
+                            >Non accogliere</button>
+                        </div>
+                        <p v-if="erroriRichieste[r.id]" class="mt-1 text-xs text-red-600">{{ erroriRichieste[r.id] }}</p>
+                    </li>
+                </ul>
             </div>
 
             <WorkAgenda
