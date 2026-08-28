@@ -168,6 +168,15 @@ class ClientController extends Controller implements HasMiddleware
             ]);
         }
 
+        // Un SAL validato e' un documento numerato agli atti: non puo'
+        // perdere il suo intestatario. Le bozze invece si eliminano prima.
+        $sals = \App\Models\Sal::query()->where('client_id', $client->id)->count();
+        if ($sals > 0) {
+            throw ValidationException::withMessages([
+                'client' => "Il cliente ha {$sals} SAL: elimina prima le bozze; con SAL validati agli atti il cliente non si può eliminare.",
+            ]);
+        }
+
         $client->delete();
         Audit::log('client.deleted', $client);
 

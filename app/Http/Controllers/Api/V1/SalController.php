@@ -44,6 +44,8 @@ class SalController extends Controller implements HasMiddleware
 
         return response()->json([
             'data' => $sals->map(fn (Sal $sal) => $this->presenta($sal, conRighe: false))->values(),
+            // Oltre il tetto l'elenco e' tagliato: la pagina deve poterlo dire
+            'totale' => Sal::query()->count(),
         ]);
     }
 
@@ -58,7 +60,28 @@ class SalController extends Controller implements HasMiddleware
 
         \App\Models\Client::query()->findOrFail($data['client_id']);
 
-        $sal = DB::transaction(function () use ($request, $data) {
+        try {
+            $sal = $this->preparaBozza($request, $data);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Due "Prepara" simultanei sullo stesso periodo: il perdente cade
+            // sull'indice unico (un ordine, un solo SAL) e deve uscire con un
+            // messaggio comprensibile, non con un errore grezzo
+            if (str_contains($e->getMessage(), 'uq_sal_items_ordine')) {
+                throw ValidationException::withMessages([
+                    'period_from' => 'Questi lavori sono appena entrati in un altro SAL: aggiorna l\'elenco e riprova.',
+                ]);
+            }
+            throw $e;
+        }
+
+        Audit::log('sal.created', $sal, ['client_id' => $sal->client_id]);
+
+        return response()->json(['data' => $this->presenta($sal->fresh(['client:id,name', 'items']))], 201);
+    }
+
+    private function preparaBozza(Request $request, array $data): Sal
+    {
+        return DB::transaction(function () use ($request, $data) {
             // I completati del committente nel periodo, non ancora in un SAL.
             // I confini del periodo sono giorni ITALIANI come nel rendiconto:
             // i due elenchi sullo stesso periodo devono coincidere
@@ -117,6 +140,19 @@ class SalController extends Controller implements HasMiddleware
                     ];
                     if ($valued['quantity'] === null) {
                         $nota = 'Nessuna quantità registrata nell\'unità del listino ('.$valued['unit'].').';
+                    } elseif (round((float) ($valued['base_amount'] ?? 0), 2) !== round((float) ($valued['amount'] ?? 0), 2)) {
+                        // Quando la voce di listino maggiora l'importo, la
+                        // moltiplicazione delle colonne non torna: il
+                        // documento deve dichiarare il perche'
+                        $pezzi = [];
+                        if (! empty($valued['overhead_pct'])) {
+                            $pezzi[] = 'spese generali '.rtrim(rtrim(number_format((float) $valued['overhead_pct'], 2, ',', '.'), '0'), ',').'%';
+                        }
+                        if (! empty($valued['safety_cost'])) {
+                            $pezzi[] = 'oneri di sicurezza '.number_format((float) $valued['safety_cost'], 2, ',', '.').' euro';
+                        }
+                        $nota = 'L\'importo comprende le maggiorazioni della voce di listino'
+                            .($pezzi !== [] ? ' ('.implode(', ', $pezzi).')' : '').'.';
                     }
                 }
 
@@ -134,10 +170,6 @@ class SalController extends Controller implements HasMiddleware
 
             return $sal;
         });
-
-        Audit::log('sal.created', $sal, ['client_id' => $sal->client_id]);
-
-        return response()->json(['data' => $this->presenta($sal->fresh(['client:id,name', 'items']))], 201);
     }
 
     public function show(string $id): JsonResponse
@@ -334,9 +366,11 @@ class SalController extends Controller implements HasMiddleware
             'status' => $sal->status,
             'notes' => $sal->notes,
             'overhead_pct' => $sal->overhead_pct !== null ? (float) $sal->overhead_pct : null,
-            'validated_at' => $sal->validated_at?->toDateTimeString(),
+            // Ore italiane, come la stampa: a cavallo della mezzanotte la
+            // pagina e il PDF devono dire lo stesso giorno
+            'validated_at' => $sal->validated_at?->timezone('Europe/Rome')->toDateTimeString(),
             'validator' => $sal->relationLoaded('validator') ? $sal->validator?->only(['id', 'name']) : null,
-            'invoiced_at' => $sal->invoiced_at?->toDateTimeString(),
+            'invoiced_at' => $sal->invoiced_at?->timezone('Europe/Rome')->toDateTimeString(),
             'invoice_ref' => $sal->invoice_ref,
             'totali' => $totali,
             'righe_totali' => $sal->items->count(),

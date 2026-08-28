@@ -122,6 +122,36 @@ class SalTest extends TestCase
         $this->assertEquals(610.0, $sal['totali']['totale']);
     }
 
+    public function test_l_elenco_dichiara_il_totale(): void
+    {
+        $this->ordineCompletato();
+        $this->creaSal();
+
+        $this->getJson('/api/v1/sals')->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('totale', 1);
+    }
+
+    public function test_le_maggiorazioni_di_listino_si_dichiarano_sulla_riga(): void
+    {
+        // Voce di listino con spese generali 10% e oneri fissi: l'importo
+        // non e' piu' quantita' x prezzo e la riga deve dirlo
+        $this->putJson("/api/v1/price-lists/{$this->listinoId}/items", [
+            'items' => [[
+                'work_type_id' => $this->lavorazione->id, 'unit' => 'mq',
+                'unit_price' => 0.5, 'overhead_pct' => 10, 'safety_cost' => 25,
+            ]],
+        ])->assertOk();
+        $this->ordineCompletato();
+
+        $riga = $this->creaSal()['items'][0];
+
+        // 1000 x 0,50 = 500; +10% = 550; +25 = 575
+        $this->assertEquals(575.0, $riga['imponibile']);
+        $this->assertStringContainsString('maggiorazioni della voce di listino', $riga['nota']);
+        $this->assertStringContainsString('spese generali 10%', $riga['nota']);
+        $this->assertStringContainsString('oneri di sicurezza 25,00 euro', $riga['nota']);
+    }
+
     public function test_i_confini_del_periodo_sono_giorni_italiani_come_nel_rendiconto(): void
     {
         // 22:30 UTC del 31/08 = 00:30 del 1/09 in Italia: non e' agosto
@@ -306,6 +336,32 @@ class SalTest extends TestCase
         // Mai due date diverse sullo stesso foglio: quella di stampa non compare
         $this->assertStringNotContainsString(now('Europe/Rome')->format('d/m/Y'), $html);
         $this->assertStringContainsString('sal-2026', $risposta->headers->get('Content-Disposition'));
+    }
+
+    public function test_la_pagina_riporta_il_giorno_italiano_della_validazione(): void
+    {
+        $this->ordineCompletato();
+        $sal = $this->creaSal();
+        $this->postJson("/api/v1/sals/{$sal['id']}/valida")->assertOk();
+        // 22:30 UTC del 31/08 = 00:30 del 1/09 in Italia: la pagina deve
+        // dire lo stesso giorno della stampa
+        Sal::query()->whereKey($sal['id'])->update(['validated_at' => '2026-08-31 22:30:00']);
+
+        $this->getJson("/api/v1/sals/{$sal['id']}")->assertOk()
+            ->assertJsonPath('data.validated_at', '2026-09-01 00:30:00');
+    }
+
+    public function test_un_committente_con_sal_non_si_elimina(): void
+    {
+        $this->ordineCompletato();
+        $sal = $this->creaSal();
+
+        $this->deleteJson("/api/v1/clients/{$this->cliente->id}")
+            ->assertUnprocessable()->assertJsonValidationErrors(['client']);
+
+        // Tolta la bozza (e senza altri vincoli) l'eliminazione riparte
+        $this->deleteJson("/api/v1/sals/{$sal['id']}")->assertNoContent();
+        $this->deleteJson("/api/v1/clients/{$this->cliente->id}")->assertNoContent();
     }
 
     public function test_permessi_e_recinto_del_tenant(): void

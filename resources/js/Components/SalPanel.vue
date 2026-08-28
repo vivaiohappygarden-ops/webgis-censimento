@@ -16,6 +16,7 @@ const props = defineProps({
 const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 
 const elenco = ref([]);
+const totale = ref(0);
 const aperto = ref(null);       // SAL aperto nel dettaglio
 const aliquote = ref([0, 4, 10, 22]);
 const busy = ref(false);
@@ -34,6 +35,7 @@ const dataIt = (d) => (d ? d.split('-').reverse().join('/') : '—');
 async function caricaElenco() {
     const { data } = await axios.get('/api/v1/sals');
     elenco.value = data.data;
+    totale.value = data.totale ?? data.data.length;
 }
 
 // Nuovo SAL: committente + periodo
@@ -72,6 +74,9 @@ async function apri(id) {
 }
 
 async function azione(fn, conferma = null) {
+    // Niente azioni sovrapposte: due risposte in volo insieme potrebbero
+    // riscrivere il dettaglio in ordine invertito
+    if (busy.value) return;
     if (conferma && ! window.confirm(conferma)) return;
     busy.value = true;
     errore.value = '';
@@ -110,13 +115,18 @@ const valida = () => azione(async () => {
 + 'righe, aliquote e importi restano quelli di adesso. Non si torna indietro: '
 + 'per correggerlo si prepara un altro SAL.');
 
-const fatturato = () => azione(async () => {
-    const riferimento = window.prompt('Riferimento della fattura (facoltativo, es. n. 12/2026):', '') ?? '';
-    const { data } = await axios.post(`/api/v1/sals/${aperto.value.id}/fatturato`, {
-        invoice_ref: riferimento.trim() || null,
+function fatturato() {
+    // Annulla sul prompt e' una rinuncia: il passaggio a "fatturato" non si
+    // puo' disfare, quindi senza risposta non si parte
+    const riferimento = window.prompt('Riferimento della fattura (facoltativo, es. n. 12/2026):', '');
+    if (riferimento === null) return;
+    azione(async () => {
+        const { data } = await axios.post(`/api/v1/sals/${aperto.value.id}/fatturato`, {
+            invoice_ref: riferimento.trim() || null,
+        });
+        aperto.value = data.data;
     });
-    aperto.value = data.data;
-});
+}
 
 const elimina = () => azione(async () => {
     await axios.delete(`/api/v1/sals/${aperto.value.id}`);
@@ -174,6 +184,10 @@ onMounted(() => carica(caricaElenco));
             </button>
         </form>
 
+        <!-- Un'apertura fallita a dettaglio chiuso deve dirlo qui: dentro il
+             dettaglio il messaggio non comparirebbe mai -->
+        <p v-if="errore && ! aperto" class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-test="sal-errore">{{ errore }}</p>
+
         <!-- Elenco -->
         <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
             <table class="w-full text-sm">
@@ -207,6 +221,9 @@ onMounted(() => carica(caricaElenco));
                 </tbody>
             </table>
         </div>
+        <p v-if="totale > elenco.length" class="mt-1 text-xs text-gray-500">
+            Mostrati i {{ elenco.length }} SAL più recenti di {{ totale }}.
+        </p>
 
         <!-- Dettaglio -->
         <div v-if="aperto" class="mt-4 rounded-xl border border-gray-200 bg-white p-4" data-test="sal-dettaglio">
@@ -258,7 +275,7 @@ onMounted(() => carica(caricaElenco));
                                 <span v-else class="tabular-nums">{{ num(riga.vat_rate) }}</span>
                             </td>
                             <td v-if="aperto.status === 'bozza'" class="px-2 py-1.5 text-right">
-                                <button class="text-xs text-red-500 hover:underline" data-test="sal-togli-riga" @click="togliRiga(riga)">togli</button>
+                                <button class="text-xs text-red-500 hover:underline disabled:opacity-50" :disabled="busy" data-test="sal-togli-riga" @click="togliRiga(riga)">togli</button>
                             </td>
                         </tr>
                     </tbody>
