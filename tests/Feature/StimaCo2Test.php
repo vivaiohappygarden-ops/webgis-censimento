@@ -177,9 +177,21 @@ class StimaCo2Test extends TestCase
         ]));
 
         $this->assertEqualsWithDelta($stima['co2_kg'] / 1000 * 80, $stima['valore_euro'], 0.01);
-        $this->assertEqualsWithDelta($stima['annuo_kg'] / 1000 * 80, $stima['valore_annuo_euro'], 0.01);
         $this->assertSame(80.0, $stima['prezzo_tonnellata']);
         $this->assertSame('fonte di prova', $stima['prezzo_fonte']);
+    }
+
+    public function test_senza_fonte_dichiarata_gli_euro_non_si_pubblicano(): void
+    {
+        // Prezzo acceso ma fonte svuotata: un valore economico senza il suo
+        // "come" non esce, né in pubblico né nel gestionale
+        config(['co2.euro_per_tonnellata' => 70.0, 'co2.prezzo_fonte' => '  ']);
+
+        $stima = CarbonEstimate::per($this->albero(['genus' => 'Tilia', 'dbh_cm' => 38]));
+
+        $this->assertGreaterThan(0, $stima['co2_kg']);
+        $this->assertNull($stima['valore_euro']);
+        $this->assertNull($stima['prezzo_tonnellata']);
     }
 
     public function test_con_prezzo_spento_restano_solo_i_chilogrammi(): void
@@ -244,6 +256,35 @@ class StimaCo2Test extends TestCase
             ->assertOk()
             ->assertSee('Anidride carbonica immagazzinata')
             ->assertDontSee('Controvalore economico');
+    }
+
+    public function test_la_home_dichiara_il_prezzo_con_cui_il_numero_e_stato_calcolato(): void
+    {
+        config(['co2.euro_per_tonnellata' => 80.0, 'co2.prezzo_fonte' => 'fonte iniziale']);
+        $this->alberoPubblico();
+
+        $this->get('/comune/mentana')->assertOk()
+            ->assertSee('80 euro')->assertSee('fonte iniziale');
+
+        // Il prezzo cambia, ma la statistica resta in cache 15 minuti: la
+        // nota deve dichiarare il prezzo con cui il numero è stato davvero
+        // calcolato, non quello nuovo che non c'entra col valore a video
+        config(['co2.euro_per_tonnellata' => 95.0, 'co2.prezzo_fonte' => 'fonte nuova']);
+
+        $this->get('/comune/mentana')->assertOk()
+            ->assertSee('80 euro')->assertSee('fonte iniziale')
+            ->assertDontSee('95 euro')->assertDontSee('fonte nuova');
+    }
+
+    public function test_un_prezzo_con_i_decimali_si_dichiara_con_i_decimali(): void
+    {
+        config(['co2.euro_per_tonnellata' => 66.5, 'co2.prezzo_fonte' => 'fonte di prova']);
+        $this->alberoPubblico();
+
+        // Il prezzo dichiarato deve essere esattamente quello applicato:
+        // "67" mentre il conto usa 66,5 non sarebbe difendibile
+        $this->get('/comune/mentana/elemento/MEN-0001')->assertOk()
+            ->assertSee('66,50')->assertDontSee('67 euro');
     }
 
     public function test_la_scheda_interna_riporta_la_stessa_stima_del_portale(): void

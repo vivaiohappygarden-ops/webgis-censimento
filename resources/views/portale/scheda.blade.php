@@ -118,7 +118,9 @@
             <sup>*</sup> Valore stimato, non misurato: {{ $co2['metodo'] }}.
             @if (($co2['valore_euro'] ?? null) !== null)
                 Il controvalore economico applica un prezzo di
-                {{ number_format($co2['prezzo_tonnellata'], 0, ',', '.') }} euro
+                {{-- Un prezzo con i decimali si dichiara con i decimali: quello
+                     stampato deve essere esattamente quello applicato --}}
+                {{ number_format($co2['prezzo_tonnellata'], fmod($co2['prezzo_tonnellata'], 1.0) == 0.0 ? 0 : 2, ',', '.') }} euro
                 per tonnellata di anidride carbonica ({{ $co2['prezzo_fonte'] }}).
             @endif
         </p>

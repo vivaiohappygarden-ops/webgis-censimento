@@ -108,9 +108,13 @@ class PortalStats
         return [
             'kg' => round($totale, 1),
             'alberi' => $contati,
-            // Controvalore economico: si mostra solo insieme al prezzo e
-            // alla fonte; con prezzo spento resta la sola stima in peso
+            // Controvalore economico: prezzo e fonte viaggiano NEL payload
+            // (che sta in cache 15 minuti), così la pagina dichiara sempre
+            // il prezzo con cui il numero è stato davvero calcolato, anche
+            // se nel frattempo la configurazione è cambiata
             'euro' => $prezzo !== null ? round($totale / 1000 * $prezzo, 2) : null,
+            'prezzo' => $prezzo,
+            'fonte' => $prezzo !== null ? (string) config('co2.prezzo_fonte') : null,
         ];
     }
 

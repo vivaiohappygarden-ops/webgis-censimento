@@ -406,8 +406,9 @@ async function eliminaValutazione(a) {
 }
 
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('it-IT') : '—');
-// Numeri all'italiana per la stima CO2 (punto per le migliaia, virgola decimale)
-const num = (v, dec = 0) => Number(v).toLocaleString('it-IT', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+// Numeri all'italiana per la stima CO2 (punto per le migliaia, virgola
+// decimale); maxDec lascia respirare i decimali veri, come nel prezzo
+const num = (v, dec = 0, maxDec = dec) => Number(v).toLocaleString('it-IT', { minimumFractionDigits: dec, maximumFractionDigits: maxDec });
 const fmtOra = (d) => (d ? new Date(d).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
 onMounted(async () => {
@@ -525,7 +526,7 @@ onMounted(async () => {
         <div v-if="asset.co2" class="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600" data-test="stima-co2">
             Anidride carbonica immagazzinata (stima): <strong>{{ num(asset.co2.co2_kg) }} kg</strong><template v-if="asset.co2.annuo_kg !== null"> · assorbimento medio {{ num(asset.co2.annuo_kg, 1) }} kg/anno</template><template v-if="asset.co2.valore_euro !== null"> · controvalore <strong>{{ num(asset.co2.valore_euro) }} euro</strong></template>
             <span class="mt-1 block text-gray-400">
-                Valore stimato, non misurato: {{ asset.co2.metodo }}<template v-if="asset.co2.valore_euro !== null">; prezzo di {{ num(asset.co2.prezzo_tonnellata) }} euro per tonnellata di CO2 ({{ asset.co2.prezzo_fonte }})</template>.
+                Valore stimato, non misurato: {{ asset.co2.metodo }}<template v-if="asset.co2.valore_euro !== null">; prezzo di {{ num(asset.co2.prezzo_tonnellata, 0, 2) }} euro per tonnellata di CO2 ({{ asset.co2.prezzo_fonte }})</template>.
                 È il dato che compare sul portale pubblico, se acceso per il committente.
             </span>
         </div>

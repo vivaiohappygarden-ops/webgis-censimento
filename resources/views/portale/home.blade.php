@@ -140,8 +140,10 @@
                     <div class="voce">Anidride carbonica immagazzinata</div>
                 </div>
                 {{-- Statistiche in cache calcolate prima dell'aggiornamento
-                     non hanno ancora la chiave: il riquadro aspetta il ricalcolo --}}
-                @if (($statistiche['co2']['euro'] ?? null) !== null)
+                     non hanno ancora la chiave: il riquadro aspetta il ricalcolo.
+                     Prezzo e fonte arrivano dallo stesso payload in cache del
+                     numero: la nota dichiara il prezzo davvero applicato --}}
+                @if (($statistiche['co2']['euro'] ?? null) !== null && ($statistiche['co2']['prezzo'] ?? null) !== null)
                     <div class="numero">
                         <div class="valore">{{ number_format($statistiche['co2']['euro'], 0, ',', '.') }} &euro;<sup>*</sup></div>
                         <div class="voce">Controvalore economico stimato</div>
@@ -151,6 +153,27 @@
         </div>
 
     </div>
+
+    {{-- La nota che scioglie l'asterisco sta fuori dal blocco della mappa:
+         il dato stimato va dichiarato anche se la mappa non c'è --}}
+    @if ($conCo2)
+        <div class="dentro">
+            <p class="nota">
+                <sup>*</sup> Valore stimato, non misurato, calcolato
+                @if ($statistiche['co2']['alberi'] === 1)
+                    su un albero di cui è noto
+                @else
+                    su {{ number_format($statistiche['co2']['alberi'], 0, ',', '.') }} alberi di cui è noto
+                @endif
+                il diametro del tronco: {{ config('co2.modello') }}.
+                @if (($statistiche['co2']['euro'] ?? null) !== null && ($statistiche['co2']['prezzo'] ?? null) !== null)
+                    Il controvalore economico applica un prezzo di
+                    {{ number_format($statistiche['co2']['prezzo'], fmod($statistiche['co2']['prezzo'], 1.0) == 0.0 ? 0 : 2, ',', '.') }} euro
+                    per tonnellata di anidride carbonica ({{ $statistiche['co2']['fonte'] }}).
+                @endif
+            </p>
+        </div>
+    @endif
 
     @if ($estensione && count($sfondi))
         <a class="anteprima" href="{{ $portale->url('/mappa') }}" aria-label="Apri la mappa del verde">
@@ -166,22 +189,6 @@
                 @endforeach
             </div>
 
-            @if ($conCo2)
-                <p class="nota">
-                    <sup>*</sup> Valore stimato, non misurato, calcolato
-                    @if ($statistiche['co2']['alberi'] === 1)
-                        su un albero di cui è noto
-                    @else
-                        su {{ number_format($statistiche['co2']['alberi'], 0, ',', '.') }} alberi di cui è noto
-                    @endif
-                    il diametro del tronco: {{ config('co2.modello') }}.
-                    @if (($statistiche['co2']['euro'] ?? null) !== null)
-                        Il controvalore economico applica un prezzo di
-                        {{ number_format((float) config('co2.euro_per_tonnellata'), 0, ',', '.') }} euro
-                        per tonnellata di anidride carbonica ({{ config('co2.prezzo_fonte') }}).
-                    @endif
-                </p>
-            @endif
         </div>
 
         @php
