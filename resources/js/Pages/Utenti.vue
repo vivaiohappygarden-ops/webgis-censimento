@@ -263,10 +263,70 @@ async function savePerizia() {
     }
 }
 
+// Intervalli di ricontrollo VTA: mesi per classe di propensione al cedimento
+const intervalli = reactive({
+    form: { A: null, B: null, C: null, 'C/D': null },
+    defaults: {},
+    personalizzato: false,
+    busy: false,
+    message: '',
+    messageOk: false,
+});
+
+function applicaIntervalli(data) {
+    for (const classe of ['A', 'B', 'C', 'C/D']) {
+        intervalli.form[classe] = data.data[classe];
+    }
+    intervalli.defaults = data.defaults;
+    intervalli.personalizzato = data.personalizzato;
+}
+
+async function loadIntervalli() {
+    try {
+        const { data } = await axios.get('/api/v1/vta/intervalli');
+        applicaIntervalli(data);
+    } catch {
+        // Il pannello resta compilabile anche se la lettura fallisce
+    }
+}
+
+async function saveIntervalli() {
+    intervalli.busy = true;
+    intervalli.message = '';
+    try {
+        const { data } = await axios.put('/api/v1/vta/intervalli', { mesi: { ...intervalli.form } });
+        applicaIntervalli(data);
+        intervalli.message = 'Salvato: vale per le prossime valutazioni, le date già assegnate non cambiano.';
+        intervalli.messageOk = true;
+    } catch (err) {
+        intervalli.message = firstError(err, 'Salvataggio non riuscito');
+        intervalli.messageOk = false;
+    } finally {
+        intervalli.busy = false;
+    }
+}
+
+async function ripristinaIntervalli() {
+    intervalli.busy = true;
+    intervalli.message = '';
+    try {
+        const { data } = await axios.put('/api/v1/vta/intervalli', { ripristina: true });
+        applicaIntervalli(data);
+        intervalli.message = 'Ripristinati i mesi predefiniti.';
+        intervalli.messageOk = true;
+    } catch (err) {
+        intervalli.message = firstError(err, 'Ripristino non riuscito');
+        intervalli.messageOk = false;
+    } finally {
+        intervalli.busy = false;
+    }
+}
+
 onMounted(() => {
     load();
     loadGestionale();
     loadPerizia();
+    loadIntervalli();
 });
 </script>
 
@@ -387,6 +447,43 @@ onMounted(() => {
                 </div>
                 <p v-if="perizia.message" class="mt-3 rounded-lg px-3 py-2 text-sm" :class="perizia.messageOk ? 'bg-green-100 text-green-900' : 'bg-red-50 text-red-700'" data-test="perizia-msg">{{ perizia.message }}</p>
                 <button class="mt-3 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50" :disabled="perizia.busy" data-test="perizia-save" @click="savePerizia">Salva</button>
+            </section>
+
+            <!-- Intervalli di ricontrollo VTA per classe di propensione al cedimento -->
+            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" data-test="vta-intervalli">
+                <h2 class="text-sm font-semibold">Intervalli di ricontrollo VTA</h2>
+                <p class="mt-1 text-xs text-gray-500">
+                    Quando una valutazione si salva senza data di prossimo controllo, il programma la
+                    calcola sommando questi mesi alla data del sopralluogo, secondo la classe di
+                    propensione al cedimento. Una data scritta a mano non viene mai sovrascritta.
+                    La classe D non riceve una data: l'esito è l'abbattimento, non un nuovo appuntamento.
+                </p>
+                <div class="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+                    <label v-for="classe in ['A', 'B', 'C', 'C/D']" :key="classe" class="block text-xs">
+                        <span class="text-gray-500">Classe {{ classe }} (mesi)</span>
+                        <input
+                            v-model.number="intervalli.form[classe]"
+                            type="number" min="1" max="240" step="1"
+                            :data-test="`intervallo-${classe === 'C/D' ? 'CD' : classe}`"
+                            class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm"
+                        >
+                        <span class="mt-1 block text-gray-400">predefinito {{ intervalli.defaults[classe] ?? '—' }}</span>
+                    </label>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">
+                    Il cambio vale per le prossime valutazioni: le scadenze già assegnate restano come sono.
+                </p>
+                <p v-if="intervalli.message" class="mt-3 rounded-lg px-3 py-2 text-sm" :class="intervalli.messageOk ? 'bg-green-100 text-green-900' : 'bg-red-50 text-red-700'" data-test="intervalli-msg">{{ intervalli.message }}</p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <button class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50" :disabled="intervalli.busy" data-test="intervalli-save" @click="saveIntervalli">Salva</button>
+                    <button
+                        v-if="intervalli.personalizzato"
+                        class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                        :disabled="intervalli.busy"
+                        data-test="intervalli-ripristina"
+                        @click="ripristinaIntervalli"
+                    >Torna ai predefiniti</button>
+                </div>
             </section>
 
             <!-- Collegamento al gestionale WordPress -->

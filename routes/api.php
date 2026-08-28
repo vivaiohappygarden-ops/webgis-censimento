@@ -94,6 +94,8 @@ Route::prefix('v1')->group(function () {
         Route::get('assessments/{id}/perizia-pdf', [\App\Http\Controllers\Api\V1\PeriziaController::class, 'pdf'])->whereUuid('id');
         Route::get('perizia/settings', [\App\Http\Controllers\Api\V1\PeriziaController::class, 'settings']);
         Route::put('perizia/settings', [\App\Http\Controllers\Api\V1\PeriziaController::class, 'updateSettings']);
+        Route::get('vta/intervalli', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'intervalli']);
+        Route::put('vta/intervalli', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'aggiornaIntervalli']);
         Route::get('vta/dashboard', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'index']);
         Route::get('vta/alberi', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'alberi']);
         Route::post('vta/valida', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'valida']);

@@ -25,6 +25,24 @@ const apriValutazione = new URLSearchParams(window.location.search).get('vta') =
 
 const asset = ref(null);
 
+// Street View di Google sul punto dell'elemento: per linee e superfici si
+// prende il primo vertice disegnato. È un semplice collegamento esterno,
+// senza chiavi né richieste: si apre solo se l'utente lo clicca
+const streetView = computed(() => {
+    const g = asset.value?.geom_geojson;
+    const p = ! g ? null
+        : g.type === 'Point' ? g.coordinates
+        : g.type === 'LineString' ? g.coordinates[0]
+        : g.type === 'Polygon' ? g.coordinates[0]?.[0]
+        : g.type === 'MultiLineString' ? g.coordinates[0]?.[0]
+        : g.type === 'MultiPolygon' ? g.coordinates[0]?.[0]?.[0]
+        : null;
+
+    return Array.isArray(p) && p.length >= 2
+        ? `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${p[1]},${p[0]}`
+        : null;
+});
+
 // Senza la scheda la pagina resterebbe bianca: se il caricamento fallisce si
 // dice perché e si offre di riprovare
 const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
@@ -379,7 +397,16 @@ onBeforeUnmount(() => map?.remove());
                                 </h1>
                                 <p class="text-sm text-gray-500">{{ asset.object_type?.name }}</p>
                             </div>
-                            <div class="flex items-center gap-2">
+                            <div class="flex flex-wrap items-center justify-end gap-2">
+                                <a
+                                    v-if="streetView"
+                                    :href="streetView"
+                                    target="_blank"
+                                    rel="noopener"
+                                    data-test="street-view"
+                                    title="Apre Google Street View sul punto dell'elemento, in un'altra scheda"
+                                    class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                                >Street View</a>
                                 <button
                                     class="rounded-lg border border-green-700 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
                                     :disabled="pdfBusy"

@@ -120,6 +120,16 @@ function goTo(id) {
                             permette di correggerne la posizione o il contorno. Se nel frattempo un
                             collega ha modificato l'elemento, il salvataggio si ferma e lo dice.
                         </p>
+                        <h3>Street View</h3>
+                        <p>
+                            Nel riquadro dell'elemento sulla mappa e in cima alla scheda c'è il
+                            collegamento <strong>Street View</strong>: apre Google Street View in
+                            un'altra scheda del browser, sul punto cliccato (dalla mappa) o sul punto
+                            dell'elemento (dalla scheda). Serve a riconoscere l'albero dalla strada
+                            senza uscire, per esempio prima di un sopralluogo. È un semplice
+                            collegamento: il programma non manda nulla a Google finché non lo clicchi,
+                            e le immagini sono quelle pubbliche di Google, con la loro data.
+                        </p>
                         <h3>Le viste salvate (filtri con un nome)</h3>
                         <p>
                             Negli elenchi <strong>Censimento</strong>, <strong>Lavori</strong> e
@@ -191,6 +201,17 @@ function goTo(id) {
                             <strong>Committente</strong> in testata restringe tutta la parte di lavoro a
                             un solo committente; il Bilancio arboreo, nella colonna di destra, ha il suo
                             filtro a parte perché il documento si prepara per l'ente che lo riceve.
+                        </p>
+                        <h3>Gli intervalli di ricontrollo</h3>
+                        <p>
+                            Quando salvi una valutazione lasciando vuoto "Prossimo controllo", il
+                            programma calcola la data sommando al sopralluogo un numero di mesi che
+                            dipende dalla classe: di serie A 60, B 36, C 24, C/D 12; la classe D non
+                            riceve una data perché l'esito è l'abbattimento. Questi mesi si cambiano
+                            dalla pagina <strong>Utenti</strong>, riquadro <strong>"Intervalli di
+                            ricontrollo VTA"</strong> (solo amministratore): il cambio vale per le
+                            prossime valutazioni, le scadenze già assegnate non si toccano, e una data
+                            scritta a mano non viene mai sovrascritta.
                         </p>
                         <h3>L'anagrafica agronomica dell'albero</h3>
                         <p>

@@ -588,7 +588,12 @@ function onFeatureClick(e) {
         commutaElemento(f.properties);
         return;
     }
-    selected.value = { ...f.properties };
+    // Il punto cliccato serve per aprire Street View proprio lì: per un
+    // prato o un filare è più utile del centro della geometria
+    selected.value = {
+        ...f.properties,
+        streetView: `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${e.lngLat.lat},${e.lngLat.lng}`,
+    };
 }
 
 // ---- Selezione di elementi per un ordine di lavoro ----
@@ -1120,6 +1125,17 @@ onBeforeUnmount(() => {
                     class="mt-3 block rounded-lg bg-green-700 px-3 py-2 text-center text-sm font-medium text-white hover:bg-green-800"
                 >
                     Apri scheda
+                </a>
+                <a
+                    v-if="selected.streetView"
+                    :href="selected.streetView"
+                    target="_blank"
+                    rel="noopener"
+                    data-test="street-view-mappa"
+                    title="Apre Google Street View sul punto cliccato, in un'altra scheda"
+                    class="mt-2 block rounded-lg border border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                    Street View
                 </a>
                 <button
                     v-if="canUpdate"

@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -23,7 +24,75 @@ class TreeAssessmentController extends Controller implements HasMiddleware
             new Middleware('can:assets.update', only: ['store', 'update']),
             new Middleware('can:assets.delete', only: ['destroy']),
             new Middleware('can:assets.update', only: ['valida']),
+            // Gli intervalli valgono per tutta l'organizzazione: li tocca
+            // l'amministratore, dalla pagina Utenti come le altre impostazioni
+            new Middleware('can:users.manage', only: ['intervalli', 'aggiornaIntervalli']),
         ];
+    }
+
+    /** Mesi al ricontrollo per classe: quelli in uso e i predefiniti. */
+    public function intervalli(Request $request): JsonResponse
+    {
+        $settings = \App\Models\Organization::find($request->user()->tenant_id)?->settings ?? [];
+        $personalizzati = $settings['vta_recheck_months'] ?? [];
+
+        return response()->json([
+            'data' => array_replace(TreeAssessment::DEFAULT_RECHECK_MONTHS, $personalizzati),
+            'defaults' => TreeAssessment::DEFAULT_RECHECK_MONTHS,
+            'personalizzato' => $personalizzati !== [],
+        ]);
+    }
+
+    /**
+     * Cambia i mesi al ricontrollo per classe, o torna ai predefiniti.
+     * Vale per le prossime valutazioni: le date gia' assegnate non cambiano.
+     * La classe D resta senza data: l'esito e' l'abbattimento, non un
+     * nuovo appuntamento.
+     */
+    public function aggiornaIntervalli(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'ripristina' => ['sometimes', 'boolean'],
+            'mesi' => ['required_without:ripristina', 'array'],
+            'mesi.A' => ['required_with:mesi', 'integer', 'min:1', 'max:240'],
+            'mesi.B' => ['required_with:mesi', 'integer', 'min:1', 'max:240'],
+            'mesi.C' => ['required_with:mesi', 'integer', 'min:1', 'max:240'],
+            'mesi.C/D' => ['required_with:mesi', 'integer', 'min:1', 'max:240'],
+        ], [], [
+            'mesi.A' => 'mesi per la classe A',
+            'mesi.B' => 'mesi per la classe B',
+            'mesi.C' => 'mesi per la classe C',
+            'mesi.C/D' => 'mesi per la classe C/D',
+        ]);
+
+        // Sotto lock e rileggendo dentro la transazione: nella stessa colonna
+        // "settings" vivono il contatore dei protocolli e le altre
+        // impostazioni, che non devono sparire per un salvataggio incrociato
+        DB::transaction(function () use ($request, $data) {
+            $organization = \App\Models\Organization::query()
+                ->lockForUpdate()
+                ->findOrFail($request->user()->tenant_id);
+
+            $settings = $organization->settings ?? [];
+            if ($data['ripristina'] ?? false) {
+                unset($settings['vta_recheck_months']);
+            } else {
+                $settings['vta_recheck_months'] = [
+                    'A' => (int) $data['mesi']['A'],
+                    'B' => (int) $data['mesi']['B'],
+                    'C' => (int) $data['mesi']['C'],
+                    'C/D' => (int) $data['mesi']['C/D'],
+                ];
+            }
+            $organization->forceFill(['settings' => $settings])->save();
+        });
+
+        Audit::log('vta.intervalli_updated', null, [
+            'ripristina' => (bool) ($data['ripristina'] ?? false),
+            'mesi' => $data['mesi'] ?? null,
+        ]);
+
+        return $this->intervalli($request);
     }
 
     public function index(string $assetId): JsonResponse
