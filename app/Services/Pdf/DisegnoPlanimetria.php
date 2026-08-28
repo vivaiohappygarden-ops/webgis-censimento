@@ -36,6 +36,9 @@ class DisegnoPlanimetria
 
     private bool $conSfondo = false;
 
+    /** @var list<array{0: float, 1: float, 2: float, 3: float}> rettangoli delle etichette gia' scritte */
+    private array $etichetteOccupate = [];
+
     public function __construct(private SfondoCartografico $sfondo) {}
 
     /**
@@ -45,14 +48,17 @@ class DisegnoPlanimetria
      */
     public function area(array $area): array
     {
+        // L'inquadratura comprende TUTTE le geometrie assegnate all'area:
+        // una siepe censita oltre il perimetro deve entrare nel foglio,
+        // non sparire in silenzio mentre la didascalia la conta
         $punti = [];
         foreach ($area['anelli'] as $anello) {
             $punti = array_merge($punti, $anello);
         }
         $margineChiome = 0.0;
         foreach ($area['elementi'] as $e) {
-            if ($e['tipo'] === 'POINT') {
-                $punti[] = $e['geo']['coordinates'];
+            $punti = array_merge($punti, self::verticiDi($e));
+            if (in_array($e['tipo'], ['POINT', 'MULTIPOINT'], true)) {
                 $margineChiome = max($margineChiome, (float) ($e['chioma_m'] ?? 0) / 2);
             }
         }
@@ -110,6 +116,25 @@ class DisegnoPlanimetria
         return ['png' => $this->chiudi(), 'sfondo' => $this->conSfondo];
     }
 
+    /**
+     * Tutti i vertici di un elemento, qualunque sia la sua geometria.
+     *
+     * @return list<array{0: float, 1: float}>
+     */
+    private static function verticiDi(array $e): array
+    {
+        $geo = $e['geo'];
+
+        return match ($e['tipo']) {
+            'POINT' => [$geo['coordinates']],
+            'MULTIPOINT' => $geo['coordinates'],
+            'LINESTRING' => $geo['coordinates'],
+            'MULTILINESTRING' => array_merge(...$geo['coordinates']),
+            'POLYGON', 'MULTIPOLYGON' => array_merge(...\App\Services\Territorio\PlanimetriaDati::anelli($geo)),
+            default => [],
+        };
+    }
+
     // --- Impianto -----------------------------------------------------------
 
     /** @param list<array{0: float, 1: float}> $punti */
@@ -149,6 +174,7 @@ class DisegnoPlanimetria
         }
 
         $this->bbox = [$minx, $miny, $maxx, $maxy];
+        $this->etichetteOccupate = [];
         $this->w = $larghezza * self::SS;
         $this->h = $altezza * self::SS;
         $this->scala = $this->w / ($maxx - $minx);
@@ -315,12 +341,17 @@ class DisegnoPlanimetria
         $geo = $e['geo'];
         switch ($e['tipo']) {
             case 'POINT':
-                if ($e['albero']) {
-                    $this->chioma($geo['coordinates'], $e['chioma_m'], (string) $e['id']);
-                } else {
-                    [$x, $y] = $this->px($geo['coordinates']);
-                    imagefilledellipse($this->im, (int) $x, (int) $y, 14, 14, $this->colore(255, 255, 255));
-                    imagefilledellipse($this->im, (int) $x, (int) $y, 10, 10, $this->colore(87, 97, 92));
+            case 'MULTIPOINT':
+                // Un MultiPoint (dagli import) disegna ogni sua parte
+                $parti = $e['tipo'] === 'POINT' ? [$geo['coordinates']] : $geo['coordinates'];
+                foreach ($parti as $i => $parte) {
+                    if ($e['albero']) {
+                        $this->chioma($parte, $e['chioma_m'], $e['id'].'#'.$i);
+                    } else {
+                        [$x, $y] = $this->px($parte);
+                        imagefilledellipse($this->im, (int) $x, (int) $y, 14, 14, $this->colore(255, 255, 255));
+                        imagefilledellipse($this->im, (int) $x, (int) $y, 10, 10, $this->colore(87, 97, 92));
+                    }
                 }
                 break;
             case 'LINESTRING':
@@ -417,35 +448,44 @@ class DisegnoPlanimetria
         return $punti;
     }
 
+    /**
+     * L'etichetta dell'elemento, ancorata al punto DENTRO la figura
+     * (ST_PointOnSurface: regge anche superfici concave e linee) e senza
+     * sovrapporsi alle etichette gia' scritte: se sotto non c'e' posto si
+     * prova sopra, e se e' pieno anche li' si rinuncia — un codice
+     * illeggibile perche' accavallato e' peggio di un codice in meno.
+     */
     private function etichetta(array $e): void
     {
         if (! $e['etichetta']) {
             return;
         }
-        $p = match ($e['tipo']) {
-            'POINT' => $e['geo']['coordinates'],
-            'LINESTRING' => $e['geo']['coordinates'][intdiv(count($e['geo']['coordinates']), 2)],
-            'MULTILINESTRING' => $e['geo']['coordinates'][0][0],
-            default => $this->baricentro(\App\Services\Territorio\PlanimetriaDati::anelli($e['geo'])[0] ?? []),
-        };
-        if ($p === null) {
-            return;
-        }
-        [$x, $y] = $this->px($p);
-        $scarto = $e['tipo'] === 'POINT' ? $this->metri(max(($e['chioma_m'] ?? 0) / 2, 1)) + 16 : 8;
-        $this->testo((string) $e['etichetta'], (float) $x, (float) $y + $scarto + 20, 19, centrato: true);
-    }
+        [$x, $y] = $this->px($e['ancora']);
+        $scarto = in_array($e['tipo'], ['POINT', 'MULTIPOINT'], true)
+            ? $this->metri(max(($e['chioma_m'] ?? 0) / 2, 1)) + 16
+            : 8;
 
-    private function baricentro(array $anello): ?array
-    {
-        if ($anello === []) {
-            return null;
-        }
+        $testo = (string) $e['etichetta'];
+        $font = base_path('vendor/dompdf/dompdf/lib/fonts/DejaVuSans.ttf');
+        $box = imagettfbbox(19, 0, $font, $testo);
+        $w = $box[2] - $box[0];
 
-        return [
-            array_sum(array_column($anello, 0)) / count($anello),
-            array_sum(array_column($anello, 1)) / count($anello),
-        ];
+        foreach ([$y + $scarto + 20, $y - $scarto - 8] as $base) {
+            $rett = [$x - $w / 2 - 6, $base - 24, $x + $w / 2 + 6, $base + 6];
+            $libero = true;
+            foreach ($this->etichetteOccupate as $o) {
+                if ($rett[0] < $o[2] && $rett[2] > $o[0] && $rett[1] < $o[3] && $rett[3] > $o[1]) {
+                    $libero = false;
+                    break;
+                }
+            }
+            if ($libero) {
+                $this->etichetteOccupate[] = $rett;
+                $this->testo($testo, (float) $x, (float) $base, 19, centrato: true);
+
+                return;
+            }
+        }
     }
 
     /** Testo con alone bianco: leggibile anche sopra la fotografia. */

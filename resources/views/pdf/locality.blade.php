@@ -84,6 +84,13 @@
             · {{ number_format($tavola['mq'], 2, ',', '.') }} m² · {{ $tavola['conteggi'] }}{{ $tavola['etichette'] ? '' : ' · etichette omesse per leggibilità' }}
         </div>
     @endforeach
+    @if (($planimetrie['omesse'] ?? 0) > 0)
+        <div class="didascalia" style="margin-top: 6px;">
+            Le tavole si fermano alle prime {{ count($planimetrie['aree']) }} aree:
+            {{ $planimetrie['omesse'] }} {{ $planimetrie['omesse'] === 1 ? 'area resta' : 'aree restano' }}
+            senza planimetria (i conteggi della scheda le comprendono comunque).
+        </div>
+    @endif
     <div class="didascalia" style="margin-top: 6px;">
         Legenda: perimetro dell'area in verde scuro; alberi con chioma sagomata (in scala quando il
         diametro è misurato, simbolo convenzionale più tenue quando non lo è) e punto del fusto;

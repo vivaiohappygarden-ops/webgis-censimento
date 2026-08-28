@@ -23,12 +23,22 @@ class SfondoCartografico
     private const MASSIMO_RIQUADRI = 25;
 
     /**
+     * Al primo intoppo il servizio si spegne per il resto della stampa: se la
+     * rete non risponde per la prima tavola non rispondera' nemmeno per le
+     * altre, e ogni tavola in piu' sarebbe solo attesa buttata.
+     */
+    private bool $fuoriUso = false;
+
+    /** Secondi gia' spesi in rete in questa stampa (la cache non conta). */
+    private float $spesi = 0.0;
+
+    /**
      * @param array{0: float, 1: float, 2: float, 3: float} $bbox EPSG:3857 [minx, miny, maxx, maxy]
      * @return \GdImage|null l'immagine (larga $larghezza, in proporzione) o null se lo sfondo non si puo' avere
      */
     public function per(array $bbox, int $larghezza, int $altezza): ?\GdImage
     {
-        if (config('planimetrie.sfondo') !== 'auto') {
+        if (config('planimetrie.sfondo') !== 'auto' || $this->fuoriUso) {
             return null;
         }
 
@@ -59,8 +69,17 @@ class SfondoCartografico
         $mosaico = imagecreatetruecolor(($tx1 - $tx0 + 1) * self::LATO, ($ty1 - $ty0 + 1) * self::LATO);
         for ($tx = $tx0; $tx <= $tx1; $tx++) {
             for ($ty = $ty0; $ty <= $ty1; $ty++) {
+                // Tetto complessivo: una rete lenta ma viva non deve tenere
+                // in ostaggio la stampa per minuti
+                if ($this->spesi > (float) config('planimetrie.tempo_massimo', 20)) {
+                    $this->fuoriUso = true;
+                    imagedestroy($mosaico);
+
+                    return null;
+                }
                 $riquadro = $this->riquadro($z, $tx, $ty);
                 if ($riquadro === null) {
+                    $this->fuoriUso = true;
                     imagedestroy($mosaico);
 
                     return null;
@@ -93,7 +112,8 @@ class SfondoCartografico
         // La cache e' per fornitore: cambiando l'indirizzo dei riquadri non
         // si mischiano immagini di servizi diversi
         $fornitore = substr(md5((string) config('planimetrie.tile_url')), 0, 12);
-        $percorso = storage_path("app/planimetrie-tiles/{$fornitore}/{$z}/{$x}/{$y}.png");
+        $base = config('planimetrie.cache_dir') ?: storage_path('app/planimetrie-tiles');
+        $percorso = "{$base}/{$fornitore}/{$z}/{$x}/{$y}.png";
         $ttl = ((int) config('planimetrie.cache_giorni', 30)) * 86400;
         if (is_file($percorso) && filemtime($percorso) > time() - $ttl) {
             $img = @imagecreatefromstring((string) file_get_contents($percorso));
@@ -106,12 +126,15 @@ class SfondoCartografico
             [(string) $z, (string) $x, (string) $y],
             (string) config('planimetrie.tile_url'));
 
+        $inizio = microtime(true);
         try {
             $risposta = Http::timeout((int) config('planimetrie.timeout', 4))
                 ->withHeaders(['User-Agent' => 'WebGIS-Censimento/1.0 (stampa scheda localita)'])
                 ->get($url);
         } catch (\Throwable) {
             return null;
+        } finally {
+            $this->spesi += microtime(true) - $inizio;
         }
         if (! $risposta->successful()) {
             return null;

@@ -40,8 +40,14 @@ class PlanimetrieTest extends TestCase
         $this->stampe = new RaccoglitorePdf;
         $this->app->instance(PdfRenderer::class, $this->stampe);
 
-        // Nei test niente rete di serie: il disegno tecnico basta
-        config(['planimetrie.sfondo' => 'disegno']);
+        // Nei test niente rete di serie: il disegno tecnico basta. E la
+        // scorta dei riquadri va in una cartella usa e getta: senza, un
+        // riquadro finto salvato oggi farebbe passare il test di domani
+        // senza piu' toccare Http::fake
+        config([
+            'planimetrie.sfondo' => 'disegno',
+            'planimetrie.cache_dir' => storage_path('framework/testing/planimetrie-'.uniqid()),
+        ]);
     }
 
     private function localita(): Locality
@@ -175,6 +181,57 @@ class PlanimetrieTest extends TestCase
 
         $this->assertStringContainsString('Planimetrie delle aree', $html);
         $this->assertStringNotContainsString('OpenStreetMap', $html);
+    }
+
+    public function test_un_multipoint_dagli_import_si_disegna_e_si_conta(): void
+    {
+        // L'import di uno shapefile puo' produrre MultiPoint a piu' parti:
+        // la tavola deve disegnarli, non solo contarli
+        $this->creaElemento('P', ['type' => 'MultiPoint', 'coordinates' => [
+            [9.1900, 45.4650], [9.1910, 45.4653],
+        ]], ['crown_diameter_m' => 6]);
+
+        $this->get("/api/v1/localities/{$this->localita()->id}/pdf")->assertOk();
+        $html = $this->stampe->html['pdf.locality'];
+        $this->assertStringContainsString('1 elemento (1 albero)', $html);
+        $this->assertStringContainsString('data:image/png;base64,', $html);
+    }
+
+    public function test_oltre_il_tetto_le_tavole_si_omettono_e_la_stampa_lo_dichiara(): void
+    {
+        config(['planimetrie.massimo_tavole' => 1]);
+        Area::create([
+            'tenant_id' => $this->organizzazione->id,
+            'locality_id' => $this->area->locality_id,
+            'name' => 'Area Due',
+            'geom' => Geometry::toEwkb($this->squarePolygon(), forceMultiPolygon: true),
+        ]);
+
+        $this->get("/api/v1/localities/{$this->localita()->id}/pdf")->assertOk();
+        $html = $this->stampe->html['pdf.locality'];
+        $this->assertStringContainsString('1 area resta', $html);
+        $this->assertStringContainsString('senza planimetria', $html);
+    }
+
+    public function test_al_primo_intoppo_lo_sfondo_si_spegne_per_tutta_la_stampa(): void
+    {
+        config([
+            'planimetrie.sfondo' => 'auto',
+            'planimetrie.tile_url' => 'https://riquadri-morti.example/{z}/{x}/{y}.png',
+        ]);
+        Http::fake(['riquadri-morti.example/*' => Http::response('', 503)]);
+
+        Area::create([
+            'tenant_id' => $this->organizzazione->id,
+            'locality_id' => $this->area->locality_id,
+            'name' => 'Area Due',
+            'geom' => Geometry::toEwkb($this->squarePolygon(), forceMultiPolygon: true),
+        ]);
+
+        // Tre tavole (quadro + due aree), ma UNA sola richiesta in rete:
+        // dopo il primo fallimento non si aspetta piu' niente
+        $this->get("/api/v1/localities/{$this->localita()->id}/pdf")->assertOk();
+        $this->assertCount(1, Http::recorded());
     }
 
     public function test_il_disegno_e_riproducibile_a_parita_di_dati(): void

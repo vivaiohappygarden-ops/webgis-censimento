@@ -38,8 +38,14 @@ class Planimetria
             $quadro = ['png' => base64_encode($esito['png'])];
         }
 
+        // Oltre il tetto le tavole si omettono e la stampa lo dichiara: un
+        // comune con decine di aree non deve esaurire memoria e tempo PHP
+        $massimo = max(1, (int) config('planimetrie.massimo_tavole', 20));
+        $daDisegnare = array_slice($dati['aree'], 0, $massimo);
+        $omesse = count($dati['aree']) - count($daDisegnare);
+
         $aree = [];
-        foreach ($dati['aree'] as $area) {
+        foreach ($daDisegnare as $area) {
             $esito = $disegno->area($area);
             $sfondoUsato = $sfondoUsato || $esito['sfondo'];
             $aree[] = [
@@ -59,6 +65,7 @@ class Planimetria
             'attribuzione' => (string) config('planimetrie.attribuzione'),
             'quadro' => $quadro,
             'aree' => $aree,
+            'omesse' => $omesse,
         ];
     }
 

@@ -45,6 +45,9 @@ class PlanimetriaDati
                 SELECT a.id, a.census_code,
                        GeometryType(a.geom) AS gtype,
                        ST_AsGeoJSON(ST_Transform(a.geom, 3857), 2) AS g,
+                       -- Il punto "dentro" la figura: e' l'ancora giusta per
+                       -- l'etichetta anche su superfici concave e linee
+                       ST_AsGeoJSON(ST_Transform(ST_PointOnSurface(a.geom), 3857), 2) AS ancora,
                        (tr.asset_id IS NOT NULL) AS albero,
                        tr.crown_diameter_m
                 FROM assets a
@@ -67,6 +70,7 @@ class PlanimetriaDati
                     'etichetta' => $e->census_code,
                     'tipo' => $e->gtype,
                     'geo' => json_decode($e->g, true),
+                    'ancora' => json_decode($e->ancora, true)['coordinates'],
                     'albero' => (bool) $e->albero,
                     'chioma_m' => $e->crown_diameter_m !== null ? (float) $e->crown_diameter_m : null,
                 ], $elementi),

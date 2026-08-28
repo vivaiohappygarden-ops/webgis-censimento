@@ -19,6 +19,17 @@ return [
     // Secondi concessi al recupero di ogni riquadro: oltre, si ripiega
     'timeout' => (int) env('PLANIMETRIE_TIMEOUT', 4),
 
+    // Secondi complessivi di rete per l'INTERA stampa: una rete lenta ma
+    // viva non deve tenere in ostaggio il PDF per minuti
+    'tempo_massimo' => (int) env('PLANIMETRIE_TEMPO_MASSIMO', 20),
+
+    // Oltre questo numero di tavole la stampa le omette e lo dichiara:
+    // un comune con decine di aree non deve esaurire memoria e tempo PHP
+    'massimo_tavole' => (int) env('PLANIMETRIE_MASSIMO_TAVOLE', 20),
+
+    // Cartella della scorta dei riquadri (null = storage/app/planimetrie-tiles)
+    'cache_dir' => env('PLANIMETRIE_CACHE_DIR'),
+
     // I riquadri scaricati si conservano su disco per non richiederli a ogni
     // ristampa (rispetto per il servizio e stampe piu' veloci)
     'cache_giorni' => 30,
