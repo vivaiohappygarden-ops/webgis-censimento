@@ -195,9 +195,13 @@ const planner = reactive({
 });
 
 // Un'impresa esterna appartiene a un committente: nella tendina compare
-// solo per gli ordini di quel committente (le interne per tutti)
+// solo per gli ordini di quel committente (le interne per tutti). La
+// squadra GIA' assegnata all'ordine resta comunque in elenco, o la
+// tendina sembrerebbe vuota e salvare le date la staccherebbe
 const squadrePlanner = computed(() => props.teams.filter((t) =>
-    ! t.is_external || (t.client_id && t.client_id === planner.order?.client_id)));
+    ! t.is_external
+    || (t.client_id && t.client_id === planner.order?.client_id)
+    || t.id === planner.order?.team_id));
 const etichettaSquadra = (t) => t.is_external
     ? `${t.name} — impresa${t.client ? ' di ' + t.client.name : ''}`
     : t.name;

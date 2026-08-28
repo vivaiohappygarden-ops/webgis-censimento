@@ -35,8 +35,7 @@ class ImpresaPortalController extends Controller implements HasMiddleware
     {
         $squadre = $this->squadreDellUtente($request);
 
-        $ordini = WorkOrder::query()
-            ->whereIn('team_id', $squadre->pluck('id'))
+        $ordini = $this->soloDelCommittente(WorkOrder::query(), $squadre)
             ->whereNotIn('status', ['draft', 'cancelled'])
             ->where(function ($q) {
                 $q->where('status', '!=', 'completed')
@@ -120,8 +119,7 @@ class ImpresaPortalController extends Controller implements HasMiddleware
         $squadre = $this->squadreDellUtente($request);
 
         $richiesta = DB::transaction(function () use ($request, $id, $data, $squadre) {
-            $ordine = WorkOrder::query()
-                ->whereIn('team_id', $squadre->pluck('id'))
+            $ordine = $this->soloDelCommittente(WorkOrder::query(), $squadre)
                 ->whereNotIn('status', ['draft', 'cancelled', 'completed'])
                 ->lockForUpdate()
                 ->findOrFail($id);
@@ -167,6 +165,27 @@ class ImpresaPortalController extends Controller implements HasMiddleware
                 ->where('user_id', $request->user()->id)
                 ->whereNull('left_on')
                 ->pluck('team_id'))
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'client_id']);
+    }
+
+    /**
+     * Solo gli ordini del committente della squadra: un ordine rimasto
+     * assegnato a un'impresa dopo un cambio di committente non si espone
+     * dal portale. Le squadre d'epoca senza committente vedono come prima.
+     */
+    private function soloDelCommittente($query, $squadre)
+    {
+        return $query->where(function ($q) use ($squadre) {
+            // Base impossibile: senza squadre non si apre niente
+            $q->whereRaw('1 = 0');
+            foreach ($squadre as $squadra) {
+                $q->orWhere(function ($qq) use ($squadra) {
+                    $qq->where('team_id', $squadra->id);
+                    if ($squadra->client_id !== null) {
+                        $qq->where('client_id', $squadra->client_id);
+                    }
+                });
+            }
+        });
     }
 }

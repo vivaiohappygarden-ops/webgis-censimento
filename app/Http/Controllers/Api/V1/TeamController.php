@@ -72,6 +72,24 @@ class TeamController extends Controller implements HasMiddleware
             $esterna = (bool) ($data['is_external'] ?? $team->is_external);
             $committente = array_key_exists('client_id', $data) ? $data['client_id'] : $team->client_id;
             $this->assertCommittentePerImpresa($esterna, $committente);
+
+            // Cambiare committente a un'impresa che ha ancora ordini aperti
+            // la farebbe entrare nei lavori di un altro (il portale li
+            // mostrerebbe): prima si chiudono o si riassegnano quegli ordini
+            if ($esterna && $committente !== $team->client_id) {
+                $vivi = \App\Models\WorkOrder::query()
+                    ->where('team_id', $team->id)
+                    ->whereNotIn('status', ['completed', 'cancelled'])
+                    ->where(fn ($q) => $q->whereNull('client_id')->orWhere('client_id', '!=', $committente))
+                    ->count();
+                if ($vivi > 0) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'client_id' => "L'impresa ha {$vivi} ".($vivi === 1 ? 'ordine non chiuso' : 'ordini non chiusi')
+                            .' di un altro committente: chiudili o riassegnali prima di cambiarle committente.',
+                    ]);
+                }
+            }
+
             $data['client_id'] = $esterna ? $committente : null;
             $data['is_external'] = $esterna;
         }

@@ -109,13 +109,23 @@ class WorkCheckController extends Controller implements HasMiddleware
                 return;
             }
 
+            // La squadra si riporta sul correttivo solo se e' ancora ammessa:
+            // un'impresa esterna nel frattempo di un altro committente (o
+            // scollegata) non si copia, e l'ordine nasce da riassegnare
+            $squadra = $workOrder->team;
+            $squadraAmmessa = $squadra === null || ! $squadra->is_external
+                || ($squadra->client_id !== null
+                    && $squadra->client_id === $workOrder->client_id
+                    && $squadra->client !== null);
+
             // L'ordine controllato resta com'è (gli stati terminali sono
             // immutabili): la ripresa del lavoro è un NUOVO ordine correttivo
             $corrective = WorkOrder::create([
                 'tenant_id' => $user->tenant_id,
                 'code' => WorkOrder::nextCode($user->tenant_id),
                 'title' => "Azione correttiva {$nonConformity->code}: {$workOrder->title}",
-                'description' => $ncData['description'],
+                'description' => $ncData['description'].($squadraAmmessa ? ''
+                    : "\n\nLa squadra dell'ordine controllato non è più ammessa per questo committente: ordine da riassegnare."),
                 'status' => 'draft',
                 'priority' => $ncData['severity'] === 'critical' ? 'urgent' : 'high',
                 'origin' => 'non_conformity',
@@ -123,7 +133,7 @@ class WorkCheckController extends Controller implements HasMiddleware
                 'client_id' => $workOrder->client_id,
                 'area_id' => $workOrder->area_id,
                 'work_type_id' => $workOrder->work_type_id,
-                'team_id' => $workOrder->team_id,
+                'team_id' => $squadraAmmessa ? $workOrder->team_id : null,
                 // Un listino nel frattempo disattivato non si applica a ordini
                 // nuovi: stessa regola della validazione degli ordini
                 'price_list_id' => $workOrder->priceList?->is_active ? $workOrder->price_list_id : null,

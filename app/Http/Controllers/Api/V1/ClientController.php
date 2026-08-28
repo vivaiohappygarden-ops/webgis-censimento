@@ -177,6 +177,16 @@ class ClientController extends Controller implements HasMiddleware
             ]);
         }
 
+        // Un'impresa esterna appartiene al suo committente: eliminandolo
+        // resterebbe agganciata a un cliente fantasma
+        $imprese = \App\Models\Team::query()->where('client_id', $client->id)->count();
+        if ($imprese > 0) {
+            throw ValidationException::withMessages([
+                'client' => "Il cliente ha {$imprese} ".($imprese === 1 ? 'impresa esterna collegata' : 'imprese esterne collegate')
+                    .': spostale su un altro committente o scollegale prima.',
+            ]);
+        }
+
         $client->delete();
         Audit::log('client.deleted', $client);
 

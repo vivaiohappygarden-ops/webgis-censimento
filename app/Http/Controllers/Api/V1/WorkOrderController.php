@@ -209,8 +209,13 @@ class WorkOrderController extends Controller implements HasMiddleware
 
             $workOrder->fill($data);
             // Un'impresa esterna lavora solo per il suo committente: il
-            // controllo avviene sui valori EFFETTIVI dopo la modifica
-            $this->assertImpresaDelCommittente($workOrder->team_id, $workOrder->client_id);
+            // controllo scatta quando squadra o committente CAMBIANO davvero.
+            // Un ordine d'epoca fuori regola resta cosi' leggibile e
+            // ritoccabile nel resto (date, descrizione, pubblicazione), ma
+            // ogni cambio di squadra o committente deve approdare in regola
+            if ($workOrder->isDirty('team_id') || $workOrder->isDirty('client_id')) {
+                $this->assertImpresaDelCommittente($workOrder->team_id, $workOrder->client_id);
+            }
 
             // L'invariante della macchina a stati vale anche qui: un ordine
             // assegnato o in corso non può restare senza squadra né responsabile
@@ -510,9 +515,17 @@ class WorkOrderController extends Controller implements HasMiddleware
                 'team_id' => "L'impresa \"{$team->name}\" non è ancora collegata a un committente: collegala dalla pagina Utenti prima di affidarle lavori.",
             ]);
         }
+        // La relazione puo' essere nulla anche con client_id valorizzato
+        // (committente eliminato in passato): mai un errore grezzo
+        $nomeCommittente = $team->client?->name;
+        if ($nomeCommittente === null) {
+            throw ValidationException::withMessages([
+                'team_id' => "L'impresa \"{$team->name}\" è collegata a un committente eliminato: sistemala dalla pagina Utenti.",
+            ]);
+        }
         if ($clientId !== $team->client_id) {
             throw ValidationException::withMessages([
-                'team_id' => "L'impresa \"{$team->name}\" lavora per {$team->client->name}: le si affidano solo ordini di quel committente.",
+                'team_id' => "L'impresa \"{$team->name}\" lavora per {$nomeCommittente}: le si affidano solo ordini di quel committente.",
             ]);
         }
     }

@@ -351,8 +351,12 @@ function commutaEsterna(team, evento) {
     if (evento.target.checked) {
         esternaInScelta.value = team.id;
     } else {
+        // Ritogliere la spunta mentre si stava solo scegliendo il
+        // committente e' una rinuncia, non una modifica: niente salvataggio
         esternaInScelta.value = null;
-        aggiornaSquadra(team, { is_external: false });
+        if (team.is_external) {
+            aggiornaSquadra(team, { is_external: false });
+        }
     }
 }
 

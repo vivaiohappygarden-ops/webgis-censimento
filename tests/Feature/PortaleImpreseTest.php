@@ -356,11 +356,136 @@ class PortaleImpreseTest extends TestCase
         $this->patchJson("/api/v1/teams/{$vecchia->id}", ['member_ids' => []])->assertOk();
     }
 
+    public function test_il_committente_di_un_impresa_non_cambia_con_ordini_aperti(): void
+    {
+        [$teamId] = $this->creaImpresa();
+        $ordine = $this->creaOrdine($teamId);
+        $altro = \App\Models\Client::create([
+            'tenant_id' => $this->organizzazione->id, 'name' => 'Altro Comune', 'client_type' => 'public',
+        ]);
+
+        // Con un ordine ancora aperto il cambio viene respinto
+        $this->patchJson("/api/v1/teams/{$teamId}", ['client_id' => $altro->id])
+            ->assertUnprocessable()->assertJsonValidationErrors(['client_id']);
+
+        // Chiuso l'ordine, il cambio passa
+        foreach (['assigned', 'in_progress', 'completed'] as $passo) {
+            $this->postJson("/api/v1/work-orders/{$ordine}/transition", ['status' => $passo])->assertOk();
+        }
+        $this->patchJson("/api/v1/teams/{$teamId}", ['client_id' => $altro->id])->assertOk();
+    }
+
+    public function test_il_portale_non_espone_ordini_di_un_altro_committente(): void
+    {
+        [$teamId, $utente] = $this->creaImpresa();
+        $ordine = $this->creaOrdine($teamId);
+
+        // Stato d'epoca forzato in base: la squadra risulta di un altro
+        $altro = \App\Models\Client::create([
+            'tenant_id' => $this->organizzazione->id, 'name' => 'Altro Comune', 'client_type' => 'public',
+        ]);
+        \App\Models\Team::withoutGlobalScopes()->whereKey($teamId)->update(['client_id' => $altro->id]);
+
+        // L'impresa non vede piu' l'ordine del vecchio committente e non
+        // puo' nemmeno chiederne la riprogrammazione
+        $this->actingAsTenantUser($utente);
+        $this->getJson('/api/v1/impresa/ordini')->assertOk()->assertJsonCount(0, 'data');
+        $this->postJson("/api/v1/impresa/ordini/{$ordine}/riprogrammazione", ['reason' => 'maltempo'])
+            ->assertNotFound();
+    }
+
+    public function test_un_committente_con_imprese_collegate_non_si_elimina(): void
+    {
+        // Un committente senza sedi ne' altro: solo l'impresa lo trattiene
+        $solo = \App\Models\Client::create([
+            'tenant_id' => $this->organizzazione->id, 'name' => 'Solo Impresa', 'client_type' => 'private',
+        ]);
+        $teamId = $this->postJson('/api/v1/teams', [
+            'name' => 'Ditta del Solo', 'is_external' => true, 'client_id' => $solo->id,
+        ])->assertCreated()->json('data.id');
+
+        $risposta = $this->deleteJson("/api/v1/clients/{$solo->id}")->assertUnprocessable();
+        $this->assertStringContainsString('impresa esterna collegata', $risposta->json('errors.client.0'));
+
+        // Scollegata l'impresa, l'eliminazione riparte
+        $this->patchJson("/api/v1/teams/{$teamId}", ['is_external' => false])->assertOk();
+        $this->deleteJson("/api/v1/clients/{$solo->id}")->assertNoContent();
+    }
+
+    public function test_un_ordine_d_epoca_fuori_regola_resta_ritoccabile(): void
+    {
+        // Stato d'epoca: squadra esterna senza committente con ordine assegnato
+        $vecchia = \App\Models\Team::create([
+            'tenant_id' => $this->organizzazione->id, 'name' => 'Vecchia Ditta', 'is_external' => true,
+        ]);
+        $ordine = \App\Models\WorkOrder::create([
+            'tenant_id' => $this->organizzazione->id, 'code' => 'ODL-2026-9001',
+            'title' => 'Ordine d\'epoca', 'status' => 'planned',
+            'team_id' => $vecchia->id, 'client_id' => $this->cliente->id,
+        ]);
+
+        // Date e descrizione si ritoccano ancora
+        $this->patchJson("/api/v1/work-orders/{$ordine->id}", ['description' => 'nota aggiunta'])
+            ->assertOk();
+
+        // Ma un cambio di committente deve approdare in regola
+        $altro = \App\Models\Client::create([
+            'tenant_id' => $this->organizzazione->id, 'name' => 'Altro Comune', 'client_type' => 'public',
+        ]);
+        $this->patchJson("/api/v1/work-orders/{$ordine->id}", ['client_id' => $altro->id])
+            ->assertUnprocessable()->assertJsonValidationErrors(['team_id']);
+    }
+
+    public function test_l_impresa_di_un_committente_eliminato_da_un_errore_parlante(): void
+    {
+        // Stato d'epoca: il committente sparisce da sotto l'impresa
+        // (oggi destroy lo impedisce; il dato vecchio pero' puo' esistere)
+        $solo = \App\Models\Client::create([
+            'tenant_id' => $this->organizzazione->id, 'name' => 'Sparito', 'client_type' => 'private',
+        ]);
+        $teamId = $this->postJson('/api/v1/teams', [
+            'name' => 'Ditta Orfana', 'is_external' => true, 'client_id' => $solo->id,
+        ])->assertCreated()->json('data.id');
+        $solo->delete();
+
+        $risposta = $this->postJson('/api/v1/work-orders', [
+            'title' => 'Potatura', 'team_id' => $teamId, 'client_id' => $this->cliente->id,
+        ])->assertUnprocessable();
+        $this->assertStringContainsString('committente eliminato', $risposta->json('errors.team_id.0'));
+    }
+
+    public function test_il_correttivo_non_copia_una_squadra_non_piu_ammessa(): void
+    {
+        [$teamId] = $this->creaImpresa();
+        $ordine = $this->creaOrdine($teamId, 'completed');
+        // Stato d'epoca: la squadra risulta ora di un altro committente
+        $altro = \App\Models\Client::create([
+            'tenant_id' => $this->organizzazione->id, 'name' => 'Altro Comune', 'client_type' => 'public',
+        ]);
+        \App\Models\Team::withoutGlobalScopes()->whereKey($teamId)->update(['client_id' => $altro->id]);
+
+        $this->postJson("/api/v1/work-orders/{$ordine}/checks", [
+            'outcome' => 'failed',
+            'non_conformity' => [
+                'severity' => 'major',
+                'description' => 'Lavoro da rifare lungo il lato nord.',
+                'create_corrective_order' => true,
+            ],
+        ])->assertOk();
+
+        $correttivo = \App\Models\WorkOrder::query()->where('origin', 'non_conformity')->firstOrFail();
+        $this->assertNull($correttivo->team_id, 'La squadra non piu\' ammessa non si copia');
+        $this->assertStringContainsString('da riassegnare', $correttivo->description);
+    }
+
     public function test_l_impresa_ha_la_sua_porta_d_ingresso(): void
     {
         [, $utente] = $this->creaImpresa();
         $utente->forceFill(['password' => \Illuminate\Support\Facades\Hash::make('segretissima1')])->save();
-        $this->post('/logout');
+        // Si torna ospiti: via l'utente fissato da Sanctum e si riparte
+        // dalla guardia di sessione, come un browser appena aperto
+        $this->app['auth']->forgetGuards();
+        $this->app['auth']->shouldUse('web');
 
         // Da ospite, il portale rimanda alla porta dedicata (non al login
         // del gestionale) e la pagina risponde
