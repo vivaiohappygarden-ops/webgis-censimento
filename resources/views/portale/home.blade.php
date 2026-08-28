@@ -139,6 +139,14 @@
                     <div class="valore">{{ number_format($statistiche['co2']['kg'] / 1000, 1, ',', '.') }} t<sup>*</sup></div>
                     <div class="voce">Anidride carbonica immagazzinata</div>
                 </div>
+                {{-- Statistiche in cache calcolate prima dell'aggiornamento
+                     non hanno ancora la chiave: il riquadro aspetta il ricalcolo --}}
+                @if (($statistiche['co2']['euro'] ?? null) !== null)
+                    <div class="numero">
+                        <div class="valore">{{ number_format($statistiche['co2']['euro'], 0, ',', '.') }} &euro;<sup>*</sup></div>
+                        <div class="voce">Controvalore economico stimato</div>
+                    </div>
+                @endif
             @endif
         </div>
 
@@ -167,6 +175,11 @@
                         su {{ number_format($statistiche['co2']['alberi'], 0, ',', '.') }} alberi di cui è noto
                     @endif
                     il diametro del tronco: {{ config('co2.modello') }}.
+                    @if (($statistiche['co2']['euro'] ?? null) !== null)
+                        Il controvalore economico applica un prezzo di
+                        {{ number_format((float) config('co2.euro_per_tonnellata'), 0, ',', '.') }} euro
+                        per tonnellata di anidride carbonica ({{ config('co2.prezzo_fonte') }}).
+                    @endif
                 </p>
             @endif
         </div>

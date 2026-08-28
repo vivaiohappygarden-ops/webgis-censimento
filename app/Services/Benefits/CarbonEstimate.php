@@ -20,7 +20,9 @@ class CarbonEstimate
     /**
      * @return array{
      *   diametro_cm: float, biomassa_kg: float, co2_kg: float,
-     *   annuo_kg: float|null, gruppo: string, metodo: string
+     *   annuo_kg: float|null, gruppo: string, metodo: string,
+     *   valore_euro: float|null, valore_annuo_euro: float|null,
+     *   prezzo_tonnellata: float|null, prezzo_fonte: string|null
      * }|null
      */
     public static function per(?Tree $albero): ?array
@@ -54,6 +56,8 @@ class CarbonEstimate
         $eta = (int) ($albero->age_years_est ?? 0);
         $annuo = $eta > 0 ? $co2 / $eta : null;
 
+        $prezzo = self::prezzoTonnellata();
+
         return [
             'diametro_cm' => round($diametro, 1),
             'biomassa_kg' => round($biomassa, 1),
@@ -61,7 +65,21 @@ class CarbonEstimate
             'annuo_kg' => $annuo !== null ? round($annuo, 1) : null,
             'gruppo' => $gruppo,
             'metodo' => (string) config('co2.modello'),
+            // Il controvalore viaggia sempre col prezzo applicato e la sua
+            // fonte: un euro senza il "come" non si pubblica
+            'valore_euro' => $prezzo !== null ? round($co2 / 1000 * $prezzo, 2) : null,
+            'valore_annuo_euro' => $prezzo !== null && $annuo !== null ? round($annuo / 1000 * $prezzo, 2) : null,
+            'prezzo_tonnellata' => $prezzo,
+            'prezzo_fonte' => $prezzo !== null ? (string) config('co2.prezzo_fonte') : null,
         ];
+    }
+
+    /** Prezzo di una tonnellata di CO2 in euro; null se spento (0 o vuoto). */
+    public static function prezzoTonnellata(): ?float
+    {
+        $prezzo = (float) config('co2.euro_per_tonnellata', 0);
+
+        return $prezzo > 0 ? $prezzo : null;
     }
 
     /** Diametro del tronco in centimetri, anche partendo dalla circonferenza. */
@@ -92,7 +110,7 @@ class CarbonEstimate
      * alberi è stato calcolato, così il numero resta leggibile.
      *
      * @param  iterable<Tree>  $alberi
-     * @return array{co2_kg: float, alberi: int}
+     * @return array{co2_kg: float, alberi: int, valore_euro: float|null}
      */
     public static function totale(iterable $alberi): array
     {
@@ -107,6 +125,12 @@ class CarbonEstimate
             }
         }
 
-        return ['co2_kg' => round($co2, 1), 'alberi' => $contati];
+        $prezzo = self::prezzoTonnellata();
+
+        return [
+            'co2_kg' => round($co2, 1),
+            'alberi' => $contati,
+            'valore_euro' => $prezzo !== null ? round($co2 / 1000 * $prezzo, 2) : null,
+        ];
     }
 }

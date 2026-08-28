@@ -104,12 +104,23 @@
                     <dd>{{ number_format($co2['annuo_kg'], 1, ',', '.') }} kg/anno</dd>
                 </div>
             @endif
+            @if (($co2['valore_euro'] ?? null) !== null)
+                <div class="riga">
+                    <dt>Controvalore economico stimato<sup>*</sup></dt>
+                    <dd>{{ number_format($co2['valore_euro'], 0, ',', '.') }} euro</dd>
+                </div>
+            @endif
         @endif
     </dl>
 
     @if (! empty($co2))
         <p class="stima">
             <sup>*</sup> Valore stimato, non misurato: {{ $co2['metodo'] }}.
+            @if (($co2['valore_euro'] ?? null) !== null)
+                Il controvalore economico applica un prezzo di
+                {{ number_format($co2['prezzo_tonnellata'], 0, ',', '.') }} euro
+                per tonnellata di anidride carbonica ({{ $co2['prezzo_fonte'] }}).
+            @endif
         </p>
     @endif
 

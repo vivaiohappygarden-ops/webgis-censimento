@@ -167,4 +167,105 @@ class StimaCo2Test extends TestCase
             // Tre alberi in tutto, ma la stima vale su due
             ->assertSee('su 2 alberi');
     }
+
+    public function test_il_controvalore_viaggia_sempre_con_prezzo_e_fonte(): void
+    {
+        config(['co2.euro_per_tonnellata' => 80.0, 'co2.prezzo_fonte' => 'fonte di prova']);
+
+        $stima = CarbonEstimate::per($this->albero([
+            'genus' => 'Tilia', 'dbh_cm' => 38, 'age_years_est' => 40,
+        ]));
+
+        $this->assertEqualsWithDelta($stima['co2_kg'] / 1000 * 80, $stima['valore_euro'], 0.01);
+        $this->assertEqualsWithDelta($stima['annuo_kg'] / 1000 * 80, $stima['valore_annuo_euro'], 0.01);
+        $this->assertSame(80.0, $stima['prezzo_tonnellata']);
+        $this->assertSame('fonte di prova', $stima['prezzo_fonte']);
+    }
+
+    public function test_con_prezzo_spento_restano_solo_i_chilogrammi(): void
+    {
+        config(['co2.euro_per_tonnellata' => 0]);
+
+        $stima = CarbonEstimate::per($this->albero(['genus' => 'Tilia', 'dbh_cm' => 38]));
+
+        $this->assertGreaterThan(0, $stima['co2_kg']);
+        $this->assertNull($stima['valore_euro']);
+        $this->assertNull($stima['prezzo_tonnellata']);
+        $this->assertNull($stima['prezzo_fonte']);
+    }
+
+    private function alberoPubblico(): void
+    {
+        $id = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $this->type->id,
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated()->json('data.id');
+
+        $this->patchJson("/api/v1/assets/{$id}", [
+            'tree' => ['genus' => 'Tilia', 'species' => 'Tilia cordata', 'dbh_cm' => 38, 'age_years_est' => 45],
+        ])->assertOk();
+
+        $this->patchJson("/api/v1/clients/{$this->client->id}", [
+            'public_profile' => ['show_co2' => true],
+        ])->assertOk();
+    }
+
+    public function test_in_pubblico_il_controvalore_dichiara_prezzo_e_fonte(): void
+    {
+        config(['co2.euro_per_tonnellata' => 70.0, 'co2.prezzo_fonte' => 'fonte di prova del prezzo']);
+        $this->alberoPubblico();
+
+        // La scheda dell'albero
+        $this->get('/comune/mentana/elemento/MEN-0001')
+            ->assertOk()
+            ->assertSee('Controvalore economico stimato')
+            ->assertSee('70 euro')
+            ->assertSee('fonte di prova del prezzo');
+
+        // La home col totale del patrimonio
+        $this->get('/comune/mentana')
+            ->assertOk()
+            ->assertSee('Controvalore economico stimato')
+            ->assertSee('fonte di prova del prezzo');
+    }
+
+    public function test_col_prezzo_spento_il_pubblico_non_vede_euro(): void
+    {
+        config(['co2.euro_per_tonnellata' => 0]);
+        $this->alberoPubblico();
+
+        $this->get('/comune/mentana/elemento/MEN-0001')
+            ->assertOk()
+            ->assertSee('Anidride carbonica immagazzinata')
+            ->assertDontSee('Controvalore economico');
+
+        $this->get('/comune/mentana')
+            ->assertOk()
+            ->assertSee('Anidride carbonica immagazzinata')
+            ->assertDontSee('Controvalore economico');
+    }
+
+    public function test_la_scheda_interna_riporta_la_stessa_stima_del_portale(): void
+    {
+        config(['co2.euro_per_tonnellata' => 70.0]);
+
+        $id = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $this->type->id,
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated()->json('data.id');
+
+        // Senza misure ancora nessuna stima, ma la chiave c'e' (nulla)
+        $this->getJson("/api/v1/assets/{$id}")->assertOk()->assertJsonPath('data.co2', null);
+
+        $this->patchJson("/api/v1/assets/{$id}", [
+            'tree' => ['genus' => 'Tilia', 'dbh_cm' => 38, 'age_years_est' => 45],
+        ])->assertOk();
+
+        $risposta = $this->getJson("/api/v1/assets/{$id}")->assertOk();
+        $this->assertGreaterThan(0, $risposta->json('data.co2.co2_kg'));
+        $this->assertGreaterThan(0, $risposta->json('data.co2.valore_euro'));
+        $this->assertNotEmpty($risposta->json('data.co2.prezzo_fonte'));
+    }
 }

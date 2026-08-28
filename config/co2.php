@@ -64,4 +64,17 @@ return [
     // validità delle equazioni, il numero sarebbe solo un'estrapolazione
     'diametro_massimo_cm' => 250,
 
+    // Controvalore economico: prezzo di una tonnellata di anidride
+    // carbonica, in euro. Il valore in euro compare sempre insieme al
+    // prezzo applicato e alla sua fonte, mai da solo; con 0 (o vuoto)
+    // gli euro non compaiono da nessuna parte e resta la sola stima in
+    // chilogrammi. Come per i coefficienti qui sopra: numero da
+    // verificare e aggiornare prima di pubblicarlo su un sito pubblico.
+    'euro_per_tonnellata' => (float) env('CO2_EURO_TONNELLATA', 70),
+
+    // La fonte del prezzo, dichiarata in pagina accanto al valore
+    'prezzo_fonte' => env('CO2_PREZZO_FONTE',
+        'valore prudenziale arrotondato, di riferimento il prezzo delle quote di emissione '
+        .'sul mercato europeo EU ETS, soggetto a oscillazioni'),
+
 ];

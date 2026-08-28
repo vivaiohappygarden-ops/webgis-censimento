@@ -103,7 +103,15 @@ class PortalStats
                 }
             });
 
-        return ['kg' => round($totale, 1), 'alberi' => $contati];
+        $prezzo = \App\Services\Benefits\CarbonEstimate::prezzoTonnellata();
+
+        return [
+            'kg' => round($totale, 1),
+            'alberi' => $contati,
+            // Controvalore economico: si mostra solo insieme al prezzo e
+            // alla fonte; con prezzo spento resta la sola stima in peso
+            'euro' => $prezzo !== null ? round($totale / 1000 * $prezzo, 2) : null,
+        ];
     }
 
     /**

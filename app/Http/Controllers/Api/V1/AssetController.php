@@ -147,7 +147,11 @@ class AssetController extends Controller implements HasMiddleware
             ->withCasts(['geom_geojson' => 'array'])
             ->findOrFail($id);
 
-        return response()->json(['data' => $asset]);
+        return response()->json(['data' => array_merge($asset->toArray(), [
+            // La stessa stima che uscirebbe sul portale pubblico: il tecnico
+            // la vede qui prima di decidere se accenderla per il committente
+            'co2' => \App\Services\Benefits\CarbonEstimate::per($asset->tree),
+        ])]);
     }
 
     /**

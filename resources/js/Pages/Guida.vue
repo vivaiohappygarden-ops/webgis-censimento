@@ -680,6 +680,16 @@ function goTo(id) {
                             quale metodo è stato ottenuto. Tienila spenta finché il tecnico non ha verificato
                             coefficienti e fonti: è l'unico numero del portale che si può contestare.
                         </p>
+                        <p>
+                            Insieme ai chilogrammi compare anche il <strong>controvalore economico
+                            stimato in euro</strong>, calcolato con un prezzo per tonnellata di CO2
+                            scritto nella configurazione del programma insieme alla sua fonte; la
+                            pagina dichiara sempre prezzo e fonte accanto al valore. Il prezzo si
+                            può cambiare (o azzerare: spariscono gli euro e restano i chilogrammi)
+                            senza toccare il codice. La stessa stima si legge anche nella scheda
+                            dell'albero nel gestionale, così la controlli prima di renderla
+                            pubblica.
+                        </p>
 
                         <h3>Prima di dare l'indirizzo a un ente</h3>
                         <ul class="mt-2 list-disc space-y-1 pl-5">
