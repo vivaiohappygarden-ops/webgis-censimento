@@ -21,6 +21,16 @@ class PortalStats
 {
     private const MINUTI_DI_CACHE = 15;
 
+    /**
+     * Si alza quando cambiano le voci calcolate qui dentro.
+     *
+     * Senza, per un quarto d'ora dopo un aggiornamento le pagine leggerebbero
+     * un risultato vecchio a cui manca la chiave nuova, e mostrerebbero un
+     * buco al posto di un dato che c'è: cambiando il nome della cassetta il
+     * calcolo riparte da capo al primo che passa.
+     */
+    private const VERSIONE = 3;
+
     /** Termini che identificano una potatura fra i tipi di lavorazione. */
     private const POTATURA = 'potatur|rimonda|capitozz|spalcatur|riformazione della chioma';
 
@@ -35,7 +45,7 @@ class PortalStats
         }
 
         return Cache::remember(
-            "portale:statistiche:{$client->id}",
+            self::chiave($client),
             now()->addMinutes(self::MINUTI_DI_CACHE),
             $calcolo,
         );
@@ -43,7 +53,12 @@ class PortalStats
 
     public static function dimentica(Client $client): void
     {
-        Cache::forget("portale:statistiche:{$client->id}");
+        Cache::forget(self::chiave($client));
+    }
+
+    private static function chiave(Client $client): string
+    {
+        return 'portale:statistiche:v'.self::VERSIONE.':'.$client->id;
     }
 
     private static function calcola(Client $client): array
@@ -65,9 +80,61 @@ class PortalStats
             'varieta' => $varieta,
             'curati' => self::conInterventi($client, escludi: self::ABBATTIMENTO),
             'potati' => self::conInterventi($client, includi: self::POTATURA),
+            'stati' => self::stati($client),
             'co2' => self::co2($client),
-            'aggiornato_al' => now('Europe/Rome')->toDateString(),
+            'ultimo_rilievo' => self::ultimoRilievo($client),
         ];
+    }
+
+    /**
+     * Data dell'ultimo rilievo registrato fra gli elementi pubblicabili.
+     *
+     * Non è la data di oggi: dice da quando il registro non si muove, ed è
+     * l'unica data che il portale può mostrare onestamente come "aggiornato
+     * al". Nessun elemento con data di rilievo (censimento appena cominciato,
+     * o importato senza date): non si scrive niente.
+     */
+    private static function ultimoRilievo(Client $client): ?string
+    {
+        $data = (clone PortalQuery::assets($client))->max('assets.surveyed_at');
+
+        return $data === null ? null : substr((string) $data, 0, 10);
+    }
+
+    /**
+     * Quanti elementi pubblicabili stanno in ciascuno dei quattro stati.
+     *
+     * Lo stato si calcola con la stessa identica espressione SQL che usano la
+     * scheda e la mappa (PortalState::sql): la regola è scritta in un posto
+     * solo, o la home direbbe una cosa e la scheda un'altra.
+     *
+     * Il raggruppamento si fa nel database, non in PHP: su un censimento
+     * grande portarsi a casa una riga per elemento per poi contarle sarebbe
+     * lavoro sprecato. Le quattro voci escono sempre tutte, anche a zero:
+     * a decidere se un numero si mostra è la pagina, non il conteggio.
+     *
+     * @return array<string, int>
+     */
+    private static function stati(Client $client): array
+    {
+        $elementi = (clone PortalQuery::assets($client))
+            ->select('assets.id')
+            ->selectRaw(PortalState::sql().' as stato')
+            ->toBase();
+
+        $conteggi = DB::query()
+            ->fromSub($elementi, 'stati')
+            ->select('stato')
+            ->selectRaw('count(*) as quanti')
+            ->groupBy('stato')
+            ->pluck('quanti', 'stato');
+
+        $fuori = [];
+        foreach (array_keys(PortalState::ETICHETTE) as $stato) {
+            $fuori[$stato] = (int) ($conteggi[$stato] ?? 0);
+        }
+
+        return $fuori;
     }
 
     /**

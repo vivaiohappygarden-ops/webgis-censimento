@@ -104,8 +104,10 @@ final class PortalPalette
         // Testo secondario, note, didascalie: AA pieno.
         ['inchiostro-2', 'scurisci', 'avorio', 4.5],
         // I titoli sono grandi (3:1 basterebbe) ma il bosco tinge anche testi
-        // di misura normale: si tiene 4,5:1 e non ci si pensa più.
-        ['bosco', 'scurisci', 'avorio', 4.5],
+        // di misura normale e fa da fondo al pulsante principale, che porta
+        // scritte in chiaro: si misura sul chiaro, che è il più severo dei due
+        // fondi (più scuro dell'avorio), e vale per entrambi i versi.
+        ['bosco', 'scurisci', 'chiaro', 4.5],
         // Gli occhielli in oro sono maiuscoletto piccolo: testo normale.
         ['oro-scuro', 'scurisci', 'avorio', 4.5],
         // Le scritte sulla carta disegnata stanno sopra il verde del parco.

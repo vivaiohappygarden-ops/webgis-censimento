@@ -69,6 +69,12 @@ class MappaController extends Controller
                 t.code AS tipo,
                 t.name AS tipo_nome,
                 (tr.asset_id IS NOT NULL) AS albero,
+                -- Il diametro della chioma serve a disegnarla alla misura vera
+                -- sulla carta (strato "chiome" in portale-mappa.js). È lo stesso
+                -- dato che la scheda pubblica già stampa fra le misure: senza
+                -- questa colonna lo strato non troverebbe niente da disegnare e
+                -- la legenda prometterebbe un cerchio che non compare mai.
+                tr.crown_diameter_m AS chioma_m,
                 CASE WHEN tr.asset_id IS NULL THEN 'altro' ELSE ({$stato}) END AS stato
               FROM assets a
               JOIN catalog_object_types t ON t.id = a.object_type_id
