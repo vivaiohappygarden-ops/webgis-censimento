@@ -41,7 +41,9 @@
                 @if ($asset->area?->locality?->site?->client) - {{ $asset->area->locality->site->client->name }}@endif
             </td>
         </tr>
-        <tr><th>Stato</th><td>{{ ['active' => 'attivo', 'dead' => 'morto', 'stump' => 'ceppaia', 'removed' => 'rimosso', 'felled' => 'abbattuto', 'dismissed' => 'dismesso'][$asset->status] ?? $asset->status }}</td></tr>
+        {{-- Etichette da AssetStatus, non ricopiate qui: la mappa inline aveva
+             gia' divergenze e perfino voci fuori vocabolario ('felled') --}}
+        <tr><th>Stato</th><td>{{ \App\Support\AssetStatus::label($asset->status) }}@if (\App\Support\AssetStatus::inArchivio($asset->status)) (scheda in archivio)@endif</td></tr>
         <tr><th>Data del rilievo</th><td>{{ $asset->surveyed_at?->format('d/m/Y') ?? '-' }}</td></tr>
         <tr><th>Ultimo aggiornamento</th><td>{{ $asset->updated_at?->timezone('Europe/Rome')->format('d/m/Y H:i') }}</td></tr>
         @if ($asset->notes)

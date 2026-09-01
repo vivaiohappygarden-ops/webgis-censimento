@@ -353,6 +353,17 @@ class WorkOrderController extends Controller implements HasMiddleware
         $workOrder = WorkOrder::query()->findOrFail($id);
         $this->assertNotTerminal($workOrder);
         $asset = Asset::query()->findOrFail($data['asset_id']);
+
+        // Stessa regola dell'azione multipla (AzioniMultiple::collegaElementi):
+        // una scheda in archivio (abbattuta o dismessa) non è più patrimonio
+        // su cui si lavora. Senza questa guardia l'aggancio singolo sarebbe
+        // la porta di servizio che scavalca la regola
+        if (\App\Support\AssetStatus::inArchivio($asset->status)) {
+            throw ValidationException::withMessages([
+                'asset_id' => 'Elemento in archivio ('.\App\Support\AssetStatus::label($asset->status).'): '.
+                    'non si collega a un ordine di lavoro. Se serve, prima ripristina la scheda.',
+            ]);
+        }
         $rowType = ! empty($data['work_type_id'])
             ? \App\Models\WorkType::query()->findOrFail($data['work_type_id'])
             : null;

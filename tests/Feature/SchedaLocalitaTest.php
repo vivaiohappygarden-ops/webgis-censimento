@@ -80,6 +80,25 @@ class SchedaLocalitaTest extends TestCase
         $this->assertSame('Tiglio selvatico', $piante[0]['comune']);
     }
 
+    public function test_l_archivio_non_entra_nei_conteggi_della_scheda(): void
+    {
+        $this->creaAlbero(['species' => 'Tilia cordata']);
+        $abbattuto = $this->creaAlbero(['species' => 'Tilia cordata']);
+        $dismesso = $this->creaAlbero(['species' => 'Acer campestre']);
+        $this->postJson("/api/v1/assets/{$abbattuto}/removal", ['removed_on' => '2026-08-14'])->assertOk();
+        $this->patchJson("/api/v1/assets/{$dismesso}", ['status' => 'dismissed'])->assertOk();
+
+        $dati = $this->getJson("/api/v1/localities/{$this->localita()->id}/scheda")
+            ->assertOk()->json('data');
+
+        // per_tipo contava perfino gli abbattuti; ora conta solo la gestione
+        $this->assertSame(1, (int) $dati['per_tipo'][0]['quanti']);
+        // e fra le piante il dismesso (che non ha removed_on) non compare
+        $this->assertCount(1, $dati['piante']);
+        $this->assertSame('Tilia cordata', $dati['piante'][0]['scientifico']);
+        $this->assertSame(1, (int) $dati['piante'][0]['quanti']);
+    }
+
     public function test_la_superficie_gestita_conta_solo_le_aree_attive(): void
     {
         $scheda = $this->getJson("/api/v1/localities/{$this->localita()->id}/scheda")->assertOk();

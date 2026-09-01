@@ -99,6 +99,48 @@ class TileTest extends TestCase
         $this->assertStringNotContainsString('TILE-UNO', $solaArea);
     }
 
+    public function test_il_filtro_archivio_delle_tessere_segue_l_elenco(): void
+    {
+        [$organization, $user] = $this->createTenantUser();
+        $area = $this->createArea($organization);
+        $type = $this->makeObjectType($organization, 'P');
+
+        $lon = 9.1905;
+        $lat = 45.4652;
+        $make = fn (string $code, string $status) => Asset::create([
+            'tenant_id' => $organization->id,
+            'area_id' => $area->id,
+            'object_type_id' => $type->id,
+            'census_code' => $code,
+            'status' => $status,
+            'geom' => Geometry::toEwkb($this->pointGeometry($lon, $lat)),
+        ]);
+        $make('TILE-VIVO', 'active');
+        $make('TILE-RIMOSSO', 'removed');
+        $make('TILE-DISMESSO', 'dismissed');
+
+        $this->actingAsTenantUser($user);
+        [$x, $y] = $this->tileForLonLat($lon, $lat, 15);
+        $base = "/api/v1/tiles/assets/15/{$x}/{$y}";
+
+        // archivio=0: la mappa di tutti i giorni, senza abbattuti ne' dismessi
+        $quotidiano = $this->get("{$base}?archivio=0")->assertOk()->getContent();
+        $this->assertStringContainsString('TILE-VIVO', $quotidiano);
+        $this->assertStringNotContainsString('TILE-RIMOSSO', $quotidiano);
+        $this->assertStringNotContainsString('TILE-DISMESSO', $quotidiano);
+
+        // archivio=1: solo l'archivio
+        $archivio = $this->get("{$base}?archivio=1")->assertOk()->getContent();
+        $this->assertStringNotContainsString('TILE-VIVO', $archivio);
+        $this->assertStringContainsString('TILE-RIMOSSO', $archivio);
+        $this->assertStringContainsString('TILE-DISMESSO', $archivio);
+
+        // hide_removed conserva il vecchio significato: il dismesso resta
+        $vecchio = $this->get("{$base}?hide_removed=1")->assertOk()->getContent();
+        $this->assertStringContainsString('TILE-DISMESSO', $vecchio);
+        $this->assertStringNotContainsString('TILE-RIMOSSO', $vecchio);
+    }
+
     /** @return array{0: int, 1: int} */
     private function tileForLonLat(float $lon, float $lat, int $zoom): array
     {

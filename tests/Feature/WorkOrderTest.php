@@ -106,6 +106,40 @@ class WorkOrderTest extends TestCase
             ->assertOk()->assertJsonCount(0, 'data.assets');
     }
 
+    public function test_una_scheda_in_archivio_non_si_collega_a_un_ordine(): void
+    {
+        // Stessa regola dell'azione multipla: l'aggancio singolo non deve
+        // essere la porta di servizio che riporta al lavoro una scheda
+        // archiviata (abbattuta o dismessa)
+        $type = $this->makeObjectType($this->organization, 'P');
+        $dismesso = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $type->id,
+            'census_code' => 'WO-DISM-1',
+            'geometry' => $this->pointGeometry(),
+        ])->json('data.id');
+        $this->patchJson("/api/v1/assets/{$dismesso}", ['status' => 'dismissed'])->assertOk();
+
+        $abbattuto = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $type->id,
+            'census_code' => 'WO-ABB-1',
+            'geometry' => $this->pointGeometry(),
+        ])->json('data.id');
+        $this->postJson("/api/v1/assets/{$abbattuto}/removal", ['removed_on' => '2026-08-14'])->assertOk();
+
+        $woId = $this->postJson('/api/v1/work-orders', ['title' => 'Niente archivio'])->json('data.id');
+
+        $risposta = $this->postJson("/api/v1/work-orders/{$woId}/assets", ['asset_id' => $dismesso])
+            ->assertUnprocessable()->assertJsonValidationErrors('asset_id');
+        $this->assertStringContainsString('archivio', $risposta->json('errors.asset_id.0'));
+
+        $this->postJson("/api/v1/work-orders/{$woId}/assets", ['asset_id' => $abbattuto])
+            ->assertUnprocessable()->assertJsonValidationErrors('asset_id');
+
+        $this->getJson("/api/v1/work-orders/{$woId}")->assertJsonCount(0, 'data.assets');
+    }
+
     public function test_update_cannot_remove_assignment_while_assigned(): void
     {
         $team = Team::create(['tenant_id' => $this->organization->id, 'name' => 'Squadra B']);

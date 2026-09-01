@@ -56,9 +56,10 @@ const tipiVoci = computed(() => tipiCensibili.value.map((t) => ({
         : `${t.label} · ${t.geo === 'L' ? 'linea da disegnare' : 'superficie da disegnare'}`,
 })));
 
-// Vista: di chi guardo il verde e dove. Gli abbattuti restano in archivio
-// ma non sulla mappa di tutti i giorni
-const vista = reactive({ clientId: '', areaId: '', showRemoved: false, busy: false });
+// Vista: di chi guardo il verde e dove. L'archivio del censimento (schede
+// abbattute e dismesse) non sta sulla mappa di tutti i giorni: la spunta
+// lo fa comparire accanto al patrimonio in gestione
+const vista = reactive({ clientId: '', areaId: '', mostraArchivio: false, busy: false });
 
 // Chiome a dimensione reale: il cerchio cresce con il diametro censito
 const chiomeVisibili = ref(true);
@@ -187,7 +188,9 @@ const tilesUrl = () => {
     const params = new URLSearchParams({ v: String(Date.now()) });
     if (vista.clientId) params.set('client_id', vista.clientId);
     if (vista.areaId) params.set('area_id', vista.areaId);
-    if (! vista.showRemoved) params.set('hide_removed', '1');
+    // Spunta spenta: fuori tutto l'archivio (abbattuti e dismessi), stessa
+    // regola dell'elenco del censimento. Spunta accesa: si vede tutto
+    if (! vista.mostraArchivio) params.set('archivio', '0');
 
     return `${window.location.origin}/api/v1/tiles/assets/{z}/{x}/{y}?${params.toString()}`;
 };
@@ -1039,13 +1042,13 @@ onBeforeUnmount(() => {
                 />
                 <label class="mt-2 flex cursor-pointer items-center gap-2 text-xs text-gray-600">
                     <input
-                        v-model="vista.showRemoved"
+                        v-model="vista.mostraArchivio"
                         type="checkbox"
-                        data-test="mappa-abbattuti"
+                        data-test="mappa-archivio"
                         class="rounded border-gray-300"
                         @change="applyVista(false)"
                     >
-                    Mostra anche gli abbattuti
+                    Mostra anche l'archivio (abbattuti e dismessi)
                 </label>
                 <label class="flex items-center gap-2 text-sm text-gray-600">
                     <input v-model="chiomeVisibili" type="checkbox" data-test="mostra-chiome" class="rounded border-gray-300" @change="applicaChiome">

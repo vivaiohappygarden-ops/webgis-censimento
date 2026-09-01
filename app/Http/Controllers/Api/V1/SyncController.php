@@ -62,7 +62,9 @@ class SyncController extends Controller implements HasMiddleware
             ->orderBy('areas.name')
             ->get();
 
-        $assets = $this->assetRows($areaIds);
+        // In campo si lavora solo sul patrimonio in gestione: l'archivio
+        // (abbattuti e dismessi) non si scarica sul telefono
+        $assets = $this->assetRows($areaIds, soloFuoriArchivio: true);
 
         return response()->json([
             'cursor' => $cursor,
@@ -144,7 +146,10 @@ class SyncController extends Controller implements HasMiddleware
             ->unique()->values()->all();
 
         foreach ($this->assetRows($areaIds, $assetIds, withTrashed: true) as $asset) {
-            $changes[] = $asset->deleted_at !== null
+            // Una scheda finita in archivio esce dal device come le eliminate
+            // (stessa logica degli ordini non piu' visibili dal campo): il
+            // ripristino la fa tornare con un normale upsert al pull dopo
+            $changes[] = ($asset->deleted_at !== null || \App\Support\AssetStatus::inArchivio($asset->status))
                 ? ['op' => 'delete', 'table' => 'assets', 'id' => $asset->id]
                 : ['op' => 'upsert', 'table' => 'assets', 'row' => $asset];
         }
@@ -314,7 +319,7 @@ class SyncController extends Controller implements HasMiddleware
     }
 
     /** Righe asset complete di specializzazioni, nel formato del working set. */
-    private function assetRows(array $areaIds, ?array $ids = null, bool $withTrashed = false)
+    private function assetRows(array $areaIds, ?array $ids = null, bool $withTrashed = false, bool $soloFuoriArchivio = false)
     {
         if ($ids !== null && $ids === []) {
             return collect();
@@ -322,6 +327,7 @@ class SyncController extends Controller implements HasMiddleware
 
         return Asset::query()
             ->when($withTrashed, fn ($q) => $q->withTrashed())
+            ->when($soloFuoriArchivio, fn ($q) => $q->fuoriArchivio())
             ->when($ids !== null, fn ($q) => $q->whereIn('assets.id', $ids))
             ->when($areaIds !== [], fn ($q) => $q->whereIn('area_id', $areaIds))
             ->with(['tree', 'plantingSite', 'tags' => fn ($q) => $q->where('status', 'active')])

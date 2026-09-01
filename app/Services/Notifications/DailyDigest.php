@@ -114,7 +114,10 @@ class DailyDigest
     {
         $horizon = $today->copy()->addDays(30)->toDateString();
 
-        $rows = collect(DB::select(<<<'SQL'
+        // Fuori l'archivio: un albero abbattuto o dismesso non ha ricontrolli
+        // da ricordare via email (removed_on da sola non vede i dismessi)
+        $fuoriArchivio = \App\Support\AssetStatus::sqlArchivio();
+        $rows = collect(DB::select(<<<SQL
             SELECT latest.next_check_due, latest.failure_class, a.census_code
             FROM (
               SELECT DISTINCT ON (ta.tree_id)
@@ -124,6 +127,7 @@ class DailyDigest
               ORDER BY ta.tree_id, ta.assessed_on DESC, ta.created_at DESC
             ) latest
             JOIN assets a ON a.id = latest.tree_id AND a.deleted_at IS NULL
+                         AND a.status NOT IN ({$fuoriArchivio})
             JOIN trees t ON t.asset_id = latest.tree_id AND t.removed_on IS NULL
             WHERE latest.next_check_due IS NOT NULL AND latest.next_check_due <= ?
             ORDER BY latest.next_check_due

@@ -45,10 +45,17 @@ class StatsController extends Controller implements HasMiddleware
         ]]);
     }
 
-    /** Censimento: consistenze per tipologia e per specie. */
+    /**
+     * Censimento: consistenze per tipologia e per specie.
+     *
+     * Tutti i conteggi escludono l'archivio (abbattuti e dismessi) sulla base
+     * di assets.status: il solo filtro su trees.removed_on non basta, perché
+     * un dismesso ha removed_on vuota e conterebbe ancora come patrimonio.
+     */
     private function census(): array
     {
         $byType = Asset::query()
+            ->fuoriArchivio()
             ->join('catalog_object_types as t', 't.id', '=', 'assets.object_type_id')
             ->groupBy('t.name')
             ->orderByRaw('COUNT(*) DESC')
@@ -62,6 +69,7 @@ class StatsController extends Controller implements HasMiddleware
         $bySpecies = Tree::query()
             ->join('assets', 'assets.id', '=', 'trees.asset_id')
             ->whereNull('assets.deleted_at')
+            ->whereNotIn('assets.status', \App\Support\AssetStatus::ARCHIVIO)
             ->whereNull('trees.removed_on')
             ->groupByRaw($speciesLabel)
             ->orderByRaw('COUNT(*) DESC')
@@ -73,6 +81,7 @@ class StatsController extends Controller implements HasMiddleware
         $protectedCount = Tree::query()
             ->join('assets', 'assets.id', '=', 'trees.asset_id')
             ->whereNull('assets.deleted_at')
+            ->whereNotIn('assets.status', \App\Support\AssetStatus::ARCHIVIO)
             ->whereNull('trees.removed_on')
             ->where(fn ($w) => $w->where('trees.is_monumental', true)
                 ->orWhere('trees.is_protected', true)
@@ -80,13 +89,14 @@ class StatsController extends Controller implements HasMiddleware
             ->count();
 
         return [
-            'assets_total' => Asset::query()->count(),
+            'assets_total' => Asset::query()->fuoriArchivio()->count(),
             'areas_total' => Area::query()->count(),
             // Anche qui serve il join: un albero il cui asset e' stato
             // eliminato dal censimento non e' piu' "in piedi" da contare
             'trees_total' => Tree::query()
                 ->join('assets', 'assets.id', '=', 'trees.asset_id')
                 ->whereNull('assets.deleted_at')
+                ->whereNotIn('assets.status', \App\Support\AssetStatus::ARCHIVIO)
                 ->whereNull('trees.removed_on')->count(),
             'protected_trees' => $protectedCount,
             'by_type' => $byType,
@@ -97,9 +107,11 @@ class StatsController extends Controller implements HasMiddleware
     /** VTA: classi dell'ultima valutazione e valutazioni per anno. */
     private function vta(string $tenantId): array
     {
-        // Il join su trees esclude gli abbattuti: un albero rimosso non e'
-        // piu' un rischio da esporre accanto al contatore "alberi in piedi"
-        $byClass = collect(DB::select(<<<'SQL'
+        // Fuori l'archivio: un albero abbattuto o dismesso non e' piu' un
+        // rischio da esporre accanto al contatore "alberi in piedi". Il
+        // filtro su removed_on da solo non vedrebbe i dismessi
+        $fuoriArchivio = \App\Support\AssetStatus::sqlArchivio();
+        $byClass = collect(DB::select(<<<SQL
             SELECT COALESCE(latest.failure_class, 'n.d.') AS label, COUNT(*) AS n
             FROM (
               SELECT DISTINCT ON (ta.tree_id) ta.tree_id, ta.failure_class
@@ -108,6 +120,7 @@ class StatsController extends Controller implements HasMiddleware
               ORDER BY ta.tree_id, ta.assessed_on DESC, ta.created_at DESC
             ) latest
             JOIN assets a ON a.id = latest.tree_id AND a.deleted_at IS NULL
+                         AND a.status NOT IN ({$fuoriArchivio})
             JOIN trees t ON t.asset_id = latest.tree_id AND t.removed_on IS NULL
             GROUP BY 1 ORDER BY 1
             SQL, [$tenantId]))->pluck('n', 'label')->map(fn ($n) => (int) $n);

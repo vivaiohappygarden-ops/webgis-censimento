@@ -23,7 +23,10 @@ class StoreAssetRequest extends FormRequest
                     fn ($q) => $q->where('tenant_id', $this->user()->tenant_id)->whereNull('deleted_at')
                 ),
             ],
-            'status' => ['nullable', 'string', 'max:50'],
+            // Una scheda non nasce in archivio: abbattuti e dismessi si
+            // registrano dai loro flussi su schede esistenti (l'import CAM,
+            // che può portare storici, non passa da questa richiesta)
+            'status' => ['nullable', 'string', Rule::in(['active', 'dead', 'stump'])],
             'survey_method' => ['nullable', 'in:gps,gps_rtk,digitized,cad_import,shapefile_import,manual_map,estimated'],
             'gps_accuracy_m' => ['nullable', 'numeric', 'min:0'],
             'surveyed_at' => ['nullable', 'date'],

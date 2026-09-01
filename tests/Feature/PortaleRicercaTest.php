@@ -197,19 +197,24 @@ class PortaleRicercaTest extends TestCase
         $risposta->assertDontSee('NOTA INTERNA RISERVATA');
     }
 
-    public function test_la_scheda_di_un_elemento_nascosto_o_abbattuto_non_si_apre(): void
+    public function test_la_scheda_di_un_elemento_nascosto_abbattuto_o_dismesso_non_si_apre(): void
     {
         $nascosto = $this->creaAlbero();
         $abbattuto = $this->creaAlbero();
+        $dismesso = $this->creaAlbero();
 
         $this->patchJson("/api/v1/assets/{$nascosto}", ['public_hidden' => true])->assertOk();
         $this->postJson("/api/v1/assets/{$abbattuto}/removal", [
             'removed_on' => now('Europe/Rome')->toDateString(),
             'removal_reason' => 'Instabilità conclamata',
         ])->assertOk();
+        // L'archivio del censimento non cambia il portale: PortalQuery tiene
+        // solo gli attivi, e un dismesso non deve comparire in vetrina
+        $this->patchJson("/api/v1/assets/{$dismesso}", ['status' => 'dismissed'])->assertOk();
 
         $this->get('/comune/mentana/elemento/MEN-0001')->assertNotFound();
         $this->get('/comune/mentana/elemento/MEN-0002')->assertNotFound();
+        $this->get('/comune/mentana/elemento/MEN-0003')->assertNotFound();
     }
 
     public function test_la_scheda_offre_navigazione_e_segnalazione(): void

@@ -39,9 +39,13 @@ class PlanimetriaDati
             return null;
         }
 
+        // Sulla planimetria si disegna solo il patrimonio in gestione: fuori
+        // tutto l'archivio (abbattuti E dismessi), non solo gli abbattuti
+        $fuoriArchivio = \App\Support\AssetStatus::sqlArchivio();
+
         $risultato = [];
         foreach ($aree as $i => $area) {
-            $elementi = DB::select(<<<'SQL'
+            $elementi = DB::select(<<<SQL
                 SELECT a.id, a.census_code,
                        GeometryType(a.geom) AS gtype,
                        ST_AsGeoJSON(ST_Transform(a.geom, 3857), 2) AS g,
@@ -52,7 +56,8 @@ class PlanimetriaDati
                        tr.crown_diameter_m
                 FROM assets a
                 LEFT JOIN trees tr ON tr.asset_id = a.id
-                WHERE a.area_id = ? AND a.deleted_at IS NULL AND a.status <> 'removed'
+                WHERE a.area_id = ? AND a.deleted_at IS NULL
+                  AND a.status NOT IN ({$fuoriArchivio})
                 ORDER BY a.census_code NULLS LAST, a.created_at
                 SQL, [$area->id]);
 

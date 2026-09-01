@@ -41,6 +41,12 @@ class TreeBalance
         $dove = $clientId === null ? '' : ' AND si.client_id = ?';
         $primi = $clientId === null ? [$tenantId] : [$tenantId, $clientId];
 
+        // I dismessi escono dal bilancio DEL TUTTO: un dismesso e' un doppione
+        // o un elemento non piu' gestito, non un evento arboreo, e siccome non
+        // ha removed_on resterebbe per sempre nelle consistenze gonfiando un
+        // numero che il sindaco pubblica. Gli abbattuti invece RESTANO: escono
+        // alla loro data e alimentano felled_count. Se un dismesso ha anche
+        // removed_on (dato sporco), lo stato vince: fuori comunque.
         $totali = DB::selectOne(<<<SQL
             WITH t AS (
               SELECT COALESCE(tr.planted_on, a.created_at::date) AS starts_on,
@@ -48,7 +54,8 @@ class TreeBalance
               FROM trees tr
               JOIN assets a ON a.id = tr.asset_id
               {$join}
-              WHERE tr.tenant_id = ? AND a.deleted_at IS NULL{$dove}
+              WHERE tr.tenant_id = ? AND a.deleted_at IS NULL
+                AND a.status <> 'dismissed'{$dove}
             )
             SELECT
               COUNT(*) FILTER (WHERE starts_on < ?::date
@@ -69,7 +76,8 @@ class TreeBalance
               FROM trees tr
               JOIN assets a ON a.id = tr.asset_id
               {$join}
-              WHERE tr.tenant_id = ? AND a.deleted_at IS NULL{$dove}
+              WHERE tr.tenant_id = ? AND a.deleted_at IS NULL
+                AND a.status <> 'dismissed'{$dove}
             )
             SELECT species_label,
                    COUNT(*) FILTER (WHERE starts_on BETWEEN ?::date AND ?::date)  AS planted,

@@ -274,6 +274,9 @@ class AssetApiTest extends TestCase
             ->assertJsonValidationErrors('asset');
 
         $this->assertStringContainsString('1 ordine di lavoro', $response->json('errors.asset.0'));
+        // Il messaggio indica le due vie d'uscita vere: abbattimento e archivio
+        $this->assertStringContainsString('Registra abbattimento', $response->json('errors.asset.0'));
+        $this->assertStringContainsString('Dismesso', $response->json('errors.asset.0'));
         $this->assertDatabaseHas('assets', ['id' => $id, 'deleted_at' => null]);
     }
 
@@ -309,6 +312,21 @@ class AssetApiTest extends TestCase
         $this->assertSame('active', $response->json('data.status'));
         $this->assertNull($response->json('data.valid_to'));
         $this->assertNull($response->json('data.tree.removed_on'));
+    }
+
+    public function test_l_annullamento_abbattimento_non_riattiva_una_scheda_dismessa(): void
+    {
+        // Su una dismessa DELETE removal la rimetterebbe attiva alla cieca,
+        // senza l'annotazione di ripristino: si annulla solo un abbattimento
+        // davvero registrato. Il ripristino del dismesso passa dalla update
+        $id = $this->createPointAsset('ALB-DISM-FERMO');
+        $this->patchJson("/api/v1/assets/{$id}", ['status' => 'dismissed'])->assertOk();
+
+        $this->deleteJson("/api/v1/assets/{$id}/removal")
+            ->assertUnprocessable()->assertJsonValidationErrors('asset');
+
+        $this->assertDatabaseHas('assets', ['id' => $id, 'status' => 'dismissed']);
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'asset.removal_cancelled', 'subject_id' => $id]);
     }
 
     public function test_removal_before_planting_date_is_rejected(): void
@@ -381,6 +399,83 @@ class AssetApiTest extends TestCase
         $visible = $this->getJson('/api/v1/assets?hide_removed=1')->assertOk()->json('data');
         $this->assertCount(1, $visible);
         $this->assertSame($kept, $visible[0]['id']);
+    }
+
+    public function test_il_filtro_archivio_nasconde_abbattuti_e_dismessi(): void
+    {
+        $vivo = $this->createPointAsset('ALB-VIVO');
+        $abbattuto = $this->createPointAsset('ALB-ABBATTUTO');
+        $dismesso = $this->createPointAsset('ALB-DISMESSO');
+        $this->postJson("/api/v1/assets/{$abbattuto}/removal", ['removed_on' => '2026-08-14'])->assertOk();
+        $this->patchJson("/api/v1/assets/{$dismesso}", ['status' => 'dismissed'])->assertOk();
+
+        // Senza parametri si vede tutto: altre pagine usano questa API
+        $this->assertCount(3, $this->getJson('/api/v1/assets')->assertOk()->json('data'));
+
+        // archivio=0: l'elenco di tutti i giorni, senza abbattuti NE' dismessi
+        $quotidiano = $this->getJson('/api/v1/assets?archivio=0')->assertOk()->json('data');
+        $this->assertCount(1, $quotidiano);
+        $this->assertSame($vivo, $quotidiano[0]['id']);
+
+        // archivio=1: SOLO l'archivio, ritrovabile a colpo sicuro
+        $archivio = collect($this->getJson('/api/v1/assets?archivio=1')->assertOk()->json('data'));
+        $this->assertEqualsCanonicalizing([$abbattuto, $dismesso], $archivio->pluck('id')->all());
+
+        // hide_removed conserva il vecchio significato (fuori i soli abbattuti):
+        // le viste salvate e i client esistenti non cambiano comportamento
+        $vecchio = collect($this->getJson('/api/v1/assets?hide_removed=1')->assertOk()->json('data'));
+        $this->assertEqualsCanonicalizing([$vivo, $dismesso], $vecchio->pluck('id')->all());
+    }
+
+    public function test_il_filtro_di_stato_esplicito_vince_sull_archivio_nascosto(): void
+    {
+        $this->createPointAsset('ALB-VIVO');
+        $dismesso = $this->createPointAsset('ALB-DISMESSO');
+        $this->patchJson("/api/v1/assets/{$dismesso}", ['status' => 'dismissed'])->assertOk();
+
+        // Chi sceglie "Dismesso" nel filtro stato li vuole vedere anche con
+        // l'archivio nascosto: elenco pieno, non vuoto
+        $rows = $this->getJson('/api/v1/assets?archivio=0&status=dismissed')->assertOk()->json('data');
+        $this->assertCount(1, $rows);
+        $this->assertSame($dismesso, $rows[0]['id']);
+    }
+
+    public function test_la_dismissione_e_annotata_e_spegne_la_pagina_pubblica(): void
+    {
+        $id = $this->createPointAsset('ALB-DA-DISMETTERE');
+        $token = $this->postJson("/api/v1/assets/{$id}/public-page")->assertOk()->json('data.public_token');
+
+        $risposta = $this->patchJson("/api/v1/assets/{$id}", ['status' => 'dismissed'])->assertOk();
+
+        $this->assertSame('dismissed', $risposta->json('data.status'));
+        // Dismettere e' leggero: niente date pretese ne' inventate
+        $this->assertNull($risposta->json('data.valid_to'));
+        $this->assertNull($risposta->json('data.tree.removed_on'));
+        // Il QR gia' stampato su targhetta deve finire su un 404
+        $this->assertNull($risposta->json('data.public_token'));
+        $this->get("/p/{$token}")->assertNotFound();
+
+        $this->assertDatabaseHas('audit_logs', ['action' => 'asset.dismissed', 'subject_id' => $id]);
+
+        // La pagina pubblica non si riaccende finche' la scheda e' in archivio
+        $this->postJson("/api/v1/assets/{$id}/public-page")
+            ->assertUnprocessable()->assertJsonValidationErrors('asset');
+
+        // Il ripristino e' un gesto annotato a sua volta
+        $version = $this->getJson("/api/v1/assets/{$id}")->json('data.version');
+        $this->patchJson("/api/v1/assets/{$id}", ['status' => 'active', 'version' => $version])
+            ->assertOk()->assertJsonPath('data.status', 'active');
+        $this->assertDatabaseHas('audit_logs', ['action' => 'asset.dismissal_cancelled', 'subject_id' => $id]);
+    }
+
+    public function test_uno_stato_fuori_vocabolario_viene_rifiutato(): void
+    {
+        $id = $this->createPointAsset();
+
+        // 'felled' non esiste in AssetStatus: prima passava qualsiasi stringa
+        $this->patchJson("/api/v1/assets/{$id}", ['status' => 'felled'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('status');
     }
 
     public function test_assets_can_be_filtered_by_client_and_area(): void

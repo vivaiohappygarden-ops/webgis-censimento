@@ -37,7 +37,11 @@ class UpdateAssetRequest extends FormRequest
                     fn ($q) => $q->where('tenant_id', $this->user()->tenant_id)->whereNull('deleted_at')
                 ),
             ],
-            'status' => ['sometimes', 'string', 'max:50'],
+            // Solo il vocabolario di AssetStatus: uno stato inventato non lo
+            // saprebbe leggere nessun filtro (l'archivio compreso). Il
+            // passaggio da/verso "removed" ha comunque la sua guardia nel
+            // controller: quello si registra con "Registra abbattimento"
+            'status' => ['sometimes', 'string', Rule::in(array_keys(\App\Support\AssetStatus::LABELS))],
             'survey_method' => ['sometimes', 'nullable', 'in:gps,gps_rtk,digitized,cad_import,shapefile_import,manual_map,estimated'],
             'gps_accuracy_m' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'surveyed_at' => ['sometimes', 'nullable', 'date'],

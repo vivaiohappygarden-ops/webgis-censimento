@@ -127,6 +127,12 @@ async function save() {
                     <option value="dismissed">Dismesso</option>
                     <option v-if="form.status === 'removed'" value="removed">Abbattuto/Rimosso</option>
                 </select>
+                <!-- La dismissione non ha finestre di conferma: basta dire
+                     chiaramente che cosa comporta, ed è sempre reversibile -->
+                <span v-if="form.status === 'dismissed'" class="mt-0.5 block text-[11px] text-gray-400" data-test="nota-dismesso">
+                    Dismesso: esce dall'elenco di tutti i giorni e dalle planimetrie, resta
+                    nell'archivio del censimento e si può sempre rimettere Attivo da qui.
+                </span>
             </label>
             <label class="block text-xs">
                 <span class="text-gray-500">Data del rilievo</span>

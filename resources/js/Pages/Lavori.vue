@@ -377,7 +377,9 @@ function searchAssets() {
             assetSearch.results = [];
             return;
         }
-        const { data } = await axios.get('/api/v1/assets', { params: { q: assetSearch.q, per_page: 8 } });
+        // archivio=0: una scheda abbattuta o dismessa non si propone per un
+        // ordine di lavoro (il server la rifiuterebbe comunque all'aggancio)
+        const { data } = await axios.get('/api/v1/assets', { params: { q: assetSearch.q, per_page: 8, archivio: 0 } });
         assetSearch.results = data.data;
     }, 250);
 }

@@ -151,6 +151,18 @@ class PlanimetrieTest extends TestCase
         $this->assertStringContainsString('1 elemento (1 albero)', $this->stampe->html['pdf.locality']);
     }
 
+    public function test_un_elemento_dismesso_non_si_disegna_sulla_tavola(): void
+    {
+        // Un dismesso non ha removed_on: prima il filtro escludeva solo i
+        // "removed" e il dismesso continuava a comparire su tavole e conteggi
+        $this->creaElemento('P', $this->pointGeometry(9.1900, 45.4650), ['crown_diameter_m' => 8]);
+        $altro = $this->creaElemento('P', $this->pointGeometry(9.1912, 45.4655));
+        DB::table('assets')->where('id', $altro)->update(['status' => 'dismissed']);
+
+        $this->get("/api/v1/localities/{$this->localita()->id}/pdf")->assertOk();
+        $this->assertStringContainsString('1 elemento (1 albero)', $this->stampe->html['pdf.locality']);
+    }
+
     public function test_con_la_rete_lo_sfondo_entra_e_l_attribuzione_pure(): void
     {
         config([

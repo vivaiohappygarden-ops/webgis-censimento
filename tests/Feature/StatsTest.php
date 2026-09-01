@@ -210,6 +210,37 @@ class StatsTest extends TestCase
         $this->assertSame(['draft', 'completed'], $statuses);
     }
 
+    public function test_un_dismesso_esce_da_tutte_le_consistenze(): void
+    {
+        // Il dismesso non ha removed_on: senza il filtro su assets.status
+        // continuerebbe a contare come albero in piedi in ogni riquadro
+        $this->createTree('ALB-0001', 'Tilia cordata');
+        $dismesso = $this->createTree('ALB-0002', 'Acer campestre');
+        $this->postJson("/api/v1/assets/{$dismesso}/assessments", [
+            'assessment_type' => 'vta_visual',
+            'assessed_on' => now('Europe/Rome')->toDateString(),
+            'failure_class' => 'D',
+            'outcome' => 'fell',
+        ])->assertCreated();
+        $this->patchJson("/api/v1/assets/{$dismesso}", ['status' => 'dismissed'])->assertOk();
+
+        $data = $this->getJson('/api/v1/stats/overview')->assertOk()->json('data');
+
+        $this->assertSame(1, $data['census']['assets_total']);
+        $this->assertSame(1, $data['census']['trees_total']);
+        $this->assertArrayNotHasKey('Acer campestre', $data['census']['by_species']);
+        // La classe D del dismesso non resta nel grafico dei rischi
+        $this->assertSame([], $data['vta']['by_class']);
+
+        // E lo scadenzario VTA non lo conta ne' lo elenca
+        $vta = $this->getJson('/api/v1/vta/dashboard')->assertOk()->json('data');
+        $this->assertSame(1, $vta['trees_total']);
+        $this->assertSame(0, $vta['assessed']);
+        $alberi = $this->getJson('/api/v1/vta/alberi')->assertOk()->json('data');
+        $this->assertCount(1, $alberi);
+        $this->assertSame('ALB-0001', $alberi[0]['census_code']);
+    }
+
     public function test_permissions_and_tenant_isolation(): void
     {
         $this->createTree('ALB-0001', 'Tilia cordata');

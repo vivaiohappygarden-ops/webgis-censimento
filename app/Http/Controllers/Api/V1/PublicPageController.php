@@ -31,6 +31,15 @@ class PublicPageController extends Controller implements HasMiddleware
     {
         $asset = Asset::query()->findOrFail($id);
 
+        // Una scheda in archivio non ha una pagina pubblica da accendere: il
+        // portale la esclude comunque e il QR stampato porterebbe a un 404
+        if (\App\Support\AssetStatus::inArchivio($asset->status)) {
+            throw ValidationException::withMessages([
+                'asset' => 'Questa scheda è in archivio ('.\App\Support\AssetStatus::label($asset->status).'): '.
+                    'la pagina pubblica non si può attivare. Se l\'elemento torna in gestione, prima ripristina la scheda.',
+            ]);
+        }
+
         if ($asset->public_token === null) {
             $asset->public_token = bin2hex(random_bytes(16));
             $asset->save();

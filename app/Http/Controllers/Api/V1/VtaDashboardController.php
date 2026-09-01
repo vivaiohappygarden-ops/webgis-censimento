@@ -58,10 +58,12 @@ class VtaDashboardController extends Controller implements HasMiddleware
         $tenantId = $request->user()->tenant_id;
         $clientId = $this->clientId($request);
 
-        // Ultima valutazione per ogni albero (DISTINCT ON). Il join su trees
-        // esclude gli abbattuti: un albero rimosso non ha ricontrolli da
-        // programmare ne' classi di rischio da esporre
-        $sql = <<<'SQL'
+        // Ultima valutazione per ogni albero (DISTINCT ON). Fuori l'archivio:
+        // un albero abbattuto o dismesso non ha ricontrolli da programmare
+        // ne' classi di rischio da esporre (removed_on da sola non basta,
+        // un dismesso ce l'ha vuota)
+        $fuoriArchivio = \App\Support\AssetStatus::sqlArchivio();
+        $sql = <<<SQL
             SELECT latest.tree_id, latest.assessed_on, latest.failure_class,
                    latest.outcome, latest.next_check_due, a.census_code
             FROM (
@@ -72,6 +74,7 @@ class VtaDashboardController extends Controller implements HasMiddleware
               ORDER BY ta.tree_id, ta.assessed_on DESC, ta.created_at DESC
             ) latest
             JOIN assets a ON a.id = latest.tree_id AND a.deleted_at IS NULL
+                         AND a.status NOT IN ({$fuoriArchivio})
             JOIN trees t ON t.asset_id = latest.tree_id AND t.removed_on IS NULL
             SQL;
         $bindings = [$tenantId];
@@ -100,9 +103,11 @@ class VtaDashboardController extends Controller implements HasMiddleware
             ->sortKeys();
 
         // Il join esclude gli alberi il cui asset e' uscito dal censimento
+        // (eliminato o in archivio)
         $treesTotal = Tree::query()
             ->join('assets', 'assets.id', '=', 'trees.asset_id')
             ->whereNull('assets.deleted_at')
+            ->whereNotIn('assets.status', \App\Support\AssetStatus::ARCHIVIO)
             ->whereNull('trees.removed_on')
             ->when($clientId !== null, fn ($q) => $q
                 ->join('areas', 'areas.id', '=', 'assets.area_id')
@@ -158,6 +163,9 @@ class VtaDashboardController extends Controller implements HasMiddleware
 
         $query = Asset::query()
             ->join('trees', 'trees.asset_id', '=', 'assets.id')
+            // Lo scadenzario e' la lista di lavoro: le schede in archivio non
+            // hanno ricontrolli da programmare e non vi compaiono
+            ->fuoriArchivio()
             ->whereNull('trees.removed_on')
             ->leftJoinSub($ultima, 'vta', 'vta.tree_id', '=', 'assets.id')
             ->leftJoinSub($conteggi, 'conte', 'conte.tree_id', '=', 'assets.id')
@@ -248,13 +256,15 @@ class VtaDashboardController extends Controller implements HasMiddleware
             $bozze = collect($request->input('assessment_ids'));
         } else {
             // Si validano solo le bozze (le validate non sono un errore da
-            // elencare) e solo di alberi in piedi: gli abbattuti non compaiono
-            // in nessuna parte della pagina, e un numero d'anteprima piu'
-            // grande di tutto cio' che si vede non sarebbe verificabile. La
-            // perizia di un albero abbattuto si valida dalla sua scheda
+            // elencare) e solo di alberi in piedi: le schede in archivio
+            // (abbattute o dismesse) non compaiono in nessuna parte della
+            // pagina, e un numero d'anteprima piu' grande di tutto cio' che
+            // si vede non sarebbe verificabile. La perizia di una scheda in
+            // archivio si valida dalla sua scheda
             $bozze = TreeAssessment::query()
                 ->whereNull('validated_at')
                 ->whereHas('tree', fn ($t) => $t->whereNull('removed_on'))
+                ->whereIn('tree_id', Asset::query()->select('assets.id')->fuoriArchivio())
                 ->when($request->filled('asset_ids'),
                     fn ($q) => $q->whereIn('tree_id', $request->input('asset_ids')),
                     fn ($q) => $q->whereIn('tree_id', $this->alberiDelCommittente($request->input('client_id'))))
@@ -371,6 +381,10 @@ class VtaDashboardController extends Controller implements HasMiddleware
         $trees = Tree::query()
             ->join('assets', 'assets.id', '=', 'trees.asset_id')
             ->whereNull('assets.deleted_at')
+            // Un tutelato abbattuto resta in elenco con la sua data (e' storia
+            // che l'ente chiede); un dismesso invece e' un doppione o un
+            // non-gestito e qui conterebbe una pianta due volte
+            ->where('assets.status', '!=', 'dismissed')
             ->when($clientId !== null, fn ($q) => $q
                 ->join('areas', 'areas.id', '=', 'assets.area_id')
                 ->join('localities', 'localities.id', '=', 'areas.locality_id')

@@ -140,6 +140,43 @@ class AssetsCsvExportTest extends TestCase
         $this->assertStringNotContainsString(';dismissed;', $csv);
     }
 
+    public function test_l_export_con_il_filtro_archivio_e_coerente_con_l_elenco(): void
+    {
+        $this->makeAsset('ALB-IN-GESTIONE');
+        $abbattuto = $this->makeAsset('ALB-ABBATTUTO');
+        $dismesso = $this->makeAsset('ALB-DISMESSO');
+        $this->postJson("/api/v1/assets/{$abbattuto}/removal", [
+            'removed_on' => '2026-08-14', 'removal_reason' => 'schianto',
+        ])->assertOk();
+        $this->patchJson("/api/v1/assets/{$dismesso}", ['status' => 'dismissed'])->assertOk();
+
+        // archivio=0: il CSV esporta quello che l'elenco di tutti i giorni mostra
+        $quotidiano = $this->download('?archivio=0');
+        $this->assertStringContainsString('ALB-IN-GESTIONE', $quotidiano);
+        $this->assertStringNotContainsString('ALB-ABBATTUTO', $quotidiano);
+        $this->assertStringNotContainsString('ALB-DISMESSO', $quotidiano);
+
+        // archivio=1: solo l'archivio
+        $archivio = $this->download('?archivio=1');
+        $this->assertStringNotContainsString('ALB-IN-GESTIONE', $archivio);
+
+        $righe = [];
+        foreach (array_slice(array_values(array_filter(explode("\n", trim($archivio)))), 1) as $line) {
+            $row = str_getcsv($line, ';', '"', '');
+            $righe[$row[0]] = $row;
+        }
+        $this->assertEqualsCanonicalizing(['ALB-ABBATTUTO', 'ALB-DISMESSO'], array_keys($righe));
+
+        // Divergenza voluta: le colonne data/motivo abbattimento restano VUOTE
+        // per il dismesso (un dismesso non e' un abbattuto, non ha una data)
+        $this->assertSame('abbattuto/rimosso', $righe['ALB-ABBATTUTO'][7]);
+        $this->assertSame('14/08/2026', $righe['ALB-ABBATTUTO'][17]);
+        $this->assertSame('schianto', $righe['ALB-ABBATTUTO'][18]);
+        $this->assertSame('dismesso', $righe['ALB-DISMESSO'][7]);
+        $this->assertSame('', $righe['ALB-DISMESSO'][17]);
+        $this->assertSame('', $righe['ALB-DISMESSO'][18]);
+    }
+
     public function test_csv_respects_filters_permissions_and_tenants(): void
     {
         $this->makeAsset('ALB-FILTRO-1');

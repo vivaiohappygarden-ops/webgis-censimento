@@ -8,7 +8,7 @@ import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import ScegliVoce from '@/Components/ScegliVoce.vue';
 import VisteSalvate from '@/Components/VisteSalvate.vue';
 import { usaCaricamento } from '@/caricamento';
-import { STATUS_LABELS, statusLabel } from '@/assetStatus';
+import { STATUS_LABELS, inArchivio, statusLabel } from '@/assetStatus';
 
 const page = usePage();
 const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
@@ -170,9 +170,23 @@ async function loadAreas() {
     }
 }
 
-// Gli abbattuti restano in archivio ma non nell'elenco di tutti i giorni.
-// Se si chiede proprio lo stato "abbattuto" è ovvio che vanno mostrati
-const showRemoved = ref(false);
+// L'archivio del censimento: le schede abbattute o dismesse escono dal
+// lavoro quotidiano ma restano ritrovabili a colpo sicuro in una vista
+// dedicata, da cui si possono sempre ripristinare
+const vista = ref('censimento');
+
+// In ogni vista il filtro di stato offre solo gli stati che le appartengono:
+// così non si può chiedere un incrocio vuoto (es. "Attivo" dentro l'archivio)
+const statiFiltro = computed(() => Object.fromEntries(
+    Object.entries(STATUS_LABELS).filter(([valore]) =>
+        (vista.value === 'archivio') === inArchivio(valore))));
+
+function cambiaVista(nuova) {
+    if (vista.value === nuova) return;
+    vista.value = nuova;
+    // Lo stato scelto nella vista di prima può non esistere in quella nuova
+    if (filters.status && ! (filters.status in statiFiltro.value)) filters.status = '';
+}
 
 // --- Viste salvate ----------------------------------------------------------
 // I filtri correnti in una forma salvabile, e il percorso inverso
@@ -181,7 +195,7 @@ const filtriCorrenti = computed(() => ({
     status: filters.status,
     clientId: filters.clientId,
     areaId: filters.areaId,
-    showRemoved: showRemoved.value,
+    vista: vista.value,
 }));
 
 function applicaVista(filtri) {
@@ -189,10 +203,21 @@ function applicaVista(filtri) {
     filters.status = filtri.status ?? '';
     filters.clientId = filtri.clientId ?? '';
     filters.areaId = filtri.areaId ?? '';
-    showRemoved.value = !! filtri.showRemoved;
+    // Le viste salvate prima dell'archivio portano ancora showRemoved (la
+    // vecchia spunta "mostra anche gli abbattuti") o un filtro su uno stato
+    // d'archivio: tutte e due le intenzioni oggi vivono nella vista Archivio
+    vista.value = filtri.vista === 'archivio'
+        || (! filtri.vista && (filtri.showRemoved || inArchivio(filtri.status)))
+        ? 'archivio' : 'censimento';
+    if (filters.status && ! (filters.status in statiFiltro.value)) filters.status = '';
     // Il watcher dei filtri riparte da solo e ricarica l'elenco
 }
-const hideRemoved = computed(() => ! showRemoved.value && filters.status !== 'removed');
+
+// Il parametro dell'archivio, identico per elenco e CSV: 1 = solo archivio,
+// 0 = nascondilo dall'elenco di tutti i giorni. Sul server un filtro di
+// stato esplicito vince comunque su archivio=0, così una vista salvata
+// vecchia con status "removed" non produce mai un elenco vuoto
+const paramArchivio = computed(() => (vista.value === 'archivio' ? 1 : 0));
 
 // Import GeoJSON / CAM
 const importer = reactive({
@@ -366,7 +391,8 @@ async function exportCsv() {
     if (filters.status) params.set('status', filters.status);
     if (filters.clientId) params.set('client_id', filters.clientId);
     if (filters.areaId) params.set('area_id', filters.areaId);
-    if (hideRemoved.value) params.set('hide_removed', '1');
+    // Il CSV esporta quello che si vede: stessi parametri dell'elenco
+    params.set('archivio', String(paramArchivio.value));
     const suffix = params.toString() ? `?${params.toString()}` : '';
     await downloadCam(`/api/v1/exports/assets.csv${suffix}`, 'censimento', 'csv');
 }
@@ -456,7 +482,9 @@ async function load() {
                 status: filters.status || undefined,
                 client_id: filters.clientId || undefined,
                 area_id: filters.areaId || undefined,
-                hide_removed: hideRemoved.value ? 1 : undefined,
+                // Vista Archivio: solo abbattuti e dismessi; altrimenti
+                // l'elenco di tutti i giorni li nasconde entrambi
+                archivio: paramArchivio.value,
                 page: filters.page,
                 per_page: 25,
             },
@@ -470,7 +498,7 @@ async function load() {
     }
 }
 
-watch(() => [filters.q, filters.status, filters.clientId, filters.areaId, showRemoved.value], () => {
+watch(() => [filters.q, filters.status, filters.clientId, filters.areaId, vista.value], () => {
     clearTimeout(debounce);
     debounce = setTimeout(() => {
         filters.page = 1;
@@ -490,6 +518,20 @@ const measure = (row) => {
     if (row.computed_length_m) return `${Number(row.computed_length_m).toLocaleString('it-IT')} m`;
     return '—';
 };
+
+// Nell'archivio le azioni in blocco non si offrono: le schede archiviate
+// verrebbero comunque saltate tutte dal pre-conteggio, meglio non proporle
+const selezionabile = computed(() => canUpdateAssets.value && vista.value !== 'archivio');
+
+// La data di abbattimento da mostrare nell'archivio: la scrive "Registra
+// abbattimento" (fine validità). Un dismesso non ce l'ha: non è un abbattuto
+const dataAbbattimento = (row) => {
+    const iso = String(row.valid_to ?? '').slice(0, 10);
+    if (! iso) return null;
+    const [y, m, d] = iso.split('-');
+
+    return `${d}/${m}/${y}`;
+};
 </script>
 
 <template>
@@ -500,7 +542,14 @@ const measure = (row) => {
             <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold">Censimento</h1>
-                    <p class="text-sm text-gray-500">{{ meta.total.toLocaleString('it-IT') }} elementi censiti</p>
+                    <!-- Il totale è quello della risposta paginata: nell'archivio
+                         diventa il contatore delle schede archiviate -->
+                    <p class="text-sm text-gray-500" data-test="censimento-contatore">
+                        {{ meta.total.toLocaleString('it-IT') }}
+                        {{ vista === 'archivio'
+                            ? (meta.total === 1 ? 'scheda in archivio' : 'schede in archivio')
+                            : (meta.total === 1 ? 'elemento censito' : 'elementi censiti') }}
+                    </p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                     <select v-model="exportLayer" data-test="cam-export-layer" class="w-full max-w-full rounded-lg border border-gray-300 px-2 py-2 text-sm sm:w-auto">
@@ -553,6 +602,27 @@ const measure = (row) => {
                 >Scarica la consegna in GeoJSON</button>
             </p>
 
+            <!-- Censimento o Archivio: il lavoro di tutti i giorni da una parte,
+                 le schede abbattute o dismesse dall'altra, sempre ripristinabili -->
+            <div class="mb-3 inline-flex max-w-full overflow-x-auto rounded-lg border border-gray-300 text-sm">
+                <button
+                    class="whitespace-nowrap px-4 py-1.5 font-medium"
+                    :class="vista === 'censimento' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    data-test="vista-censimento"
+                    @click="cambiaVista('censimento')"
+                >Censimento</button>
+                <button
+                    class="whitespace-nowrap border-l border-gray-300 px-4 py-1.5 font-medium"
+                    :class="vista === 'archivio' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    data-test="vista-archivio"
+                    @click="cambiaVista('archivio')"
+                >Archivio</button>
+            </div>
+            <p v-if="vista === 'archivio'" class="mb-3 text-xs text-gray-500" data-test="archivio-descrizione">
+                L'archivio raccoglie le schede abbattute e quelle dismesse: fuori dall'elenco
+                di tutti i giorni, ma sempre consultabili e ripristinabili dalla loro scheda.
+            </p>
+
             <div class="mb-4 flex flex-wrap items-center gap-3">
                 <input
                     v-model="filters.q"
@@ -581,19 +651,15 @@ const measure = (row) => {
                     vuoto="Nessuna area trovata."
                 />
                 <select v-model="filters.status" data-test="filtro-stato" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-auto">
-                    <option value="">Tutti gli stati</option>
-                    <option v-for="(label, value) in STATUS_LABELS" :key="value" :value="value">{{ label }}</option>
+                    <option value="">{{ vista === 'archivio' ? 'Tutto l\'archivio' : 'Tutti gli stati' }}</option>
+                    <option v-for="(label, value) in statiFiltro" :key="value" :value="value">{{ label }}</option>
                 </select>
-                <label class="flex items-center gap-2 text-sm text-gray-600">
-                    <input v-model="showRemoved" type="checkbox" data-test="mostra-abbattuti" class="rounded border-gray-300">
-                    Mostra anche gli abbattuti
-                </label>
 
                 <VisteSalvate pagina="censimento" :filtri="filtriCorrenti" @applica="applicaVista" />
             </div>
 
             <div
-                v-if="canUpdateAssets && selezionati.length"
+                v-if="selezionabile && selezionati.length"
                 data-test="censimento-barra-selezione"
                 class="mb-3 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm"
             >
@@ -683,7 +749,7 @@ const measure = (row) => {
                 <table class="w-full text-sm">
                     <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
                         <tr>
-                            <th v-if="canUpdateAssets" class="px-2 py-3">
+                            <th v-if="selezionabile" class="px-2 py-3">
                                 <input
                                     type="checkbox"
                                     class="rounded border-gray-300"
@@ -704,13 +770,15 @@ const measure = (row) => {
                     </thead>
                     <tbody class="divide-y divide-gray-100">
                         <tr v-if="loading">
-                            <td colspan="9" class="px-4 py-8 text-center text-gray-400">Caricamento…</td>
+                            <td :colspan="selezionabile ? 9 : 8" class="px-4 py-8 text-center text-gray-400">Caricamento…</td>
                         </tr>
                         <tr v-else-if="rows.length === 0">
-                            <td colspan="9" class="px-4 py-8 text-center text-gray-400">Nessun elemento trovato.</td>
+                            <td :colspan="selezionabile ? 9 : 8" class="px-4 py-8 text-center text-gray-400">
+                                {{ vista === 'archivio' ? 'Nessuna scheda in archivio.' : 'Nessun elemento trovato.' }}
+                            </td>
                         </tr>
                         <tr v-for="row in rows" v-else :key="row.id" class="hover:bg-green-50/40">
-                            <td v-if="canUpdateAssets" class="px-2 py-3">
+                            <td v-if="selezionabile" class="px-2 py-3">
                                 <input
                                     v-model="selezionati"
                                     type="checkbox"
@@ -736,11 +804,19 @@ const measure = (row) => {
                                     :class="{
                                         'bg-green-100 text-green-800': row.status === 'active',
                                         'bg-amber-100 text-amber-900': row.status === 'removed',
-                                        'bg-gray-100 text-gray-600': ! ['active', 'removed'].includes(row.status),
+                                        'bg-gray-200 text-gray-700': row.status === 'dismissed',
+                                        'bg-gray-100 text-gray-600': ! ['active', 'removed', 'dismissed'].includes(row.status),
                                     }"
                                 >
                                     {{ statusLabel(row.status) }}
                                 </span>
+                                <!-- Nell'archivio la data dell'abbattimento sta accanto allo
+                                     stato; un dismesso non ne ha una (non è un abbattuto) -->
+                                <span
+                                    v-if="vista === 'archivio' && row.status === 'removed' && dataAbbattimento(row)"
+                                    class="mt-0.5 block text-xs text-gray-500"
+                                    data-test="archivio-data"
+                                >il {{ dataAbbattimento(row) }}</span>
                             </td>
                             <td class="px-4 py-3">{{ measure(row) }}</td>
                             <td class="px-4 py-3 text-gray-500">{{ new Date(row.updated_at).toLocaleDateString('it-IT') }}</td>

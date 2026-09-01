@@ -69,10 +69,21 @@ class AssetController extends Controller implements HasMiddleware
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
         }
-        // Gli elementi abbattuti restano in archivio ma sporcano l'elenco di
-        // tutti i giorni: chi consulta decide se vederli (default: si vedono,
-        // così le altre pagine che usano questa API non cambiano)
-        if ($request->boolean('hide_removed')) {
+        // L'archivio (schede abbattute/rimosse e dismesse) sta fuori dal
+        // lavoro di tutti i giorni: archivio=0 lo nasconde, archivio=1 mostra
+        // SOLO quello (la vista "Archivio" della pagina Censimento). Il filtro
+        // di stato esplicito vince: chi chiede status=dismissed vuole vederli
+        // anche con la spunta dell'archivio spenta. Senza alcun parametro si
+        // vede tutto, così le altre pagine che usano questa API non cambiano;
+        // hide_removed resta con il vecchio significato (solo abbattuti) per
+        // le viste salvate e i client esistenti.
+        if ($request->has('archivio')) {
+            if ($request->boolean('archivio')) {
+                $query->inArchivio();
+            } elseif (! $request->filled('status')) {
+                $query->fuoriArchivio();
+            }
+        } elseif ($request->boolean('hide_removed')) {
             $query->where('status', '!=', 'removed');
         }
         if ($request->filled('q')) {
@@ -214,6 +225,18 @@ class AssetController extends Controller implements HasMiddleware
                 ]);
             }
 
+            // La dismissione invece passa da qui: è leggera per scelta (niente
+            // date o campi in più, si dismette un doppione o un elemento che
+            // non si gestisce più), ma non invisibile. Entrare o uscire
+            // dall'archivio si annota nel giornale come l'abbattimento, e chi
+            // entra spegne la pagina pubblica col QR: un cartellino stampato
+            // non deve più portare alla scheda di un elemento dismesso.
+            $entraInDismesso = array_key_exists('status', $data)
+                && $data['status'] === 'dismissed' && $asset->status !== 'dismissed';
+            $esceDaDismesso = array_key_exists('status', $data)
+                && $data['status'] !== 'dismissed' && $asset->status === 'dismissed';
+            $paginaPubblicaAccesa = $asset->public_token !== null;
+
             $type = isset($data['object_type_id'])
                 ? CatalogObjectType::findOrFail($data['object_type_id'])
                 : $asset->objectType;
@@ -266,6 +289,9 @@ class AssetController extends Controller implements HasMiddleware
             }
 
             $asset->fill($data);
+            if ($entraInDismesso) {
+                $asset->public_token = null;
+            }
             $asset->updated_by = $request->user()->id;
             $this->assertValidityDates($asset);
             $asset->save();
@@ -287,6 +313,15 @@ class AssetController extends Controller implements HasMiddleware
             }
 
             Audit::log('asset.updated', $asset);
+            if ($entraInDismesso) {
+                Audit::log('asset.dismissed', $asset, [
+                    'public_page_disabled' => $paginaPubblicaAccesa,
+                ]);
+            } elseif ($esceDaDismesso) {
+                Audit::log('asset.dismissal_cancelled', $asset, [
+                    'nuovo_stato' => $asset->status,
+                ]);
+            }
         });
 
         return $this->show($id);
@@ -297,9 +332,10 @@ class AssetController extends Controller implements HasMiddleware
      * Se l'elemento è già entrato nel lavoro (ordini, ispezioni, preventivi,
      * rapportini, segnalazioni, trattamenti, valutazioni di stabilità, invii al
      * gestionale, tag ancora associati) l'eliminazione lascerebbe righe orfane
-     * e storia incoerente: la via giusta è registrare l'abbattimento, che tiene
-     * la scheda in archivio con la sua storia. Un elemento censito non si
-     * "dismette": o è un errore di rilievo e sparisce, o è patrimonio e resta.
+     * e storia incoerente: le vie giuste sono "Registra abbattimento" (se
+     * l'elemento non c'è più davvero) o lo stato "Dismesso" (doppione o
+     * elemento che non si gestisce più). In entrambi i casi la scheda finisce
+     * in archivio con la sua storia, e da lì si può sempre ripristinare.
      */
     public function destroy(string $id): Response
     {
@@ -313,10 +349,10 @@ class AssetController extends Controller implements HasMiddleware
                     'e senza la scheda quelle righe resterebbero senza il loro elemento. '.
                     'Se la pianta è stata abbattuta o l\'elemento è stato rimosso usa '.
                     '"Registra abbattimento": la scheda resta in archivio con la sua storia '.
-                    'ed esce dal censimento attivo. Se invece è un doppione, togli prima i '.
-                    'collegamenti che si possono togliere (una valutazione ancora in bozza, '.
-                    'un tag fisico ancora associato); quello che è già stato inviato o '.
-                    'consuntivato resta, ed è giusto che resti.',
+                    'ed esce dal censimento attivo. Se invece è un doppione o un elemento '.
+                    'che non si gestisce più, mettila nello stato "Dismesso" dal pannello '.
+                    'di modifica: sparisce dall\'elenco di tutti i giorni, finisce '.
+                    'nell\'archivio del censimento e da lì si può sempre ripristinare.',
             ]);
         }
 
@@ -407,6 +443,16 @@ class AssetController extends Controller implements HasMiddleware
     {
         DB::transaction(function () use ($request, $id) {
             $asset = Asset::query()->lockForUpdate()->findOrFail($id);
+
+            // Si annulla solo un abbattimento davvero registrato: su una
+            // scheda dismessa questo percorso la rimetterebbe attiva alla
+            // cieca, senza l'annotazione di ripristino che scrive update
+            if ($asset->status !== 'removed') {
+                throw ValidationException::withMessages([
+                    'asset' => 'Questa scheda non ha un abbattimento registrato da annullare. '.
+                        'Una scheda dismessa si ripristina riportando lo stato ad Attivo dal pannello di modifica.',
+                ]);
+            }
 
             $asset->status = 'active';
             $asset->valid_to = null;

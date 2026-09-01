@@ -115,7 +115,9 @@ class CommandApplier
             'area_id' => ['required', 'uuid'],
             'object_type_id' => ['required', 'uuid'],
             'census_code' => ['nullable', 'string', 'max:80'],
-            'status' => ['nullable', 'string', 'max:50'],
+            // Dal campo una scheda non nasce in archivio: abbattimento e
+            // dismissione passano dai loro flussi nel gestionale
+            'status' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['active', 'dead', 'stump'])],
             'attributes' => ['sometimes', 'array'],
             'notes' => ['nullable', 'string'],
         ])->validate();
@@ -207,8 +209,22 @@ class CommandApplier
             'census_code' => ['sometimes', 'nullable', 'string', 'max:80'],
             'attributes' => ['sometimes', 'array'],
             'notes' => ['sometimes', 'nullable', 'string'],
-            'status' => ['sometimes', 'string', 'max:50'],
+            // Solo il vocabolario di AssetStatus: uno stato inventato dal
+            // device non lo saprebbe leggere nessun filtro
+            'status' => ['sometimes', 'string', \Illuminate\Validation\Rule::in(array_keys(\App\Support\AssetStatus::LABELS))],
         ])->validate();
+
+        // Dal campo non si entra e non si esce dall'archivio: l'abbattimento
+        // scrive anche data, fine validita' e scheda albero, la dismissione
+        // annota il giornale e spegne il QR. Scavalcarli da un comando di
+        // sync lascerebbe tutto questo a meta' (e la stessa guardia sta in
+        // AssetController::update per la modifica dal gestionale)
+        if (array_key_exists('status', $payload) && $payload['status'] !== $asset->status
+            && (\App\Support\AssetStatus::inArchivio($payload['status'])
+                || \App\Support\AssetStatus::inArchivio($asset->status))) {
+            return $this->rejected($command, 'VALIDATION_FAILED',
+                'Abbattimento e dismissione (e i loro annullamenti) si registrano dal gestionale, non dal campo.');
+        }
 
         if (array_key_exists('attributes', $payload)) {
             $payload['attributes'] = app(AttributeValidator::class)
@@ -374,6 +390,14 @@ class CommandApplier
         $asset = Asset::query()->find($command['entity_id']);
         if (! $asset) {
             return $this->rejected($command, 'NOT_FOUND', 'Elemento inesistente o non accessibile.');
+        }
+
+        // Un tag fisico si aggancia solo a patrimonio in gestione: su una
+        // scheda in archivio lo scan deve dire com'e' andata, non agganciare
+        // in silenzio un cartellino a un abbattuto o a un dismesso
+        if (\App\Support\AssetStatus::inArchivio($asset->status)) {
+            return $this->rejected($command, 'VALIDATION_FAILED',
+                'Elemento in archivio ('.\App\Support\AssetStatus::label($asset->status).'): il tag non si associa. Se serve, ripristina prima la scheda dal gestionale.');
         }
 
         $existing = \App\Models\AssetTag::query()

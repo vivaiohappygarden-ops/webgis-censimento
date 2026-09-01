@@ -104,6 +104,45 @@ class TreeBalanceTest extends TestCase
         $this->assertSame(1, $data['by_species'][0]['felled']);
     }
 
+    public function test_un_dismesso_esce_dal_bilancio_e_l_abbattuto_continua_a_contare(): void
+    {
+        // Un dismesso non ha removed_on: senza il filtro sullo stato
+        // resterebbe PER SEMPRE nelle consistenze di un documento che il
+        // sindaco pubblica. Un abbattuto invece esce alla sua data e
+        // alimenta gli abbattimenti: la sua esclusione sarebbe un errore.
+        $this->createTree('ALB-A', '2020-05-01', null, 'Tilia cordata');
+        $abbattuto = $this->createTree('ALB-B', '2020-06-01', null, 'Platanus x acerifolia');
+        $this->postJson("/api/v1/assets/{$abbattuto}/removal", ['removed_on' => '2024-06-15'])->assertOk();
+        $dismesso = $this->createTree('ALB-C', '2020-07-01', null, 'Tilia cordata');
+        $this->patchJson("/api/v1/assets/{$dismesso}", ['status' => 'dismissed'])->assertOk();
+
+        $data = $this->getJson('/api/v1/vta/bilancio?from=2023-01-01&to=2024-12-31')
+            ->assertOk()->json('data');
+
+        $this->assertSame(2, $data['initial_count']); // ALB-A e ALB-B: il dismesso non c'e'
+        $this->assertSame(0, $data['planted_count']);
+        $this->assertSame(1, $data['felled_count']);  // ALB-B alla sua data
+        $this->assertSame(1, $data['final_count']);   // resta solo ALB-A
+    }
+
+    public function test_un_dismesso_con_removed_on_sporca_non_conta_come_abbattuto(): void
+    {
+        // Dato sporco possibile: una removed_on scritta sulla scheda albero e
+        // POI la dismissione. Lo stato vince: la scheda esce dal bilancio del
+        // tutto, non finisce fra gli abbattimenti del periodo.
+        $this->createTree('ALB-A', '2020-05-01', null, 'Tilia cordata');
+        $sporco = $this->createTree('ALB-D', '2020-01-01', '2024-05-01', 'Acer campestre');
+        $this->patchJson("/api/v1/assets/{$sporco}", ['status' => 'dismissed'])->assertOk();
+
+        $data = $this->getJson('/api/v1/vta/bilancio?from=2023-01-01&to=2024-12-31')
+            ->assertOk()->json('data');
+
+        $this->assertSame(1, $data['initial_count']); // solo ALB-A
+        $this->assertSame(0, $data['felled_count']);
+        $this->assertSame(1, $data['final_count']);
+        $this->assertSame([], $data['by_species']);
+    }
+
     public function test_balance_validates_date_range(): void
     {
         $this->getJson('/api/v1/vta/bilancio?from=2024-01-01&to=2023-01-01')

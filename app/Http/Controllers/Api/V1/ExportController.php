@@ -117,9 +117,18 @@ class ExportController extends Controller implements HasMiddleware
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
         }
-        // Stessa scelta fatta a video: se l'elenco nasconde gli abbattuti,
-        // il CSV esporta quello che si sta guardando
-        if ($request->boolean('hide_removed')) {
+        // Stessa scelta fatta a video: il CSV esporta quello che si sta
+        // guardando. Il blocco è la copia esatta di AssetController::index —
+        // archivio=0 nasconde abbattuti e dismessi (salvo filtro di stato
+        // esplicito), archivio=1 esporta solo l'archivio, hide_removed resta
+        // col vecchio significato per compatibilità
+        if ($request->has('archivio')) {
+            if ($request->boolean('archivio')) {
+                $query->inArchivio();
+            } elseif (! $request->filled('status')) {
+                $query->fuoriArchivio();
+            }
+        } elseif ($request->boolean('hide_removed')) {
             $query->where('status', '!=', 'removed');
         }
         if ($request->filled('q')) {
@@ -128,7 +137,7 @@ class ExportController extends Controller implements HasMiddleware
         }
 
         Audit::log('export.assets_csv', null, ['filters' => $request->only([
-            'area_id', 'locality_id', 'client_id', 'object_type_id', 'type_code', 'status', 'hide_removed', 'q',
+            'area_id', 'locality_id', 'client_id', 'object_type_id', 'type_code', 'status', 'hide_removed', 'archivio', 'q',
         ])]);
 
         // Gli stati usati dall'interfaccia del censimento

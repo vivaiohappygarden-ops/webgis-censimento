@@ -47,8 +47,15 @@ class TileController extends Controller implements HasMiddleware
                 WHERE s.client_id = ? AND ar.tenant_id = a.tenant_id)';
             $bindings[] = (string) $request->string('client_id');
         }
-        // Gli abbattuti restano in archivio ma non sulla mappa di tutti i giorni
-        if ($request->boolean('hide_removed')) {
+        // L'archivio (abbattuti e dismessi) non sta sulla mappa di tutti i
+        // giorni: archivio=0 lo nasconde, archivio=1 mostra solo quello.
+        // Stessi parametri e stessa semantica dell'elenco e del CSV;
+        // hide_removed resta col vecchio significato per compatibilità
+        if ($request->has('archivio')) {
+            $filters .= $request->boolean('archivio')
+                ? ' AND a.status IN ('.\App\Support\AssetStatus::sqlArchivio().')'
+                : ' AND a.status NOT IN ('.\App\Support\AssetStatus::sqlArchivio().')';
+        } elseif ($request->boolean('hide_removed')) {
             $filters .= " AND a.status <> 'removed'";
         }
 

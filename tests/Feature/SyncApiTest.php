@@ -258,6 +258,64 @@ class SyncApiTest extends TestCase
             ->assertJsonPath('results.0.code', 'NOT_FOUND');
     }
 
+    public function test_dal_campo_non_si_entra_ne_si_esce_dall_archivio(): void
+    {
+        $entityId = (string) Str::uuid();
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([$this->createCommand($entityId)]))->assertOk();
+
+        $cambioStato = fn (string $status) => [
+            'idempotency_key' => (string) Str::uuid(),
+            'device_seq' => 2,
+            'type' => 'asset.change_status',
+            'entity_id' => $entityId,
+            'base_version' => 1,
+            'payload' => ['status' => $status],
+        ];
+
+        // Verso l'archivio: rifiutato con motivo leggibile, non applicato.
+        // La dismissione (e l'abbattimento) hanno il loro flusso nel
+        // gestionale: dal campo si scavalcherebbero data, giornale e QR
+        $risposta = $this->postJson('/api/v1/sync/batch', $this->batchPayload([$cambioStato('dismissed')]))
+            ->assertOk()
+            ->assertJsonPath('results.0.status', 'rejected')
+            ->assertJsonPath('results.0.code', 'VALIDATION_FAILED');
+        $this->assertStringContainsString('gestionale', $risposta->json('results.0.message'));
+        $this->assertDatabaseHas('assets', ['id' => $entityId, 'status' => 'active']);
+
+        // Uno stato fuori vocabolario non passa
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([$cambioStato('felled')]))
+            ->assertOk()->assertJsonPath('results.0.status', 'rejected');
+
+        // Un passaggio legittimo (l'operatore trova una ceppaia) funziona
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([$cambioStato('stump')]))
+            ->assertOk()->assertJsonPath('results.0.status', 'applied');
+        $this->assertDatabaseHas('assets', ['id' => $entityId, 'status' => 'stump']);
+    }
+
+    public function test_l_archiviazione_toglie_la_scheda_dai_telefoni(): void
+    {
+        $entityId = (string) Str::uuid();
+        $this->postJson('/api/v1/sync/batch', $this->batchPayload([$this->createCommand($entityId)]))->assertOk();
+        $cursor = $this->getJson('/api/v1/sync/changes?cursor=0')->assertOk()->json('cursor');
+
+        // La dismissione dal gestionale (il ruolo operatore ha assets.update)
+        $this->patchJson("/api/v1/assets/{$entityId}", ['status' => 'dismissed'])->assertOk();
+
+        // Nel delta la scheda viaggia come delete: sparisce dal device come
+        // le eliminate, stessa logica degli ordini non piu' visibili
+        $changes = $this->getJson('/api/v1/sync/changes?cursor='.$cursor)->assertOk()->json('changes');
+        $this->assertTrue(collect($changes)->contains(
+            fn ($c) => $c['op'] === 'delete' && $c['table'] === 'assets' && $c['id'] === $entityId,
+        ));
+
+        // E il bootstrap non la scarica piu'
+        $this->assertCount(0, $this->getJson('/api/v1/sync/bootstrap')->json('assets'));
+
+        // Il ripristino la fa tornare con un normale upsert
+        $this->patchJson("/api/v1/assets/{$entityId}", ['status' => 'active'])->assertOk();
+        $this->assertCount(1, $this->getJson('/api/v1/sync/bootstrap')->json('assets'));
+    }
+
     public function test_tag_associate_and_working_set_tags(): void
     {
         $entityId = (string) Str::uuid();

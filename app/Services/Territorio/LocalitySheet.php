@@ -74,15 +74,24 @@ class LocalitySheet
         ];
     }
 
-    /** Quanti elementi censiti, per tipo di oggetto del catalogo. */
+    /**
+     * Quanti elementi censiti, per tipo di oggetto del catalogo. Fuori
+     * l'archivio (abbattuti e dismessi): questi numeri finiscono anche nella
+     * stampa PDF della località, e su un capitolato a misura si litiga —
+     * prima il conteggio prendeva perfino gli abbattuti, in contrasto con la
+     * planimetria della stessa scheda.
+     */
     private static function perTipo(Locality $localita): array
     {
-        return DB::select(<<<'SQL'
+        $fuoriArchivio = \App\Support\AssetStatus::sqlArchivio();
+
+        return DB::select(<<<SQL
             SELECT t.code, t.name, COUNT(*) AS quanti
             FROM assets a
             JOIN areas ar ON ar.id = a.area_id AND ar.deleted_at IS NULL
             JOIN catalog_object_types t ON t.id = a.object_type_id
             WHERE ar.locality_id = ? AND a.deleted_at IS NULL
+              AND a.status NOT IN ({$fuoriArchivio})
             GROUP BY t.code, t.name
             ORDER BY COUNT(*) DESC, t.name
             SQL, [$localita->id]);
@@ -94,13 +103,18 @@ class LocalitySheet
      */
     private static function piante(Locality $localita): array
     {
-        return DB::select(<<<'SQL'
+        // Anche qui fuori l'archivio su assets.status: un dismesso ha
+        // removed_on vuota e col solo filtro sulle date conterebbe ancora
+        $fuoriArchivio = \App\Support\AssetStatus::sqlArchivio();
+
+        return DB::select(<<<SQL
             SELECT
               COALESCE(NULLIF(TRIM(tr.species), ''), NULLIF(TRIM(tr.genus), ''), 'Specie non indicata') AS scientifico,
               NULLIF(TRIM(MIN(tr.common_name)), '') AS comune,
               COUNT(*) AS quanti
             FROM trees tr
             JOIN assets a ON a.id = tr.asset_id AND a.deleted_at IS NULL
+                         AND a.status NOT IN ({$fuoriArchivio})
             JOIN areas ar ON ar.id = a.area_id AND ar.deleted_at IS NULL
             WHERE ar.locality_id = ? AND tr.removed_on IS NULL
             GROUP BY 1

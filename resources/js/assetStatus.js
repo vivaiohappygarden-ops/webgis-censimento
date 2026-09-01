@@ -8,6 +8,17 @@ export const STATUS_LABELS = {
     dismissed: 'Dismesso',
 };
 
+// L'archivio del censimento: schede abbattute o dismesse, fuori dal lavoro
+// quotidiano ma sempre consultabili e ripristinabili. "Morto in piedi" e
+// "ceppaia" NON sono archivio: sono elementi veri ancora da gestire (un morto
+// in piedi va abbattuto, una ceppaia va estirpata). Gemello della definizione
+// lato server (AssetStatus): si aggiornano insieme.
+export const ARCHIVE_STATUSES = ['removed', 'dismissed'];
+
+export function inArchivio(status) {
+    return ARCHIVE_STATUSES.includes(status);
+}
+
 export function statusLabel(status) {
     return STATUS_LABELS[status] ?? (status || '—');
 }

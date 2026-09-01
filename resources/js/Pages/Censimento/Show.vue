@@ -485,8 +485,18 @@ onBeforeUnmount(() => map?.remove());
                         >
                             Elemento abbattuto/rimosso<template v-if="removedOn"> il {{ removedOn }}</template>.
                             <template v-if="asset.removal_reason">Motivo: {{ asset.removal_reason }}.</template>
-                            Resta in archivio, ma non compare più nell'elenco del censimento
-                            né nella consistenza del patrimonio.
+                            Resta nell'archivio del censimento, ma non compare più nell'elenco
+                            di tutti i giorni né nella consistenza del patrimonio.
+                        </p>
+
+                        <p
+                            v-else-if="asset.status === 'dismissed'"
+                            class="mb-3 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700"
+                            data-test="banner-dismesso"
+                        >
+                            Elemento dismesso: sta nell'archivio del censimento e non compare più
+                            nell'elenco di tutti i giorni, nelle planimetrie né nelle consistenze.
+                            Per riprenderlo in gestione riporta lo stato ad Attivo dal pannello di modifica.
                         </p>
 
                         <p v-if="asset.public_token" class="mb-3 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-900" data-test="public-url">
@@ -790,7 +800,16 @@ onBeforeUnmount(() => map?.remove());
                                 qualche parte: ordini di lavoro, preventivi, rapportini, ispezioni,
                                 segnalazioni, non conformità, trattamenti, valutazioni di stabilità, invii al
                                 gestionale, tag fisici ancora associati. In quel caso la scheda è già storia
-                                di qualcun altro, e la via giusta è registrare l'abbattimento.
+                                di qualcun altro e non si elimina.
+                            </p>
+                            <!-- La strada per i doppioni non eliminabili: l'archivio, non
+                                 l'abbattimento (che scriverebbe la data di una pianta mai abbattuta) -->
+                            <p class="mt-2 text-sm text-gray-600" data-test="spiegazione-archivio">
+                                Per una scheda che non si può eliminare ma non va più gestita — il doppione
+                                già collegato a un ordine, l'elemento uscito dal contratto — c'è l'archivio:
+                                premi "Modifica" in cima alla scheda e imposta lo stato su "Dismesso".
+                                La scheda esce dall'elenco di tutti i giorni e dalle planimetrie, resta
+                                consultabile nell'archivio del censimento e si può sempre rimettere Attiva.
                             </p>
                             <button
                                 class="mt-3 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"

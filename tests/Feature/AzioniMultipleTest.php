@@ -121,6 +121,41 @@ class AzioniMultipleTest extends TestCase
         $this->assertSame('active', Asset::findOrFail($id)->status);
     }
 
+    public function test_le_schede_in_archivio_si_saltano_con_il_motivo(): void
+    {
+        $vivo = $this->creaElemento();
+        $dismesso = $this->creaElemento();
+        $this->patchJson("/api/v1/assets/{$dismesso}", ['status' => 'dismissed'])->assertOk();
+
+        // Prova ed esecuzione passano dallo stesso giro: contano uguale
+        foreach ([1, 0] as $prova) {
+            $esito = $this->postJson('/api/v1/azioni/modifica-elementi', [
+                'ids' => [$vivo, $dismesso],
+                'public_hidden' => true,
+                'prova' => $prova,
+            ])->assertOk()->json('data');
+
+            $this->assertCount(1, $esito['modificati']);
+            $this->assertCount(1, $esito['saltati']);
+            $this->assertSame($dismesso, $esito['saltati'][0]['id']);
+            $this->assertStringContainsString('In archivio', $esito['saltati'][0]['motivo']);
+        }
+
+        // Il dismesso non e' stato toccato dall'esecuzione
+        $this->assertFalse((bool) $this->getJson("/api/v1/assets/{$dismesso}")->json('data.public_hidden'));
+
+        // E non si aggancia nemmeno a un ordine di lavoro
+        $ordine = $this->creaOrdine();
+        $esito = $this->postJson("/api/v1/azioni/lavori/{$ordine->id}/collega-elementi", [
+            'ids' => [$vivo, $dismesso],
+        ])->assertOk()->json('data');
+
+        $this->assertCount(1, $esito['collegati']);
+        $this->assertCount(1, $esito['saltati']);
+        $this->assertStringContainsString('In archivio', $esito['saltati'][0]['motivo']);
+        $this->assertDatabaseMissing('work_order_assets', ['asset_id' => $dismesso]);
+    }
+
     public function test_senza_modifiche_indicate_non_si_fa_niente(): void
     {
         $this->postJson('/api/v1/azioni/modifica-elementi', [

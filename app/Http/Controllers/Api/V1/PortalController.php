@@ -101,7 +101,9 @@ class PortalController extends Controller implements HasMiddleware
             'client' => ['name' => $client?->name],
             'counts' => [
                 'areas' => $areaIds->count(),
-                'assets' => Asset::query()->whereIn('area_id', $areaIds)->count(),
+                // Solo il patrimonio in gestione: al cliente non si conta
+                // l'archivio (abbattuti e dismessi)
+                'assets' => Asset::query()->whereIn('area_id', $areaIds)->fuoriArchivio()->count(),
                 'completed_orders' => WorkOrder::query()
                     ->where('status', 'completed')
                     ->where($orderScope)->count(),

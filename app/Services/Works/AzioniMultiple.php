@@ -99,6 +99,17 @@ class AzioniMultiple
             }
 
             foreach ($elementi as $elemento) {
+                // Le schede in archivio (abbattute o dismesse) non si toccano
+                // in blocco: prima si ripristinano. Il controllo sta nello
+                // stesso giro della prova, cosi' anteprima ed esecuzione
+                // contano uguale
+                if (\App\Support\AssetStatus::inArchivio($elemento->status)) {
+                    $saltati[] = ['id' => $elemento->id, 'codice' => $elemento->census_code,
+                        'motivo' => 'In archivio ('.\App\Support\AssetStatus::label($elemento->status).'): si modifica solo dopo il ripristino.'];
+
+                    continue;
+                }
+
                 if (! $prova) {
                     $elemento->fill($modifiche);
                     $elemento->version += 1;
@@ -153,6 +164,16 @@ class AzioniMultiple
             $unita = $lavorazione?->unit ?? $ordine->workType?->unit;
 
             foreach ($elementi as $elemento) {
+                // Un abbattuto o un dismesso non entra in un ordine di lavoro:
+                // non e' piu' patrimonio su cui si lavora. Stesso giro della
+                // prova, cosi' il pre-conteggio non mente
+                if (\App\Support\AssetStatus::inArchivio($elemento->status)) {
+                    $saltati[] = ['id' => $elemento->id, 'codice' => $elemento->census_code,
+                        'motivo' => 'In archivio ('.\App\Support\AssetStatus::label($elemento->status).'): non si collega a un ordine di lavoro.'];
+
+                    continue;
+                }
+
                 if (in_array($elemento->id, $gia, true)) {
                     $saltati[] = ['id' => $elemento->id, 'codice' => $elemento->census_code,
                         'motivo' => 'Gia\' presente nell\'ordine con questa lavorazione.'];

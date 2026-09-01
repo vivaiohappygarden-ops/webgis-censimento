@@ -107,6 +107,16 @@ function goTo(id) {
                             Il pulsante <strong>"Esporta CSV"</strong> scarica l'elenco (con i filtri attivi)
                             in un file da aprire direttamente in Excel.
                         </p>
+                        <h3>L'archivio del censimento</h3>
+                        <p>
+                            In cima all'elenco, il selettore <strong>Censimento | Archivio</strong> separa
+                            il lavoro di tutti i giorni dalle schede chiuse: l'archivio contiene gli elementi
+                            <strong>abbattuti</strong> e quelli <strong>dismessi</strong> (il doppione che non
+                            si può eliminare, l'elemento che non si gestisce più — lo stato "Dismesso" si
+                            imposta dal pannello di modifica della scheda). Le schede archiviate non compaiono
+                            più negli elenchi, nelle planimetrie e nelle consistenze, ma restano consultabili
+                            e si possono sempre ripristinare dalla loro scheda.
+                        </p>
                         <h3>Censire dalla mappa: punti, linee e superfici</h3>
                         <p>
                             Dalla <strong>Mappa</strong>, con "Nuovo elemento", si censisce qualsiasi

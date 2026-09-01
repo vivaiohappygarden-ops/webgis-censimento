@@ -122,6 +122,22 @@ class Asset extends Model
         return $this->hasOne(PlantingSite::class, 'asset_id');
     }
 
+    /**
+     * Solo il patrimonio in gestione: fuori le schede in archivio
+     * (abbattute/rimosse e dismesse). La lista degli stati sta in
+     * AssetStatus::ARCHIVIO, non qui.
+     */
+    public function scopeFuoriArchivio(Builder $query): Builder
+    {
+        return $query->whereNotIn($this->qualifyColumn('status'), \App\Support\AssetStatus::ARCHIVIO);
+    }
+
+    /** Solo l'archivio: le schede abbattute/rimosse e dismesse. */
+    public function scopeInArchivio(Builder $query): Builder
+    {
+        return $query->whereIn($this->qualifyColumn('status'), \App\Support\AssetStatus::ARCHIVIO);
+    }
+
     /** Aggiunge la geometria come GeoJSON alla select (colonna geom_geojson). */
     public function scopeWithGeoJson(Builder $query): Builder
     {
