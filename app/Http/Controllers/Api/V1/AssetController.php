@@ -294,9 +294,12 @@ class AssetController extends Controller implements HasMiddleware
 
     /**
      * Eliminazione della scheda: serve solo a cancellare un rilievo sbagliato.
-     * Se l'elemento è già entrato nel lavoro (ordini, ispezioni, segnalazioni,
-     * trattamenti…) l'eliminazione lascerebbe righe orfane e storia incoerente:
-     * in quel caso si registra l'abbattimento o si dismette la scheda.
+     * Se l'elemento è già entrato nel lavoro (ordini, ispezioni, preventivi,
+     * rapportini, segnalazioni, trattamenti, valutazioni di stabilità, invii al
+     * gestionale, tag ancora associati) l'eliminazione lascerebbe righe orfane
+     * e storia incoerente: la via giusta è registrare l'abbattimento, che tiene
+     * la scheda in archivio con la sua storia. Un elemento censito non si
+     * "dismette": o è un errore di rilievo e sparisce, o è patrimonio e resta.
      */
     public function destroy(string $id): Response
     {
@@ -306,9 +309,14 @@ class AssetController extends Controller implements HasMiddleware
         if ($links !== []) {
             $elenco = implode(', ', $links);
             throw ValidationException::withMessages([
-                'asset' => "Non si può eliminare questa scheda: è collegata a {$elenco}. ".
-                    'Se la pianta è stata abbattuta usa "Registra abbattimento", '.
-                    'altrimenti metti la scheda come dismessa.',
+                'asset' => "Non si può eliminare questa scheda: è collegata a {$elenco}, ".
+                    'e senza la scheda quelle righe resterebbero senza il loro elemento. '.
+                    'Se la pianta è stata abbattuta o l\'elemento è stato rimosso usa '.
+                    '"Registra abbattimento": la scheda resta in archivio con la sua storia '.
+                    'ed esce dal censimento attivo. Se invece è un doppione, togli prima i '.
+                    'collegamenti che si possono togliere (una valutazione ancora in bozza, '.
+                    'un tag fisico ancora associato); quello che è già stato inviato o '.
+                    'consuntivato resta, ed è giusto che resti.',
             ]);
         }
 

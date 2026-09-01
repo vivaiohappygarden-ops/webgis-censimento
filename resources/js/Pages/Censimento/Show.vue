@@ -786,8 +786,11 @@ onBeforeUnmount(() => map?.remove());
                         <div v-if="canDelete" class="mt-4 border-t border-gray-100 pt-4">
                             <p class="text-sm text-gray-600">
                                 Se questa scheda è stata creata per sbaglio (doppione, punto messo nel posto
-                                errato) puoi eliminarla. Non è possibile se l'elemento è già stato usato in
-                                ordini di lavoro, ispezioni, segnalazioni o trattamenti.
+                                errato) puoi eliminarla. Non è possibile quando l'elemento è già entrato da
+                                qualche parte: ordini di lavoro, preventivi, rapportini, ispezioni,
+                                segnalazioni, non conformità, trattamenti, valutazioni di stabilità, invii al
+                                gestionale, tag fisici ancora associati. In quel caso la scheda è già storia
+                                di qualcun altro, e la via giusta è registrare l'abbattimento.
                             </p>
                             <button
                                 class="mt-3 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
