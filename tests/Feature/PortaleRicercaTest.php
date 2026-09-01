@@ -139,6 +139,25 @@ class PortaleRicercaTest extends TestCase
             ->assertRedirect('/comune/mentana/elemento/MEN-0001');
     }
 
+    public function test_la_ricerca_del_portale_resta_a_corrispondenza_esatta(): void
+    {
+        $this->creaAlbero();
+
+        // Sul portale si copia il numero letto sul cartellino: niente ricerca
+        // a pezzi del gestionale (un pezzo di codice non apre nulla) e niente
+        // tolleranza sugli accenti, il codice o e' quello o non e' lui
+        $this->get('/comune/mentana/cerca?etichetta=MEN')
+            ->assertOk()->assertSee('Nessun elemento trovato');
+        $this->get('/comune/mentana/cerca?etichetta=EN-0001')
+            ->assertOk()->assertSee('Nessun elemento trovato');
+        $this->get('/comune/mentana/cerca?etichetta='.urlencode('MÈN-0001'))
+            ->assertOk()->assertSee('Nessun elemento trovato');
+
+        // Il codice esatto invece apre la scheda, come sempre
+        $this->get('/comune/mentana/cerca?etichetta=MEN-0001')
+            ->assertRedirect('/comune/mentana/elemento/MEN-0001');
+    }
+
     public function test_la_ricerca_senza_esito_lo_dice_senza_rivelare_nulla(): void
     {
         $this->creaAlbero();

@@ -83,8 +83,17 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - La ricerca del portale pubblico (`PortalSearch`) **resta a corrispondenza
   esatta**: lì si cerca il numero dell'etichetta letto sul cartellino, non un
   nome.
-- Gli accenti contano ancora: "citta" non trova "Città". Per toglierli servirebbe
-  l'estensione `unaccent` di PostgreSQL, che va creata da superutente.
+- Gli accenti non contano più nel gestionale (dal 01/09/2026): "citta" trova
+  "Città". Lato server le condizioni diventano `senza_accenti(campo) ILIKE
+  senza_accenti(?)`: la funzione è l'involucro IMMUTABLE (quindi indicizzabile)
+  dell'estensione `unaccent`, creato con i suoi indici a trigrammi dalla
+  migrazione `ricerca_senza_accenti`. L'estensione la crea il **deploy** da
+  superutente (`update.sh` e `provision.sh`); la migrazione la tenta comunque e,
+  senza permessi, avvisa nel log e prosegue. Senza funzione la ricerca degrada
+  da sola al comportamento vecchio (accenti distinti): l'esito del controllo sta
+  in `RicercaTestuale::databaseSenzaAccenti()`, una volta per processo. In
+  pagina `ricerca.js` toglie i diacritici (NFD) da tutte e due le parti. La
+  ricerca del portale pubblico resta a corrispondenza esatta, accenti compresi.
 
 ## Elenchi, mappa e scheda (dal 25/08/2026)
 

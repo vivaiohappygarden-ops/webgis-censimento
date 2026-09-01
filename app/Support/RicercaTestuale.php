@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use Illuminate\Support\Facades\DB;
+
 /**
  * Ricerca a parole, come la scrive chi cerca.
  *
@@ -13,6 +15,12 @@ namespace App\Support;
  *
  * Restringere a ogni parola in più è voluto: si scrive per arrivare a un
  * risultato solo, non per allargare l'elenco.
+ *
+ * Nemmeno gli accenti contano: "citta" trova "Città", "perche" trova
+ * "perché". Lo fa la funzione senza_accenti() del database (estensione
+ * unaccent, creata dal deploy; la migrazione ricerca_senza_accenti la
+ * congela in forma indicizzabile). Dove la funzione manca la ricerca torna
+ * da sola al confronto di prima, con gli accenti distinti.
  */
 class RicercaTestuale
 {
@@ -21,6 +29,14 @@ class RicercaTestuale
      * condizione alla ricerca, e chi ne scrive dodici sta incollando una frase.
      */
     public const MASSIMO_PAROLE = 6;
+
+    /**
+     * Se il database sa togliere gli accenti. Si accerta una volta sola per
+     * processo: è una proprietà del database, non cambia a metà richiesta.
+     * Niente cache condivisa (file o Redis): un altro processo potrebbe
+     * parlare con un database diverso, ognuno guarda il suo.
+     */
+    private static ?bool $senzaAccenti = null;
 
     /**
      * Regole di validazione per un campo di ricerca.
@@ -57,9 +73,7 @@ class RicercaTestuale
         foreach (self::parole($testo) as $parola) {
             $query->where(function ($gruppo) use ($parola, $colonne, $inoltre) {
                 foreach ($colonne as $indice => $colonna) {
-                    $indice === 0
-                        ? $gruppo->where($colonna, 'ilike', $parola)
-                        : $gruppo->orWhere($colonna, 'ilike', $parola);
+                    self::condizione($gruppo, $colonna, $parola, inOr: $indice > 0);
                 }
 
                 if ($inoltre !== null) {
@@ -82,11 +96,64 @@ class RicercaTestuale
     {
         $query->where(function ($gruppo) use ($parola, $colonne) {
             foreach ($colonne as $indice => $colonna) {
-                $indice === 0
-                    ? $gruppo->where($colonna, 'ilike', $parola)
-                    : $gruppo->orWhere($colonna, 'ilike', $parola);
+                self::condizione($gruppo, $colonna, $parola, inOr: $indice > 0);
             }
         });
+    }
+
+    /**
+     * La singola condizione "questa parola in questo campo".
+     *
+     * Con senza_accenti() nel database il confronto ignora gli accenti da
+     * tutte e due le parti; la parola resta un parametro, con i jolly già
+     * schermati da parole() - unaccent non tocca "%", "_" né la barra di
+     * schermatura, quindi chi cerca "50%" continua a cercare proprio quello.
+     * Il nome del campo arriva dal codice, mai da chi scrive, ma lo si
+     * racchiude comunque con la grammatica ("assets.notes" diventa
+     * "assets"."notes"): così nell'SQL grezzo non entra testo libero.
+     *
+     * @param  \Illuminate\Contracts\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder  $gruppo
+     */
+    private static function condizione($gruppo, string $colonna, string $parola, bool $inOr): void
+    {
+        if (! self::databaseSenzaAccenti()) {
+            $inOr
+                ? $gruppo->orWhere($colonna, 'ilike', $parola)
+                : $gruppo->where($colonna, 'ilike', $parola);
+
+            return;
+        }
+
+        // La stessa espressione degli indici (senza_accenti(colonna)):
+        // scritta diversamente, PostgreSQL non li userebbe
+        $sql = 'senza_accenti('.$gruppo->getGrammar()->wrap($colonna).') ilike senza_accenti(?)';
+
+        $inOr
+            ? $gruppo->orWhereRaw($sql, [$parola])
+            : $gruppo->whereRaw($sql, [$parola]);
+    }
+
+    /**
+     * Vero se il database ha la funzione senza_accenti() (estensione unaccent
+     * più la migrazione che la rende indicizzabile). Si controlla la funzione
+     * e non pg_extension: è la funzione che le query usano, e un'estensione
+     * creata a mano dopo le migrazioni non basterebbe da sola.
+     */
+    public static function databaseSenzaAccenti(): bool
+    {
+        return self::$senzaAccenti ??= (bool) DB::scalar(
+            "SELECT to_regproc('public.senza_accenti') IS NOT NULL",
+        );
+    }
+
+    /**
+     * Solo per i test: forza l'esito del controllo (false per provare il
+     * comportamento di ripiego senza togliere l'estensione dal database),
+     * null per tornare a chiederlo al database.
+     */
+    public static function forzaSenzaAccenti(?bool $valore): void
+    {
+        self::$senzaAccenti = $valore;
     }
 
     /**

@@ -18,6 +18,14 @@ composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 npm ci --silent
 npm run build --silent
 
+echo "==> Estensioni del database"
+# La ricerca senza accenti ("citta" trova "Città") usa l'estensione unaccent,
+# che può creare solo il superutente postgres: si crea qui, prima delle
+# migrazioni, che poi costruiscono la funzione e gli indici. Se non riesce
+# l'aggiornamento prosegue: la ricerca continua solo a distinguere gli accenti
+sudo -u postgres psql -d webgis -qc "CREATE EXTENSION IF NOT EXISTS unaccent" \
+  || echo "  (estensione unaccent non creata: la ricerca distingue ancora gli accenti)"
+
 echo "==> Manutenzione breve"
 php artisan down --retry=15 || true
 # Qualunque cosa accada, il sito non resta in manutenzione

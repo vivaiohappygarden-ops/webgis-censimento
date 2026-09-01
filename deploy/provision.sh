@@ -122,7 +122,7 @@ printf "ALTER ROLE webgis PASSWORD '%s';\n" "${DB_PASS}" | sudo -u postgres psql
 sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='webgis'" | grep -q 1 \
   || sudo -u postgres createdb -O webgis webgis
 # Le estensioni richiedono il superutente: le stesse attese dalle migrazioni
-sudo -u postgres psql -d webgis -qc "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS citext; CREATE EXTENSION IF NOT EXISTS btree_gist;"
+sudo -u postgres psql -d webgis -qc "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS citext; CREATE EXTENSION IF NOT EXISTS btree_gist; CREATE EXTENSION IF NOT EXISTS unaccent;"
 
 log "Codice applicativo in ${APP_DIR}"
 # Il repo appartiene a www-data ma git gira da root: senza questa eccezione

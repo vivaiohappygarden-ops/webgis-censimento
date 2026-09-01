@@ -31,6 +31,15 @@ class RicercaTest extends TestCase
         $this->actingAsTenantUser($this->utente);
     }
 
+    protected function tearDown(): void
+    {
+        // Un esito forzato del controllo sull'estensione non deve
+        // sopravvivere al singolo test: la proprieta' statica resterebbe
+        // per tutto il processo di PHPUnit
+        RicercaTestuale::forzaSenzaAccenti(null);
+        parent::tearDown();
+    }
+
     private function committente(string $nome, array $extra = []): Client
     {
         return Client::create([
@@ -120,6 +129,84 @@ class RicercaTest extends TestCase
         $this->assertSame([], RicercaTestuale::parole('   '));
         $this->assertSame([], RicercaTestuale::parole(null));
         $this->assertSame(['%mario%', '%rossi%'], RicercaTestuale::parole("  mario \t rossi "));
+    }
+
+    // --- Gli accenti -------------------------------------------------------
+
+    public function test_gli_accenti_non_contano(): void
+    {
+        $this->serveSenzaAccenti();
+        $this->committente('Città di Cefalù');
+
+        // Sul telefono accento e apostrofo costano un tasto in più: si
+        // scrive "citta" e si deve arrivare lo stesso a "Città"
+        $this->assertSame(['Città di Cefalù'], $this->nomiCommittenti('citta cefalu'));
+    }
+
+    public function test_chi_scrive_l_accento_trova_anche_il_testo_senza(): void
+    {
+        $this->serveSenzaAccenti();
+        $this->committente('Localita Pineta');
+
+        // L'accento si toglie da tutte e due le parti del confronto
+        $this->assertSame(['Localita Pineta'], $this->nomiCommittenti('località'));
+    }
+
+    public function test_maiuscole_e_accenti_insieme_non_contano(): void
+    {
+        $this->serveSenzaAccenti();
+        $this->committente('Città di Cefalù');
+
+        $this->assertSame(['Città di Cefalù'], $this->nomiCommittenti('CITTA cefalù'));
+    }
+
+    public function test_i_jolly_restano_schermati_anche_senza_accenti(): void
+    {
+        $this->serveSenzaAccenti();
+        $this->committente('Sconto 50% però');
+        $this->committente('Sconto 50 lordo');
+
+        // "%" deve valere come carattere scritto anche quando il confronto
+        // passa da senza_accenti(): unaccent non tocca jolly né schermature
+        $this->assertSame(['Sconto 50% però'], $this->nomiCommittenti('50%'));
+    }
+
+    public function test_l_elemento_si_trova_senza_accenti_nelle_note(): void
+    {
+        $this->serveSenzaAccenti();
+        $albero = $this->creaAlbero([], [
+            'notes' => 'Da ricontrollare perché la chioma è sopra la città vecchia',
+        ]);
+
+        // Lo scope Asset::cercaTesto, dalla stessa API dell'elenco
+        $this->assertSame([$albero], $this->idElementi('perche'));
+        $this->assertSame([$albero], $this->idElementi('citta vecchia'));
+    }
+
+    public function test_senza_estensione_la_ricerca_distingue_ancora_gli_accenti(): void
+    {
+        $this->committente('Città di Cefalù');
+
+        // Il ripiego dove unaccent manca: identico al comportamento vecchio.
+        // L'esito del controllo si forza, senza togliere davvero l'estensione;
+        // il tearDown lo azzera
+        RicercaTestuale::forzaSenzaAccenti(false);
+
+        $this->assertSame([], $this->nomiCommittenti('citta'));
+        $this->assertSame(['Città di Cefalù'], $this->nomiCommittenti('città'));
+    }
+
+    /**
+     * I test sugli accenti valgono solo dove il database ha la funzione
+     * senza_accenti() (estensione unaccent più la sua migrazione): dove
+     * manca, la ricerca degrada apposta al vecchio comportamento, che ha il
+     * suo test con l'esito forzato.
+     */
+    private function serveSenzaAccenti(): void
+    {
+        if (! RicercaTestuale::databaseSenzaAccenti()) {
+            $this->markTestSkipped('Estensione unaccent assente: qui la ricerca distingue ancora gli accenti.');
+        }
     }
 
     // --- Gli elementi censiti ---------------------------------------------
