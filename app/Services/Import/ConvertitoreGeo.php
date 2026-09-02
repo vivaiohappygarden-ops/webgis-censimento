@@ -171,8 +171,9 @@ class ConvertitoreGeo
         return $path;
     }
 
-    /** I nomi dei livelli del file, letti con ogrinfo. */
-    private function livelli(string $path): array
+    /** I nomi dei livelli del file, letti con ogrinfo (pubblico: lo usa
+     * anche ConvertitoreTabella per i fogli di un file Excel). */
+    public function livelli(string $path): array
     {
         $process = new Process(['ogrinfo', '-ro', '-q', $path]);
 

@@ -191,6 +191,15 @@ class ImportGenerico
     /**
      * @param  array<string, string>  $mappatura  colonna del file -> destinazione
      * @param  string  $esistenti  'salta' (come il canale CAM) o 'aggiorna'
+     * @param  list<array{index: int, error: string}>  $scartiPreliminari  righe già
+     *         scartate a monte (coordinate tabellari non valide): entrano nel
+     *         rapporto con il loro numero di riga e si saltano nel giro. La
+     *         verifica e l'import vero ricevono gli stessi scarti, quindi il
+     *         pre-conteggio non può divergere dall'esecuzione.
+     * @param  int  $primaRiga  numero di riga, nel file d'origine, della prima
+     *         feature: 1 per i formati geografici, 2 per i fogli Excel/CSV
+     *         (la riga 1 è l'intestazione). Serve solo alle etichette "riga #N",
+     *         che devono corrispondere a ciò che l'utente vede aprendo il file.
      */
     public function importa(
         array $geojson,
@@ -199,6 +208,8 @@ class ImportGenerico
         ?CatalogObjectType $defaultType,
         string $esistenti,
         bool $dryRun = true,
+        array $scartiPreliminari = [],
+        int $primaRiga = 1,
     ): array {
         $this->validaMappatura($mappatura);
 
@@ -206,7 +217,8 @@ class ImportGenerico
         $tenantId = $area->tenant_id;
         $typesByCode = CatalogObjectType::query()->get()->keyBy('code');
 
-        $errors = [];
+        $errors = $scartiPreliminari;
+        $indiciScartati = array_flip(array_column($scartiPreliminari, 'index'));
         $warnings = [];
         $daInserire = [];
         $daAggiornare = [];
@@ -248,7 +260,12 @@ class ImportGenerico
         }
 
         foreach ($features as $index => $feature) {
-            $label = 'riga #'.($index + 1);
+            // Riga già scartata a monte (coordinate non valide): è già nel
+            // rapporto con il suo numero, non va né importata né ricontata
+            if (isset($indiciScartati[$index])) {
+                continue;
+            }
+            $label = 'riga #'.($index + $primaRiga);
             $props = is_array($feature['properties'] ?? null) ? $feature['properties'] : [];
 
             // Un valore composto (lista o oggetto del GeoJSON) non è un dato
@@ -476,6 +493,11 @@ class ImportGenerico
                 }
             });
         }
+
+        // Gli scarti preliminari (coordinate) arrivano prima del giro: si
+        // riordina tutto per numero di riga, o l'elenco salterebbe avanti
+        // e indietro fra i motivi di scarto
+        usort($errors, fn ($a, $b) => $a['index'] <=> $b['index']);
 
         return [
             'total' => count($features),

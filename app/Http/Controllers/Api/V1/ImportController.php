@@ -54,10 +54,10 @@ class ImportController extends Controller implements HasMiddleware
 
     /**
      * Primo passo dell'import generico: si carica il file (shapefile zip,
-     * GeoJSON, GeoPackage o KML) e si riceve l'elenco delle colonne con gli
-     * esempi, l'anteprima delle prime righe e una proposta di mappatura.
-     * Il file convertito resta conservato un'ora: la verifica e l'import
-     * usano il gettone, senza ricaricare nulla.
+     * GeoJSON, GeoPackage, KML, oppure una tabella Excel .xlsx o .csv) e si
+     * riceve l'elenco delle colonne con gli esempi, l'anteprima delle prime
+     * righe e una proposta di mappatura. Il file convertito resta conservato
+     * un'ora: la verifica e l'import usano il gettone, senza ricaricare nulla.
      */
     public function analizza(Request $request, \App\Services\Import\ImportGenerico $importer): JsonResponse
     {
@@ -65,7 +65,25 @@ class ImportController extends Controller implements HasMiddleware
             'file' => ['required', 'file', 'max:51200'],
         ]);
 
-        $geojson = (new \App\Services\Import\ConvertitoreGeo)->aGeoJson($data['file']);
+        $tabella = new \App\Services\Import\ConvertitoreTabella;
+        if ($tabella->gestisce($data['file'])) {
+            // Tabella senza geometria: stesso flusso di analisi degli altri
+            // formati, più il blocco per scegliere colonne X/Y e sistema
+            // di riferimento (con proposta automatica dai nomi)
+            [$geojson, $avvisi] = $tabella->aGeoJson($data['file']);
+            $analisi = $importer->analizza($geojson, $request->user()->tenant_id);
+            $analisi['tabellare'] = $tabella->descriviCoordinate(array_column($analisi['colonne'], 'nome'));
+            $analisi['avvisi'] = $avvisi;
+
+            return response()->json(['data' => $analisi]);
+        }
+
+        // L'elenco esteso serve solo al messaggio d'errore sui formati:
+        // .xlsx e .csv sono già stati smistati sopra
+        $geojson = (new \App\Services\Import\ConvertitoreGeo)->aGeoJson(
+            $data['file'],
+            [...\App\Services\Import\ConvertitoreGeo::FORMATI, ...\App\Services\Import\ConvertitoreTabella::FORMATI],
+        );
 
         return response()->json(['data' => $importer->analizza($geojson, $request->user()->tenant_id)]);
     }
@@ -81,6 +99,15 @@ class ImportController extends Controller implements HasMiddleware
             'default_object_type_id' => ['nullable', 'uuid'],
             'esistenti' => ['sometimes', \Illuminate\Validation\Rule::in(['salta', 'aggiorna'])],
             'dry_run' => ['sometimes', 'boolean'],
+            // Solo per i file tabellari (Excel/CSV): colonne delle coordinate
+            // e sistema di riferimento, scelti nel passo di mappatura
+            'coordinate' => ['sometimes', 'array'],
+            'coordinate.colonna_x' => ['required_with:coordinate', 'string', 'max:255'],
+            'coordinate.colonna_y' => ['required_with:coordinate', 'string', 'max:255'],
+            'coordinate.epsg' => [
+                'required_with:coordinate',
+                \Illuminate\Validation\Rule::in(array_keys(\App\Services\Import\ConvertitoreTabella::SISTEMI)),
+            ],
         ]);
 
         $esistenti = $data['esistenti'] ?? 'salta';
@@ -97,7 +124,26 @@ class ImportController extends Controller implements HasMiddleware
         $geojson = $importer->riprendi($data['file_token'], $request->user()->tenant_id);
         $dryRun = (bool) ($data['dry_run'] ?? true);
 
-        $report = $importer->importa($geojson, $area, $data['mappatura'], $defaultType, $esistenti, $dryRun);
+        // File tabellare: i punti nascono qui dalle colonne scelte, sia in
+        // verifica sia in import vero (stesso percorso, stesso conteggio);
+        // le righe senza coordinate valide diventano scarti dichiarati
+        $scartiCoordinate = [];
+        if (isset($data['coordinate'])) {
+            [$geojson, $scartiCoordinate] = (new \App\Services\Import\ConvertitoreTabella)->applicaCoordinate(
+                $geojson,
+                $data['coordinate']['colonna_x'],
+                $data['coordinate']['colonna_y'],
+                (string) $data['coordinate']['epsg'],
+            );
+        }
+
+        // Nei fogli la riga 1 è l'intestazione: le etichette "riga #N" dei
+        // messaggi devono contare come conta l'utente aprendo il file
+        $primaRiga = isset($data['coordinate'])
+            ? \App\Services\Import\ConvertitoreTabella::PRIMA_RIGA_DATI
+            : 1;
+
+        $report = $importer->importa($geojson, $area, $data['mappatura'], $defaultType, $esistenti, $dryRun, $scartiCoordinate, $primaRiga);
 
         if (! $dryRun) {
             // Il gettone si consuma con l'import vero: un secondo clic non

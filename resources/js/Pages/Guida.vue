@@ -933,10 +933,17 @@ function goTo(id) {
                         <p>
                             Se il censimento arriva da un altro programma, con colonne dai nomi diversi
                             (ID_PIANTA, SPECIE_ALB, ALTEZZA…), si usa "Importa" scegliendo
-                            <strong>"Qualsiasi file"</strong>: shapefile zippato, GeoJSON, GeoPackage o KML.
-                            Il programma legge il file e mostra le colonne con gli esempi e l'anteprima
+                            <strong>"Qualsiasi file"</strong>: shapefile zippato, GeoJSON, GeoPackage, KML,
+                            oppure una tabella <strong>Excel (.xlsx) o CSV</strong> con le coordinate in due
+                            colonne. Il programma legge il file e mostra le colonne con gli esempi e l'anteprima
                             delle prime righe; per ciascuna colonna dici a quale nostro campo corrisponde
                             (codice censimento, specie, altezza…), con una proposta automatica già pronta.
+                            Per Excel e CSV si indicano anche le colonne di longitudine e latitudine (o Est/Nord)
+                            e il sistema di riferimento (WGS84, Gauss-Boaga, RDN2008, UTM); le virgole decimali
+                            all'italiana vanno bene, un file con più fogli usa il primo dicendolo, e le righe
+                            senza coordinate valide vengono scartate e conteggiate con il numero di riga del
+                            foglio (intestazione compresa), mai posizionate a caso. Un vecchio .xls va prima
+                            risalvato come .xlsx.
                             Per le righe senza codice di catalogo si sceglie un <strong>tipo predefinito</strong>;
                             i codici censimento già presenti si possono saltare oppure
                             <strong>aggiornare</strong> (geometria, misure e note della scheda esistente).

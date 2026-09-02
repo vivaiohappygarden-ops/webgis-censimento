@@ -226,7 +226,15 @@ const importer = reactive({
     // tipo predefinito, gestione dei codici già presenti, mappature salvate
     analisi: null, mappatura: {}, tipoDefaultId: '', esistenti: 'salta',
     mappature: [], nomeMappatura: '', mappaturaSceltaId: '', avvisoMappatura: '',
+    // Solo per i file tabellari (Excel/CSV): colonne delle coordinate e
+    // sistema di riferimento, proposti dall'analisi ma decisi dall'utente
+    coordinate: { x: '', y: '', epsg: '4326' },
 });
+
+// Per un file tabellare la verifica parte solo con le coordinate scelte:
+// senza colonne X/Y ogni riga sarebbe scartata per geometria mancante
+const coordinateMancanti = computed(() => Boolean(importer.analisi?.tabellare)
+    && (! importer.coordinate.x || ! importer.coordinate.y));
 
 // Tipi del catalogo per il "tipo predefinito" (caricati alla prima analisi)
 const tipiImport = ref([]);
@@ -238,6 +246,7 @@ function azzeraGenerico() {
     importer.error = '';
     importer.mappaturaSceltaId = '';
     importer.avvisoMappatura = '';
+    importer.coordinate = { x: '', y: '', epsg: '4326' };
 }
 
 async function analizzaGenerico() {
@@ -256,6 +265,11 @@ async function analizzaGenerico() {
         // La proposta automatica è un punto di partenza: si può cambiare tutto
         importer.mappatura = { ...data.data.proposta };
         importer.mappaturaSceltaId = '';
+        // File tabellare: proposta delle colonne di coordinate (se i nomi
+        // parlano da soli); il sistema parte da WGS84, il più comune
+        importer.coordinate = data.data.tabellare
+            ? { x: data.data.tabellare.proposta_x ?? '', y: data.data.tabellare.proposta_y ?? '', epsg: '4326' }
+            : { x: '', y: '', epsg: '4326' };
         if (! tipiImport.value.length) {
             const cat = await axios.get('/api/v1/catalog');
             tipiImport.value = cat.data.data.flatMap((m) => m.sub_types.flatMap((s) =>
@@ -279,6 +293,10 @@ async function runImportGenerico(dryRun) {
         importer.error = 'Analizza il file e scegli un\'area di destinazione.';
         return;
     }
+    if (coordinateMancanti.value) {
+        importer.error = 'Scegli le colonne di longitudine (X) e latitudine (Y) del foglio.';
+        return;
+    }
     importer.busy = true;
     importer.error = '';
     try {
@@ -289,6 +307,12 @@ async function runImportGenerico(dryRun) {
             default_object_type_id: importer.tipoDefaultId || null,
             esistenti: importer.esistenti,
             dry_run: dryRun,
+            // Solo per i fogli: da queste colonne nascono i punti
+            ...(importer.analisi.tabellare ? { coordinate: {
+                colonna_x: importer.coordinate.x,
+                colonna_y: importer.coordinate.y,
+                epsg: importer.coordinate.epsg,
+            } } : {}),
         });
         importer.report = data.data;
         if (! dryRun) {
@@ -858,8 +882,9 @@ const dataAbbattimento = (row) => {
                         </div>
                         <p class="mt-1 text-xs text-gray-500">
                             <template v-if="importer.format === 'generico'">
-                                File di qualunque provenienza (shapefile zippato, GeoJSON, GeoPackage, KML):
-                                il programma legge le colonne e tu dici a quale nostro campo corrisponde ciascuna.
+                                File di qualunque provenienza (shapefile zippato, GeoJSON, GeoPackage, KML,
+                                Excel .xlsx o CSV): il programma legge le colonne e tu dici a quale nostro campo
+                                corrisponde ciascuna. Per Excel e CSV indichi anche le due colonne delle coordinate.
                             </template>
                             <template v-else-if="importer.format === 'cam'">
                                 Shapefile zippato o GeoJSON nel formato ministeriale (Modello Dati v2.1), tutte le macro-categorie: campi CODICE, OBJ_ID, GENERE/SPECIE, H_m, LARG_m, DATA_RIL…
@@ -890,7 +915,7 @@ const dataAbbattimento = (row) => {
                             <input
                                 type="file"
                                 data-test="imp-file"
-                                :accept="importer.format === 'generico' ? '.zip,.json,.geojson,.gpkg,.kml'
+                                :accept="importer.format === 'generico' ? '.zip,.json,.geojson,.gpkg,.kml,.xlsx,.csv'
                                     : importer.format === 'cam' ? '.zip,.json,.geojson' : '.json,.geojson,application/json,application/geo+json'"
                                 class="w-full text-sm disabled:opacity-50"
                                 :disabled="importer.busy"
@@ -919,9 +944,50 @@ const dataAbbattimento = (row) => {
 
                                 <div v-if="importer.analisi" class="space-y-3">
                                     <p class="text-xs text-gray-600" data-test="imp-analisi-riassunto">
-                                        {{ importer.analisi.totale }} elementi nel file
-                                        ({{ Object.entries(importer.analisi.geometrie).map(([t, n]) => `${n} ${t}`).join(', ') }}).
+                                        <template v-if="importer.analisi.tabellare">
+                                            {{ importer.analisi.totale }} righe nel foglio: i punti nasceranno
+                                            dalle colonne di coordinate scelte qui sotto.
+                                        </template>
+                                        <template v-else>
+                                            {{ importer.analisi.totale }} elementi nel file
+                                            ({{ Object.entries(importer.analisi.geometrie).map(([t, n]) => `${n} ${t}`).join(', ') }}).
+                                        </template>
                                     </p>
+                                    <p v-for="(avviso, i) in importer.analisi.avvisi ?? []" :key="i" class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900" data-test="imp-avviso-analisi">{{ avviso }}</p>
+
+                                    <!-- Coordinate del foglio: due colonne e sistema di riferimento.
+                                         Le righe senza coordinate valide saranno scartate e dichiarate,
+                                         mai posizionate a caso -->
+                                    <div v-if="importer.analisi.tabellare" class="rounded-xl border border-gray-200 p-3" data-test="imp-coordinate">
+                                        <p class="mb-2 text-xs font-medium text-gray-500">Coordinate (obbligatorie per Excel/CSV)</p>
+                                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                            <label class="block text-xs">
+                                                <span class="text-gray-500">Colonna X / longitudine / Est</span>
+                                                <select v-model="importer.coordinate.x" data-test="imp-coordinata-x" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" @change="importer.report = null">
+                                                    <option value="">Scegli…</option>
+                                                    <option v-for="colonna in importer.analisi.colonne" :key="colonna.nome" :value="colonna.nome">{{ colonna.nome }}</option>
+                                                </select>
+                                            </label>
+                                            <label class="block text-xs">
+                                                <span class="text-gray-500">Colonna Y / latitudine / Nord</span>
+                                                <select v-model="importer.coordinate.y" data-test="imp-coordinata-y" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" @change="importer.report = null">
+                                                    <option value="">Scegli…</option>
+                                                    <option v-for="colonna in importer.analisi.colonne" :key="colonna.nome" :value="colonna.nome">{{ colonna.nome }}</option>
+                                                </select>
+                                            </label>
+                                            <label class="block text-xs">
+                                                <span class="text-gray-500">Sistema di riferimento</span>
+                                                <select v-model="importer.coordinate.epsg" data-test="imp-coordinate-epsg" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" @change="importer.report = null">
+                                                    <option v-for="s in importer.analisi.tabellare.sistemi" :key="s.valore" :value="s.valore">{{ s.etichetta }}</option>
+                                                </select>
+                                            </label>
+                                        </div>
+                                        <p class="mt-2 text-xs text-gray-500">
+                                            Le virgole decimali ("9,1912") vanno bene. Le righe senza coordinate
+                                            valide verranno scartate e conteggiate con il numero di riga del
+                                            foglio (la riga 1 è l'intestazione).
+                                        </p>
+                                    </div>
 
                                     <div v-if="importer.mappature.length" class="flex flex-wrap items-center gap-2 text-xs">
                                         <span class="text-gray-500">Mappatura salvata</span>
@@ -1056,13 +1122,13 @@ const dataAbbattimento = (row) => {
                             <div v-else-if="importer.analisi" class="flex gap-2">
                                 <button
                                     class="flex-1 rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
-                                    :disabled="importer.busy"
+                                    :disabled="importer.busy || coordinateMancanti"
                                     data-test="imp-verifica"
                                     @click="runImportGenerico(true)"
                                 >{{ importer.busy ? 'Verifica…' : '2 · Verifica (senza importare)' }}</button>
                                 <button
                                     class="flex-1 rounded-lg bg-green-700 px-3 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
-                                    :disabled="importer.busy || ! importer.report || ! importer.report.dry_run || (importer.report.importable === 0 && importer.report.updatable === 0)"
+                                    :disabled="importer.busy || coordinateMancanti || ! importer.report || ! importer.report.dry_run || (importer.report.importable === 0 && importer.report.updatable === 0)"
                                     data-test="imp-importa"
                                     @click="runImportGenerico(false)"
                                 >3 · Importa{{ importer.report?.dry_run ? ` ${importer.report.importable + importer.report.updatable}` : '' }}</button>
