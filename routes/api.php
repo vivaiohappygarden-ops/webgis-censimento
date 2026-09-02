@@ -142,6 +142,8 @@ Route::prefix('v1')->group(function () {
         ]))->middleware('can:works.manage');
 
         Route::get('reports/lavori', [\App\Http\Controllers\Api\V1\WorkReportController::class, 'lavori']);
+        Route::get('reports/relazione-annuale/pdf', [\App\Http\Controllers\Api\V1\RelazioneAnnualeController::class, 'pdf']);
+        Route::get('reports/relazione-annuale/primo-anno', [\App\Http\Controllers\Api\V1\RelazioneAnnualeController::class, 'primoAnno']);
         Route::get('dashboard/today', [\App\Http\Controllers\Api\V1\DashboardController::class, 'today']);
         Route::get('stats/overview', [\App\Http\Controllers\Api\V1\StatsController::class, 'overview']);
 

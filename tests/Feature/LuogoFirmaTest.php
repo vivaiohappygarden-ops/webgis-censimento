@@ -204,6 +204,25 @@ class LuogoFirmaTest extends TestCase
         $this->assertStringContainsString('Roma, '.$this->oggi(), $this->stampe->html['pdf.phyto-register']);
     }
 
+    public function test_la_relazione_annuale_porta_luogo_e_data_di_stampa(): void
+    {
+        $this->createArea($this->organizzazione);
+        $this->impostaLuogo('Roma');
+        $committente = Client::withoutGlobalScopes()
+            ->where('tenant_id', $this->organizzazione->id)->firstOrFail();
+        $anno = Carbon::now('Europe/Rome')->year;
+
+        $this->get("/api/v1/reports/relazione-annuale/pdf?client_id={$committente->id}&anno={$anno}")
+            ->assertOk();
+
+        $html = $this->stampe->html['pdf.relazione-annuale'];
+        $this->assertStringContainsString('Roma, '.$this->oggi(), $html);
+        // La relazione non ha una data propria: firma e "stampato il" leggono
+        // lo stesso orologio, una volta sola
+        $this->assertStringContainsString('stampato il '.$this->oggi(), $html);
+        $this->assertSame(1, substr_count($html, 'stampato il'));
+    }
+
     public function test_il_preventivo_non_porta_luogo_e_data(): void
     {
         // Decisione del committente: sul preventivo non serve. La data

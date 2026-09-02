@@ -340,6 +340,10 @@ function goTo(id) {
                             bozza, pianificato, assegnato, in corso, sospeso, completato (o annullato).
                             L'<strong>agenda</strong> mostra la settimana per squadra; il <strong>rendiconto</strong>
                             riepiloga i lavori completati per cliente e periodo, con i valori calcolati dal listino.
+                            Sotto il rendiconto, il riquadro <strong>"Relazione annuale del verde"</strong> stampa
+                            in un clic il PDF da consegnare al committente a fine anno (patrimonio, bilancio
+                            arboreo, lavori, controlli, segnalazioni, trattamenti, stima CO2, fotografie), con la
+                            firma del tecnico; le sezioni senza dati nell'anno non vengono stampate.
                         </p>
                         <h3>Il calendario sul telefono (abbonamento)</h3>
                         <p>

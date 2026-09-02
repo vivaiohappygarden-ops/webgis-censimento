@@ -6,6 +6,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import WorkAgenda from '@/Components/WorkAgenda.vue';
 import CalendarioAbbonamento from '@/Components/CalendarioAbbonamento.vue';
 import WorkReport from '@/Components/WorkReport.vue';
+import RelazioneAnnuale from '@/Components/RelazioneAnnuale.vue';
 import QualityBoard from '@/Components/QualityBoard.vue';
 import QuotesPanel from '@/Components/QuotesPanel.vue';
 import SalPanel from '@/Components/SalPanel.vue';
@@ -718,12 +719,16 @@ onMounted(async () => {
                 <CalendarioAbbonamento />
             </template>
 
-            <WorkReport
-                v-if="view === 'rendiconto'"
-                ref="reportRef"
-                :clients="clients"
-                @open="openDetail"
-            />
+            <template v-if="view === 'rendiconto'">
+                <WorkReport
+                    ref="reportRef"
+                    :clients="clients"
+                    @open="openDetail"
+                />
+                <!-- Sotto il rendiconto: e' lo stesso riepilogo per cliente
+                     e periodo, portato in forma di documento da consegnare -->
+                <RelazioneAnnuale :clients="clients" />
+            </template>
 
             <QualityBoard
                 v-if="view === 'qualita'"
