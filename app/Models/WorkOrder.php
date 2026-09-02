@@ -65,12 +65,17 @@ class WorkOrder extends Model
         'origin_id', 'planned_start', 'planned_end', 'due_at',
         'estimated_duration_min', 'team_id', 'assigned_to', 'price_list_id',
         'risks', 'ppe', 'is_public', 'created_by', 'updated_by',
+        // Scadenza del piano di manutenzione coperta dall'ordine: la scrive
+        // solo GeneratorePiani (non e' accettata dall'API), cosi' spostare
+        // le date in agenda non fa rigenerare l'ordine al giro successivo
+        'plan_month',
     ];
 
     protected function casts(): array
     {
         return [
             'is_public' => 'boolean',
+            'plan_month' => 'date',
             'planned_start' => 'date',
             'planned_end' => 'date',
             'due_at' => 'datetime',

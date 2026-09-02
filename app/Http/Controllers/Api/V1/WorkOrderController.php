@@ -509,36 +509,12 @@ class WorkOrderController extends Controller implements HasMiddleware
 
     /**
      * Un'impresa esterna appartiene a un committente (indicazione 28/08/2026):
-     * le si affidano solo ordini di QUEL committente. Le squadre interne
-     * lavorano per chiunque.
+     * regola condivisa con i piani di manutenzione, scritta una volta sola
+     * in ImpresaDelCommittente.
      */
     private function assertImpresaDelCommittente(?string $teamId, ?string $clientId): void
     {
-        if ($teamId === null) {
-            return;
-        }
-        $team = \App\Models\Team::query()->with('client:id,name')->find($teamId);
-        if ($team === null || ! $team->is_external) {
-            return;
-        }
-        if ($team->client_id === null) {
-            throw ValidationException::withMessages([
-                'team_id' => "L'impresa \"{$team->name}\" non è ancora collegata a un committente: collegala dalla pagina Utenti prima di affidarle lavori.",
-            ]);
-        }
-        // La relazione puo' essere nulla anche con client_id valorizzato
-        // (committente eliminato in passato): mai un errore grezzo
-        $nomeCommittente = $team->client?->name;
-        if ($nomeCommittente === null) {
-            throw ValidationException::withMessages([
-                'team_id' => "L'impresa \"{$team->name}\" è collegata a un committente eliminato: sistemala dalla pagina Utenti.",
-            ]);
-        }
-        if ($clientId !== $team->client_id) {
-            throw ValidationException::withMessages([
-                'team_id' => "L'impresa \"{$team->name}\" lavora per {$nomeCommittente}: le si affidano solo ordini di quel committente.",
-            ]);
-        }
+        \App\Services\Works\ImpresaDelCommittente::verifica($teamId, $clientId);
     }
 
     private function validated(Request $request, bool $required = true): array

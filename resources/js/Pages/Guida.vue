@@ -345,6 +345,17 @@ function goTo(id) {
                             arboreo, lavori, controlli, segnalazioni, trattamenti, stima CO2, fotografie), con la
                             firma del tecnico; le sezioni senza dati nell'anno non vengono stampate.
                         </p>
+                        <h3>I piani di manutenzione pluriennali</h3>
+                        <p>
+                            Nella vista <strong>Piani</strong> della pagina Lavori si dichiara, area per area,
+                            ogni quanto ricorre una lavorazione: "potatura ogni 3 anni", "sfalcio ogni mese
+                            da marzo a ottobre". Il riquadro <strong>"Genera gli ordini del periodo"</strong>
+                            calcola le scadenze dovute — contando dall'ultimo lavoro esistente di quell'area,
+                            anche se creato a mano — e crea gli ordini pianificati al primo del mese, da
+                            correggere poi in agenda. Prima della conferma l'<strong>anteprima</strong> elenca
+                            che cosa verrebbe creato e che cosa viene saltato con il motivo; rilanciare la
+                            generazione non crea mai doppioni: le scadenze già coperte si saltano e basta.
+                        </p>
                         <h3>Il calendario sul telefono (abbonamento)</h3>
                         <p>
                             Sotto l'agenda della pagina <strong>Lavori</strong> c'è il riquadro

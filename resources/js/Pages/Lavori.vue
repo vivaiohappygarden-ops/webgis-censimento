@@ -10,6 +10,7 @@ import RelazioneAnnuale from '@/Components/RelazioneAnnuale.vue';
 import QualityBoard from '@/Components/QualityBoard.vue';
 import QuotesPanel from '@/Components/QuotesPanel.vue';
 import SalPanel from '@/Components/SalPanel.vue';
+import PianiPanel from '@/Components/PianiPanel.vue';
 import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import ScegliVoce from '@/Components/ScegliVoce.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
@@ -112,7 +113,7 @@ function applicaVista(filtri) {
 const loading = ref(false);
 // La vista iniziale può arrivare dall'URL (es. il cruscotto Oggi linka
 // direttamente la Qualità): valori sconosciuti ricadono sull'elenco
-const VIEWS = ['elenco', 'agenda', 'rendiconto', 'qualita', 'preventivi', 'sal'];
+const VIEWS = ['elenco', 'agenda', 'rendiconto', 'qualita', 'preventivi', 'sal', 'piani'];
 const requested = new URLSearchParams(window.location.search).get('vista');
 // I SAL sono riservati a chi gestisce i lavori: senza permesso si ricade sull'elenco
 const vistaAmmessa = (v) => VIEWS.includes(v) && (v !== 'sal' || canManage.value);
@@ -593,6 +594,7 @@ onMounted(async () => {
                     <p v-else-if="view === 'agenda'" class="text-sm text-gray-500">Programmazione settimanale per squadra</p>
                     <p v-else-if="view === 'rendiconto'" class="text-sm text-gray-500">Lavori completati per cliente e periodo, con importi da listino</p>
                     <p v-else-if="view === 'preventivi'" class="text-sm text-gray-500">Offerte ai clienti: bozza, invio, esito e trasformazione in ordine di lavoro</p>
+                    <p v-else-if="view === 'piani'" class="text-sm text-gray-500">Ricorrenze dichiarate per area e lavorazione: gli ordini del periodo si generano da qui</p>
                     <p v-else class="text-sm text-gray-500">Controlli qualità e non conformità con flusso correttivo</p>
                 </div>
                 <button
@@ -642,6 +644,12 @@ onMounted(async () => {
                     data-test="view-sal"
                     @click="view = 'sal'"
                 >SAL</button>
+                <button
+                    class="whitespace-nowrap border-l border-gray-300 px-4 py-1.5 font-medium"
+                    :class="view === 'piani' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    data-test="view-piani"
+                    @click="view = 'piani'"
+                >Piani</button>
             </div>
 
             <p
@@ -749,6 +757,17 @@ onMounted(async () => {
             <SalPanel
                 v-if="view === 'sal' && canManage"
                 :clients="clients"
+            />
+
+            <!-- Piani di manutenzione pluriennali: dopo la generazione gli
+                 ordini nuovi devono comparire anche in elenco e in agenda -->
+            <PianiPanel
+                v-if="view === 'piani'"
+                :clients="clients"
+                :work-types="workTypes"
+                :teams="teams"
+                :can-manage="canManage"
+                @generated="load(); agendaRef?.reload?.()"
             />
 
             <div

@@ -177,6 +177,13 @@ Route::prefix('v1')->group(function () {
         Route::post('work-orders/{id}/transition', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'transition'])->whereUuid('id');
         Route::post('work-orders/{id}/day', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'toggleDay'])->whereUuid('id');
 
+        // Piani di manutenzione pluriennali e generazione degli ordini dovuti
+        Route::get('piani-manutenzione', [\App\Http\Controllers\Api\V1\MaintenancePlanController::class, 'index']);
+        Route::post('piani-manutenzione', [\App\Http\Controllers\Api\V1\MaintenancePlanController::class, 'store']);
+        Route::post('piani-manutenzione/genera', [\App\Http\Controllers\Api\V1\MaintenancePlanController::class, 'genera']);
+        Route::patch('piani-manutenzione/{id}', [\App\Http\Controllers\Api\V1\MaintenancePlanController::class, 'update'])->whereUuid('id');
+        Route::delete('piani-manutenzione/{id}', [\App\Http\Controllers\Api\V1\MaintenancePlanController::class, 'destroy'])->whereUuid('id');
+
         // Azioni su piu' elementi selezionati in un elenco
         Route::post('azioni/chiudi-lavori', [\App\Http\Controllers\Api\V1\AzioniMultipleController::class, 'chiudiLavori']);
         Route::post('azioni/modifica-elementi', [\App\Http\Controllers\Api\V1\AzioniMultipleController::class, 'modificaElementi']);
