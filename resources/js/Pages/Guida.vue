@@ -830,6 +830,15 @@ function goTo(id) {
                             consuntivi dei lavori assegnati, eseguire ispezioni su checklist e aprire segnalazioni:
                             tutto resta in coda sul dispositivo e parte da solo appena torna la rete.
                         </p>
+                        <h3>Il giro del giorno</h3>
+                        <p>
+                            In "I miei lavori" l'interruttore "Giro del giorno" ordina i lavori di oggi
+                            per vicinanza, a partire da dove ti trovi: accanto a ogni tappa vedi la
+                            distanza dal passo precedente e il pulsante Naviga apre l'app di mappe del
+                            telefono. È solo un suggerimento: non cambia nulla sul server, e "Ricalcola
+                            da qui" rifà l'ordine dal punto in cui sei. Funziona anche senza rete.
+                        </p>
+
                         <h3>Censire linee e superfici dal campo</h3>
                         <p>
                             Nel rilievo si sceglie qualsiasi tipo del catalogo: per una <strong>siepe</strong>

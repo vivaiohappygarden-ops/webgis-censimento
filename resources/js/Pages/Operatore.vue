@@ -4,6 +4,7 @@ import { contornoSiIncrocia } from '@/geometria';
 import { Head, usePage } from '@inertiajs/vue3';
 import * as maplibregl from 'maplibre-gl';
 import { openFieldDb } from '@/field/db';
+import { eDelGiorno, formattaDistanza, ordinaGiro, puntoDaGeoJson } from '@/field/giro';
 import { compressImage } from '@/field/photo';
 import { SyncManager } from '@/field/sync';
 
@@ -775,6 +776,9 @@ async function refreshLocal() {
         }));
     localAssets.value = (await db.assets.orderBy('updated_at').reverse().limit(200).toArray());
     localOrders.value = await db.work_orders.toArray();
+    // I punti seguono i lavori: dopo un sync un ordine nuovo o cambiato deve
+    // entrare nel giro con la sua posizione
+    await risolviPuntiLavori(localOrders.value);
     localTemplates.value = await db.inspection_templates.orderBy('name').toArray();
     // Un modello selezionato ma non più sul device non deve restare scelto
     if (inspectionPick.assetTemplateId && ! localTemplates.value.some((t) => t.id === inspectionPick.assetTemplateId)) {
@@ -997,6 +1001,96 @@ const ORDER_SORT = { in_progress: 0, suspended: 1, assigned: 2, planned: 3, comp
 const sortedOrders = computed(() => [...localOrders.value]
     .sort((a, b) => (ORDER_SORT[a.status] ?? 9) - (ORDER_SORT[b.status] ?? 9) || String(a.code).localeCompare(String(b.code))));
 
+// ---- Giro del giorno: ordinamento per vicinanza, solo un suggerimento ----
+// Non tocca il database e non riordina nulla sul server: spegnendolo si
+// torna all'ordinamento normale per stato.
+
+const giro = reactive({ attivo: false, calcolo: false, partenza: null, senzaGps: false });
+
+// Punto {lat, lon} di ogni lavoro sul dispositivo, per id
+const puntiLavori = ref({});
+
+const oggiLocale = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+/**
+ * Punto di ogni lavoro: prima quello calcolato dal server (point_lon/point_lat
+ * nel working set), poi — per i dati scaricati prima di questo aggiornamento —
+ * la geometria locale del primo elemento collegato o dell'area. Così i telefoni
+ * con dati vecchi non si rompono: al prossimo scarico il punto arriva pronto.
+ */
+async function risolviPuntiLavori(orders) {
+    const punti = {};
+    for (const o of orders) {
+        if (o.point_lon != null && o.point_lat != null) {
+            punti[o.id] = { lon: Number(o.point_lon), lat: Number(o.point_lat) };
+            continue;
+        }
+        let punto = null;
+        for (const row of o.assets ?? []) {
+            const asset = row.asset_id ? await db.assets.get(row.asset_id) : null;
+            punto = puntoDaGeoJson(asset?.geom_geojson);
+            if (punto) break;
+        }
+        if (! punto && o.area_id) {
+            punto = puntoDaGeoJson((await db.areas.get(o.area_id))?.geom_geojson);
+        }
+        punti[o.id] = punto;
+    }
+    puntiLavori.value = punti;
+}
+
+/**
+ * Righe dell'elenco lavori: col giro acceso prima le tappe di oggi
+ * nell'ordine del percorso (con la distanza dal passo precedente), poi gli
+ * altri lavori sotto un'intestazione; da spento, l'ordinamento normale.
+ */
+const righeLavori = computed(() => {
+    if (! giro.attivo) return sortedOrders.value.map((o) => ({ ordine: o }));
+    const oggi = oggiLocale();
+    const delGiorno = sortedOrders.value.filter((o) => eDelGiorno(o, oggi));
+    const altri = sortedOrders.value.filter((o) => ! eDelGiorno(o, oggi));
+    const tappe = ordinaGiro(
+        giro.partenza,
+        delGiorno.map((o) => ({ ordine: o, punto: puntiLavori.value[o.id] ?? null })),
+    );
+    return [
+        ...tappe.map((t, i) => ({ ordine: t.ordine, giro: { tappa: i + 1, distanzaKm: t.distanzaKm, punto: t.punto } })),
+        ...(altri.length ? [{ intestazione: 'Non previsti per oggi' }] : []),
+        ...altri.map((o) => ({ ordine: o })),
+    ];
+});
+
+async function toggleGiro() {
+    giro.attivo = ! giro.attivo;
+    // La preferenza resta sul dispositivo, come il resto dello stato di campo
+    await db.meta.put({ key: 'giro_del_giorno', value: giro.attivo });
+    if (giro.attivo) await ricalcolaGiro();
+}
+
+/** Rilegge la posizione e riparte da lì ("Ricalcola da qui"). */
+async function ricalcolaGiro() {
+    giro.calcolo = true;
+    // Stesso fix GPS veloce delle foto: se il permesso è negato o il fix non
+    // arriva, il giro parte dal primo lavoro e l'elenco lo dichiara
+    const posizione = await quickPosition();
+    giro.partenza = posizione ? { lat: posizione.lat, lon: posizione.lon } : null;
+    giro.senzaGps = ! posizione;
+    giro.calcolo = false;
+}
+
+// Stesso schema di collegamento della scheda pubblica ("Raggiungi
+// l'elemento"): si apre l'app di mappe del telefono, che offline naviga da
+// sé. Il ripiego serve alla shell salvata dal service worker, che potrebbe
+// non avere le prop della pagina.
+const modelloNavigazione = page.props.urlNavigazione
+    ?? 'https://www.google.com/maps/dir/?api=1&destination={lat},{lon}';
+const urlNaviga = (punto) => modelloNavigazione
+    .replaceAll('{lat}', punto.lat.toFixed(6))
+    .replaceAll('{lon}', punto.lon.toFixed(6));
+
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('it-IT') : '');
 
 function openOrder(order) {
@@ -1162,6 +1256,9 @@ onMounted(async () => {
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
     await refreshLocal();
+    // Il giro acceso l'ultima volta resta acceso, con la posizione riletta ora
+    giro.attivo = (await db.meta.get('giro_del_giorno'))?.value === true;
+    if (giro.attivo) await ricalcolaGiro();
     if (state.online && ! bootstrapped.value) {
         await downloadWorkingSet();
     } else if (state.online && state.pending > 0) {
@@ -1528,37 +1625,89 @@ onBeforeUnmount(() => {
             <!-- LAVORI -->
             <section v-if="tab === 'lavori'">
                 <h1 class="text-base font-semibold">I miei lavori ({{ localOrders.length }})</h1>
+
+                <!-- Giro del giorno: ordinamento per vicinanza (solo un
+                     suggerimento, calcolato sul telefono: funziona offline) -->
+                <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                        class="rounded-lg px-3 py-2.5 text-sm font-medium"
+                        :class="giro.attivo ? 'bg-green-700 text-white' : 'border border-green-700 text-green-700'"
+                        data-test="giro-toggle"
+                        @click="toggleGiro"
+                    >{{ giro.attivo ? 'Giro del giorno attivo' : 'Giro del giorno' }}</button>
+                    <button
+                        v-if="giro.attivo"
+                        class="rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-700 disabled:opacity-50"
+                        :disabled="giro.calcolo"
+                        data-test="giro-ricalcola"
+                        @click="ricalcolaGiro"
+                    >{{ giro.calcolo ? 'Rilevamento…' : 'Ricalcola da qui' }}</button>
+                </div>
+                <p v-if="giro.attivo && giro.senzaGps" class="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-900" data-test="giro-senza-gps">
+                    Posizione non disponibile: il giro parte dal primo lavoro di oggi.
+                </p>
+                <p
+                    v-if="giro.attivo && localOrders.length && ! righeLavori.some((r) => r.giro)"
+                    class="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500"
+                    data-test="giro-vuoto"
+                >Nessun lavoro previsto per oggi: sotto restano gli altri lavori assegnati.</p>
+
                 <ul class="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white" data-test="wo-list">
-                    <li
-                        v-for="o in sortedOrders"
-                        :key="o.id"
-                        class="cursor-pointer px-4 py-2.5 text-sm hover:bg-gray-50"
-                        data-test="wo-item"
-                        @click="openOrder(o)"
-                    >
-                        <div class="flex items-center justify-between gap-2">
-                            <span class="font-medium">{{ o.code }}</span>
-                            <span class="flex items-center gap-1.5">
-                                <span
-                                    v-if="o.dirty"
-                                    class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
-                                >da inviare</span>
-                                <span
-                                    class="rounded-full px-2 py-0.5 text-xs font-medium"
-                                    :class="WO_STATUS[o.status]?.cls"
-                                >{{ WO_STATUS[o.status]?.label ?? o.status }}</span>
-                            </span>
-                        </div>
-                        <div class="mt-0.5 truncate text-xs text-gray-600">{{ o.title }}</div>
-                        <div class="mt-0.5 text-xs text-gray-500">
-                            {{ o.work_type?.name ?? 'Lavorazione non indicata' }}
-                            · {{ (o.assets ?? []).length }} {{ (o.assets ?? []).length === 1 ? 'elemento' : 'elementi' }}
-                            <template v-if="o.planned_start"> · dal {{ fmtDate(o.planned_start) }}</template>
-                            <template v-if="o.priority === 'high' || o.priority === 'urgent'">
-                                · Priorità {{ WO_PRIORITY[o.priority].toLowerCase() }}
-                            </template>
-                        </div>
-                    </li>
+                    <template v-for="(riga, idx) in righeLavori" :key="riga.ordine?.id ?? `intestazione-${idx}`">
+                        <li v-if="riga.intestazione" class="bg-gray-50 px-4 py-1.5 text-xs font-medium text-gray-500">
+                            {{ riga.intestazione }}
+                        </li>
+                        <li
+                            v-else
+                            class="cursor-pointer px-4 py-2.5 text-sm hover:bg-gray-50"
+                            data-test="wo-item"
+                            @click="openOrder(riga.ordine)"
+                        >
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="font-medium">
+                                    <template v-if="riga.giro">{{ riga.giro.tappa }}. </template>{{ riga.ordine.code }}
+                                </span>
+                                <span class="flex items-center gap-1.5">
+                                    <span
+                                        v-if="riga.ordine.dirty"
+                                        class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                                    >da inviare</span>
+                                    <span
+                                        class="rounded-full px-2 py-0.5 text-xs font-medium"
+                                        :class="WO_STATUS[riga.ordine.status]?.cls"
+                                    >{{ WO_STATUS[riga.ordine.status]?.label ?? riga.ordine.status }}</span>
+                                </span>
+                            </div>
+                            <div class="mt-0.5 truncate text-xs text-gray-600">{{ riga.ordine.title }}</div>
+                            <div class="mt-0.5 text-xs text-gray-500">
+                                {{ riga.ordine.work_type?.name ?? 'Lavorazione non indicata' }}
+                                · {{ (riga.ordine.assets ?? []).length }} {{ (riga.ordine.assets ?? []).length === 1 ? 'elemento' : 'elementi' }}
+                                <template v-if="riga.ordine.planned_start"> · dal {{ fmtDate(riga.ordine.planned_start) }}</template>
+                                <template v-if="riga.ordine.priority === 'high' || riga.ordine.priority === 'urgent'">
+                                    · Priorità {{ WO_PRIORITY[riga.ordine.priority].toLowerCase() }}
+                                </template>
+                            </div>
+                            <!-- Tappa del giro: distanza dal passo precedente e navigazione -->
+                            <div v-if="riga.giro" class="mt-1.5 flex items-center justify-between gap-2">
+                                <span class="text-xs text-gray-600" data-test="giro-distanza">
+                                    <template v-if="riga.giro.distanzaKm != null">
+                                        {{ formattaDistanza(riga.giro.distanzaKm) }} {{ riga.giro.tappa === 1 ? 'da qui' : 'dal passo precedente' }}
+                                    </template>
+                                    <template v-else-if="! riga.giro.punto">Posizione del lavoro non nota: in coda al giro</template>
+                                    <template v-else>Prima tappa</template>
+                                </span>
+                                <a
+                                    v-if="riga.giro.punto"
+                                    :href="urlNaviga(riga.giro.punto)"
+                                    target="_blank"
+                                    rel="noopener"
+                                    class="shrink-0 rounded-lg border border-green-700 px-3 py-1.5 text-xs font-semibold text-green-700"
+                                    data-test="giro-naviga"
+                                    @click.stop
+                                >Naviga</a>
+                            </div>
+                        </li>
+                    </template>
                     <li v-if="! localOrders.length" class="px-4 py-5 text-sm text-gray-400">
                         Nessun lavoro assegnato sul dispositivo. Scarica i dati di lavoro dalla sezione Sync.
                     </li>

@@ -113,6 +113,78 @@ class WorkOrderSyncTest extends TestCase
         $this->getJson('/api/v1/sync/bootstrap')->assertOk()->assertJsonCount(2, 'work_orders');
     }
 
+    private function makeAssetAt(float $lon, float $lat, ?\App\Models\Area $area = null): \App\Models\Asset
+    {
+        return \App\Models\Asset::create([
+            'tenant_id' => $this->organization->id,
+            'area_id' => ($area ?? $this->createArea($this->organization))->id,
+            'object_type_id' => $this->makeObjectType($this->organization, 'P')->id,
+            'census_code' => 'GIRO-'.fake()->unique()->numberBetween(1000, 9999),
+            'geom' => \App\Support\Geometry::toEwkb($this->pointGeometry($lon, $lat)),
+        ]);
+    }
+
+    /**
+     * Il "giro del giorno" ordina i lavori per vicinanza SUL TELEFONO: il
+     * working set deve quindi portare un punto rappresentativo del lavoro
+     * (point_lon/point_lat): primo elemento collegato con geometria, altrimenti
+     * un punto dentro l'area, altrimenti null (il client lo mette in coda).
+     */
+    public function test_bootstrap_porta_il_punto_rappresentativo_del_lavoro(): void
+    {
+        $area = $this->createArea($this->organization);
+
+        $conElemento = $this->makeOrder(['area_id' => $area->id]);
+        \App\Models\WorkOrderAsset::create([
+            'tenant_id' => $this->organization->id,
+            'work_order_id' => $conElemento->id,
+            'asset_id' => $this->makeAssetAt(9.2500, 45.5100, $area)->id,
+        ]);
+
+        $soloArea = $this->makeOrder(['area_id' => $area->id]);
+        $senzaNulla = $this->makeOrder(['area_id' => null]);
+
+        $rows = collect($this->getJson('/api/v1/sync/bootstrap')->assertOk()->json('work_orders'))
+            ->keyBy('id');
+
+        // L'elemento collegato vince sull'area
+        $this->assertEqualsWithDelta(9.2500, $rows[$conElemento->id]['point_lon'], 0.000001);
+        $this->assertEqualsWithDelta(45.5100, $rows[$conElemento->id]['point_lat'], 0.000001);
+
+        // Senza elementi: un punto DENTRO l'area (ST_PointOnSurface sul
+        // quadrato di prova 9.1890-9.1930 / 45.4640-45.4665)
+        $this->assertGreaterThanOrEqual(9.1890, $rows[$soloArea->id]['point_lon']);
+        $this->assertLessThanOrEqual(9.1930, $rows[$soloArea->id]['point_lon']);
+        $this->assertGreaterThanOrEqual(45.4640, $rows[$soloArea->id]['point_lat']);
+        $this->assertLessThanOrEqual(45.4665, $rows[$soloArea->id]['point_lat']);
+
+        // Senza elementi ne' area il punto resta nullo, MA il lavoro c'e':
+        // niente sparisce dall'elenco per mancanza di coordinate
+        $this->assertNull($rows[$senzaNulla->id]['point_lon']);
+        $this->assertNull($rows[$senzaNulla->id]['point_lat']);
+    }
+
+    public function test_punto_del_lavoro_ignora_gli_elementi_eliminati(): void
+    {
+        $area = $this->createArea($this->organization);
+        $order = $this->makeOrder(['area_id' => $area->id]);
+
+        $eliminato = $this->makeAssetAt(11.0000, 46.0000, $area);
+        \App\Models\WorkOrderAsset::create([
+            'tenant_id' => $this->organization->id,
+            'work_order_id' => $order->id,
+            'asset_id' => $eliminato->id,
+        ]);
+        $eliminato->delete();
+
+        $row = collect($this->getJson('/api/v1/sync/bootstrap')->assertOk()->json('work_orders'))
+            ->firstWhere('id', $order->id);
+
+        // L'elemento soft-deleted non conta: si ripiega sul punto dell'area
+        $this->assertGreaterThanOrEqual(9.1890, $row['point_lon']);
+        $this->assertLessThanOrEqual(9.1930, $row['point_lon']);
+    }
+
     public function test_operator_runs_order_lifecycle_with_worklog_from_the_field(): void
     {
         $order = $this->makeOrder();

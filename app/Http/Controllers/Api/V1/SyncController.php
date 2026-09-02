@@ -344,9 +344,30 @@ class SyncController extends Controller implements HasMiddleware
             return collect();
         }
 
+        // Punto rappresentativo del lavoro (point_lon/point_lat), per il "giro
+        // del giorno": l'ordinamento per vicinanza si calcola sul telefono e il
+        // punto deve quindi viaggiare col working set. Primo elemento collegato
+        // con geometria (stesso ordine della relazione assets), altrimenti un
+        // punto DENTRO l'area (ST_PointOnSurface: il centroide di una corte a L
+        // può cadere fuori), altrimenti null. Campi aggiuntivi: i client con
+        // dati vecchi li ignorano e li ricevono al prossimo scarico.
+        $puntoSql = <<<'SQL'
+            ST_PointOnSurface(COALESCE(
+                (SELECT a.geom
+                   FROM work_order_assets woa
+                   JOIN assets a ON a.id = woa.asset_id AND a.deleted_at IS NULL
+                  WHERE woa.work_order_id = work_orders.id AND a.geom IS NOT NULL
+                  ORDER BY woa.created_at, woa.id
+                  LIMIT 1),
+                (SELECT ar.geom FROM areas ar WHERE ar.id = work_orders.area_id AND ar.deleted_at IS NULL)
+            ))
+            SQL;
+
         return WorkOrder::query()
             ->when($ids !== null, fn ($q) => $q->whereIn('work_orders.id', $ids))
             ->visibleInField($user)
+            ->selectRaw("work_orders.*, ST_X({$puntoSql}) AS point_lon, ST_Y({$puntoSql}) AS point_lat")
+            ->withCasts(['point_lon' => 'float', 'point_lat' => 'float'])
             ->with([
                 'workType:id,code,name,unit',
                 'area:id,name,code',

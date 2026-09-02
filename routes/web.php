@@ -80,8 +80,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/vta', fn () => Inertia::render('Vta'))
         ->middleware('can:assets.view')->name('vta');
 
-    Route::get('/operatore', fn () => Inertia::render('Operatore'))
-        ->middleware('can:assets.create')->name('operatore');
+    // Il modello di collegamento per "Naviga" è lo stesso del portale
+    // pubblico ("Raggiungi l'elemento"): un solo posto dove si decide quale
+    // app di mappe si apre (config/portal.php, PORTAL_NAVIGATION_URL)
+    Route::get('/operatore', fn () => Inertia::render('Operatore', [
+        'urlNavigazione' => config('portal.navigation_url'),
+    ]))->middleware('can:assets.create')->name('operatore');
 
     Route::get('/lavori', fn () => Inertia::render('Lavori'))
         ->middleware('can:works.view')->name('lavori');
