@@ -25,7 +25,10 @@ use Illuminate\Validation\ValidationException;
  * Il SAL nasce in bozza fotografando i lavori completati del committente nel
  * periodo, valorizzati dal listino; in bozza si correggono le aliquote IVA e
  * si tolgono righe. La validazione e' manuale: assegna il numero e congela
- * il documento. "Fatturato" e' solo un segno: i pagamenti non si gestiscono.
+ * il documento. Dopo la validazione si REGISTRANO (non si emettono: la
+ * fattura elettronica la fa il commercialista) gli estremi della fattura e
+ * poi l'incasso: "incassato" non e' uno stato ma paid_at valorizzata, e
+ * "in ritardo" e' una condizione derivata dalla scadenza passata.
  */
 class SalController extends Controller implements HasMiddleware
 {
@@ -268,34 +271,237 @@ class SalController extends Controller implements HasMiddleware
         return response()->json(['data' => $this->presenta($sal->fresh(['client:id,name', 'items', 'validator:id,name']))]);
     }
 
-    /** Solo un segno: i pagamenti non si gestiscono. */
+    /**
+     * Registra la fattura emessa dal commercialista: numero, data e
+     * scadenza di pagamento. E' lo stesso passaggio di stato di prima
+     * (validato -> fatturato), solo con gli estremi in piu': tutti
+     * facoltativi lato server, cosi' un SAL fatturato "alla vecchia"
+     * resta legittimo e la data, se manca, e' il giorno di oggi.
+     */
     public function fatturato(Request $request, string $id): JsonResponse
     {
         $data = $request->validate([
             'invoice_ref' => ['nullable', 'string', 'max:100'],
-        ], [], ['invoice_ref' => 'riferimento fattura']);
+            // Y-m-d obbligato: piu' sotto le date si confrontano come
+            // stringhe, e solo in questa forma il confronto e' anche
+            // cronologico
+            'invoiced_at' => ['nullable', 'date_format:Y-m-d'],
+            'payment_due_at' => ['nullable', 'date_format:Y-m-d'],
+        ], [], [
+            'invoice_ref' => 'numero fattura',
+            'invoiced_at' => 'data fattura',
+            'payment_due_at' => 'scadenza di pagamento',
+        ]);
 
-        $sal = DB::transaction(function () use ($request, $id, $data) {
+        // La data della fattura e' un giorno italiano di calendario
+        $dataFattura = $data['invoiced_at'] ?? now('Europe/Rome')->toDateString();
+        if (! empty($data['payment_due_at']) && $data['payment_due_at'] < $dataFattura) {
+            throw ValidationException::withMessages([
+                'payment_due_at' => 'La scadenza di pagamento non può precedere la data della fattura.',
+            ]);
+        }
+
+        $sal = DB::transaction(function () use ($request, $id, $data, $dataFattura) {
             $sal = Sal::query()->lockForUpdate()->findOrFail($id);
             if ($sal->status !== 'validato') {
                 abort(409, $sal->status === 'bozza'
-                    ? 'Prima si valida il SAL, poi lo si segna come fatturato.'
+                    ? 'Prima si valida il SAL, poi si registra la fattura.'
                     : 'Questo SAL è già segnato come fatturato.');
             }
             $sal->forceFill([
                 'status' => 'fatturato',
-                'invoiced_at' => now(),
+                'invoiced_at' => $dataFattura,
                 'invoiced_by' => $request->user()->id,
                 'invoice_ref' => $data['invoice_ref'] ?? null,
+                'payment_due_at' => $data['payment_due_at'] ?? null,
                 'updated_by' => $request->user()->id,
             ])->save();
 
             return $sal;
         });
 
-        Audit::log('sal.invoiced', $sal, ['invoice_ref' => $sal->invoice_ref]);
+        Audit::log('sal.invoiced', $sal, [
+            'invoice_ref' => $sal->invoice_ref,
+            'invoiced_at' => $sal->invoiced_at?->toDateString(),
+            'payment_due_at' => $sal->payment_due_at?->toDateString(),
+        ]);
 
         return response()->json(['data' => $this->presenta($sal->fresh(['client:id,name', 'items']))]);
+    }
+
+    /**
+     * Registra l'incasso: un fatto contabile, non un nuovo stato. Solo su
+     * un SAL fatturato, con data non nel futuro e non prima della fattura.
+     */
+    public function registraIncasso(Request $request, string $id): JsonResponse
+    {
+        $data = $request->validate([
+            'paid_at' => ['required', 'date_format:Y-m-d'],
+            'paid_note' => ['nullable', 'string', 'max:200'],
+        ], [], ['paid_at' => "data d'incasso", 'paid_note' => 'nota']);
+
+        // Il "futuro" e' quello del calendario italiano: alle 23:30 di Roma
+        // il server in UTC e' ancora a ieri e rifiuterebbe la data giusta
+        if ($data['paid_at'] > now('Europe/Rome')->toDateString()) {
+            throw ValidationException::withMessages([
+                'paid_at' => "La data d'incasso non può essere nel futuro.",
+            ]);
+        }
+
+        $sal = DB::transaction(function () use ($request, $id, $data) {
+            $sal = Sal::query()->lockForUpdate()->findOrFail($id);
+            if ($sal->status !== 'fatturato') {
+                abort(409, "L'incasso si registra dopo la fattura: prima si registra la fattura sul SAL validato.");
+            }
+            if ($sal->paid_at !== null) {
+                abort(409, "Questo SAL risulta già incassato: per correggere si annulla prima l'incasso registrato.");
+            }
+            if ($sal->invoiced_at !== null && $data['paid_at'] < $sal->invoiced_at->toDateString()) {
+                throw ValidationException::withMessages([
+                    'paid_at' => "La data d'incasso non può precedere la data della fattura ("
+                        .$sal->invoiced_at->format('d/m/Y').').',
+                ]);
+            }
+            $sal->forceFill([
+                'paid_at' => $data['paid_at'],
+                'paid_note' => $data['paid_note'] ?? null,
+                'updated_by' => $request->user()->id,
+            ])->save();
+
+            return $sal;
+        });
+
+        Audit::log('sal.paid', $sal, ['paid_at' => $data['paid_at'], 'paid_note' => $sal->paid_note]);
+
+        return response()->json(['data' => $this->presenta($sal->fresh(['client:id,name', 'items']))]);
+    }
+
+    /**
+     * Annulla un incasso registrato per sbaglio: il SAL torna "fatturato
+     * non incassato". L'audit tiene i valori tolti: un fatto contabile non
+     * sparisce senza traccia.
+     */
+    public function annullaIncasso(Request $request, string $id): JsonResponse
+    {
+        [$sal, $tolto] = DB::transaction(function () use ($request, $id) {
+            $sal = Sal::query()->lockForUpdate()->findOrFail($id);
+            if ($sal->paid_at === null) {
+                abort(409, 'Su questo SAL non risulta un incasso da annullare.');
+            }
+            $tolto = ['paid_at' => $sal->paid_at->toDateString(), 'paid_note' => $sal->paid_note];
+            $sal->forceFill([
+                'paid_at' => null,
+                'paid_note' => null,
+                'updated_by' => $request->user()->id,
+            ])->save();
+
+            return [$sal, $tolto];
+        });
+
+        Audit::log('sal.payment_cancelled', $sal, $tolto);
+
+        return response()->json(['data' => $this->presenta($sal->fresh(['client:id,name', 'items']))]);
+    }
+
+    /**
+     * Quadro dei crediti: per ogni committente (e in totale) quanto e'
+     * emesso in attesa di fattura, quanto e' fatturato da incassare (e di
+     * questo quanto e' oltre la scadenza, con i giorni medi di ritardo) e
+     * quanto e' stato incassato nell'anno in corso.
+     *
+     * Gli importi passano da SalTotali, LA STESSA strada della pagina e
+     * della stampa: una seconda formula in SQL prima o poi divergerebbe.
+     */
+    public function crediti(): JsonResponse
+    {
+        $oggi = now('Europe/Rome')->toDateString();
+        $anno = now('Europe/Rome')->year;
+
+        // Le bozze restano fuori: un documento non validato non e' un
+        // credito. Degli incassati interessano solo quelli dell'anno
+        $sals = Sal::query()
+            ->with(['client:id,name', 'items'])
+            ->where(fn ($q) => $q
+                ->where('status', 'validato')
+                ->orWhere(fn ($q2) => $q2->where('status', 'fatturato')->whereNull('paid_at'))
+                ->orWhere(fn ($q3) => $q3->whereNotNull('paid_at')
+                    ->whereBetween('paid_at', ["{$anno}-01-01", "{$anno}-12-31"])))
+            ->get();
+
+        $vuoto = [
+            'emesso' => 0.0, 'da_incassare' => 0.0, 'scaduto' => 0.0,
+            'incassato_anno' => 0.0, 'ritardo_somma' => 0, 'ritardo_conta' => 0,
+        ];
+        $totale = $vuoto;
+        $righe = [];
+        foreach ($sals as $sal) {
+            $riga = $righe[$sal->client_id] ?? ['client' => $sal->client?->only(['id', 'name'])] + $vuoto;
+            $importo = SalTotali::per($sal)['totale'];
+
+            if ($sal->status === 'validato') {
+                $riga['emesso'] = round($riga['emesso'] + $importo, 2);
+                $totale['emesso'] = round($totale['emesso'] + $importo, 2);
+            } elseif ($sal->paid_at === null) {
+                $riga['da_incassare'] = round($riga['da_incassare'] + $importo, 2);
+                $totale['da_incassare'] = round($totale['da_incassare'] + $importo, 2);
+                $ritardo = $this->giorniRitardo($sal, $oggi);
+                if ($ritardo !== null) {
+                    $riga['scaduto'] = round($riga['scaduto'] + $importo, 2);
+                    $totale['scaduto'] = round($totale['scaduto'] + $importo, 2);
+                    $riga['ritardo_somma'] += $ritardo;
+                    $riga['ritardo_conta']++;
+                    $totale['ritardo_somma'] += $ritardo;
+                    $totale['ritardo_conta']++;
+                }
+            } else {
+                $riga['incassato_anno'] = round($riga['incassato_anno'] + $importo, 2);
+                $totale['incassato_anno'] = round($totale['incassato_anno'] + $importo, 2);
+            }
+
+            $righe[$sal->client_id] = $riga;
+        }
+
+        // La media si chiude alla fine: durante il giro si sommano i giorni
+        $chiudi = function (array $r): array {
+            $r['ritardo_medio_giorni'] = $r['ritardo_conta'] > 0
+                ? (int) round($r['ritardo_somma'] / $r['ritardo_conta'])
+                : null;
+            unset($r['ritardo_somma'], $r['ritardo_conta']);
+
+            return $r;
+        };
+
+        $perCommittente = collect($righe)->map($chiudi)
+            // Prima chi ha piu' scaduto, poi chi ha piu' da incassare: il
+            // quadro serve a decidere chi sollecitare
+            ->sortBy([['scaduto', 'desc'], ['da_incassare', 'desc'], ['client.name', 'asc']])
+            ->values();
+
+        return response()->json(['data' => [
+            'anno' => $anno,
+            'totale' => $chiudi($totale),
+            'per_committente' => $perCommittente,
+        ]]);
+    }
+
+    /**
+     * Giorni di ritardo di un SAL fatturato non incassato oltre la
+     * scadenza; null se non e' in ritardo (o senza scadenza registrata).
+     */
+    private function giorniRitardo(Sal $sal, string $oggi): ?int
+    {
+        if ($sal->status !== 'fatturato' || $sal->paid_at !== null || $sal->payment_due_at === null) {
+            return null;
+        }
+        $scadenza = $sal->payment_due_at->toDateString();
+        if ($scadenza >= $oggi) {
+            return null;
+        }
+
+        // Date pure a mezzanotte nello stesso fuso: la differenza e' un
+        // numero intero di giorni, senza resti di fuso orario
+        return (int) \Illuminate\Support\Carbon::parse($scadenza)
+            ->diffInDays(\Illuminate\Support\Carbon::parse($oggi));
     }
 
     public function pdf(Request $request, PdfRenderer $renderer, string $id)
@@ -370,8 +576,16 @@ class SalController extends Controller implements HasMiddleware
             // pagina e il PDF devono dire lo stesso giorno
             'validated_at' => $sal->validated_at?->timezone('Europe/Rome')->toDateTimeString(),
             'validator' => $sal->relationLoaded('validator') ? $sal->validator?->only(['id', 'name']) : null,
-            'invoiced_at' => $sal->invoiced_at?->timezone('Europe/Rome')->toDateTimeString(),
+            // Le date contabili sono giorni di calendario, non istanti:
+            // si presentano cosi' come sono scritte sulla fattura
+            'invoiced_at' => $sal->invoiced_at?->toDateString(),
             'invoice_ref' => $sal->invoice_ref,
+            'payment_due_at' => $sal->payment_due_at?->toDateString(),
+            'paid_at' => $sal->paid_at?->toDateString(),
+            'paid_note' => $sal->paid_note,
+            // Il ritardo lo calcola il server, cosi' pagina e quadro dei
+            // crediti dicono la stessa cosa (null = non in ritardo)
+            'ritardo_giorni' => $this->giorniRitardo($sal, now('Europe/Rome')->toDateString()),
             'totali' => $totali,
             'righe_totali' => $sal->items->count(),
         ];

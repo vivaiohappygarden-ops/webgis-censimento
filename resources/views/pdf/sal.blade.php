@@ -40,7 +40,9 @@
                 — validato il {{ $dataDocumento->format('d/m/Y') }}@if ($sal->validator) da {{ $sal->validator->name }}@endif
             @endif
             @if ($sal->status === 'fatturato')
-                — fatturato{{ $sal->invoice_ref ? ' ('.$sal->invoice_ref.')' : '' }}
+                {{-- Gli estremi della fattura registrata (il documento fiscale
+                     lo emette il commercialista: qui se ne riportano i riferimenti) --}}
+                — fattura{{ $sal->invoice_ref ? ' '.$sal->invoice_ref : '' }}{{ $sal->invoiced_at ? ' del '.$sal->invoiced_at->format('d/m/Y') : '' }}{{ $sal->payment_due_at ? ', scadenza di pagamento '.$sal->payment_due_at->format('d/m/Y') : '' }}
             @endif
         </div>
         @if ($sal->status === 'bozza')

@@ -113,6 +113,9 @@ Route::prefix('v1')->group(function () {
 
         // Stati di avanzamento lavori (SAL)
         Route::get('sals', [\App\Http\Controllers\Api\V1\SalController::class, 'index']);
+        // Prima di sals/{id}: "crediti" non e' un id (il vincolo uuid gia'
+        // lo esclude, ma l'ordine rende l'intenzione leggibile)
+        Route::get('sals/crediti', [\App\Http\Controllers\Api\V1\SalController::class, 'crediti']);
         Route::post('sals', [\App\Http\Controllers\Api\V1\SalController::class, 'store']);
         Route::get('sals/{id}', [\App\Http\Controllers\Api\V1\SalController::class, 'show'])->whereUuid('id');
         Route::patch('sals/{id}', [\App\Http\Controllers\Api\V1\SalController::class, 'update'])->whereUuid('id');
@@ -120,6 +123,10 @@ Route::prefix('v1')->group(function () {
         Route::delete('sals/{id}/items/{itemId}', [\App\Http\Controllers\Api\V1\SalController::class, 'rimuoviRiga'])->whereUuid(['id', 'itemId']);
         Route::post('sals/{id}/valida', [\App\Http\Controllers\Api\V1\SalController::class, 'valida'])->whereUuid('id');
         Route::post('sals/{id}/fatturato', [\App\Http\Controllers\Api\V1\SalController::class, 'fatturato'])->whereUuid('id');
+        // L'incasso e' un fatto registrato sul SAL, non uno stato: si
+        // aggiunge (POST) e si toglie se registrato per sbaglio (DELETE)
+        Route::post('sals/{id}/incasso', [\App\Http\Controllers\Api\V1\SalController::class, 'registraIncasso'])->whereUuid('id');
+        Route::delete('sals/{id}/incasso', [\App\Http\Controllers\Api\V1\SalController::class, 'annullaIncasso'])->whereUuid('id');
         Route::get('sals/{id}/pdf', [\App\Http\Controllers\Api\V1\SalController::class, 'pdf'])->whereUuid('id');
 
         // Portale dell'impresa appaltatrice: solo gli ordini delle sue squadre
