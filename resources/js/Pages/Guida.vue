@@ -341,6 +341,18 @@ function goTo(id) {
                             L'<strong>agenda</strong> mostra la settimana per squadra; il <strong>rendiconto</strong>
                             riepiloga i lavori completati per cliente e periodo, con i valori calcolati dal listino.
                         </p>
+                        <h3>Il calendario sul telefono (abbonamento)</h3>
+                        <p>
+                            Sotto l'agenda della pagina <strong>Lavori</strong> c'è il riquadro
+                            <strong>"Calendario da abbonamento"</strong>: un indirizzo personale a cui
+                            abbonarsi da Google Calendar, iPhone o Outlook ("aggiungi calendario da URL").
+                            Sul telefono compaiono i lavori pianificati e le scadenze — termini degli
+                            ordini, ricontrolli VTA, patentini in scadenza — e si aggiornano da soli,
+                            senza aprire il gestionale. Ognuno vede solo ciò che i suoi permessi gli
+                            mostrano qui: un operatore, ad esempio, solo i suoi lavori. Se l'indirizzo
+                            finisce in mani sbagliate, <strong>Rigenera</strong> ne crea uno nuovo e il
+                            vecchio smette di funzionare.
+                        </p>
                         <h3>Le imprese appaltatrici</h3>
                         <p>
                             Se un lavoro lo esegue una ditta terza, dalla pagina <strong>Utenti</strong>

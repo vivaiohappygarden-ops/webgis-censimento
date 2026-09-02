@@ -4,6 +4,7 @@ import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import WorkAgenda from '@/Components/WorkAgenda.vue';
+import CalendarioAbbonamento from '@/Components/CalendarioAbbonamento.vue';
 import WorkReport from '@/Components/WorkReport.vue';
 import QualityBoard from '@/Components/QualityBoard.vue';
 import QuotesPanel from '@/Components/QuotesPanel.vue';
@@ -704,14 +705,18 @@ onMounted(async () => {
                 </ul>
             </div>
 
-            <WorkAgenda
-                v-if="view === 'agenda'"
-                ref="agendaRef"
-                :teams="teams"
-                :personnel="personnel"
-                :can-manage="canManage"
-                @open="openDetail"
-            />
+            <template v-if="view === 'agenda'">
+                <WorkAgenda
+                    ref="agendaRef"
+                    :teams="teams"
+                    :personnel="personnel"
+                    :can-manage="canManage"
+                    @open="openDetail"
+                />
+                <!-- L'abbonamento sta sotto l'agenda: è la stessa agenda,
+                     vista dal calendario del telefono -->
+                <CalendarioAbbonamento />
+            </template>
 
             <WorkReport
                 v-if="view === 'rendiconto'"

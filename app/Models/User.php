@@ -29,7 +29,10 @@ class User extends Authenticatable
     }
 
     protected $hidden = [
-        'password', 'remember_token', 'mfa_secret',
+        // calendar_token è nascosto perché gli elenchi utenti (pagina Utenti)
+        // serializzano il modello: il gettone dà accesso all'agenda personale
+        // e lo deve vedere solo il proprietario, dal pannello del calendario
+        'password', 'remember_token', 'mfa_secret', 'calendar_token',
     ];
 
     protected function casts(): array

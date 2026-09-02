@@ -224,6 +224,11 @@ Route::prefix('v1')->group(function () {
         Route::get('assets/{id}/quantita', [\App\Http\Controllers\Api\V1\AssetController::class, 'quantita'])
             ->whereUuid('id');
 
+        // Calendario da abbonamento: ognuno legge e rigenera solo il
+        // proprio gettone (il controller lavora su $request->user())
+        Route::get('calendario/gettone', [\App\Http\Controllers\Api\V1\CalendarioController::class, 'gettone']);
+        Route::post('calendario/gettone/rigenera', [\App\Http\Controllers\Api\V1\CalendarioController::class, 'rigenera']);
+
         // Viste salvate: filtri con nome, per gli elenchi
         Route::get('viste', [\App\Http\Controllers\Api\V1\VisteController::class, 'index']);
         Route::post('viste', [\App\Http\Controllers\Api\V1\VisteController::class, 'store']);

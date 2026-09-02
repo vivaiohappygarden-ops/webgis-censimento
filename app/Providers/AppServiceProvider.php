@@ -58,5 +58,13 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('portale', function (Request $request) {
             return Limit::perMinute(1200)->by($request->ip());
         });
+
+        // Feed del calendario da abbonamento: un lettore di calendari
+        // interroga poche volte al giorno, ma un ufficio intero può uscire
+        // dallo stesso indirizzo. Il tetto serve a scoraggiare i tentativi
+        // a raffica di gettoni, non a limitare gli abbonati legittimi
+        RateLimiter::for('calendario', function (Request $request) {
+            return Limit::perMinute(60)->by($request->ip());
+        });
     }
 }

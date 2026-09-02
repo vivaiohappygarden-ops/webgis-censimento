@@ -11,11 +11,14 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
-        // Portale pubblico dei committenti: rotte anonime, fuori dal gruppo
-        // "web" perché non devono avviare sessione né lasciare cookie
+        // Portale pubblico dei committenti e feed del calendario: rotte
+        // anonime, fuori dal gruppo "web" perché non devono avviare sessione
+        // né lasciare cookie
         then: function (): void {
             \Illuminate\Support\Facades\Route::middleware('portale')
                 ->group(base_path('routes/portale.php'));
+            \Illuminate\Support\Facades\Route::middleware('calendario')
+                ->group(base_path('routes/calendario.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
@@ -45,6 +48,13 @@ return Application::configure(basePath: dirname(__DIR__))
             'throttle:portale',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             \App\Http\Middleware\ResolvePublicPortal::class,
+        ]);
+        // Feed iCal: il gettone nell'indirizzo è l'unico riconoscimento,
+        // resta solo il tetto di richieste (i lettori di calendari
+        // interrogano poche volte al giorno; il limite ferma i tentativi
+        // a raffica di gettoni)
+        $middleware->group('calendario', [
+            'throttle:calendario',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
