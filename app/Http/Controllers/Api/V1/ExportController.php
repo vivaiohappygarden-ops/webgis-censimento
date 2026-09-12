@@ -83,6 +83,12 @@ class ExportController extends Controller implements HasMiddleware
      * righe in streaming (mai tutto in memoria). Rispetta gli stessi filtri
      * della pagina Censimento.
      */
+    /** L'indirizzo con estensione .xlsx: stesso metodo, formato imposto. */
+    public function assetsXlsxRoute(Request $request)
+    {
+        return $this->assetsCsv($request->merge(['formato' => 'xlsx']));
+    }
+
     public function assetsCsv(Request $request)
     {
         \App\Support\ListQuery::validateUuidFilters($request, ['area_id', 'object_type_id', 'client_id', 'locality_id']);
@@ -136,65 +142,151 @@ class ExportController extends Controller implements HasMiddleware
             $query->cercaTesto($request->string('q'));
         }
 
-        Audit::log('export.assets_csv', null, ['filters' => $request->only([
+        $formato = $request->string('formato')->lower()->toString() ?: 'csv';
+
+        Audit::log('export.assets_'.($formato === 'xlsx' ? 'xlsx' : 'csv'), null, ['filters' => $request->only([
             'area_id', 'locality_id', 'client_id', 'object_type_id', 'type_code', 'status', 'hide_removed', 'archivio', 'q',
         ])]);
 
-        // Gli stati usati dall'interfaccia del censimento
-        $statusLabels = \App\Support\AssetStatus::LABELS;
+        return $formato === 'xlsx'
+            ? $this->assetsXlsx($query)
+            : $this->assetsCsvStream($query);
+    }
+
+    /**
+     * Le colonne dell'esportazione del censimento: titolo, larghezza in
+     * Excel e tipo del dato.
+     *
+     * Stanno qui una volta sola perche' il CSV e il foglio Excel devono
+     * esportare esattamente le stesse cose, nello stesso ordine: due elenchi
+     * paralleli divergerebbero al primo campo aggiunto.
+     *
+     * @return list<array{titolo: string, larghezza: int, tipo: string}>
+     */
+    private function colonneAssets(): array
+    {
+        return [
+            ['titolo' => 'Codice', 'larghezza' => 14, 'tipo' => 'testo'],
+            ['titolo' => 'Tipo', 'larghezza' => 10, 'tipo' => 'testo'],
+            ['titolo' => 'Descrizione tipo', 'larghezza' => 28, 'tipo' => 'testo'],
+            ['titolo' => 'Categoria', 'larghezza' => 18, 'tipo' => 'testo'],
+            ['titolo' => 'Committente', 'larghezza' => 24, 'tipo' => 'testo'],
+            ['titolo' => 'Area', 'larghezza' => 22, 'tipo' => 'testo'],
+            ['titolo' => 'Localita', 'larghezza' => 22, 'tipo' => 'testo'],
+            ['titolo' => 'Stato', 'larghezza' => 14, 'tipo' => 'testo'],
+            ['titolo' => 'Data rilievo', 'larghezza' => 12, 'tipo' => 'data'],
+            ['titolo' => 'Specie', 'larghezza' => 22, 'tipo' => 'testo'],
+            ['titolo' => 'Nome comune', 'larghezza' => 20, 'tipo' => 'testo'],
+            ['titolo' => 'Altezza (m)', 'larghezza' => 11, 'tipo' => 'numero'],
+            ['titolo' => 'Diametro fusto (cm)', 'larghezza' => 16, 'tipo' => 'numero'],
+            ['titolo' => 'Superficie (m2)', 'larghezza' => 14, 'tipo' => 'numero'],
+            ['titolo' => 'Lunghezza (m)', 'larghezza' => 13, 'tipo' => 'numero'],
+            ['titolo' => 'Perimetro (m)', 'larghezza' => 13, 'tipo' => 'numero'],
+            ['titolo' => 'Note', 'larghezza' => 40, 'tipo' => 'testo'],
+            ['titolo' => 'Data abbattimento/rimozione', 'larghezza' => 16, 'tipo' => 'data'],
+            ['titolo' => 'Motivo abbattimento/rimozione', 'larghezza' => 30, 'tipo' => 'testo'],
+        ];
+    }
+
+    /**
+     * Una riga dell'esportazione, con i valori grezzi (date come date,
+     * numeri come numeri): a formattarli ci pensa chi scrive il file, che sa
+     * se sta facendo un CSV o un foglio Excel.
+     *
+     * @return list<mixed>
+     */
+    private function rigaAsset(\App\Models\Asset $asset): array
+    {
+        return [
+            $asset->census_code,
+            $asset->objectType?->code,
+            $asset->objectType?->name,
+            $asset->objectType?->subType?->mainType?->name,
+            $asset->area?->locality?->site?->client?->name,
+            $asset->area?->name,
+            $asset->area?->locality?->name,
+            \App\Support\AssetStatus::LABELS[$asset->status] ?? $asset->status,
+            $asset->surveyed_at,
+            // Il campo specie contiene gia' il binomio completo
+            $asset->tree?->species ?: ($asset->tree?->genus ?? null),
+            $asset->tree?->common_name,
+            $asset->tree?->height_m,
+            $asset->tree?->dbh_cm,
+            $asset->computed_area_sqm,
+            $asset->computed_length_m,
+            $asset->computed_perimeter_m,
+            $asset->notes,
+            $asset->status === 'removed' ? $asset->valid_to : null,
+            $asset->status === 'removed' ? $asset->removal_reason : null,
+        ];
+    }
+
+    /** Il CSV di sempre: separatore punto e virgola, virgola decimale, BOM. */
+    private function assetsCsvStream($query)
+    {
+        $colonne = $this->colonneAssets();
         // I decimali con la virgola, come li aspetta l'Excel italiano
         $num = fn ($value) => $value === null ? '' : str_replace('.', ',', (string) (float) $value);
         // Testo libero neutralizzato: una cella che inizia con = + - @ ecc.
-        // verrebbe eseguita da Excel come formula (iniezione CSV)
+        // verrebbe eseguita da Excel come formula (iniezione CSV). Nel foglio
+        // .xlsx non serve: li' una cella di testo resta testo
         $text = fn (?string $value) => $value !== null && preg_match('/^[=+\-@\t\r]/', $value)
             ? "'".$value
             : ($value ?? '');
 
-        return response()->streamDownload(function () use ($query, $statusLabels, $num, $text) {
+        $formatta = function (array $riga) use ($colonne, $num, $text) {
+            foreach ($riga as $i => $valore) {
+                $riga[$i] = match ($colonne[$i]['tipo']) {
+                    'numero' => $num($valore),
+                    'data' => $valore?->format('d/m/Y') ?? '',
+                    default => $text($valore === null ? null : (string) $valore),
+                };
+            }
+
+            return $riga;
+        };
+
+        return response()->streamDownload(function () use ($query, $colonne, $formatta) {
             $out = fopen('php://output', 'w');
             // BOM: senza, l'Excel italiano legge le lettere accentate sbagliate
             fwrite($out, "\xEF\xBB\xBF");
             // escape '': niente backslash "magici" (RFC 4180) e niente
             // avviso di deprecazione a ogni riga su PHP 8.4
-            fputcsv($out, [
-                'Codice', 'Tipo', 'Descrizione tipo', 'Categoria', 'Committente', 'Area', 'Località', 'Stato',
-                'Data rilievo', 'Specie', 'Nome comune', 'Altezza (m)', 'Diametro fusto (cm)',
-                'Superficie (m2)', 'Lunghezza (m)', 'Perimetro (m)', 'Note',
-                'Data abbattimento/rimozione', 'Motivo abbattimento/rimozione',
-            ], ';', '"', '');
+            fputcsv($out, array_column($colonne, 'titolo'), ';', '"', '');
 
             // Solo chunkById, nessun altro orderBy: un ordinamento diverso
             // dalla colonna cursore romperebbe l'invariante dei blocchi
             // (righe saltate o duplicate oltre le prime 500)
-            $query->chunkById(500, function ($assets) use ($out, $statusLabels, $num, $text) {
+            $query->chunkById(500, function ($assets) use ($out, $formatta) {
                 foreach ($assets as $asset) {
-                    fputcsv($out, [
-                        $text($asset->census_code),
-                        $text($asset->objectType?->code),
-                        $text($asset->objectType?->name),
-                        $text($asset->objectType?->subType?->mainType?->name),
-                        $text($asset->area?->locality?->site?->client?->name),
-                        $text($asset->area?->name),
-                        $text($asset->area?->locality?->name),
-                        $statusLabels[$asset->status] ?? $text($asset->status),
-                        $asset->surveyed_at?->format('d/m/Y'),
-                        // Il campo specie contiene già il binomio completo
-                        $text($asset->tree?->species ?: ($asset->tree?->genus ?? '')),
-                        $text($asset->tree?->common_name),
-                        $num($asset->tree?->height_m),
-                        $num($asset->tree?->dbh_cm),
-                        $num($asset->computed_area_sqm),
-                        $num($asset->computed_length_m),
-                        $num($asset->computed_perimeter_m),
-                        $text($asset->notes),
-                        $asset->status === 'removed' ? $asset->valid_to?->format('d/m/Y') : '',
-                        $asset->status === 'removed' ? $text($asset->removal_reason) : '',
-                    ], ';', '"', '');
+                    fputcsv($out, $formatta($this->rigaAsset($asset)), ';', '"', '');
                 }
             });
             fclose($out);
         }, 'censimento_'.now()->format('Ymd').'.csv', [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+    /** Il foglio Excel vero: intestazione bloccata, filtri, tipi giusti. */
+    private function assetsXlsx($query)
+    {
+        $foglio = new \App\Services\Export\FoglioXlsx('Censimento');
+        $foglio->intestazione($this->colonneAssets());
+
+        $query->chunkById(500, function ($assets) use ($foglio) {
+            foreach ($assets as $asset) {
+                $foglio->riga($this->rigaAsset($asset));
+            }
+        });
+
+        $percorso = $foglio->scrivi();
+
+        // deleteFileAfterSend: il file temporaneo non deve restare sul server
+        return response()->download(
+            $percorso,
+            'censimento_'.now()->format('Ymd').'.xlsx',
+            ['Content-Type' => \App\Services\Export\FoglioXlsx::mime()],
+        )->deleteFileAfterSend(true);
     }
 }

@@ -457,17 +457,19 @@ async function exportDelivery(format = 'shapefile') {
     }
 }
 
-// CSV per Excel con gli stessi filtri attivi nell'elenco
-async function exportCsv() {
+// L'elenco che si sta guardando, in foglio Excel o in CSV: stessi filtri,
+// stesse colonne, due formati (il foglio ha i numeri veri e le date vere,
+// il CSV serve a chi lo deve dare in pasto a un altro programma)
+async function esportaElenco(formato = 'xlsx') {
     const params = new URLSearchParams();
     if (filters.q) params.set('q', filters.q);
     if (filters.status) params.set('status', filters.status);
     if (filters.clientId) params.set('client_id', filters.clientId);
     if (filters.areaId) params.set('area_id', filters.areaId);
-    // Il CSV esporta quello che si vede: stessi parametri dell'elenco
+    // Si esporta quello che si vede: stessi parametri dell'elenco
     params.set('archivio', String(paramArchivio.value));
     const suffix = params.toString() ? `?${params.toString()}` : '';
-    await downloadCam(`/api/v1/exports/assets.csv${suffix}`, 'censimento', 'csv');
+    await downloadCam(`/api/v1/exports/assets.${formato}${suffix}`, 'censimento', formato);
 }
 
 async function downloadCam(url, baseName, extension) {
@@ -650,9 +652,16 @@ const dataAbbattimento = (row) => {
                     <button
                         class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                         :disabled="camExport.busy"
-                        title="Elenco degli elementi con i filtri attivi, da aprire in Excel"
+                        title="Elenco degli elementi con i filtri attivi, come foglio di calcolo Excel"
+                        data-test="xlsx-export"
+                        @click="esportaElenco('xlsx')"
+                    >Esporta Excel</button>
+                    <button
+                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        :disabled="camExport.busy"
+                        title="Lo stesso elenco in CSV, per darlo in pasto a un altro programma"
                         data-test="csv-export"
-                        @click="exportCsv()"
+                        @click="esportaElenco('csv')"
                     >Esporta CSV</button>
                     <button
                         v-if="canCreate"

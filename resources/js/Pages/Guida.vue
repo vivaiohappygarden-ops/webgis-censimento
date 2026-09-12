@@ -104,8 +104,13 @@ function goTo(id) {
                             <strong>Censimento</strong> è l'elenco completo, con ricerca per codice e note.
                             Ogni elemento ha una scheda con il tipo (dal catalogo ministeriale), le misure, le foto,
                             gli attributi del suo tipo e la storia delle modifiche.
-                            Il pulsante <strong>"Esporta CSV"</strong> scarica l'elenco (con i filtri attivi)
-                            in un file da aprire direttamente in Excel.
+                            Il pulsante <strong>"Esporta Excel"</strong> scarica l'elenco che stai guardando
+                            (con i filtri attivi) come <strong>foglio di calcolo vero</strong>: intestazione
+                            in grassetto e bloccata, colonne larghe il giusto, frecce per filtrare, e
+                            soprattutto numeri che sono numeri e date che sono date, quindi si sommano e si
+                            ordinano senza sistemare niente a mano. Accanto resta
+                            <strong>"Esporta CSV"</strong>, lo stesso elenco in un file di testo, utile
+                            quando i dati devono entrare in un altro programma.
                         </p>
                         <h3>L'archivio del censimento</h3>
                         <p>

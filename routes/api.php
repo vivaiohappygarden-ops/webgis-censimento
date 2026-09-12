@@ -83,6 +83,8 @@ Route::prefix('v1')->group(function () {
         Route::get('exports/cam/delivery', [\App\Http\Controllers\Api\V1\ExportController::class, 'camDelivery']);
         Route::get('exports/cam', [\App\Http\Controllers\Api\V1\ExportController::class, 'cam']);
         Route::get('exports/assets.csv', [\App\Http\Controllers\Api\V1\ExportController::class, 'assetsCsv']);
+        // Stesso elenco, stessi filtri, foglio Excel invece del CSV
+        Route::get('exports/assets.xlsx', [\App\Http\Controllers\Api\V1\ExportController::class, 'assetsXlsxRoute']);
 
         Route::get('assets/{asset}/assessments', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'index'])->whereUuid('asset');
         Route::post('assets/{asset}/assessments', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'store'])->whereUuid('asset');
