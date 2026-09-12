@@ -529,6 +529,35 @@ function goTo(id) {
                             <strong>Scadenzario</strong> mostra per ogni area o elemento l'ultima ispezione e la data
                             entro cui ripeterla, con i ritardi in cima e in rosso.
                         </p>
+                        <h3>Il corredo per le aree gioco</h3>
+                        <p>
+                            Il pulsante <strong>"Corredo aree gioco"</strong>, in alto nella pagina Ispezioni,
+                            installa in un gesto quello che serve per gestire i giochi: i
+                            <strong>campi della scheda dell'attrezzo</strong> (produttore, modello,
+                            matricola, data di installazione e di collaudo, materiale, fascia d'età,
+                            altezza di caduta libera, superficie di attenuazione, area di impatto,
+                            norme di riferimento, gioco inclusivo), i campi dell'<strong>area
+                            gioco</strong> (fascia d'età, recinzione, cartello informativo,
+                            accessibilità) e <strong>tre liste di controllo</strong>: visivo
+                            ordinario ogni 7 giorni sull'area, funzionale ogni 90 giorni
+                            sull'attrezzo, ispezione principale una volta l'anno. Ogni voce negativa
+                            apre la non conformità e chiede la fotografia.
+                        </p>
+                        <p>
+                            Prima di installare, una finestra dice esattamente che cosa creerebbe.
+                            Quello che c'è già non viene toccato: se hai cambiato un'etichetta o una
+                            periodicità, la tua versione resta, e rilanciare il comando non crea
+                            doppioni. Da lì in poi i campi si adattano dal <strong>Catalogo</strong>
+                            e le domande da questa pagina.
+                        </p>
+                        <p>
+                            Una precisazione onesta: le liste <strong>non sono il testo della norma
+                            UNI EN 1176-7</strong>, che è protetto e va acquistato. Sono la traccia
+                            dei controlli che quella norma prevede, scritta in italiano corrente e
+                            pensata per essere adattata. L'ispezione principale annuale resta
+                            compito di personale competente: il programma tiene il registro, non
+                            firma il giudizio.
+                        </p>
                     </section>
 
                     <section id="segnalazioni">

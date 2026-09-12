@@ -21,6 +21,58 @@ const OUTCOMES = {
 };
 const ANSWER_TYPES = { ok_ko: 'OK / KO', ok_ko_na: 'OK / KO / N.A.', text: 'Testo', number: 'Numero' };
 
+// Il corredo pronto per le aree gioco: prima l'anteprima di cosa verrebbe
+// installato, poi la conferma. Le due chiamate passano dallo stesso
+// endpoint, cosi' l'anteprima non puo' divergere dall'esito
+const canCatalog = computed(() => (page.props.auth?.user?.permissions ?? []).includes('catalog.manage'));
+const gioco = reactive({ aperta: false, inCorso: false, errore: '', anteprima: null, esito: null });
+
+async function apriGioco() {
+    gioco.aperta = true;
+    gioco.anteprima = null;
+    gioco.esito = null;
+    gioco.errore = '';
+    gioco.inCorso = true;
+    try {
+        const { data } = await axios.post('/api/v1/aree-gioco/modello', { prova: 1 });
+        gioco.anteprima = data.data;
+    } catch (err) {
+        gioco.errore = err.response?.data?.message ?? 'Non riesco a leggere il modello delle aree gioco.';
+    } finally {
+        gioco.inCorso = false;
+    }
+}
+
+async function confermaGioco() {
+    gioco.inCorso = true;
+    gioco.errore = '';
+    try {
+        const { data } = await axios.post('/api/v1/aree-gioco/modello', { prova: 0 });
+        gioco.esito = data.data;
+    } catch (err) {
+        gioco.errore = err.response?.data?.message ?? 'Installazione non riuscita.';
+        gioco.inCorso = false;
+
+        return;
+    }
+    gioco.inCorso = false;
+    // Fuori dal try dell'atto: un errore nel ricaricare l'elenco non deve
+    // coprire un'installazione ormai riuscita
+    try {
+        await load();
+    } catch { /* l'elenco si ricarica alla prossima apertura */ }
+}
+
+const daInstallare = computed(() => {
+    const a = gioco.anteprima;
+    if (! a) return { campi: 0, modelli: 0 };
+
+    return {
+        campi: a.campi.filter((c) => c.stato === 'creato').length,
+        modelli: a.modelli.filter((m) => m.stato === 'creato').length,
+    };
+});
+
 const view = ref('esecuzioni');
 const templates = ref([]);
 const inspections = ref([]);
@@ -358,12 +410,21 @@ onMounted(async () => {
                     <h1 class="text-xl font-semibold">Ispezioni</h1>
                     <p class="text-sm text-gray-500">Controlli su checklist: modelli configurabili, esiti per voce e non conformità automatiche</p>
                 </div>
-                <button
-                    v-if="canManage"
-                    class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800"
-                    data-test="new-template"
-                    @click="openTemplateEditor()"
-                >Nuovo modello</button>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button
+                        v-if="canManage && canCatalog"
+                        class="rounded-lg border border-green-700 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
+                        data-test="modello-gioco"
+                        title="Installa i campi della scheda attrezzo e le liste di controllo EN 1176"
+                        @click="apriGioco"
+                    >Corredo aree gioco</button>
+                    <button
+                        v-if="canManage"
+                        class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800"
+                        data-test="new-template"
+                        @click="openTemplateEditor()"
+                    >Nuovo modello</button>
+                </div>
             </div>
 
             <div class="mb-3 inline-flex overflow-hidden rounded-lg border border-gray-300 text-sm">
@@ -768,6 +829,71 @@ onMounted(async () => {
                     </div>
                 </div>
             </Teleport>
+
+            <!-- Corredo aree gioco: anteprima e conferma -->
+            <div v-if="gioco.aperta" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4" data-test="modale-gioco">
+                <div class="w-full max-w-xl rounded-xl bg-white shadow-xl">
+                    <div class="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                        <h2 class="text-sm font-semibold">Corredo per le aree gioco</h2>
+                        <button class="px-1 text-gray-400 hover:text-gray-600" :disabled="gioco.inCorso" @click="gioco.aperta = false">&#10005;</button>
+                    </div>
+                    <div class="max-h-96 space-y-3 overflow-y-auto px-4 py-3 text-sm">
+                        <p v-if="gioco.errore" class="rounded-lg bg-red-50 px-3 py-2 text-red-700">{{ gioco.errore }}</p>
+                        <p v-else-if="gioco.inCorso && ! gioco.anteprima" class="text-gray-400">Controllo cosa manca…</p>
+
+                        <template v-else-if="gioco.esito">
+                            <p class="rounded-lg bg-green-50 px-3 py-2 text-green-800" data-test="gioco-esito">
+                                Installati {{ gioco.esito.campi.filter((c) => c.stato === 'creato').length }} campi della scheda
+                                e {{ gioco.esito.modelli.filter((m) => m.stato === 'creato').length }} modelli di ispezione.
+                            </p>
+                            <p class="text-xs text-gray-500">
+                                I campi si adattano dal Catalogo, le domande da questa pagina: quello che modifichi
+                                non viene più toccato, nemmeno rilanciando l'installazione.
+                            </p>
+                        </template>
+
+                        <template v-else-if="gioco.anteprima">
+                            <p class="rounded-lg bg-gray-50 px-3 py-2">
+                                Da installare: <span class="font-semibold">{{ daInstallare.campi }}</span>
+                                {{ daInstallare.campi === 1 ? 'campo della scheda' : 'campi della scheda' }}
+                                e <span class="font-semibold">{{ daInstallare.modelli }}</span>
+                                {{ daInstallare.modelli === 1 ? 'modello di ispezione' : 'modelli di ispezione' }}.
+                                <template v-if="gioco.anteprima.campi.length - daInstallare.campi > 0">
+                                    Già presenti (non si toccano): {{ gioco.anteprima.campi.length - daInstallare.campi }} campi.
+                                </template>
+                            </p>
+                            <ul class="space-y-1 text-xs text-gray-600" data-test="gioco-modelli">
+                                <li v-for="m in gioco.anteprima.modelli" :key="m.codice">
+                                    {{ m.codice }} · {{ m.nome }} · {{ m.domande }} domande · ogni {{ m.periodicita_giorni }} giorni
+                                    <span v-if="m.stato === 'presente'" class="text-gray-400">(già presente)</span>
+                                </li>
+                            </ul>
+                            <ul v-if="gioco.anteprima.mancanti.length" class="space-y-1 text-xs text-amber-800" data-test="gioco-mancanti">
+                                <li v-for="m in gioco.anteprima.mancanti" :key="m.codice">{{ m.codice }}: {{ m.motivo }}</li>
+                            </ul>
+                            <p class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                Le liste non sono il testo della norma (protetto): sono la traccia dei controlli
+                                che la UNI EN 1176-7 prevede, scritta in italiano corrente e da adattare.
+                                L'ispezione principale annuale resta compito di personale competente.
+                            </p>
+                        </template>
+                    </div>
+                    <div class="flex justify-end gap-2 border-t border-gray-100 px-4 py-3">
+                        <button
+                            class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            :disabled="gioco.inCorso"
+                            @click="gioco.aperta = false"
+                        >Chiudi</button>
+                        <button
+                            v-if="! gioco.esito && gioco.anteprima && (daInstallare.campi || daInstallare.modelli)"
+                            data-test="conferma-gioco"
+                            class="rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                            :disabled="gioco.inCorso"
+                            @click="confermaGioco"
+                        >{{ gioco.inCorso ? 'Installazione…' : 'Installa' }}</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </AppLayout>
 </template>

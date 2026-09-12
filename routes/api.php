@@ -200,6 +200,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('inspection-templates', \App\Http\Controllers\Api\V1\InspectionTemplateController::class)
             ->whereUuid('inspection_template');
         Route::put('inspection-templates/{id}/items', [\App\Http\Controllers\Api\V1\InspectionTemplateController::class, 'syncItems'])->whereUuid('id');
+        Route::post('aree-gioco/modello', [\App\Http\Controllers\Api\V1\AreeGiocoController::class, 'installa']);
         Route::get('inspections/deadlines', [\App\Http\Controllers\Api\V1\InspectionController::class, 'deadlines']);
         Route::get('inspections/{id}/pdf', [\App\Http\Controllers\Api\V1\PdfController::class, 'inspection'])->whereUuid('id');
         Route::get('assets/{id}/pdf', [\App\Http\Controllers\Api\V1\PdfController::class, 'asset'])->whereUuid('id');
