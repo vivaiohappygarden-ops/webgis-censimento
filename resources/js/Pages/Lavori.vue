@@ -4,6 +4,7 @@ import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import WorkAgenda from '@/Components/WorkAgenda.vue';
+import GanttLavori from '@/Components/GanttLavori.vue';
 import CalendarioAbbonamento from '@/Components/CalendarioAbbonamento.vue';
 import WorkReport from '@/Components/WorkReport.vue';
 import RelazioneAnnuale from '@/Components/RelazioneAnnuale.vue';
@@ -113,7 +114,7 @@ function applicaVista(filtri) {
 const loading = ref(false);
 // La vista iniziale può arrivare dall'URL (es. il cruscotto Oggi linka
 // direttamente la Qualità): valori sconosciuti ricadono sull'elenco
-const VIEWS = ['elenco', 'agenda', 'rendiconto', 'qualita', 'preventivi', 'sal', 'piani'];
+const VIEWS = ['elenco', 'agenda', 'gantt', 'rendiconto', 'qualita', 'preventivi', 'sal', 'piani'];
 const requested = new URLSearchParams(window.location.search).get('vista');
 // I SAL sono riservati a chi gestisce i lavori: senza permesso si ricade sull'elenco
 const vistaAmmessa = (v) => VIEWS.includes(v) && (v !== 'sal' || canManage.value);
@@ -592,6 +593,7 @@ onMounted(async () => {
                     <!-- Il conteggio segue i filtri dell'elenco: in agenda sarebbe fuorviante -->
                     <p v-if="view === 'elenco'" class="text-sm text-gray-500">{{ meta.total }} {{ meta.total === 1 ? 'ordine' : 'ordini' }} · flusso: bozza, pianificato, assegnato, in corso, completato</p>
                     <p v-else-if="view === 'agenda'" class="text-sm text-gray-500">Programmazione settimanale per squadra</p>
+                    <p v-else-if="view === 'gantt'" class="text-sm text-gray-500">I lavori del periodo su una linea del tempo, raggruppati come serve</p>
                     <p v-else-if="view === 'rendiconto'" class="text-sm text-gray-500">Lavori completati per cliente e periodo, con importi da listino</p>
                     <p v-else-if="view === 'preventivi'" class="text-sm text-gray-500">Offerte ai clienti: bozza, invio, esito e trasformazione in ordine di lavoro</p>
                     <p v-else-if="view === 'piani'" class="text-sm text-gray-500">Ricorrenze dichiarate per area e lavorazione: gli ordini del periodo si generano da qui</p>
@@ -619,6 +621,12 @@ onMounted(async () => {
                     data-test="view-agenda"
                     @click="view = 'agenda'"
                 >Agenda</button>
+                <button
+                    class="whitespace-nowrap border-l border-gray-300 px-4 py-1.5 font-medium"
+                    :class="view === 'gantt' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                    data-test="view-gantt"
+                    @click="view = 'gantt'"
+                >Gantt</button>
                 <button
                     class="whitespace-nowrap border-l border-gray-300 px-4 py-1.5 font-medium"
                     :class="view === 'rendiconto' ? 'bg-green-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
@@ -726,6 +734,13 @@ onMounted(async () => {
                      vista dal calendario del telefono -->
                 <CalendarioAbbonamento />
             </template>
+
+            <GanttLavori
+                v-if="view === 'gantt'"
+                :teams="teams"
+                :committenti="clients"
+                @open="openDetail"
+            />
 
             <template v-if="view === 'rendiconto'">
                 <WorkReport

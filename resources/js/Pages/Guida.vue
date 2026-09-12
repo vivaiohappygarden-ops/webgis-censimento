@@ -362,6 +362,23 @@ function goTo(id) {
                             arboreo, lavori, controlli, segnalazioni, trattamenti, stima CO2, fotografie), con la
                             firma del tecnico; le sezioni senza dati nell'anno non vengono stampate.
                         </p>
+                        <h3>Il diagramma a barre (Gantt)</h3>
+                        <p>
+                            La vista <strong>Gantt</strong> mette i lavori su una linea del tempo: il
+                            periodo in orizzontale (3, 6 o 12 mesi), le righe raggruppate per
+                            <strong>squadra, area, committente o lavorazione</strong>. Ogni lavoro è una
+                            barra che va dall'inizio alla fine previsti, con il colore del suo stato; una
+                            linea rossa segna il giorno di oggi. Le frecce ← e → sulla barra dicono che il
+                            lavoro comincia prima o finisce dopo il periodo che stai guardando, e un lavoro
+                            senza data di fine occupa il solo giorno di inizio, come in agenda.
+                        </p>
+                        <p>
+                            Un clic sulla barra apre la scheda del lavoro. I pulsanti ← Oggi → spostano il
+                            periodo di un mese alla volta; i filtri per squadra, committente e stato valgono
+                            solo per il disegno. Sul telefono il diagramma si legge scorrendolo di lato.
+                            Se nel periodo ci sono più lavori di quanti il diagramma ne possa disegnare, te
+                            lo dice invece di mostrarne una parte in silenzio.
+                        </p>
                         <h3>I piani di manutenzione pluriennali</h3>
                         <p>
                             Nella vista <strong>Piani</strong> della pagina Lavori si dichiara, area per area,
