@@ -100,6 +100,7 @@ Route::prefix('v1')->group(function () {
         Route::get('vta/dashboard', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'index']);
         Route::get('vta/alberi', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'alberi']);
         Route::post('vta/valida', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'valida']);
+        Route::post('vta/ricontrolli', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'ricontrolli']);
         // POST e non GET: fino a 500 id selezionati non stanno in un indirizzo
         Route::post('vta/registro', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'registro']);
         Route::get('vta/tutelati', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'tutelati']);

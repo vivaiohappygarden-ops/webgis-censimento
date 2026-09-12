@@ -42,6 +42,9 @@ class DashboardController extends Controller implements HasMiddleware
             'issues' => $this->issues(),
             'non_conformities' => $this->nonConformities(),
             'certificates' => $this->certificates($today),
+            // Lo scadenzario VTA richiede assets.view: chi non può aprirlo non
+            // deve vederne i numeri qui
+            'vta' => $request->user()->can('assets.view') ? $this->vta($today, $request->user()->tenant_id) : null,
             // La pagina e le API dell'irrigazione richiedono areas.view: chi
             // non le può aprire non deve vederne i dati nel cruscotto
             'irrigation' => $request->user()->can('areas.view') ? $this->irrigation($today) : null,
@@ -172,6 +175,59 @@ class DashboardController extends Controller implements HasMiddleware
             'expired_count' => (clone $query)->whereDate('expires_on', '<', $today->toDateString())->count(),
             'due_soon_count' => (clone $query)->whereDate('expires_on', '>=', $today->toDateString())->count(),
             'rows' => $rows,
+        ];
+    }
+
+    /**
+     * Ricontrolli VTA scaduti o in scadenza entro 30 giorni, e quanti di
+     * quelli hanno già l'ordine di lavoro in agenda: la differenza fra i due
+     * numeri è il lavoro da mettere in programma.
+     *
+     * Stessa definizione dello scadenzario (ultima valutazione per albero,
+     * fuori l'archivio e gli abbattuti): i numeri delle due pagine devono
+     * tornare.
+     */
+    private function vta(Carbon $today, string $tenantId): array
+    {
+        $horizon = $today->copy()->addDays(30)->toDateString();
+        $archivio = \App\Support\AssetStatus::sqlArchivio();
+
+        $righe = collect(\Illuminate\Support\Facades\DB::select(<<<SQL
+            SELECT a.id, a.census_code, vta.id AS assessment_id,
+                   vta.failure_class, vta.next_check_due::text AS next_check_due,
+                   wo.code AS work_order_code
+            FROM assets a
+            JOIN trees t ON t.asset_id = a.id AND t.removed_on IS NULL
+            JOIN LATERAL (
+              SELECT ta.id, ta.failure_class, ta.next_check_due
+              FROM tree_assessments ta
+              WHERE ta.tree_id = a.id AND ta.tenant_id = a.tenant_id AND ta.deleted_at IS NULL
+              ORDER BY ta.assessed_on DESC, ta.created_at DESC
+              LIMIT 1
+            ) vta ON true
+            LEFT JOIN work_orders wo ON wo.origin = 'vta_recheck' AND wo.origin_id = vta.id
+                                    AND wo.deleted_at IS NULL AND wo.status <> 'cancelled'
+            WHERE a.tenant_id = ? AND a.deleted_at IS NULL
+              AND a.status NOT IN ({$archivio})
+              AND vta.next_check_due IS NOT NULL AND vta.next_check_due <= ?
+            ORDER BY vta.next_check_due
+            SQL, [$tenantId, $horizon]));
+
+        $oggi = $today->toDateString();
+
+        return [
+            'overdue_count' => $righe->where('next_check_due', '<', $oggi)->count(),
+            'due_soon_count' => $righe->where('next_check_due', '>=', $oggi)->count(),
+            // Senza ordine: sono i ricontrolli che nessuno ha ancora messo in
+            // agenda, il motivo per cui questo riquadro esiste
+            'without_order_count' => $righe->whereNull('work_order_code')->count(),
+            'rows' => $righe->take(self::LIMIT)->map(fn ($r) => [
+                'id' => $r->id,
+                'census_code' => $r->census_code,
+                'failure_class' => $r->failure_class,
+                'next_check_due' => $r->next_check_due,
+                'work_order_code' => $r->work_order_code,
+            ])->values(),
         ];
     }
 

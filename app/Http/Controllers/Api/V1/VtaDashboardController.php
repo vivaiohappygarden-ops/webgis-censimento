@@ -7,6 +7,7 @@ use App\Models\Asset;
 use App\Models\Tree;
 use App\Models\TreeAssessment;
 use App\Services\Trees\PeriziaValidation;
+use App\Services\Works\GeneratoreRicontrolliVta;
 use App\Support\Audit;
 use App\Support\RicercaTestuale;
 use Illuminate\Http\JsonResponse;
@@ -50,6 +51,9 @@ class VtaDashboardController extends Controller implements HasMiddleware
             // Validare e' un gesto che scrive atti: stesso permesso della
             // validazione singola
             new Middleware('can:assets.update', only: ['valida']),
+            // Generare ordini di ricontrollo scrive in agenda: serve anche il
+            // permesso dei lavori, oltre a quello di leggere lo scadenzario
+            new Middleware('can:works.manage', only: ['ricontrolli']),
         ];
     }
 
@@ -407,6 +411,47 @@ class VtaDashboardController extends Controller implements HasMiddleware
             ->get();
 
         return response()->json(['data' => $trees]);
+    }
+
+    /**
+     * Genera gli ordini di lavoro "Ricontrollo VTA" per gli alberi in
+     * scadenza: la data che il tecnico ha prescritto entra in agenda invece
+     * di restare un promemoria da leggere.
+     *
+     * Come la validazione collettiva, il flusso e' in due tempi: con prova=1
+     * si conta e si legge chi resta fuori e perche', poi si conferma. Le due
+     * chiamate passano dallo stesso metodo del servizio, quindi l'anteprima
+     * non puo' divergere dall'esito.
+     */
+    public function ricontrolli(Request $request, GeneratoreRicontrolliVta $generatore): JsonResponse
+    {
+        $request->validate([
+            'asset_ids' => ['sometimes', 'array', 'min:1', 'max:'.GeneratoreRicontrolliVta::MASSIMO],
+            'asset_ids.*' => ['uuid'],
+            'client_id' => ['sometimes', 'nullable', 'uuid'],
+            // Fin dove si guarda avanti: di serie i 30 giorni della fascia
+            // "in scadenza", cosi' il pulsante fa quello che la pagina mostra
+            'entro' => ['sometimes', 'date_format:Y-m-d'],
+            'prova' => ['sometimes', 'boolean'],
+        ]);
+
+        $entro = \Carbon\CarbonImmutable::parse(
+            $request->input('entro') ?? now()->addDays(30)->toDateString(),
+        );
+
+        $esito = $generatore->genera(
+            $this->clientId($request),
+            $request->filled('asset_ids') ? $request->input('asset_ids') : null,
+            $entro,
+            $request->user(),
+            $request->boolean('prova'),
+        );
+
+        return response()->json(['data' => [
+            'entro' => $entro->toDateString(),
+            'creati' => $esito['creati'],
+            'saltati' => $esito['saltati'],
+        ]]);
     }
 
     /** Filtro per committente comune alle sezioni del cruscotto. */

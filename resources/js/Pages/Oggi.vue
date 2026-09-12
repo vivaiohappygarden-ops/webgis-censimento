@@ -210,6 +210,39 @@ onMounted(load);
                     </div>
                 </section>
 
+                <!-- Ricontrolli VTA (solo per chi può aprire lo scadenzario) -->
+                <section v-if="data.vta" class="rounded-xl border border-gray-200 bg-white" data-test="oggi-vta">
+                    <div class="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
+                        <h2 class="text-sm font-semibold">Ricontrolli VTA</h2>
+                        <Link href="/vta" class="text-xs font-medium text-green-800 hover:underline">Vai allo scadenzario →</Link>
+                    </div>
+                    <div class="overflow-x-auto px-4 py-3">
+                        <p v-if="data.vta.overdue_count || data.vta.due_soon_count" class="mb-2 text-xs font-medium" data-test="oggi-vta-conteggi">
+                            <span v-if="data.vta.overdue_count" class="text-red-700">{{ data.vta.overdue_count }} {{ data.vta.overdue_count === 1 ? 'scaduto' : 'scaduti' }}</span>
+                            <span v-if="data.vta.overdue_count && data.vta.due_soon_count" class="text-gray-400"> · </span>
+                            <span v-if="data.vta.due_soon_count" class="text-gray-600">{{ data.vta.due_soon_count }} in scadenza entro 30 giorni</span>
+                            <span v-if="data.vta.without_order_count" class="text-gray-400"> · </span>
+                            <span v-if="data.vta.without_order_count" class="text-amber-700">{{ data.vta.without_order_count }} senza ordine di lavoro</span>
+                        </p>
+                        <table v-if="data.vta.rows.length" class="w-full text-sm">
+                            <tbody class="divide-y divide-gray-50">
+                                <tr v-for="row in data.vta.rows" :key="row.id">
+                                    <td class="py-1.5 pr-2 font-medium">{{ row.census_code ?? '—' }}</td>
+                                    <td class="py-1.5 pr-2 text-gray-600">{{ row.failure_class ? `classe ${row.failure_class}` : 'classe n.d.' }}</td>
+                                    <td class="py-1.5 pr-2 text-gray-600">
+                                        <template v-if="row.work_order_code">in agenda ({{ row.work_order_code }})</template>
+                                        <template v-else><span class="text-amber-700">da mettere in agenda</span></template>
+                                    </td>
+                                    <td class="py-1.5 text-right" :class="row.next_check_due < data.date ? 'text-red-700' : 'text-gray-600'">
+                                        {{ row.next_check_due < data.date ? 'scaduto il' : 'entro il' }} {{ formatDate(row.next_check_due) }}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p v-else class="text-sm text-gray-400">Nessun ricontrollo scaduto o in scadenza entro 30 giorni.</p>
+                    </div>
+                </section>
+
                 <!-- Irrigazione (solo per chi può aprire la pagina dedicata) -->
                 <section v-if="data.irrigation" class="rounded-xl border border-gray-200 bg-white" data-test="oggi-irrigazione">
                     <div class="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">

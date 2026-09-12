@@ -10,6 +10,9 @@ const data = ref(null);
 const tutelati = ref([]);
 
 const canValidate = computed(() => (usePage().props.auth?.user?.permissions ?? []).includes('assets.update'));
+// Mettere in agenda un ricontrollo crea ordini di lavoro: stesso permesso
+// che serve nella pagina Lavori
+const canWorks = computed(() => (usePage().props.auth?.user?.permissions ?? []).includes('works.manage'));
 
 // Filtri della pagina: il committente vale per tutto (cruscotto, fasce,
 // elenco, tutelati); stato e classe restringono solo l'elenco
@@ -258,6 +261,76 @@ async function confermaValidazione() {
 function chiudiValidazione() {
     if (validazione.inCorso) return;
     validazione.aperta = false;
+}
+
+// Ricontrolli in agenda: stessa liturgia della validazione collettiva
+// (prima la prova a vuoto, poi la conferma), stesso endpoint per tutte e due
+const ricontrolli = reactive({
+    aperta: false, dovuti: false, inCorso: false, errore: '',
+    anteprima: null, esito: null,
+});
+
+function corpoRicontrolli(dovuti) {
+    // "Dovuti": tutti quelli in scadenza entro 30 giorni, ristretti al
+    // committente scelto se c'e' un filtro attivo. Altrimenti gli alberi
+    // spuntati, qualunque sia la loro data
+    return dovuti
+        ? (filtri.client_id ? { client_id: filtri.client_id } : {})
+        : { asset_ids: [...selezione.value] };
+}
+
+async function apriRicontrolli(dovuti) {
+    ricontrolli.aperta = true;
+    ricontrolli.dovuti = dovuti;
+    ricontrolli.anteprima = null;
+    ricontrolli.esito = null;
+    ricontrolli.errore = '';
+    ricontrolli.inCorso = true;
+    try {
+        const { data: res } = await axios.post('/api/v1/vta/ricontrolli', {
+            ...corpoRicontrolli(dovuti), prova: 1,
+        });
+        ricontrolli.anteprima = res.data;
+    } catch (err) {
+        ricontrolli.errore = err.response?.data?.message ?? avvisoCaricamento(err);
+    } finally {
+        ricontrolli.inCorso = false;
+    }
+}
+
+async function confermaRicontrolli() {
+    ricontrolli.inCorso = true;
+    ricontrolli.errore = '';
+    try {
+        // Si confermano gli alberi contati in anteprima, non il filtro: un
+        // albero valutato nel frattempo non finisce in agenda senza essere
+        // stato mostrato
+        const { data: res } = await axios.post('/api/v1/vta/ricontrolli', {
+            asset_ids: ricontrolli.anteprima.creati.map((r) => r.asset_id),
+            entro: ricontrolli.anteprima.entro,
+            prova: 0,
+        });
+        ricontrolli.esito = res.data;
+        selezione.value = new Set();
+    } catch (err) {
+        ricontrolli.errore = err.response?.data?.message ?? avvisoCaricamento(err);
+        ricontrolli.inCorso = false;
+
+        return;
+    }
+    ricontrolli.inCorso = false;
+    // Fuori dal try dell'atto: un errore di rete nel ricaricare non deve
+    // coprire l'esito di una generazione ormai riuscita
+    try {
+        await Promise.all([caricaCruscotto(), caricaFasce(), caricaElenco(elenco.page)]);
+    } catch (err) {
+        loadError.value = avvisoCaricamento(err);
+    }
+}
+
+function chiudiRicontrolli() {
+    if (ricontrolli.inCorso) return;
+    ricontrolli.aperta = false;
 }
 
 // Registro CSV: POST perche' 500 id non stanno in un indirizzo; la risposta
@@ -609,6 +682,23 @@ onMounted(async () => {
                                 :disabled="esportazione.inCorso"
                                 @click="esportaRegistro(true)"
                             >Esporta il registro di {{ committenteScelto?.name }}</button>
+                            <template v-if="canWorks">
+                                <button
+                                    type="button"
+                                    data-test="ricontrolli-selezione"
+                                    class="rounded-lg border border-green-700 px-3 py-1.5 font-medium text-green-700 hover:bg-green-50 disabled:border-gray-300 disabled:text-gray-400"
+                                    :disabled="! selezione.size"
+                                    :title="selezione.size ? 'Crea gli ordini di lavoro Ricontrollo VTA per gli alberi selezionati' : 'Scegli prima gli alberi con le caselle'"
+                                    @click="apriRicontrolli(false)"
+                                >Metti in agenda i ricontrolli (selezione)</button>
+                                <button
+                                    type="button"
+                                    data-test="ricontrolli-scaduti"
+                                    class="rounded-lg border border-green-700 px-3 py-1.5 font-medium text-green-700 hover:bg-green-50"
+                                    :title="'Crea gli ordini di lavoro per tutti i ricontrolli dovuti entro 30 giorni'"
+                                    @click="apriRicontrolli(true)"
+                                >Metti in agenda i ricontrolli dovuti<template v-if="filtri.client_id"> di {{ committenteScelto?.name }}</template></button>
+                            </template>
                             <span v-if="esportazione.errore" class="text-red-700">{{ esportazione.errore }}</span>
                         </div>
 
@@ -852,6 +942,68 @@ onMounted(async () => {
                             :disabled="validazione.inCorso"
                             @click="confermaValidazione"
                         >{{ validazione.inCorso ? 'Validazione…' : (validazione.anteprima.validate.length === 1 ? 'Valida 1 perizia' : `Valida ${validazione.anteprima.validate.length} perizie`) }}</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Finestra dei ricontrolli da mettere in agenda -->
+            <div v-if="ricontrolli.aperta" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4" data-test="modale-ricontrolli">
+                <div class="w-full max-w-lg rounded-xl bg-white shadow-xl">
+                    <div class="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                        <h2 class="text-sm font-semibold">Ricontrolli VTA in agenda</h2>
+                        <button class="px-1 text-gray-400 hover:text-gray-600" :disabled="ricontrolli.inCorso" @click="chiudiRicontrolli">✕</button>
+                    </div>
+                    <div class="max-h-96 space-y-3 overflow-y-auto px-4 py-3 text-sm">
+                        <p v-if="ricontrolli.errore" class="rounded-lg bg-red-50 px-3 py-2 text-red-700">{{ ricontrolli.errore }}</p>
+                        <p v-else-if="ricontrolli.inCorso && ! ricontrolli.anteprima" class="text-gray-400">Conto i ricontrolli…</p>
+
+                        <template v-else-if="ricontrolli.esito">
+                            <p class="rounded-lg bg-green-50 px-3 py-2 text-green-800" data-test="ricontrolli-esito">
+                                {{ ricontrolli.esito.creati.length === 1 ? 'Creato 1 ordine di ricontrollo' : `Creati ${ricontrolli.esito.creati.length} ordini di ricontrollo` }}{{ ricontrolli.esito.saltati.length ? `, ${ricontrolli.esito.saltati.length === 1 ? '1 saltato' : ricontrolli.esito.saltati.length + ' saltati'}` : '' }}.
+                            </p>
+                            <ul v-if="ricontrolli.esito.creati.length" class="space-y-1 text-xs text-gray-600">
+                                <li v-for="r in ricontrolli.esito.creati.slice(0, 10)" :key="r.asset_id">
+                                    {{ r.ordine }} · {{ r.codice ?? 'albero senza codice' }} · scadenza {{ fmt(r.scadenza) }}
+                                </li>
+                                <li v-if="ricontrolli.esito.creati.length > 10">… e altri {{ ricontrolli.esito.creati.length - 10 }}.</li>
+                            </ul>
+                            <p class="text-xs text-gray-500">Gli ordini sono in agenda come pianificati: squadra e data si assegnano dalla pagina Lavori.</p>
+                        </template>
+
+                        <template v-else-if="ricontrolli.anteprima">
+                            <p class="rounded-lg bg-gray-50 px-3 py-2">
+                                {{ ricontrolli.dovuti
+                                    ? `Ricontrolli dovuti entro il ${fmt(ricontrolli.anteprima.entro)}${committenteScelto ? ' di ' + committenteScelto.name : ''}:`
+                                    : `Alberi selezionati (${selezione.size}):` }}
+                                <span class="font-semibold">{{ ricontrolli.anteprima.creati.length }}</span> da mettere in agenda<template v-if="ricontrolli.anteprima.saltati.length">,
+                                <span class="font-semibold">{{ ricontrolli.anteprima.saltati.length }}</span> {{ ricontrolli.anteprima.saltati.length === 1 ? 'escluso' : 'esclusi' }}</template>.
+                            </p>
+                            <ul v-if="ricontrolli.anteprima.saltati.length" class="space-y-1 text-xs text-gray-600" data-test="ricontrolli-saltati">
+                                <li v-for="s in ricontrolli.anteprima.saltati.slice(0, 10)" :key="s.asset_id">
+                                    {{ s.codice ?? 'albero senza codice' }}: {{ s.motivo }}
+                                </li>
+                                <li v-if="ricontrolli.anteprima.saltati.length > 10">… e altri {{ ricontrolli.anteprima.saltati.length - 10 }}.</li>
+                            </ul>
+                            <p v-if="ricontrolli.anteprima.creati.length" class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                Nasce un ordine di lavoro "Ricontrollo VTA" per ogni albero, con la data
+                                prescritta dall'ultima valutazione. Rilanciare non crea doppioni.
+                            </p>
+                            <p v-else class="text-gray-500">Non c'è nessun ricontrollo da mettere in agenda.</p>
+                        </template>
+                    </div>
+                    <div class="flex justify-end gap-2 border-t border-gray-100 px-4 py-3">
+                        <button
+                            class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            :disabled="ricontrolli.inCorso"
+                            @click="chiudiRicontrolli"
+                        >Chiudi</button>
+                        <button
+                            v-if="! ricontrolli.esito && ricontrolli.anteprima?.creati.length"
+                            data-test="conferma-ricontrolli"
+                            class="rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                            :disabled="ricontrolli.inCorso"
+                            @click="confermaRicontrolli"
+                        >{{ ricontrolli.inCorso ? 'Creazione…' : (ricontrolli.anteprima.creati.length === 1 ? 'Crea 1 ordine' : `Crea ${ricontrolli.anteprima.creati.length} ordini`) }}</button>
                     </div>
                 </div>
             </div>

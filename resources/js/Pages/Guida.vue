@@ -228,6 +228,23 @@ function goTo(id) {
                             prossime valutazioni, le scadenze già assegnate non si toccano, e una data
                             scritta a mano non viene mai sovrascritta.
                         </p>
+                        <h3>Dal ricontrollo all'ordine di lavoro</h3>
+                        <p>
+                            La data di prossimo controllo non resta un promemoria da leggere: dalla
+                            barra delle azioni dell'elenco, <strong>"Metti in agenda i ricontrolli
+                            dovuti"</strong> crea un ordine di lavoro <strong>Ricontrollo VTA</strong>
+                            per ogni albero in scadenza entro 30 giorni (con il filtro Committente
+                            attivo, solo i suoi); <strong>"(selezione)"</strong> lo fa per gli alberi
+                            spuntati, qualunque sia la loro data. Prima di scrivere, una finestra dice
+                            quanti ordini nascerebbero e quali alberi restano fuori con il perché
+                            (nessuna valutazione, scadenza oltre la data scelta, scheda in archivio,
+                            ordine già presente). L'ordine nasce pianificato alla data prescritta, con
+                            l'albero già collegato e la valutazione richiamata nella descrizione: data
+                            e squadra si sistemano poi in agenda, e spostarle non fa rigenerare nulla.
+                            Rilanciare il comando non crea doppioni. Nel cruscotto <strong>Oggi</strong>
+                            il riquadro "Ricontrolli VTA" tiene il conto di quelli scaduti, in scadenza
+                            e ancora <strong>senza ordine di lavoro</strong>.
+                        </p>
                         <h3>L'anagrafica agronomica dell'albero</h3>
                         <p>
                             Nella scheda albero, oltre alle misure, ci sono le classificazioni a
