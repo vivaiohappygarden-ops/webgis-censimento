@@ -944,6 +944,30 @@ function goTo(id) {
                             consuntivi dei lavori assegnati, eseguire ispezioni su checklist e aprire segnalazioni:
                             tutto resta in coda sul dispositivo e parte da solo appena torna la rete.
                         </p>
+                        <h3>La schermata operativa</h3>
+                        <p>
+                            Chi lavora in campo, appena entra, si trova davanti la domanda
+                            <strong>"Che cosa devi fare?"</strong> e quattro riquadri grandi:
+                            <strong>Nuovo albero</strong> (con il tipo già scelto: si passa subito a
+                            posizione, specie e misure), <strong>Valutazione VTA</strong>,
+                            <strong>Aggiorna un albero</strong> (misure, fotografie, cartellino,
+                            segnalazione) e <strong>I miei lavori</strong>, con il conto di quanti ce ne
+                            sono per oggi. Sotto, in piccolo: scansiona un cartellino, censisci qualcosa
+                            che non è un albero, mappa e sincronizzazione. In cima si legge quanti
+                            elementi ci sono sul telefono e quanti sono ancora da inviare.
+                        </p>
+                        <p>
+                            Scegliendo VTA o "Aggiorna un albero" l'elenco mostra <strong>solo gli
+                            alberi</strong>, con un campo per cercarli per codice, tipo o specie. La
+                            scheda di valutazione si compila nel programma completo, quindi serve la
+                            rete: se non c'è, l'app lo dice subito e apre lo stesso la scheda
+                            dell'albero, dove misure e fotografie si registrano anche offline.
+                        </p>
+                        <p>
+                            Chi in campo non ci va (chi programma i lavori o gestisce gli utenti) continua
+                            ad atterrare nel programma completo; il passaggio fra le due parti è sempre a
+                            un tocco: "Campo (operatore)" nel menu laterale, "Gestione →" in alto nell'app.
+                        </p>
                         <h3>Il giro del giorno</h3>
                         <p>
                             In "I miei lavori" l'interruttore "Giro del giorno" ordina i lavori di oggi

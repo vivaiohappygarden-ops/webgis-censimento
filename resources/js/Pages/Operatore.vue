@@ -16,7 +16,7 @@ const canWorks = computed(() => (user.permissions ?? []).includes('works.view'))
 const db = openFieldDb(user.tenant_id, user.id);
 const sync = new SyncManager(db);
 
-const tab = ref('rilievo');
+const tab = ref('home');
 const state = reactive({ pending: 0, attention: 0, photos: 0, photosFailed: 0, syncing: false, online: navigator.onLine });
 const bootstrapped = ref(false);
 const areas = ref([]);
@@ -491,6 +491,12 @@ function switchTab(key) {
     consuntivo.open = false;
     inspectionRun.open = false;
     resetAssetIssue();
+    // Tornando alla schermata operativa si esce dall'operazione in corso:
+    // l'elenco degli elementi non deve restare filtrato senza motivo
+    if (key === 'home') {
+        azione.value = null;
+        filtroElementi.value = '';
+    }
     tab.value = key;
     refreshLocal();
     if (key === 'scansiona') {
@@ -760,6 +766,109 @@ function setMessage(text, ok = true) {
     message.ok = ok;
 }
 
+/*
+ * La schermata operativa: quattro cose grandi da toccare, non un elenco di
+ * menu. In campo si lavora con i guanti, con una mano sola e con il sole in
+ * faccia: il primo tocco deve gia' essere l'operazione, non la ricerca
+ * dell'operazione.
+ *
+ * "azione" ricorda perche' si sta scegliendo un albero: valutare (VTA) o
+ * aggiornare la scheda. Senza, l'elenco degli elementi sarebbe sempre lo
+ * stesso e il tocco successivo ambiguo.
+ */
+const azione = ref(null);
+const filtroElementi = ref('');
+// Gli id degli elementi che hanno una scheda albero sul dispositivo: servono
+// a mostrare i soli alberi quando si sta scegliendo che cosa valutare
+const idAlberi = ref(new Set());
+
+const elementiVisibili = computed(() => {
+    const testo = filtroElementi.value.trim().toLowerCase();
+    let righe = localAssets.value;
+
+    if (azione.value === 'vta' || azione.value === 'variazione') {
+        righe = righe.filter((a) => idAlberi.value.has(a.id));
+    }
+    if (testo) {
+        // Ricerca a parole come nel gestionale: ogni parola deve comparire
+        // da qualche parte fra codice, tipo e specie
+        const parole = testo.split(/\s+/).slice(0, 6);
+        righe = righe.filter((a) => {
+            const dove = `${a.census_code ?? ''} ${typeLabel(a)} ${a.tree_species ?? ''}`.toLowerCase();
+
+            return parole.every((parola) => dove.includes(parola));
+        });
+    }
+
+    return righe;
+});
+
+const alberiSulTelefono = computed(() => localAssets.value.filter((a) => idAlberi.value.has(a.id)).length);
+const daInviare = computed(() => state.pending + (state.photos ?? 0));
+
+/** I lavori di oggi e quelli in corso: il numero che serve sul blocco. */
+const lavoriDiOggi = computed(() => {
+    // Data locale, non UTC: a ridosso della mezzanotte i due fusi divergono
+    const d = new Date();
+    const oggi = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    return localOrders.value.filter((o) => eDelGiorno(o, oggi)).length;
+});
+
+function vaiA(quale) {
+    azione.value = null;
+    filtroElementi.value = '';
+
+    if (quale === 'albero') {
+        // Il tipo "albero" gia' scelto: il rilievo di una pianta e' quello
+        // che si fa cento volte al giorno, non deve costare una tendina
+        const albero = tipiRilievo.value.find((t) => t.requires_tree_record);
+        if (albero) form.typeId = albero.id;
+        if (! form.areaId && areas.value.length === 1) form.areaId = areas.value[0].id;
+        switchTab('rilievo');
+
+        return;
+    }
+    if (quale === 'elemento') {
+        form.typeId = '';
+        switchTab('rilievo');
+
+        return;
+    }
+    if (quale === 'vta' || quale === 'variazione') {
+        azione.value = quale;
+        switchTab('elementi');
+
+        return;
+    }
+
+    switchTab(quale);
+}
+
+/**
+ * Un albero scelto dall'elenco mentre si sta facendo qualcosa di preciso.
+ *
+ * La valutazione di stabilita' si compila nel programma completo, che sul
+ * telefono si apre solo con la rete: lo si dice prima di far perdere tempo,
+ * invece di aprire una pagina bianca in mezzo a un parco.
+ */
+function apriPerAzione(asset) {
+    if (azione.value === 'vta') {
+        if (! state.online) {
+            setMessage('Per la valutazione VTA serve la rete. Intanto puoi registrare misure e fotografie.', false);
+            azione.value = 'variazione';
+            openAsset(asset);
+
+            return;
+        }
+        window.location.href = `/censimento/${asset.id}?vta=1`;
+
+        return;
+    }
+
+    openAsset(asset);
+}
+
 async function refreshLocal() {
     // La mappa aperta si aggiorna insieme ai dati (sync, nuovi rilievi, tombstone)
     if (map && tab.value === 'mappa') await initOrRefreshMap();
@@ -775,6 +884,9 @@ async function refreshLocal() {
                 + (t.allowed_geometry === 'L' ? ' (linea)' : t.allowed_geometry === 'S' ? ' (superficie)' : ''),
         }));
     localAssets.value = (await db.assets.orderBy('updated_at').reverse().limit(200).toArray());
+    // Chi ha una scheda albero: l'elenco lo usa la schermata operativa per
+    // mostrare i soli alberi quando si sceglie che cosa valutare
+    idAlberi.value = new Set(await db.trees.toCollection().primaryKeys());
     localOrders.value = await db.work_orders.toArray();
     // I punti seguono i lavori: dopo un sync un ordine nuovo o cambiato deve
     // entrare nel giro con la sua posizione
@@ -1311,6 +1423,88 @@ onBeforeUnmount(() => {
                 data-test="message"
             >{{ message.text }}</p>
 
+            <!-- SCHERMATA OPERATIVA: le quattro cose che si fanno in campo -->
+            <section v-if="tab === 'home'" data-test="op-home">
+                <h1 class="text-base font-semibold">Che cosa devi fare?</h1>
+                <p class="mt-1 text-xs text-gray-500">
+                    {{ localAssets.length }} element{{ localAssets.length === 1 ? 'o' : 'i' }} sul telefono
+                    ({{ alberiSulTelefono }} alber{{ alberiSulTelefono === 1 ? 'o' : 'i' }})<template v-if="daInviare">
+                    · <span class="font-medium text-amber-700">{{ daInviare }} da inviare</span></template>
+                </p>
+
+                <p v-if="! bootstrapped" class="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-sm text-amber-900" data-test="op-home-scarica">
+                    Prima di andare in campo scarica i dati di lavoro: tocca <strong>Sincronizza</strong> qui sotto.
+                </p>
+
+                <div class="mt-3 grid grid-cols-2 gap-3">
+                    <button
+                        class="flex min-h-32 flex-col justify-between rounded-2xl bg-green-700 p-4 text-left text-white active:bg-green-800"
+                        data-test="op-home-albero"
+                        @click="vaiA('albero')"
+                    >
+                        <span class="text-base font-semibold leading-tight">Nuovo albero</span>
+                        <span class="text-xs opacity-90">Posizione GPS, specie, misure e foto</span>
+                    </button>
+
+                    <button
+                        class="flex min-h-32 flex-col justify-between rounded-2xl border-2 border-green-700 bg-white p-4 text-left text-green-900 active:bg-green-50"
+                        data-test="op-home-vta"
+                        @click="vaiA('vta')"
+                    >
+                        <span class="text-base font-semibold leading-tight">Valutazione VTA</span>
+                        <span class="text-xs text-gray-600">
+                            Scegli l'albero e compila la scheda<template v-if="! state.online"> (serve la rete)</template>
+                        </span>
+                    </button>
+
+                    <button
+                        class="flex min-h-32 flex-col justify-between rounded-2xl border-2 border-green-700 bg-white p-4 text-left text-green-900 active:bg-green-50"
+                        data-test="op-home-variazione"
+                        @click="vaiA('variazione')"
+                    >
+                        <span class="text-base font-semibold leading-tight">Aggiorna un albero</span>
+                        <span class="text-xs text-gray-600">Misure, fotografie, cartellino, segnalazione</span>
+                    </button>
+
+                    <button
+                        v-if="canWorks"
+                        class="flex min-h-32 flex-col justify-between rounded-2xl border-2 border-green-700 bg-white p-4 text-left text-green-900 active:bg-green-50"
+                        data-test="op-home-lavori"
+                        @click="vaiA('lavori')"
+                    >
+                        <span class="text-base font-semibold leading-tight">I miei lavori</span>
+                        <span class="text-xs text-gray-600">
+                            {{ lavoriDiOggi }} da fare oggi · giro e consuntivi
+                        </span>
+                    </button>
+                    <button
+                        v-else
+                        class="flex min-h-32 flex-col justify-between rounded-2xl border-2 border-green-700 bg-white p-4 text-left text-green-900 active:bg-green-50"
+                        data-test="op-home-mappa"
+                        @click="vaiA('mappa')"
+                    >
+                        <span class="text-base font-semibold leading-tight">Mappa</span>
+                        <span class="text-xs text-gray-600">Dove sono gli elementi intorno a te</span>
+                    </button>
+                </div>
+
+                <!-- La seconda fila: cose che si fanno spesso ma non sono il lavoro -->
+                <div class="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <button class="rounded-xl border border-gray-300 bg-white px-3 py-3 font-medium active:bg-gray-50" data-test="op-home-scansiona" @click="vaiA('scansiona')">
+                        Scansiona cartellino
+                    </button>
+                    <button class="rounded-xl border border-gray-300 bg-white px-3 py-3 font-medium active:bg-gray-50" data-test="op-home-elemento" @click="vaiA('elemento')">
+                        Censisci altro (siepe, prato…)
+                    </button>
+                    <button v-if="canWorks" class="rounded-xl border border-gray-300 bg-white px-3 py-3 font-medium active:bg-gray-50" @click="vaiA('mappa')">
+                        Mappa
+                    </button>
+                    <button class="rounded-xl border border-gray-300 bg-white px-3 py-3 font-medium active:bg-gray-50" data-test="op-home-sync" @click="vaiA('sync')">
+                        Sincronizza<template v-if="daInviare"> ({{ daInviare }})</template>
+                    </button>
+                </div>
+            </section>
+
             <!-- RILIEVO -->
             <section v-if="tab === 'rilievo'">
                 <h1 class="text-base font-semibold">Nuovo rilievo</h1>
@@ -1465,13 +1659,27 @@ onBeforeUnmount(() => {
 
             <!-- ELEMENTI -->
             <section v-if="tab === 'elementi'">
-                <h1 class="text-base font-semibold">Elementi sul dispositivo ({{ localAssets.length }})</h1>
+                <h1 class="text-base font-semibold">
+                    <template v-if="azione === 'vta'">Quale albero devi valutare?</template>
+                    <template v-else-if="azione === 'variazione'">Quale albero devi aggiornare?</template>
+                    <template v-else>Elementi sul dispositivo ({{ localAssets.length }})</template>
+                </h1>
+                <p v-if="azione" class="mt-1 text-xs text-gray-500" data-test="op-elenco-azione">
+                    Solo alberi ({{ elementiVisibili.length }}).
+                    <template v-if="azione === 'vta'">La scheda di valutazione si apre nel programma completo.</template>
+                </p>
+                <input
+                    v-model="filtroElementi"
+                    class="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                    placeholder="Cerca per codice, tipo o specie"
+                    data-test="op-cerca-elemento"
+                >
                 <ul class="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white" data-test="local-assets">
                     <li
-                        v-for="a in localAssets"
+                        v-for="a in elementiVisibili"
                         :key="a.id"
                         class="flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50"
-                        @click="openAsset(a)"
+                        @click="apriPerAzione(a)"
                     >
                         <div class="min-w-0 flex-1">
                             <div class="font-medium">{{ a.census_code || a.id.slice(0, 8) }}</div>
@@ -1483,8 +1691,10 @@ onBeforeUnmount(() => {
                         >da inviare</span>
                         <span v-else class="text-xs text-gray-400">v{{ a.version }}</span>
                     </li>
-                    <li v-if="! localAssets.length" class="px-4 py-5 text-sm text-gray-400">
-                        Nessun elemento sul dispositivo. Scarica i dati di lavoro.
+                    <li v-if="! elementiVisibili.length" class="px-4 py-5 text-sm text-gray-400">
+                        <template v-if="filtroElementi.trim()">Nessun elemento trovato con questa ricerca.</template>
+                        <template v-else-if="azione">Nessun albero sul dispositivo. Scarica i dati di lavoro.</template>
+                        <template v-else>Nessun elemento sul dispositivo. Scarica i dati di lavoro.</template>
                     </li>
                 </ul>
             </section>
@@ -2191,10 +2401,10 @@ onBeforeUnmount(() => {
         >
             <button
                 v-for="item in [
+                    { key: 'home', label: 'Home' },
                     { key: 'rilievo', label: 'Rilievo' },
                     { key: 'mappa', label: 'Mappa' },
                     ...(canWorks ? [{ key: 'lavori', label: 'Lavori' }] : []),
-                    { key: 'elementi', label: 'Elementi' },
                     { key: 'scansiona', label: 'Scansiona' },
                     { key: 'sync', label: 'Sync' },
                 ]"
