@@ -57,7 +57,10 @@ class UserAdminController extends Controller implements HasMiddleware
         $data = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'email' => ['required', 'email', 'max:255'],
-            'role' => ['required', Rule::in(array_keys(TenantProvisioner::ROLES))],
+            // Qualunque ruolo del tenant, non solo quelli di serie: dalla
+            // pagina Ruoli se ne possono creare su misura
+            'role' => ['required', 'string', Rule::exists('roles', 'name')
+                ->where(fn ($q) => $q->where('tenant_id', $request->user()->tenant_id))],
             'client_id' => ['required_if:role,cliente', 'nullable', 'uuid'],
         ]);
 
@@ -102,7 +105,8 @@ class UserAdminController extends Controller implements HasMiddleware
 
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:150'],
-            'role' => ['sometimes', Rule::in(array_keys(TenantProvisioner::ROLES))],
+            'role' => ['sometimes', 'string', Rule::exists('roles', 'name')
+                ->where(fn ($q) => $q->where('tenant_id', $me->tenant_id))],
             'client_id' => ['nullable', 'uuid'],
             'is_active' => ['sometimes', 'boolean'],
             'notify_email' => ['sometimes', 'boolean'],

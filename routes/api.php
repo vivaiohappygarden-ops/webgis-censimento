@@ -113,6 +113,10 @@ Route::prefix('v1')->group(function () {
         Route::post('users', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'store']);
         Route::patch('users/{id}', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'update'])->whereUuid('id');
         Route::post('users/{id}/reset-password', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'resetPassword'])->whereUuid('id');
+        Route::get('roles', [\App\Http\Controllers\Api\V1\RoleAdminController::class, 'index']);
+        Route::post('roles', [\App\Http\Controllers\Api\V1\RoleAdminController::class, 'store']);
+        Route::patch('roles/{id}', [\App\Http\Controllers\Api\V1\RoleAdminController::class, 'update'])->whereUuid('id');
+        Route::delete('roles/{id}', [\App\Http\Controllers\Api\V1\RoleAdminController::class, 'destroy'])->whereUuid('id');
 
         // Stati di avanzamento lavori (SAL)
         Route::get('sals', [\App\Http\Controllers\Api\V1\SalController::class, 'index']);

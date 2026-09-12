@@ -58,6 +58,82 @@ async function fetchAllClients() {
     return all;
 }
 
+/*
+ * I ruoli: i cinque di serie piu' quelli su misura del committente. Il
+ * catalogo dei permessi arriva dal server insieme all'elenco, cosi' la
+ * pagina non deve conoscerli per conto suo (al primo permesso nuovo
+ * mostrerebbe una casella in meno senza dirlo).
+ */
+const ruoli = ref([]);
+const catalogoPermessi = ref([]);
+const ruoloEditor = reactive({ aperto: false, id: null, nome: '', permessi: [], diSistema: false, busy: false, error: '' });
+
+const gruppiPermessi = computed(() => {
+    const mappa = new Map();
+    for (const p of catalogoPermessi.value) {
+        if (! mappa.has(p.gruppo)) mappa.set(p.gruppo, []);
+        mappa.get(p.gruppo).push(p);
+    }
+
+    return [...mappa.entries()].map(([nome, voci]) => ({ nome, voci }));
+});
+
+const nomePermesso = (chiave) => catalogoPermessi.value.find((p) => p.chiave === chiave)?.nome ?? chiave;
+
+function apriRuolo(ruolo = null) {
+    ruoloEditor.aperto = true;
+    ruoloEditor.error = '';
+    ruoloEditor.id = ruolo?.id ?? null;
+    ruoloEditor.nome = ruolo?.nome ?? '';
+    ruoloEditor.permessi = [...(ruolo?.permessi ?? [])];
+    ruoloEditor.diSistema = !! ruolo?.di_sistema;
+}
+
+async function salvaRuolo() {
+    ruoloEditor.busy = true;
+    ruoloEditor.error = '';
+    try {
+        const corpo = { permessi: ruoloEditor.permessi };
+        if (! ruoloEditor.diSistema) corpo.nome = ruoloEditor.nome.trim();
+        if (ruoloEditor.id) {
+            await axios.patch(`/api/v1/roles/${ruoloEditor.id}`, corpo);
+        } else {
+            await axios.post('/api/v1/roles', corpo);
+        }
+        ruoloEditor.aperto = false;
+        await caricaRuoli();
+    } catch (err) {
+        ruoloEditor.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? avvisoCaricamento(err);
+    } finally {
+        ruoloEditor.busy = false;
+    }
+}
+
+async function eliminaRuolo(ruolo) {
+    if (! window.confirm(`Eliminare il ruolo "${ruolo.nome}"?`)) return;
+    try {
+        await axios.delete(`/api/v1/roles/${ruolo.id}`);
+        await caricaRuoli();
+    } catch (err) {
+        pageError.value = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? avvisoCaricamento(err);
+    }
+}
+
+async function caricaRuoli() {
+    const { data } = await axios.get('/api/v1/roles');
+    ruoli.value = data.data;
+    catalogoPermessi.value = data.permessi;
+}
+
+// I ruoli assegnabili nelle tendine degli utenti: quelli veri del server,
+// non un elenco fisso scritto in pagina
+const ruoliAssegnabili = computed(() => ruoli.value.map((r) => ({
+    valore: r.nome,
+    etichetta: ROLE_LABELS[r.nome] ?? r.nome,
+})));
+
 async function load() {
     loading.value = true;
     pageError.value = '';
@@ -65,6 +141,7 @@ async function load() {
         const [u, c] = await Promise.all([
             axios.get('/api/v1/users'),
             fetchAllClients(),
+            caricaRuoli(),
         ]);
         users.value = u.data.data;
         clients.value = c;
@@ -522,6 +599,131 @@ onMounted(() => {
                 </table>
             </div>
 
+            <!-- Ruoli e permessi -->
+            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" data-test="ruoli">
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                        <h2 class="text-sm font-semibold">Ruoli e permessi</h2>
+                        <p class="mt-1 text-xs text-gray-500">
+                            Chi può fare cosa. I cinque ruoli di serie restano (il programma li chiama per
+                            nome) ma i loro permessi si cambiano, tranne quelli dell'amministratore; e se ne
+                            possono creare di nuovi su misura.
+                        </p>
+                    </div>
+                    <button
+                        class="rounded-lg border border-green-700 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-50"
+                        data-test="ruolo-nuovo"
+                        @click="apriRuolo()"
+                    >Nuovo ruolo</button>
+                </div>
+
+                <div class="mt-3 overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
+                                <th class="py-2 pr-3 font-medium">Ruolo</th>
+                                <th class="py-2 pr-3 font-medium">Utenti</th>
+                                <th class="py-2 pr-3 font-medium">Permessi</th>
+                                <th class="py-2" />
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-50">
+                            <tr v-for="r in ruoli" :key="r.id" data-test="ruolo-riga">
+                                <td class="py-2 pr-3 font-medium">
+                                    {{ ROLE_LABELS[r.nome] ?? r.nome }}
+                                    <span v-if="r.di_sistema" class="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500">di serie</span>
+                                </td>
+                                <td class="py-2 pr-3 text-gray-600">{{ r.utenti }}</td>
+                                <td class="py-2 pr-3">
+                                    <span v-if="r.intoccabile" class="text-xs text-gray-500">tutti i permessi</span>
+                                    <span v-else class="flex flex-wrap gap-1">
+                                        <span
+                                            v-for="p in r.permessi"
+                                            :key="p"
+                                            class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-700"
+                                        >{{ nomePermesso(p) }}</span>
+                                        <span v-if="! r.permessi.length" class="text-xs text-gray-400">nessuno</span>
+                                    </span>
+                                </td>
+                                <td class="py-2 text-right whitespace-nowrap">
+                                    <button
+                                        v-if="! r.intoccabile"
+                                        class="text-xs font-medium text-green-800 hover:underline"
+                                        :data-test="`ruolo-modifica-${r.nome}`"
+                                        @click="apriRuolo(r)"
+                                    >Permessi</button>
+                                    <button
+                                        v-if="! r.di_sistema"
+                                        class="ml-3 text-xs font-medium text-red-700 hover:underline"
+                                        :data-test="`ruolo-elimina-${r.nome}`"
+                                        @click="eliminaRuolo(r)"
+                                    >Elimina</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Finestra dei permessi -->
+                <div v-if="ruoloEditor.aperto" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4" data-test="ruolo-editor">
+                    <div class="w-full max-w-2xl rounded-xl bg-white shadow-xl">
+                        <div class="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                            <h3 class="text-sm font-semibold">{{ ruoloEditor.id ? 'Permessi del ruolo' : 'Nuovo ruolo' }}</h3>
+                            <button class="px-1 text-gray-400 hover:text-gray-600" :disabled="ruoloEditor.busy" @click="ruoloEditor.aperto = false">&#10005;</button>
+                        </div>
+                        <div class="max-h-[70vh] space-y-3 overflow-y-auto px-4 py-3 text-sm">
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Nome del ruolo</span>
+                                <input
+                                    v-model="ruoloEditor.nome"
+                                    :disabled="ruoloEditor.diSistema"
+                                    data-test="ruolo-nome"
+                                    class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm disabled:bg-gray-50"
+                                    placeholder="es. Capo squadra"
+                                >
+                                <span v-if="ruoloEditor.diSistema" class="mt-1 block text-gray-400">
+                                    I ruoli di serie non si rinominano: il programma li chiama per nome.
+                                </span>
+                            </label>
+
+                            <div v-for="g in gruppiPermessi" :key="g.nome">
+                                <p class="mb-1 text-xs font-semibold text-gray-500">{{ g.nome }}</p>
+                                <div class="grid gap-1 sm:grid-cols-2">
+                                    <label v-for="p in g.voci" :key="p.chiave" class="flex items-start gap-2">
+                                        <input
+                                            v-model="ruoloEditor.permessi"
+                                            type="checkbox"
+                                            :value="p.chiave"
+                                            class="mt-0.5 rounded border-gray-300"
+                                            :data-test="`permesso-${p.chiave}`"
+                                        >
+                                        <span>
+                                            {{ p.nome }}
+                                            <span class="block text-xs text-gray-400">{{ p.spiegazione }}</span>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <p class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                I due permessi dei <strong>portali esterni</strong> non si mescolano con gli
+                                altri: un ruolo è o di studio o di portale.
+                            </p>
+                            <p v-if="ruoloEditor.error" class="rounded-lg bg-red-50 px-3 py-2 text-red-700" data-test="ruolo-errore">{{ ruoloEditor.error }}</p>
+                        </div>
+                        <div class="flex justify-end gap-2 border-t border-gray-100 px-4 py-3">
+                            <button class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50" :disabled="ruoloEditor.busy" @click="ruoloEditor.aperto = false">Annulla</button>
+                            <button
+                                class="rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                                :disabled="ruoloEditor.busy || (! ruoloEditor.diSistema && ruoloEditor.nome.trim().length < 3) || ! ruoloEditor.permessi.length"
+                                data-test="ruolo-salva"
+                                @click="salvaRuolo"
+                            >{{ ruoloEditor.busy ? 'Salvataggio…' : 'Salva' }}</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Intestazione e firma dei documenti stampati -->
             <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" data-test="perizia-settings">
                 <h2 class="text-sm font-semibold">Intestazione e firma dei documenti</h2>
@@ -735,7 +937,7 @@ onMounted(() => {
                             <label class="block text-xs">
                                 <span class="text-gray-500">Ruolo</span>
                                 <select v-model="creator.form.role" data-test="usr-role" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
-                                    <option v-for="(label, value) in ROLE_LABELS" :key="value" :value="value">{{ label }}</option>
+                                    <option v-for="r in ruoliAssegnabili" :key="r.valore" :value="r.valore">{{ r.etichetta }}</option>
                                 </select>
                             </label>
                             <label v-if="creator.form.role === 'cliente'" class="block text-xs">
@@ -774,7 +976,7 @@ onMounted(() => {
                             <label class="block text-xs">
                                 <span class="text-gray-500">Ruolo</span>
                                 <select v-model="editor.form.role" data-test="usr-edit-role" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
-                                    <option v-for="(label, value) in ROLE_LABELS" :key="value" :value="value">{{ label }}</option>
+                                    <option v-for="r in ruoliAssegnabili" :key="r.valore" :value="r.valore">{{ r.etichetta }}</option>
                                 </select>
                             </label>
                             <label v-if="editor.form.role === 'cliente'" class="block text-xs">

@@ -1079,6 +1079,29 @@ function goTo(id) {
                             (la sua storia resta); "Nuova password" rimedia a una password dimenticata.
                             Non è possibile disattivare sé stessi né l'ultimo amministratore attivo.
                         </p>
+                        <h3>Ruoli e permessi su misura</h3>
+                        <p>
+                            Il riquadro <strong>"Ruoli e permessi"</strong> mostra chi può fare cosa. I
+                            cinque ruoli di serie (amministratore, tecnico, operatore, cliente del portale,
+                            impresa esterna) restano sempre, perché il programma li chiama per nome, ma
+                            <strong>i loro permessi si possono cambiare</strong>: se da voi il tecnico non
+                            deve poter cancellare le schede, si toglie quella spunta e vale da subito.
+                        </p>
+                        <p>
+                            Con <strong>"Nuovo ruolo"</strong> se ne creano di propri — "capo squadra",
+                            "agronomo esterno", "ufficio tecnico in sola lettura" — spuntando i permessi
+                            uno per uno, ognuno spiegato in italiano. Il ruolo nuovo compare subito fra
+                            quelli assegnabili a un utente. Un ruolo su misura si elimina solo quando non
+                            è più assegnato a nessuno: prima si spostano le persone su un altro ruolo.
+                        </p>
+                        <p>
+                            Due cose non si possono fare, ed è meglio così. L'<strong>amministratore</strong>
+                            non si modifica: è il ruolo che tiene aperta la porta, e restringerlo
+                            significherebbe chiudersi fuori da soli. E i due permessi dei
+                            <strong>portali esterni</strong> (committente e impresa) non si mescolano con
+                            quelli del gestionale: un ruolo è o di studio o di portale, altrimenti si
+                            finirebbe per mostrare a qualcuno dati che non sono suoi.
+                        </p>
                     </section>
 
                     <section id="ricerca">
