@@ -112,6 +112,55 @@ const applicaDataRilievo = () => azioneMultipla(
     (d) => d.modificati.length,
 );
 
+/*
+ * Specie e misure su piu' alberi: e' l'azione piu' pericolosa della pagina,
+ * quindi si sceglie campo per campo (una casella per ciascuno) e di serie si
+ * riempiono solo i vuoti. Cosi' completare un censimento importato non
+ * cancella il lavoro di nessuno.
+ */
+const agronomia = computed(() => page.props.agronomia ?? {});
+const CAMPI_SCHEDA = [
+    { chiave: 'genus', etichetta: 'Genere', tipo: 'text' },
+    { chiave: 'species', etichetta: 'Specie', tipo: 'text' },
+    { chiave: 'cultivar', etichetta: 'Cultivar', tipo: 'text' },
+    { chiave: 'common_name', etichetta: 'Nome comune', tipo: 'text' },
+    { chiave: 'height_m', etichetta: 'Altezza (m)', tipo: 'number' },
+    { chiave: 'dbh_cm', etichetta: 'Diametro del tronco (cm)', tipo: 'number' },
+    { chiave: 'trunk_circumference_cm', etichetta: 'Circonferenza del tronco (cm)', tipo: 'number' },
+    { chiave: 'crown_diameter_m', etichetta: 'Diametro della chioma (m)', tipo: 'number' },
+    { chiave: 'crown_insertion_m', etichetta: 'Inserzione della chioma (m)', tipo: 'number' },
+    { chiave: 'trunk_count', etichetta: 'Numero di fusti', tipo: 'number' },
+    { chiave: 'age_years_est', etichetta: 'Età stimata (anni)', tipo: 'number' },
+    { chiave: 'age_qualifier', etichetta: "Qualificatore dell'età", tipo: 'select', voci: 'qualificatore_eta' },
+    { chiave: 'age_class', etichetta: 'Fase fisiologica', tipo: 'select', voci: 'fase_fisiologica' },
+    { chiave: 'vegetative_state', etichetta: 'Stato vegetativo', tipo: 'select', voci: 'stato_vegetativo' },
+    { chiave: 'social_position', etichetta: 'Posizione sociale', tipo: 'select', voci: 'posizione_sociale' },
+    { chiave: 'growth_site', etichetta: 'Sito di crescita', tipo: 'select', voci: 'sito_di_crescita' },
+    { chiave: 'target', etichetta: 'Bersaglio', tipo: 'select', voci: 'bersaglio' },
+];
+const scheda = reactive({ aperta: false, soloVuoti: true, scelti: {}, valori: {} });
+
+const campiScelti = computed(() => Object.fromEntries(
+    CAMPI_SCHEDA
+        .filter((c) => scheda.scelti[c.chiave])
+        // Campo spuntato e lasciato vuoto: si svuota il valore sull'albero.
+        // Ha senso solo quando NON si stanno riempiendo i buchi
+        .map((c) => [c.chiave, scheda.valori[c.chiave] === '' || scheda.valori[c.chiave] === undefined
+            ? null
+            : scheda.valori[c.chiave]]),
+));
+
+const applicaScheda = () => azioneMultipla(
+    (prova) => axios.post('/api/v1/azioni/alberi', {
+        ids: selezionati.value,
+        campi: campiScelti.value,
+        solo_vuoti: scheda.soloVuoti ? 1 : 0,
+        prova: prova ? 1 : 0,
+    }),
+    (d) => `Scheda aggiornata su ${d.modificati.length} alber${d.modificati.length === 1 ? 'o' : 'i'}.`,
+    (d) => d.modificati.length,
+);
+
 const collegaAOrdine = () => azioneMultipla(
     (prova) => axios.post(`/api/v1/azioni/lavori/${ordineScelto.value}/collega-elementi`, {
         ids: selezionati.value, prova: prova ? 1 : 0,
@@ -727,6 +776,13 @@ const dataAbbattimento = (row) => {
                         >Applica</button>
                     </label>
 
+                    <button
+                        class="rounded-lg border border-green-700 px-3 py-1.5 font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
+                        :disabled="azioneInCorso"
+                        data-test="multipla-scheda"
+                        @click="scheda.aperta = ! scheda.aperta"
+                    >Specie e misure{{ scheda.aperta ? ' ✕' : '…' }}</button>
+
                     <label class="flex items-center gap-2">
                         <span class="text-gray-600">Aggiungi a un lavoro</span>
                         <ScegliVoce
@@ -753,6 +809,69 @@ const dataAbbattimento = (row) => {
                 </div>
 
                 <p v-if="esitoMultiplo" class="mt-2 text-gray-700">{{ esitoMultiplo }}</p>
+            </div>
+
+            <!-- Specie e misure: una casella per campo, e di serie solo i vuoti -->
+            <div
+                v-if="selezionabile && selezionati.length && scheda.aperta"
+                data-test="scheda-multipla"
+                class="mb-3 rounded-xl border border-green-200 bg-white px-4 py-3 text-sm"
+            >
+                <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <p class="font-medium">Specie e misure sui {{ selezionati.length }} elementi selezionati</p>
+                    <label class="flex items-center gap-2 text-gray-700">
+                        <input v-model="scheda.soloVuoti" type="checkbox" class="rounded border-gray-300" data-test="scheda-solo-vuoti">
+                        Riempi solo dove il campo è vuoto
+                    </label>
+                </div>
+                <p class="mb-3 text-xs" :class="scheda.soloVuoti ? 'text-gray-500' : 'text-amber-800'">
+                    {{ scheda.soloVuoti
+                        ? 'I valori già presenti non vengono toccati: vengono elencati fra gli esclusi.'
+                        : 'Attenzione: i valori già presenti nei campi spuntati verranno sostituiti. Un campo spuntato e lasciato vuoto svuota il dato.' }}
+                </p>
+                <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    <div v-for="c in CAMPI_SCHEDA" :key="c.chiave" class="flex items-center gap-2">
+                        <input
+                            v-model="scheda.scelti[c.chiave]"
+                            type="checkbox"
+                            class="rounded border-gray-300"
+                            :data-test="`scheda-scegli-${c.chiave}`"
+                            :aria-label="c.etichetta"
+                        >
+                        <span class="w-44 shrink-0 text-xs text-gray-600">{{ c.etichetta }}</span>
+                        <select
+                            v-if="c.tipo === 'select'"
+                            v-model="scheda.valori[c.chiave]"
+                            :disabled="! scheda.scelti[c.chiave]"
+                            class="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50"
+                            :data-test="`scheda-valore-${c.chiave}`"
+                        >
+                            <option value="">—</option>
+                            <option v-for="voce in (agronomia[c.voci] ?? [])" :key="voce" :value="voce">{{ voce }}</option>
+                        </select>
+                        <input
+                            v-else
+                            v-model="scheda.valori[c.chiave]"
+                            :type="c.tipo"
+                            step="any"
+                            :disabled="! scheda.scelti[c.chiave]"
+                            class="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50"
+                            :data-test="`scheda-valore-${c.chiave}`"
+                        >
+                    </div>
+                </div>
+                <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                        class="rounded-lg bg-green-700 px-3 py-1.5 font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                        :disabled="azioneInCorso || ! Object.keys(campiScelti).length"
+                        data-test="scheda-anteprima"
+                        @click="applicaScheda"
+                    >Anteprima</button>
+                    <span class="text-xs text-gray-500">
+                        {{ Object.keys(campiScelti).length }} {{ Object.keys(campiScelti).length === 1 ? 'campo scelto' : 'campi scelti' }};
+                        prima di scrivere si legge quante schede cambierebbero davvero.
+                    </span>
+                </div>
             </div>
 
             <ul

@@ -678,6 +678,29 @@ function goTo(id) {
                             filtro o pagina, cosi' non ti ritrovi ad agire su righe che non stai piu'
                             vedendo.
                         </p>
+                        <h3>Specie e misure su tanti alberi</h3>
+                        <p class="mt-2">
+                            Il pulsante <strong>"Specie e misure…"</strong> della barra apre un riquadro
+                            con <strong>una casella per ogni campo</strong>: genere, specie, cultivar,
+                            nome comune, altezza, diametro del tronco, circonferenza, chioma, inserzione,
+                            numero di fusti, età stimata e le tendine agronomiche. Si scrive solo dove hai
+                            spuntato: i campi non spuntati non vengono toccati, nemmeno per sbaglio.
+                        </p>
+                        <p class="mt-2">
+                            La spunta <strong>"Riempi solo dove il campo è vuoto"</strong> è attiva di
+                            serie: è il modo giusto per completare un censimento importato senza
+                            cancellare quello che c'è già. Togliendola, i valori esistenti vengono
+                            sostituiti, e il riquadro te lo dice a chiare lettere; un campo spuntato e
+                            lasciato vuoto svuota il dato.
+                        </p>
+                        <p class="mt-2">
+                            Come tutte le azioni di gruppo, prima conta: l'anteprima dice quante schede
+                            cambierebbero <em>davvero</em> (un valore già uguale non è una modifica) e
+                            perché le altre restano fuori: campo già compilato, elemento in archivio,
+                            oppure non è una scheda albero. Ogni modifica finisce nello
+                            <strong>storico della scheda</strong> con la revisione precedente, l'autore e
+                            la data: si vede sempre com'era prima.
+                        </p>
                         <p class="mt-2">
                             <strong>Prima di eseguire, il programma conta.</strong> Premendo un'azione di
                             gruppo non succede ancora niente: compare un riquadro che dice quante righe

@@ -76,13 +76,39 @@ class AzioniMultiple
     }
 
     /**
+     * Campi della scheda albero che si possono cambiare in blocco, con
+     * l'etichetta con cui si mostrano. L'elenco sta qui e basta: lo usano
+     * la validazione dell'API, il riepilogo dell'anteprima e la finestra.
+     */
+    public const CAMPI_ALBERO = [
+        'genus' => 'Genere',
+        'species' => 'Specie',
+        'cultivar' => 'Cultivar',
+        'common_name' => 'Nome comune',
+        'height_m' => 'Altezza (m)',
+        'dbh_cm' => 'Diametro del tronco (cm)',
+        'trunk_circumference_cm' => 'Circonferenza del tronco (cm)',
+        'crown_diameter_m' => 'Diametro della chioma (m)',
+        'crown_insertion_m' => 'Inserzione della chioma (m)',
+        'trunk_count' => 'Numero di fusti',
+        'age_years_est' => "Eta' stimata (anni)",
+        'age_qualifier' => "Qualificatore dell'eta'",
+        'age_class' => 'Fase fisiologica',
+        'vegetative_state' => 'Stato vegetativo',
+        'social_position' => 'Posizione sociale',
+        'growth_site' => 'Sito di crescita',
+        'target' => 'Bersaglio',
+    ];
+
+    /**
      * Modifica gli stessi campi su piu' elementi censiti.
      *
      * Si toccano solo campi che hanno senso in blocco: la visibilita' sul
-     * portale pubblico e la data di rilievo. Specie, misure e geometria
-     * restano fuori perche' sono dati del singolo albero; lo stato resta
-     * fuori perche' l'abbattimento ha un suo flusso, e cambiarlo da qui
-     * lascerebbe data di rimozione e scheda albero disallineate.
+     * portale pubblico e la data di rilievo. La geometria resta fuori perche'
+     * e' il posto di quel singolo elemento; lo stato resta fuori perche'
+     * l'abbattimento ha un suo flusso, e cambiarlo da qui lascerebbe data di
+     * rimozione e scheda albero disallineate. Specie e misure hanno una
+     * strada tutta loro, con le sue difese: modificaAlberi() qui sotto.
      *
      * @param  list<string>  $ids
      */
@@ -203,5 +229,136 @@ class AzioniMultiple
         });
 
         return ['collegati' => $fatti, 'saltati' => $saltati];
+    }
+
+    /**
+     * Modifica specie e misure su piu' alberi in una volta.
+     *
+     * E' l'azione piu' pericolosa del programma: applicata alla selezione
+     * sbagliata riscrive il censimento. Per questo ha tre difese, e nessuna
+     * e' facoltativa:
+     *
+     *  1. si scrivono SOLO i campi scelti uno per uno (chi non compare nella
+     *     richiesta non viene toccato, nemmeno per svuotarlo);
+     *  2. con $soloVuoti si riempiono i buchi e basta: dove un valore c'e'
+     *     gia', si salta e lo si dichiara. E' il modo giusto per completare
+     *     un censimento importato senza cancellare il lavoro di nessuno;
+     *  3. l'anteprima conta le righe che cambierebbero davvero, non quelle
+     *     selezionate: un valore gia' uguale non e' una modifica.
+     *
+     * Ordine di scrittura obbligato (vedi CLAUDE.md): prima si prepara la
+     * scheda albero senza salvarla, poi si incrementa la versione della
+     * scheda (li' scatta la fotografia dello storico, che deve riprendere i
+     * valori VECCHI), e solo alla fine si salva l'albero. Invertirlo fa
+     * mentire lo storico.
+     *
+     * @param  list<string>  $ids
+     * @param  array<string, mixed>  $campi
+     * @return array{modificati: list<array>, saltati: list<array>}
+     */
+    public static function modificaAlberi(array $ids, array $campi, bool $soloVuoti, User $utente, bool $prova = false): array
+    {
+        $fatti = [];
+        $saltati = [];
+
+        DB::transaction(function () use ($ids, $campi, $soloVuoti, $utente, $prova, &$fatti, &$saltati) {
+            $elementi = Asset::query()->with('tree')->whereIn('id', $ids)->lockForUpdate()->get();
+
+            foreach (array_diff($ids, $elementi->pluck('id')->all()) as $mancante) {
+                $saltati[] = ['id' => $mancante, 'codice' => null, 'motivo' => 'Elemento non trovato.'];
+            }
+
+            foreach ($elementi as $elemento) {
+                $base = ['id' => $elemento->id, 'codice' => $elemento->census_code];
+
+                if (\App\Support\AssetStatus::inArchivio($elemento->status)) {
+                    $saltati[] = [...$base,
+                        'motivo' => 'In archivio ('.\App\Support\AssetStatus::label($elemento->status).'): si modifica solo dopo il ripristino.'];
+
+                    continue;
+                }
+                if ($elemento->tree === null) {
+                    $saltati[] = [...$base, 'motivo' => "Non e' una scheda albero."];
+
+                    continue;
+                }
+
+                [$daScrivere, $motivi] = self::campiDaScrivere($elemento->tree, $campi, $soloVuoti);
+
+                if ($daScrivere === []) {
+                    $saltati[] = [...$base, 'motivo' => implode(' ', $motivi) ?: 'Nessun campo da cambiare.'];
+
+                    continue;
+                }
+
+                if (! $prova) {
+                    // 1. si prepara la specializzazione, senza salvarla
+                    $elemento->tree->fill($daScrivere);
+
+                    // 2. si incrementa la versione della scheda: la fotografia
+                    //    dello storico scatta qui e riprende i valori vecchi
+                    DB::update('UPDATE assets SET version = version + 1, updated_at = now(), updated_by = ? WHERE id = ?', [
+                        $utente->id, $elemento->id,
+                    ]);
+
+                    // 3. e solo adesso si salva l'albero
+                    $elemento->tree->save();
+
+                    Audit::log('asset.updated', $elemento, [
+                        'multipla' => true,
+                        'campi_albero' => array_keys($daScrivere),
+                        'solo_vuoti' => $soloVuoti,
+                    ]);
+                }
+
+                $fatti[] = [...$base, 'campi' => array_keys($daScrivere)];
+            }
+        });
+
+        return ['modificati' => $fatti, 'saltati' => $saltati];
+    }
+
+    /**
+     * Che cosa cambierebbe davvero su questo albero, e perche' il resto no.
+     *
+     * Lo usano anteprima ed esecuzione (e' lo stesso giro): un valore gia'
+     * uguale non e' una modifica, e in modalita' "solo i vuoti" un campo
+     * gia' compilato si rispetta.
+     *
+     * @param  array<string, mixed>  $campi
+     * @return array{0: array<string, mixed>, 1: list<string>}
+     */
+    private static function campiDaScrivere(\App\Models\Tree $albero, array $campi, bool $soloVuoti): array
+    {
+        $daScrivere = [];
+        $motivi = [];
+
+        foreach ($campi as $campo => $valore) {
+            $attuale = $albero->{$campo};
+            $vuoto = $attuale === null || $attuale === '';
+
+            if ($soloVuoti && ! $vuoto) {
+                $motivi[] = (self::CAMPI_ALBERO[$campo] ?? $campo).": c'e' gia' un valore.";
+
+                continue;
+            }
+
+            // Il confronto passa dal casting del modello (i decimali arrivano
+            // dal database come stringhe): senza, "38" e 38.0 sembrerebbero
+            // due valori diversi e l'anteprima conterebbe modifiche finte
+            $uguale = $vuoto
+                ? ($valore === null || $valore === '')
+                : (string) $attuale === (string) $albero->newInstance()->forceFill([$campo => $valore])->{$campo};
+
+            if ($uguale) {
+                $motivi[] = (self::CAMPI_ALBERO[$campo] ?? $campo).': valore gia\' uguale.';
+
+                continue;
+            }
+
+            $daScrivere[$campo] = $valore;
+        }
+
+        return [$daScrivere, $motivi];
     }
 }
