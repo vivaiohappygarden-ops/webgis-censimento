@@ -208,6 +208,48 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   cinque di serie non bastano); `deploy/diagnostica.sh` stampa in italiano lo
   stato del server quando qualcosa "a volte non funziona".
 
+## Dal rilievo al lavoro (dal 12/09/2026)
+
+- **Ricontrollo VTA in agenda**: `GeneratoreRicontrolliVta` crea ordini con `origin`
+  `vta_recheck` e `origin_id` della **valutazione** (non dell'albero): l'indice unico
+  parziale sul DB e' la garanzia contro i doppioni, anche con due lanci insieme. Un
+  ordine annullato copre comunque la sua valutazione; spostare la data in agenda non
+  rigenera nulla. Il riferimento e' sempre l'**ultima** valutazione dell'albero.
+  Anteprima ed esecuzione dallo stesso metodo (`$prova`), come per piani e azioni
+  multiple. Il cruscotto Oggi conta anche quelli **senza ordine**.
+- **Benefici ambientali**: la CO2 sta in `config/co2.php`, ossigeno/polveri/pioggia in
+  `config/benefici.php`, tutti e due con i loro riferimenti e l'avvertenza di
+  verificarli prima di pubblicarli. Le **voci** (etichetta, valore, unita', euro) si
+  compongono una volta sola in `ServiziEcosistemici`: le stesse righe escono su scheda,
+  portale e relazione annuale. Niente energia risparmiata: dipende dagli edifici, dato
+  che non abbiamo. Euro spenti senza prezzo **e** fonte dichiarati.
+- **Modifica multipla di specie e misure** (`AzioniMultiple::modificaAlberi`): si
+  scrivono solo i campi scelti, di serie **solo dove il campo e' vuoto**, e l'anteprima
+  conta le schede che cambierebbero davvero (un valore gia' uguale non e' una modifica).
+  Vale l'**ordine di scrittura** delle specializzazioni: fill dell'albero senza save,
+  bump della versione di `assets` (li' scatta la fotografia), poi save dell'albero.
+- **Corredo aree gioco** (`ModelloAreeGioco`): campi della scheda attrezzo e tre liste
+  EN 1176 si installano con un gesto e sono **idempotenti**; quello che c'e' si dichiara
+  "presente" e non si tocca, cosi' gli adattamenti del tecnico restano. Le liste non
+  sono il testo della norma (protetto) e il programma lo dichiara.
+- **Gantt**: la matematica sta nel modulo puro `resources/js/lavori/gantt.js` con le sue
+  prove (`node --test tests/js/gantt.test.mjs`); i dati sono quelli dell'agenda (stessa
+  API e stessa regola: senza fine prevista il lavoro occupa il solo giorno di inizio).
+- **Esportazioni**: `App\Services\Export\FoglioXlsx` scrive un .xlsx vero senza
+  librerie (zip di XML, righe su file temporaneo). Colonne e valori dell'export del
+  censimento si dichiarano **una volta sola** nel controller: CSV e foglio partono da
+  li', o al primo campo aggiunto divergono.
+- **Ruoli su misura**: i cinque di serie non si rinominano ne' si eliminano, i loro
+  permessi si cambiano tranne quelli dell'`amministratore`; i permessi dei portali non
+  si mescolano con quelli interni. Il modello `Role` viene dal pacchetto dei permessi e
+  **non ha TenantScope**: ogni query dei ruoli filtra a mano su `tenant_id`.
+  I nomi dei permessi si spiegano in italiano in `App\Support\Permessi`.
+- **Schermata operativa**: `/operatore` si apre sulla home a quattro blocchi ed e' la
+  pagina di atterraggio di chi sta in campo (`HomeRoute`: censisce e non gestisce ne'
+  lavori ne' utenti - guarda i permessi, non il nome del ruolo, perche' i ruoli ora si
+  inventano). La VTA si compila nel gestionale: senza rete l'app lo dice e apre la
+  scheda dell'albero, dove misure e foto vanno offline.
+
 ## Flusso di lavoro
 
 - Direttiva committente 11/08/2026: **proseguire sempre** con il blocco successivo della roadmap
