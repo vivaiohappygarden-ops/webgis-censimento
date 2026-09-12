@@ -162,6 +162,7 @@ class AssetController extends Controller implements HasMiddleware
             // La stessa stima che uscirebbe sul portale pubblico: il tecnico
             // la vede qui prima di decidere se accenderla per il committente
             'co2' => \App\Services\Benefits\CarbonEstimate::per($asset->tree),
+            'benefici' => \App\Services\Benefits\ServiziEcosistemici::per($asset->tree),
         ])]);
     }
 

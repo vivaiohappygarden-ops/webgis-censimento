@@ -529,6 +529,9 @@ p.sc-occhiello { margin: 0; }
         $scale = ['0.92', '1', '1.08'];
 
         $conCo2 = $portale->mostraCo2() && ($statistiche['co2']['alberi'] ?? 0) > 0;
+        // Gli altri benefici viaggiano con lo stesso interruttore della CO2:
+        // e' un solo consenso del committente a mostrare le stime ambientali
+        $beneficiVoci = $portale->mostraCo2() ? ($statistiche['benefici']['voci'] ?? []) : [];
         $conEuro = $conCo2
             && ($statistiche['co2']['euro'] ?? null) !== null
             && ($statistiche['co2']['prezzo'] ?? null) !== null;
@@ -904,8 +907,9 @@ p.sc-occhiello { margin: 0; }
                 </p>
             @endif
 
-            @if ($conCo2)
+            @if ($conCo2 || count($beneficiVoci))
                 <div class="stime">
+                    @if ($conCo2)
                     <div class="stima">
                         <p class="stima-valore">{{ number_format($statistiche['co2']['kg'] / 1000, 1, ',', '.') }}<span class="stima-unita">t</span></p>
                         <p class="stima-nome">Anidride carbonica immagazzinata dal patrimonio arboreo<a class="sc-ast" href="#nota-metodo">*</a></p>
@@ -920,6 +924,18 @@ p.sc-occhiello { margin: 0; }
                             <p class="stima-nome">Controvalore economico stimato di quelle tonnellate sul mercato delle quote di emissione<a class="sc-ast" href="#nota-metodo">*</a>: non è il valore degli alberi.</p>
                         </div>
                     @endif
+
+                    @endif
+
+                    {{-- Gli altri benefici del patrimonio: ossigeno, polveri
+                         trattenute, pioggia intercettata. Le voci le compone il
+                         servizio (etichetta, valore, unità): qui si stampano --}}
+                    @foreach ($beneficiVoci as $voce)
+                        <div class="stima">
+                            <p class="stima-valore">{{ number_format($voce['valore'], $voce['valore'] < 10 ? 1 : 0, ',', '.') }}<span class="stima-unita">{{ $voce['unita'] }}</span></p>
+                            <p class="stima-nome">{{ $voce['etichetta'] }} in un anno, su {{ number_format($voce['alberi'], 0, ',', '.') }} {{ $voce['alberi'] === 1 ? 'albero' : 'alberi' }}<a class="sc-ast" href="#nota-metodo">*</a></p>
+                        </div>
+                    @endforeach
                 </div>
             @endif
         </div>
@@ -1069,22 +1085,31 @@ p.sc-occhiello { margin: 0; }
     {{-- ================================= 6. NOTA SUL METODO E CHIUSURA --}}
     <section class="coda sc-scuro sc-sezione">
         <div class="sc-contenitore">
-            @if ($conCo2)
+            @if ($conCo2 || count($beneficiVoci))
                 <div id="nota-metodo">
                     <p class="sc-occhiello sc-occhiello-luce">Nota sul metodo</p>
-                    <h2 class="sc-h3">Da dove viene il valore segnato con l'asterisco</h2>
+                    <h2 class="sc-h3">Da dove vengono i valori segnati con l'asterisco</h2>
                     <p class="metodo-nota">
-                        <sup>*</sup> Valore stimato, non misurato, calcolato
-                        @if ($statistiche['co2']['alberi'] === 1)
-                            su un albero di cui è noto
-                        @else
-                            su {{ number_format($statistiche['co2']['alberi'], 0, ',', '.') }} alberi di cui è noto
+                        <sup>*</sup> Valori stimati, non misurati.
+                        @if ($conCo2)
+                            L'anidride carbonica è calcolata
+                            @if ($statistiche['co2']['alberi'] === 1)
+                                su un albero di cui è noto
+                            @else
+                                su {{ number_format($statistiche['co2']['alberi'], 0, ',', '.') }} alberi di cui è noto
+                            @endif
+                            il diametro del tronco: {{ config('co2.modello') }}.
+                            @if ($conEuro)
+                                Il controvalore economico applica un prezzo di
+                                {{ number_format($statistiche['co2']['prezzo'], fmod($statistiche['co2']['prezzo'], 1.0) == 0.0 ? 0 : 2, ',', '.') }} euro
+                                per tonnellata di anidride carbonica ({{ $statistiche['co2']['fonte'] }}).
+                            @endif
                         @endif
-                        il diametro del tronco: {{ config('co2.modello') }}.
-                        @if ($conEuro)
-                            Il controvalore economico applica un prezzo di
-                            {{ number_format($statistiche['co2']['prezzo'], fmod($statistiche['co2']['prezzo'], 1.0) == 0.0 ? 0 : 2, ',', '.') }} euro
-                            per tonnellata di anidride carbonica ({{ $statistiche['co2']['fonte'] }}).
+                        @if (count($beneficiVoci))
+                            Gli altri benefici sono calcolati sugli alberi che hanno il dato
+                            necessario - l'età per l'ossigeno, il diametro della chioma per
+                            polveri e pioggia - e ogni voce dice su quanti alberi:
+                            {{ $statistiche['benefici']['metodo'] }}.
                         @endif
                     </p>
                 </div>

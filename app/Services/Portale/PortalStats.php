@@ -29,7 +29,7 @@ class PortalStats
      * buco al posto di un dato che c'è: cambiando il nome della cassetta il
      * calcolo riparte da capo al primo che passa.
      */
-    private const VERSIONE = 3;
+    private const VERSIONE = 4;
 
     /** Termini che identificano una potatura fra i tipi di lavorazione. */
     private const POTATURA = 'potatur|rimonda|capitozz|spalcatur|riformazione della chioma';
@@ -81,7 +81,7 @@ class PortalStats
             'curati' => self::conInterventi($client, escludi: self::ABBATTIMENTO),
             'potati' => self::conInterventi($client, includi: self::POTATURA),
             'stati' => self::stati($client),
-            'co2' => self::co2($client),
+            ...self::stimeAmbientali($client),
             'ultimo_rilievo' => self::ultimoRilievo($client),
         ];
     }
@@ -138,51 +138,73 @@ class PortalStats
     }
 
     /**
-     * Anidride carbonica immagazzinata dal patrimonio arboreo.
-     * Si calcola solo dove ci sono diametro e specie: il conteggio degli
-     * alberi effettivamente stimati viaggia insieme al totale, perché un
+     * Le stime ambientali del patrimonio arboreo: anidride carbonica
+     * immagazzinata e gli altri benefici (ossigeno, polveri, pioggia).
+     *
+     * Le somme le fanno i due servizi, non questa pagina: la formula sta in
+     * un posto solo, qui si passano gli alberi. Gli alberi arrivano a uno a
+     * uno da un cursore, non in una lista: su un patrimonio da decine di
+     * migliaia di piante tenerli tutti in memoria per sommarli sarebbe uno
+     * spreco che si sente.
+     *
+     * Si calcola solo dove ci sono i dati che servono (diametro per la CO2,
+     * età per l'ossigeno, chioma per polveri e pioggia): il conteggio degli
+     * alberi effettivamente stimati viaggia insieme a ogni totale, perché un
      * numero senza il suo denominatore non si può leggere.
+     *
+     * @return array{co2: array, benefici: array|null}
      */
-    private static function co2(Client $client): array
+    private static function stimeAmbientali(Client $client): array
     {
-        $totale = 0.0;
-        $contati = 0;
-
-        (clone PortalQuery::trees($client))
-            ->select('trees.asset_id', 'trees.genus', 'trees.species',
-                'trees.dbh_cm', 'trees.trunk_circumference_cm', 'trees.age_years_est')
-            ->orderBy('trees.asset_id')
-            ->chunk(1000, function ($righe) use (&$totale, &$contati) {
-                foreach ($righe as $riga) {
-                    $albero = new \App\Models\Tree;
-                    $albero->forceFill([
-                        'genus' => $riga->genus,
-                        'species' => $riga->species,
-                        'dbh_cm' => $riga->dbh_cm,
-                        'trunk_circumference_cm' => $riga->trunk_circumference_cm,
-                    ]);
-
-                    $stima = \App\Services\Benefits\CarbonEstimate::per($albero);
-                    if ($stima !== null) {
-                        $totale += $stima['co2_kg'];
-                        $contati++;
-                    }
-                }
-            });
+        $co2 = \App\Services\Benefits\CarbonEstimate::totale(self::alberiPubblici($client));
+        $benefici = \App\Services\Benefits\ServiziEcosistemici::totale(self::alberiPubblici($client));
 
         $prezzo = \App\Services\Benefits\CarbonEstimate::prezzoTonnellata();
 
         return [
-            'kg' => round($totale, 1),
-            'alberi' => $contati,
-            // Controvalore economico: prezzo e fonte viaggiano NEL payload
-            // (che sta in cache 15 minuti), così la pagina dichiara sempre
-            // il prezzo con cui il numero è stato davvero calcolato, anche
-            // se nel frattempo la configurazione è cambiata
-            'euro' => $prezzo !== null ? round($totale / 1000 * $prezzo, 2) : null,
-            'prezzo' => $prezzo,
-            'fonte' => $prezzo !== null ? (string) config('co2.prezzo_fonte') : null,
+            'co2' => [
+                'kg' => $co2['co2_kg'],
+                'alberi' => $co2['alberi'],
+                // Controvalore economico: prezzo e fonte viaggiano NEL payload
+                // (che sta in cache 15 minuti), così la pagina dichiara sempre
+                // il prezzo con cui il numero è stato davvero calcolato, anche
+                // se nel frattempo la configurazione è cambiata
+                'euro' => $prezzo !== null ? round($co2['co2_kg'] / 1000 * $prezzo, 2) : null,
+                'prezzo' => $prezzo,
+                'fonte' => $prezzo !== null ? (string) config('co2.prezzo_fonte') : null,
+            ],
+            'benefici' => $benefici,
         ];
+    }
+
+    /**
+     * Gli alberi pubblicabili del committente, uno alla volta, con i soli
+     * campi che servono alle stime.
+     *
+     * @return \Generator<int, \App\Models\Tree>
+     */
+    private static function alberiPubblici(Client $client): \Generator
+    {
+        $righe = (clone PortalQuery::trees($client))
+            ->select('trees.asset_id', 'trees.genus', 'trees.species',
+                'trees.dbh_cm', 'trees.trunk_circumference_cm', 'trees.age_years_est',
+                'trees.crown_diameter_m')
+            ->orderBy('trees.asset_id')
+            ->cursor();
+
+        foreach ($righe as $riga) {
+            $albero = new \App\Models\Tree;
+            $albero->forceFill([
+                'genus' => $riga->genus,
+                'species' => $riga->species,
+                'dbh_cm' => $riga->dbh_cm,
+                'trunk_circumference_cm' => $riga->trunk_circumference_cm,
+                'age_years_est' => $riga->age_years_est,
+                'crown_diameter_m' => $riga->crown_diameter_m,
+            ]);
+
+            yield $albero;
+        }
     }
 
     /**

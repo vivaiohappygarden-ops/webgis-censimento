@@ -1059,10 +1059,12 @@ onMounted(() => carica(loadClients));
                                 <label class="flex items-start gap-2 border-t border-gray-100 pt-3 text-sm">
                                     <input v-model="portale.show_co2" type="checkbox" class="mt-0.5 rounded border-gray-300">
                                     <span>
-                                        Mostra la stima dell'anidride carbonica
+                                        Mostra le stime dei benefici ambientali
                                         <span class="block text-xs text-gray-500">
-                                            Calcolata dal diametro del tronco con un modello dichiarato sulla pagina.
-                                            Tienila spenta finché il tecnico non ha verificato coefficienti e fonti.
+                                            Anidride carbonica dal diametro del tronco, ossigeno dall'età,
+                                            polveri sottili e pioggia intercettata dalla chioma: modelli
+                                            dichiarati sulla pagina. Tienile spente finché il tecnico non ha
+                                            verificato coefficienti e fonti.
                                         </span>
                                     </span>
                                 </label>

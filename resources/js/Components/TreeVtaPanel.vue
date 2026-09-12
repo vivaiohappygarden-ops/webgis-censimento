@@ -531,6 +531,17 @@ onMounted(async () => {
             </span>
         </div>
 
+        <!-- Gli altri benefici, dallo stesso interruttore del portale -->
+        <div v-if="asset.benefici" class="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600" data-test="benefici-ambientali">
+            <span v-for="(voce, i) in asset.benefici.voci" :key="voce.chiave">
+                <template v-if="i"> · </template>{{ voce.etichetta }}: <strong>{{ num(voce.valore, voce.valore < 10 ? 1 : 0) }} {{ voce.unita }}</strong><template v-if="voce.euro !== null"> ({{ num(voce.euro) }} euro)</template>
+            </span>
+            <span class="mt-1 block text-gray-400">
+                Valori stimati, non misurati: {{ asset.benefici.metodo }}<template v-if="asset.benefici.chioma_m2 !== null">; chioma di {{ num(asset.benefici.chioma_m2) }} metri quadrati</template>.
+                Manca una voce quando manca il dato che la regge: l'età per l'ossigeno, il diametro della chioma per polveri e pioggia.
+            </span>
+        </div>
+
         <div class="mt-3 flex flex-wrap gap-4 text-sm">
             <label class="flex items-center gap-1.5"><input v-model="tree.is_monumental" type="checkbox" :disabled="! canUpdate" class="rounded border-gray-300"> Monumentale</label>
             <label class="flex items-center gap-1.5"><input v-model="tree.is_protected" type="checkbox" :disabled="! canUpdate" class="rounded border-gray-300"> Soggetto a tutela</label>

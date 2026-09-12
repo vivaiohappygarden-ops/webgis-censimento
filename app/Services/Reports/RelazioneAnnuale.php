@@ -348,14 +348,20 @@ class RelazioneAnnuale
         $totale = 0.0;
         $contati = 0;
         $alberi = 0;
+        // Gli alberi del giro servono anche agli altri benefici: la somma la
+        // fa il servizio, la formula sta in un posto solo. Qui la lista si
+        // puo' tenere: la relazione e' di un committente e di un anno, non
+        // del patrimonio di un'intera installazione
+        $perBenefici = [];
 
         self::patrimonioInGestione($tenantId, $clientId)
             ->join('trees', 'trees.asset_id', '=', 'assets.id')
             ->whereNull('trees.removed_on')
             ->select('trees.asset_id', 'trees.genus', 'trees.species',
-                'trees.dbh_cm', 'trees.trunk_circumference_cm')
+                'trees.dbh_cm', 'trees.trunk_circumference_cm',
+                'trees.age_years_est', 'trees.crown_diameter_m')
             ->orderBy('trees.asset_id')
-            ->chunk(1000, function ($righe) use (&$totale, &$contati, &$alberi) {
+            ->chunk(1000, function ($righe) use (&$totale, &$contati, &$alberi, &$perBenefici) {
                 foreach ($righe as $riga) {
                     $alberi++;
                     $albero = new Tree;
@@ -364,6 +370,8 @@ class RelazioneAnnuale
                         'species' => $riga->species,
                         'dbh_cm' => $riga->dbh_cm,
                         'trunk_circumference_cm' => $riga->trunk_circumference_cm,
+                        'age_years_est' => $riga->age_years_est,
+                        'crown_diameter_m' => $riga->crown_diameter_m,
                     ]);
 
                     $stima = CarbonEstimate::per($albero);
@@ -371,11 +379,16 @@ class RelazioneAnnuale
                         $totale += $stima['co2_kg'];
                         $contati++;
                     }
+
+                    $perBenefici[] = $albero;
                 }
             });
 
-        // Nessun albero con diametro: nessuna stima, meglio niente che finto
-        if ($contati === 0) {
+        $benefici = \App\Services\Benefits\ServiziEcosistemici::totale($perBenefici);
+
+        // Nessun albero con diametro e nessun altro beneficio calcolabile:
+        // nessuna stima, meglio niente che finto
+        if ($contati === 0 && $benefici === null) {
             return null;
         }
 
@@ -389,6 +402,8 @@ class RelazioneAnnuale
             'euro' => $prezzo !== null ? round($totale / 1000 * $prezzo, 2) : null,
             'prezzo' => $prezzo,
             'fonte' => $prezzo !== null ? (string) config('co2.prezzo_fonte') : null,
+            // Ossigeno, polveri e pioggia: voci gia' pronte da stampare
+            'benefici' => $benefici,
         ];
     }
 

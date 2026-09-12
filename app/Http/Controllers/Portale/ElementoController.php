@@ -66,6 +66,9 @@ class ElementoController extends Controller
             'co2' => $portale->mostraCo2()
                 ? \App\Services\Benefits\CarbonEstimate::per($asset->tree)
                 : null,
+            'benefici' => $portale->mostraCo2()
+                ? \App\Services\Benefits\ServiziEcosistemici::per($asset->tree)
+                : null,
             'vincoli' => $this->vincoli($portale, $asset),
         ];
 

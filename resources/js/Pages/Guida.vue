@@ -793,9 +793,9 @@ function goTo(id) {
                             collegamenti fatti a mano.
                         </p>
 
-                        <h3>La stima dell'anidride carbonica</h3>
+                        <h3>Le stime dei benefici ambientali</h3>
                         <p class="mt-2">
-                            Si accende con la spunta <strong>"Mostra la stima dell'anidride carbonica"</strong> nel
+                            Si accendono con la spunta <strong>"Mostra le stime dei benefici ambientali"</strong> nel
                             riquadro del portale. Il calcolo parte dal <strong>diametro del tronco</strong>: senza
                             quel dato la stima non compare. L'<strong>assorbimento medio annuo</strong> richiede
                             anche l'<strong>età stimata</strong>. Sotto al valore la pagina dichiara sempre con
@@ -811,6 +811,29 @@ function goTo(id) {
                             senza toccare il codice. La stessa stima si legge anche nella scheda
                             dell'albero nel gestionale, così la controlli prima di renderla
                             pubblica.
+                        </p>
+                        <p>
+                            Con la stessa spunta compaiono gli <strong>altri benefici</strong> della
+                            pianta, ognuno con il suo metodo dichiarato: l'<strong>ossigeno
+                            liberato</strong> in un anno (legato all'assorbimento di anidride
+                            carbonica, quindi serve l'età), le <strong>polveri sottili
+                            trattenute</strong> (PM10 e PM2,5) e la <strong>pioggia intercettata
+                            dalla chioma</strong>, che non finisce subito in fognatura. Queste
+                            ultime due si calcolano sull'area della chioma, quindi vogliono il
+                            <strong>diametro della chioma</strong> censito: dove manca, la voce non
+                            compare. Manca di proposito l'energia risparmiata dagli edifici:
+                            dipende da dove sta l'albero rispetto alle case, un dato che il
+                            censimento non ha, e inventarlo sarebbe peggio che tacerlo.
+                        </p>
+                        <p>
+                            I coefficienti (quante polveri per metro quadrato di chioma, quanta
+                            pioggia cade in un anno, quanta ne trattiene la chioma) stanno nella
+                            configurazione del programma insieme ai loro riferimenti: vanno
+                            adattati al clima e all'aria del posto prima di pubblicarli. Gli
+                            eventuali controvalori in euro di polveri e acqua sono spenti di
+                            serie e, come per la CO2, non compaiono senza una fonte dichiarata.
+                            Gli stessi numeri finiscono nella <strong>relazione annuale del
+                            verde</strong>, con il conto di quanti alberi hanno il dato che serve.
                         </p>
 
                         <h3>Prima di dare l'indirizzo a un ente</h3>

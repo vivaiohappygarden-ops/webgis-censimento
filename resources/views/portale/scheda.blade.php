@@ -769,38 +769,70 @@
         </aside>
     @endif
 
-    @if (! empty($co2))
+    @if (! empty($co2) || ! empty($benefici))
         <section class="sezione lato">
             <p class="sc-occhiello sc-occhiello-oro">Valori stimati, non misurati</p>
             <h2 class="titolo-sezione">Il contributo di questa pianta</h2>
 
             <div class="stime">
-                <div class="valore-stimato">
-                    <p class="cifra sc-num">{{ number_format($co2['co2_kg'], 0, ',', '.') }}<span class="unita">kg</span></p>
-                    <p class="dice">Anidride carbonica immagazzinata<span class="sc-ast">*</span></p>
-                </div>
-                @if ($co2['annuo_kg'] !== null)
+                @if (! empty($co2))
                     <div class="valore-stimato">
-                        <p class="cifra sc-num">{{ number_format($co2['annuo_kg'], 1, ',', '.') }}<span class="unita">kg/anno</span></p>
-                        <p class="dice">Assorbimento medio annuo<span class="sc-ast">*</span></p>
+                        <p class="cifra sc-num">{{ number_format($co2['co2_kg'], 0, ',', '.') }}<span class="unita">kg</span></p>
+                        <p class="dice">Anidride carbonica immagazzinata<span class="sc-ast">*</span></p>
                     </div>
+                    @if ($co2['annuo_kg'] !== null)
+                        <div class="valore-stimato">
+                            <p class="cifra sc-num">{{ number_format($co2['annuo_kg'], 1, ',', '.') }}<span class="unita">kg/anno</span></p>
+                            <p class="dice">Assorbimento medio annuo<span class="sc-ast">*</span></p>
+                        </div>
+                    @endif
+                    @if (($co2['valore_euro'] ?? null) !== null)
+                        <div class="valore-stimato">
+                            <p class="cifra sc-num">{{ number_format($co2['valore_euro'], 0, ',', '.') }}<span class="unita">euro</span></p>
+                            <p class="dice">Controvalore economico stimato<span class="sc-ast">*</span></p>
+                        </div>
+                    @endif
                 @endif
-                @if (($co2['valore_euro'] ?? null) !== null)
+
+                {{-- Gli altri benefici: ossigeno, polveri trattenute, pioggia
+                     che la chioma ferma. Le voci le compone il servizio, qui si
+                     stampano: le stesse identiche righe escono nella scheda del
+                     gestionale e nella relazione annuale --}}
+                @foreach ($benefici['voci'] ?? [] as $voce)
                     <div class="valore-stimato">
-                        <p class="cifra sc-num">{{ number_format($co2['valore_euro'], 0, ',', '.') }}<span class="unita">euro</span></p>
-                        <p class="dice">Controvalore economico stimato<span class="sc-ast">*</span></p>
+                        <p class="cifra sc-num">{{ number_format($voce['valore'], $voce['valore'] < 10 ? 1 : 0, ',', '.') }}<span class="unita">{{ $voce['unita'] }}</span></p>
+                        <p class="dice">{{ $voce['etichetta'] }}<span class="sc-ast">*</span></p>
                     </div>
-                @endif
+                    @if ($voce['euro'] !== null)
+                        <div class="valore-stimato">
+                            <p class="cifra sc-num">{{ number_format($voce['euro'], 0, ',', '.') }}<span class="unita">euro</span></p>
+                            <p class="dice">Controvalore stimato ({{ mb_strtolower($voce['etichetta']) }})<span class="sc-ast">*</span></p>
+                        </div>
+                    @endif
+                @endforeach
             </div>
 
             <p class="stima">
-                <span class="sc-ast">*</span> Valore stimato, non misurato: {{ $co2['metodo'] }}.
-                @if (($co2['valore_euro'] ?? null) !== null)
-                    Il controvalore economico applica un prezzo di
-                    {{-- Un prezzo con i decimali si dichiara con i decimali: quello
-                         stampato deve essere esattamente quello applicato --}}
-                    {{ number_format($co2['prezzo_tonnellata'], fmod($co2['prezzo_tonnellata'], 1.0) == 0.0 ? 0 : 2, ',', '.') }} euro
-                    per tonnellata di anidride carbonica ({{ $co2['prezzo_fonte'] }}).
+                <span class="sc-ast">*</span> Valori stimati, non misurati.
+                @if (! empty($co2))
+                    Anidride carbonica: {{ $co2['metodo'] }}.
+                    @if (($co2['valore_euro'] ?? null) !== null)
+                        Il controvalore economico applica un prezzo di
+                        {{-- Un prezzo con i decimali si dichiara con i decimali: quello
+                             stampato deve essere esattamente quello applicato --}}
+                        {{ number_format($co2['prezzo_tonnellata'], fmod($co2['prezzo_tonnellata'], 1.0) == 0.0 ? 0 : 2, ',', '.') }} euro
+                        per tonnellata di anidride carbonica ({{ $co2['prezzo_fonte'] }}).
+                    @endif
+                @endif
+                @if (! empty($benefici))
+                    Altri benefici: {{ $benefici['metodo'] }}
+                    @if (($benefici['chioma_m2'] ?? null) !== null)
+                        , su una chioma di {{ number_format($benefici['chioma_m2'], 0, ',', '.') }} metri quadrati
+                    @endif
+                    .
+                    @foreach (collect($benefici['voci'])->whereNotNull('euro')->unique('prezzo_fonte') as $voce)
+                        Controvalore di {{ mb_strtolower($voce['etichetta']) }}: {{ $voce['prezzo_fonte'] }}.
+                    @endforeach
                 @endif
             </p>
         </section>

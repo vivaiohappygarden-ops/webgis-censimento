@@ -188,26 +188,50 @@
     @endif
 
     @if ($co2)
-        <h2>Anidride carbonica immagazzinata dal patrimonio arboreo</h2>
+        <h2>Benefici ambientali del patrimonio arboreo</h2>
         <table>
             <tr>
                 <th style="width: 70%;">Voce</th>
                 <th style="width: 30%;" class="num">Valore</th>
             </tr>
-            <tr>
-                <td>CO2 immagazzinata (stima su {{ $n($co2['alberi_stimati']) }} alberi con diametro noto su {{ $n($co2['alberi_totali']) }})</td>
-                <td class="num">{{ number_format($co2['kg'], 1, ',', '.') }} kg</td>
-            </tr>
-            @if ($co2['euro'] !== null)
-                <tr><td>Controvalore economico ({{ $dec($co2['prezzo']) }} euro/t)</td><td class="num">{{ number_format($co2['euro'], 2, ',', '.') }} euro</td></tr>
+            @if ($co2['alberi_stimati'] > 0)
+                <tr>
+                    <td>Anidride carbonica immagazzinata (stima su {{ $n($co2['alberi_stimati']) }} alberi con diametro noto su {{ $n($co2['alberi_totali']) }})</td>
+                    <td class="num">{{ number_format($co2['kg'], 1, ',', '.') }} kg</td>
+                </tr>
+                @if ($co2['euro'] !== null)
+                    <tr><td>Controvalore economico ({{ $dec($co2['prezzo']) }} euro/t)</td><td class="num">{{ number_format($co2['euro'], 2, ',', '.') }} euro</td></tr>
+                @endif
             @endif
+            {{-- Ossigeno, polveri, pioggia: ogni voce dice su quanti alberi e'
+                 stata calcolata, perche' un totale senza denominatore non si
+                 legge. Le voci le compone ServiziEcosistemici --}}
+            @foreach ($co2['benefici']['voci'] ?? [] as $voce)
+                <tr>
+                    <td>{{ $voce['etichetta'] }} (stima su {{ $n($voce['alberi']) }} alberi)</td>
+                    <td class="num">{{ number_format($voce['valore'], 1, ',', '.') }} {{ $voce['unita'] }}</td>
+                </tr>
+                @if ($voce['euro'] !== null)
+                    <tr><td>Controvalore economico ({{ mb_strtolower($voce['etichetta']) }})</td><td class="num">{{ number_format($voce['euro'], 2, ',', '.') }} euro</td></tr>
+                @endif
+            @endforeach
         </table>
         <div class="nota">
-            <strong>Metodo di stima della CO2</strong>: {{ $co2['metodo'] }}.
-            La stima riguarda i soli alberi con diametro del tronco noto (o ricavabile
-            dalla circonferenza) e si riferisce al patrimonio in gestione alla data di stampa.
-            @if ($co2['fonte'])
-                Prezzo applicato per il controvalore: {{ $dec($co2['prezzo']) }} euro per tonnellata ({{ $co2['fonte'] }}).
+            @if ($co2['alberi_stimati'] > 0)
+                <strong>Metodo di stima della CO2</strong>: {{ $co2['metodo'] }}.
+                La stima riguarda i soli alberi con diametro del tronco noto (o ricavabile
+                dalla circonferenza) e si riferisce al patrimonio in gestione alla data di stampa.
+                @if ($co2['fonte'])
+                    Prezzo applicato per il controvalore: {{ $dec($co2['prezzo']) }} euro per tonnellata ({{ $co2['fonte'] }}).
+                @endif
+            @endif
+            @if (! empty($co2['benefici']))
+                <strong>Metodo di stima degli altri benefici</strong>: {{ $co2['benefici']['metodo'] }}.
+                Ogni voce e' calcolata sui soli alberi che hanno il dato necessario:
+                l'eta' per l'ossigeno, il diametro della chioma per polveri e pioggia.
+                @foreach (collect($co2['benefici']['voci'])->whereNotNull('euro')->unique('prezzo_fonte') as $voce)
+                    Prezzo applicato per il controvalore di {{ mb_strtolower($voce['etichetta']) }}: {{ $voce['prezzo_fonte'] }}.
+                @endforeach
             @endif
         </div>
     @endif

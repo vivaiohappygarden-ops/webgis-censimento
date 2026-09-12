@@ -139,7 +139,7 @@ class StimaCo2Test extends TestCase
         $risposta->assertSee('Anidride carbonica immagazzinata');
         $risposta->assertSee('Assorbimento medio annuo');
         // Il metodo va sempre dichiarato accanto al valore
-        $risposta->assertSee('Valore stimato, non misurato');
+        $risposta->assertSee('Valori stimati, non misurati');
         $risposta->assertSee('Jenkins');
     }
 
