@@ -254,6 +254,30 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   inventano). La VTA si compila nel gestionale: senza rete l'app lo dice e apre la
   scheda dell'albero, dove misure e foto vanno offline.
 
+## Sito aziendale (dal 13/09/2026)
+
+- Tre indirizzi sullo stesso dominio: il **sito che parla ai Comuni** sul dominio nudo
+  (`SITO_BASE_HOST`, piu' il suo `www`), i **portali civici** sui sottodomini, il
+  **gestionale** sul suo. Le rotte del sito stanno in `routes/sito.php`, gruppo di
+  middleware `sito`: come i portali, **niente sessione e niente cookie** - e' quello che
+  permette di scrivere in pie' di pagina che non c'e' niente da accettare, e
+  `SitoAziendaleTest` lo verifica.
+- Percorso di collaudo `/sito`, sempre attivo. I collegamenti interni passano da
+  `App\Support\SitoUrl`: restano nella strada da cui si e' arrivati (dominio o `/sito`),
+  come `PortalContext::url()` per i portali.
+- **Il programma non inventa fatti sull'azienda.** Ragione sociale, partita IVA,
+  recapiti, titolo di chi firma le perizie e referenze stanno in `config/sito.php`
+  (chiavi `SITO_*`): quello che e' vuoto **non viene stampato**, mai un segnaposto.
+  Finche' `SITO_BASE_HOST` non e' impostato il sito non e' pubblico: e' la leva con cui
+  si decide quando aprirlo.
+- Registro visivo **istituzionale e sobrio** (decisione committente 13/09/2026),
+  volutamente diverso dal portale civico: fondo chiaro, un solo verde come accento,
+  nessuna illustrazione. Sistema di design documentato in testa a
+  `resources/views/sito/layout.blade.php` (scala tipografica, spazi, colori con i
+  contrasti gia' verificati). Corpo del testo mai sotto i 17px, riga entro 68 caratteri,
+  bersagli da toccare alti almeno 44px: il difetto da battere era "sul telefono si legge
+  male". Niente JavaScript, nessuna risorsa di terzi, caratteri gia' ospitati in casa.
+
 ## Flusso di lavoro
 
 - Direttiva committente 11/08/2026: **proseguire sempre** con il blocco successivo della roadmap

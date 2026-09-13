@@ -210,6 +210,35 @@ stampati e i collegamenti salvati continuano a funzionare.
 
 Per tornare all'indirizzo IP (raro): `bash /var/www/webgis/deploy/set-domain.sh 80.211.79.223`.
 
+### 6.2-bis Pubblicare il sito aziendale
+
+Il sito che parla ai Comuni sta sul **dominio nudo**
+(`censimentoalberature.it`, senza prefisso). Finche' non lo si accende, quel
+dominio non risponde e il sito si guarda solo dall'indirizzo di collaudo
+`https://<indirizzo del server>/sito`.
+
+Prima di accenderlo servono i dati veri, altrimenti il sito pubblica pagine
+a meta': ragione sociale, sede, partita IVA, telefono ed email. Si scrivono
+nel file `.env` del server (chiavi `SITO_*`, elencate in `.env.example`), e
+quello che si lascia vuoto semplicemente non compare.
+
+1. Nel pannello DNS del dominio: un record **A** per `@` (il dominio nudo) e
+   uno per `www`, tutti e due verso l'indirizzo IP del server. Sono gli stessi
+   valori del record dei portali.
+2. Sul server, nel file `/var/www/webgis/.env`:
+
+   ```
+   SITO_BASE_HOST=censimentoalberature.it
+   SITO_RAGIONE_SOCIALE=...
+   SITO_PIVA=...
+   SITO_TELEFONO=...
+   SITO_EMAIL=...
+   ```
+3. `bash /var/www/webgis/deploy/update.sh` (rilegge la configurazione e
+   rigenera le pagine in cache).
+
+Il lucchetto HTTPS lo prende da solo, come per gli altri indirizzi.
+
 ### 6.3 Il dominio dei portali dei Comuni
 
 I portali pubblici stanno ognuno sul proprio indirizzo, con il nome del Comune

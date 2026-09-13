@@ -59,6 +59,14 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(1200)->by($request->ip());
         });
 
+        // Sito aziendale: pagine statiche, nessuna interrogazione al database.
+        // Il tetto e' solo un freno agli abusi; un ufficio comunale intero
+        // puo' uscire dallo stesso indirizzo e nessuno deve trovarsi la porta
+        // chiusa mentre legge
+        RateLimiter::for('sito', function (Request $request) {
+            return Limit::perMinute(300)->by($request->ip());
+        });
+
         // Feed del calendario da abbonamento: un lettore di calendari
         // interroga poche volte al giorno, ma un ufficio intero può uscire
         // dallo stesso indirizzo. Il tetto serve a scoraggiare i tentativi

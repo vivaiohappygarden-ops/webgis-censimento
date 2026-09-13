@@ -1,9 +1,16 @@
 # Sito aziendale: struttura e testi (bozza da rivedere)
 
-> **Decisione del committente, 22/08/2026: rimandato.** Il sito aziendale non
-> e' lavoro di adesso. Questa bozza resta qui pronta per quando servira'.
-> Fino ad allora il dominio senza prefisso (`censimentoalberature.it`) non
-> risponde: agli enti si da' sempre l'indirizzo completo del loro portale.
+> **Fatto il 13/09/2026.** Il sito esiste: `routes/sito.php`,
+> `resources/views/sito/*`, dati in `config/sito.php`. Questa pagina resta
+> come traccia dei contenuti e come posto dove ragionare sui testi prima di
+> cambiarli nelle viste.
+>
+> Il sito risponde sul dominio nudo solo quando `SITO_BASE_HOST` e'
+> impostato; prima di allora si guarda dal percorso di collaudo `/sito`.
+> E' la leva con cui si decide quando aprirlo: **finche' mancano ragione
+> sociale, partita IVA e recapiti, non va pubblicato**. Le voci compilate in
+> `config/sito.php` compaiono, quelle vuote non vengono stampate: sul sito
+> non c'e' nessun `[DA COMPILARE]` visibile e nessun dato inventato.
 
 Bozza dei contenuti per il sito su `censimentoalberature.it`. Serve per non
 partire dal foglio bianco: i testi sono da leggere, correggere e far propri.

@@ -19,6 +19,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 ->group(base_path('routes/portale.php'));
             \Illuminate\Support\Facades\Route::middleware('calendario')
                 ->group(base_path('routes/calendario.php'));
+            // Sito aziendale sul dominio nudo: come i portali, niente
+            // sessione e niente cookie
+            \Illuminate\Support\Facades\Route::middleware('sito')
+                ->group(base_path('routes/sito.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
@@ -48,6 +52,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'throttle:portale',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             \App\Http\Middleware\ResolvePublicPortal::class,
+        ]);
+        // Sito aziendale: pagine di sola lettura, nessuno stato. Come per i
+        // portali non si avvia la sessione, ed è quello che permette di
+        // scrivere in pie' di pagina che il sito non usa cookie
+        $middleware->group('sito', [
+            'throttle:sito',
         ]);
         // Feed iCal: il gettone nell'indirizzo è l'unico riconoscimento,
         // resta solo il tetto di richieste (i lettori di calendari
