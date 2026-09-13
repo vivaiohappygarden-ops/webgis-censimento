@@ -254,7 +254,11 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 
 - Direttiva committente 11/08/2026: **proseguire sempre** con il blocco successivo della roadmap
   senza chiedere conferma a ogni passaggio; chiedere solo per decisioni irreversibili o acquisti.
-- Branch di sviluppo: `claude/aruba-hosting-specifics-atsiy4`; mai push altrove.
+- Branch di riferimento del progetto: `claude/aruba-hosting-specifics-atsiy4`. Quando la
+  sessione ne assegna d'ufficio un altro (succede: il nome cambia a ogni sessione), si
+  lavora su quello e **alla fine si allinea il ramo di riferimento** allo stesso punto,
+  cosi' chi riprende non riparte da una storia vecchia. Mai push su rami diversi da
+  questi due.
 - Test: `php artisan test` (DB `webgis_test`); la suite deve restare verde prima del push.
 - Verifica ogni blocco anche nel browser reale (Playwright/Chromium) oltre che con i test.
 - Il committente non è tecnico: i resoconti si scrivono in italiano semplice, senza tecnicismi
