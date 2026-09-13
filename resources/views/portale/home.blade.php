@@ -529,9 +529,9 @@ p.sc-occhiello { margin: 0; }
         $scale = ['0.92', '1', '1.08'];
 
         $conCo2 = $portale->mostraCo2() && ($statistiche['co2']['alberi'] ?? 0) > 0;
-        // Gli altri benefici viaggiano con lo stesso interruttore della CO2:
-        // e' un solo consenso del committente a mostrare le stime ambientali
-        $beneficiVoci = $portale->mostraCo2() ? ($statistiche['benefici']['voci'] ?? []) : [];
+        // Gli altri benefici hanno il loro interruttore, spento di suo: sono
+        // stime nuove, e il consenso dato per la CO2 non vale anche per loro
+        $beneficiVoci = $portale->mostraBenefici() ? ($statistiche['benefici']['voci'] ?? []) : [];
         $conEuro = $conCo2
             && ($statistiche['co2']['euro'] ?? null) !== null
             && ($statistiche['co2']['prezzo'] ?? null) !== null;

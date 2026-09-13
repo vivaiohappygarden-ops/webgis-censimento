@@ -69,6 +69,20 @@ class PortalContext
         return (bool) ($this->client->public_profile['show_co2'] ?? false);
     }
 
+    /**
+     * Vero se il committente ha scelto di pubblicare anche gli altri benefici
+     * ambientali (ossigeno, polveri sottili, pioggia intercettata).
+     *
+     * Interruttore separato da quello della CO2, e spento di suo: sono
+     * stime nuove, con coefficienti che dipendono dal clima e dall'aria del
+     * posto. Niente esce in pubblico da solo, nemmeno appoggiandosi a un
+     * consenso dato mesi fa per un altro numero.
+     */
+    public function mostraBenefici(): bool
+    {
+        return (bool) ($this->client->public_profile['show_benefici'] ?? false);
+    }
+
     /** Vero se il committente ha caricato uno stemma. */
     public function hasLogo(): bool
     {

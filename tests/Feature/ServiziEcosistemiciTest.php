@@ -186,6 +186,32 @@ class ServiziEcosistemiciTest extends TestCase
         $this->assertGreaterThan(0, $pioggia['valore']);
     }
 
+    public function test_l_interruttore_della_co2_non_accende_gli_altri_benefici(): void
+    {
+        $id = $this->postJson('/api/v1/assets', [
+            'area_id' => $this->area->id,
+            'object_type_id' => $this->tipo->id,
+            'geometry' => $this->pointGeometry(),
+        ])->assertCreated()->json('data.id');
+
+        $this->patchJson("/api/v1/assets/{$id}", [
+            'tree' => ['genus' => 'Tilia', 'dbh_cm' => 38, 'age_years_est' => 45, 'crown_diameter_m' => 7],
+        ])->assertOk();
+
+        // Solo la CO2 accesa: il consenso dato per quel numero non vale per
+        // stime nuove, con coefficienti ancora da tarare sul posto
+        $this->patchJson("/api/v1/clients/{$this->committente->id}", [
+            'public_profile' => ['show_co2' => true],
+        ])->assertOk();
+
+        $scheda = $this->get('/comune/mentana/elemento/MEN-0001')->assertOk();
+        $scheda->assertSee('Anidride carbonica immagazzinata');
+        $scheda->assertDontSee('Ossigeno liberato');
+        $scheda->assertDontSee('Pioggia intercettata dalla chioma');
+
+        $this->get('/comune/mentana')->assertOk()->assertDontSee('Polveri PM10 trattenute');
+    }
+
     public function test_in_pubblico_i_benefici_compaiono_solo_se_accesi(): void
     {
         $id = $this->postJson('/api/v1/assets', [
@@ -204,7 +230,7 @@ class ServiziEcosistemiciTest extends TestCase
             ->assertDontSee('Ossigeno liberato');
 
         $this->patchJson("/api/v1/clients/{$this->committente->id}", [
-            'public_profile' => ['show_co2' => true],
+            'public_profile' => ['show_benefici' => true],
         ])->assertOk();
 
         $risposta = $this->get('/comune/mentana/elemento/MEN-0001')->assertOk();
@@ -230,7 +256,7 @@ class ServiziEcosistemiciTest extends TestCase
         }
 
         $this->patchJson("/api/v1/clients/{$this->committente->id}", [
-            'public_profile' => ['show_co2' => true],
+            'public_profile' => ['show_benefici' => true],
         ])->assertOk();
 
         $this->get('/comune/mentana')

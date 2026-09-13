@@ -219,7 +219,11 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   multiple. Il cruscotto Oggi conta anche quelli **senza ordine**.
 - **Benefici ambientali**: la CO2 sta in `config/co2.php`, ossigeno/polveri/pioggia in
   `config/benefici.php`, tutti e due con i loro riferimenti e l'avvertenza di
-  verificarli prima di pubblicarli. Le **voci** (etichetta, valore, unita', euro) si
+  verificarli prima di pubblicarli. In pubblico hanno **due interruttori distinti**
+  (`show_co2`, `show_benefici`), tutti e due spenti di suo: stime nuove non escono
+  appoggiandosi al consenso dato per un altro numero (regola "niente esce in pubblico
+  da solo"). Nella scheda del gestionale si vedono sempre: il tecnico deve poterle
+  controllare prima di accenderle. Le **voci** (etichetta, valore, unita', euro) si
   compongono una volta sola in `ServiziEcosistemici`: le stesse righe escono su scheda,
   portale e relazione annuale. Niente energia risparmiata: dipende dagli edifici, dato
   che non abbiamo. Euro spenti senza prezzo **e** fonte dichiarati.

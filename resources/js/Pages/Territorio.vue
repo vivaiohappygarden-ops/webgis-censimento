@@ -525,6 +525,7 @@ const portale = reactive({
     welcome_text: '',
     footer_text: '',
     show_co2: false,
+    show_benefici: false,
     legal_owner: '',
     privacy_text: '',
     accessibility_url: '',
@@ -618,6 +619,7 @@ function caricaPortale(client) {
         welcome_text: profilo.welcome_text ?? '',
         footer_text: profilo.footer_text ?? '',
         show_co2: !! profilo.show_co2,
+        show_benefici: !! profilo.show_benefici,
         legal_owner: profilo.legal_owner ?? '',
         privacy_text: profilo.privacy_text ?? '',
         accessibility_url: profilo.accessibility_url ?? '',
@@ -640,6 +642,7 @@ async function salvaPortale() {
                 welcome_text: portale.welcome_text || null,
                 footer_text: portale.footer_text || null,
                 show_co2: portale.show_co2,
+                show_benefici: portale.show_benefici,
                 legal_owner: portale.legal_owner || null,
                 privacy_text: portale.privacy_text || null,
                 accessibility_url: portale.accessibility_url || null,
@@ -1059,12 +1062,23 @@ onMounted(() => carica(loadClients));
                                 <label class="flex items-start gap-2 border-t border-gray-100 pt-3 text-sm">
                                     <input v-model="portale.show_co2" type="checkbox" class="mt-0.5 rounded border-gray-300">
                                     <span>
-                                        Mostra le stime dei benefici ambientali
+                                        Mostra la stima dell'anidride carbonica
                                         <span class="block text-xs text-gray-500">
-                                            Anidride carbonica dal diametro del tronco, ossigeno dall'età,
-                                            polveri sottili e pioggia intercettata dalla chioma: modelli
-                                            dichiarati sulla pagina. Tienile spente finché il tecnico non ha
-                                            verificato coefficienti e fonti.
+                                            Calcolata dal diametro del tronco con un modello dichiarato sulla pagina.
+                                            Tienila spenta finché il tecnico non ha verificato coefficienti e fonti.
+                                        </span>
+                                    </span>
+                                </label>
+
+                                <label class="flex items-start gap-2 border-t border-gray-100 pt-3 text-sm">
+                                    <input v-model="portale.show_benefici" type="checkbox" class="mt-0.5 rounded border-gray-300" data-test="portale-benefici">
+                                    <span>
+                                        Mostra gli altri benefici ambientali
+                                        <span class="block text-xs text-gray-500">
+                                            Ossigeno liberato (serve l'età dell'albero), polveri sottili trattenute
+                                            e pioggia intercettata (servono il diametro della chioma). I
+                                            coefficienti dipendono dal clima e dall'aria del posto: falli
+                                            verificare dal tecnico prima di accendere.
                                         </span>
                                     </span>
                                 </label>

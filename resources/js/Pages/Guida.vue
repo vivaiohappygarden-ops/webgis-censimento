@@ -869,7 +869,7 @@ function goTo(id) {
 
                         <h3>Le stime dei benefici ambientali</h3>
                         <p class="mt-2">
-                            Si accendono con la spunta <strong>"Mostra le stime dei benefici ambientali"</strong> nel
+                            Si accende con la spunta <strong>"Mostra la stima dell'anidride carbonica"</strong> nel
                             riquadro del portale. Il calcolo parte dal <strong>diametro del tronco</strong>: senza
                             quel dato la stima non compare. L'<strong>assorbimento medio annuo</strong> richiede
                             anche l'<strong>età stimata</strong>. Sotto al valore la pagina dichiara sempre con
@@ -887,8 +887,11 @@ function goTo(id) {
                             pubblica.
                         </p>
                         <p>
-                            Con la stessa spunta compaiono gli <strong>altri benefici</strong> della
-                            pianta, ognuno con il suo metodo dichiarato: l'<strong>ossigeno
+                            Gli <strong>altri benefici</strong> della pianta hanno una spunta tutta loro,
+                            <strong>"Mostra gli altri benefici ambientali"</strong>, anch'essa spenta di
+                            partenza: accendere la CO2 non li accende, perché sono stime diverse con
+                            coefficienti da tarare sul posto. Sono, ognuno con il suo metodo dichiarato:
+                            l'<strong>ossigeno
                             liberato</strong> in un anno (legato all'assorbimento di anidride
                             carbonica, quindi serve l'età), le <strong>polveri sottili
                             trattenute</strong> (PM10 e PM2,5) e la <strong>pioggia intercettata
