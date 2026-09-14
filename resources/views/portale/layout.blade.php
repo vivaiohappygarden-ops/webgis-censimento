@@ -17,45 +17,48 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="{{ $indicizzabile ?? false ? 'index,follow' : 'noindex' }}">
-<meta name="theme-color" content="{{ $tavolozza->colore('notte') }}">
+<meta name="theme-color" content="{{ $tavolozza->colore('bosco') }}">
 <title>@yield('titolo', 'Censimento del verde') - {{ $portale->name() }}</title>
 <style>
 {{-- I caratteri sono ospitati sul nostro server: nessuna chiamata a terzi --}}
 @include('portale.caratteri')
 
 /* ==========================================================================
-   SOTTO LA CHIOMA — veste del portale pubblico del verde
-   Le fondamenta: tavolozza, scala tipografica, testata, piede e gli stili
-   che le pagine si dividono. Le tre pagine (home, scheda, mappa) non
-   ridichiarano né colori né corpi: prendono da qui.
+   PORTALE DEL VERDE — veste istituzionale
+   (registro scelto dal committente il 14/09/2026: lo stesso del sito
+   aziendale, perché un portale civico dev'essere riconoscibile come un atto
+   dell'ente e non come una rivista)
+
+   Che cosa cambia rispetto alla veste precedente, e perché:
+   - una sola famiglia di caratteri, Inter, tondo e corsivo. Il carattere da
+     titoli con grazie diceva "editoriale": qui serve "ufficio tecnico".
+   - fondi grigio chiarissimo e bianco, niente avorio e niente oro. Un solo
+     accento: il colore scelto dal Comune.
+   - niente illustrazioni. Restano i disegni che spiegano un dato (le quote
+     della pianta), che sono tavole tecniche, non decorazione.
+   - il testo corrente parte da 17px anche sul telefono: il difetto da
+     battere era "sul telefono si legge male".
 
    SCALA TIPOGRAFICA — pochi corpi, salti veri. Ogni valore è fluido fra il
-   telefono a 360px e lo schermo largo a 1600px.
+   telefono a 360px e lo schermo largo a 1440px. È la stessa scala del sito
+   aziendale (resources/views/sito/layout.blade.php): le due facce della
+   stessa impresa non devono sembrare due mestieri diversi.
      --t-occhiello  13        maiuscoletto spaziato: occhielli, menu, etichette
-     --t-etichetta  14        note, didascalie, dati minori
-     --t-corpo      16 -> 17  testo corrente
-     --t-guida      17 -> 20  il testo che accompagna un titolo
-     --t-h3         22 -> 27  nome botanico, titoli dentro una sezione
-     --t-h2         28 -> 54  titolo di sezione
-     --t-h1         36 -> 96  titolo di pagina, apertura
-   Il numero del cartellino non è qui: ha la sua scala dentro il foglio della
-   scheda, che è fluido sul contenitore e non sulla finestra.
-   Le bozze scendevano a 11 e 12: qui no. Questo portale si legge in strada,
-   davanti alla pianta, e nessun testo va sotto i 13px.
-
-   INTERLINEE (tabella unica, non se ne inventano altre)
-     serif >= 36: 0.98 | serif 22-35: 1.12 | 20: 1.34
-     testo 17: 1.58 prosa, 1.35 se è un valore su una riga
-     testo 14: 1.62 prosa, 1.35 se è un'etichetta | 13 maiuscoletto: 1.20
-   CRENATURA del serif: h1 -.025em, h2 -.018em, h3 -.008em, 20 -.004em, sotto 0.
-   Eccezione dichiarata: le cifre del cartellino tengono la rampa positiva.
+     --t-etichetta  15        note, didascalie, dati minori
+     --t-corpo      17 -> 18  testo corrente, mai sotto i 17
+     --t-guida      19 -> 21  il testo che accompagna un titolo
+     --t-h3         20 -> 23  titoli dentro una sezione
+     --t-h2         26 -> 36  titolo di sezione
+     --t-h1         32 -> 46  titolo di pagina
+     --t-dato       28 -> 40  le cifre che si leggono da lontano
+   Il numero del cartellino ha la sua scala dentro il foglio della scheda,
+   che è fluido sul contenitore e non sulla finestra.
 
    SPAZI  --s-1 .. --s-9 = 8 16 24 32 48 64 88 112 128; gli ultimi cinque si
-   accorciano sul telefono. Un solo raggio (3px).
+   accorciano sul telefono. Un solo raggio (4px).
 
-   ORO  ha tre mestieri e basta: l'occhiello che apre una sezione, l'asterisco
-   dei valori stimati e il filo sotto il campo di ricerca. Fuori di qui
-   smetterebbe di essere un accento.
+   BERSAGLI  tutto ciò che si tocca è alto almeno 44px, anche quando il segno
+   visibile è più piccolo (l'asterisco delle stime, i collegamenti in riga).
    ========================================================================== */
 
 :root {
@@ -78,25 +81,27 @@
 @endforeach
 
     /* Caratteri. Se il woff2 non arriva la pagina resta leggibile con i
-       caratteri di sistema: le due famiglie di ripiego sono dichiarate. */
-    --titolo: 'Fraunces', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+       caratteri di sistema: la famiglia di ripiego è dichiarata. */
     --testo: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    --titolo: var(--testo);
 
     /* Scala tipografica. Ogni corpo è dichiarato due volte: prima in pixel
        secchi, poi con clamp(). Un browser che non conosce clamp() tiene il
        primo valore e la pagina resta in scala. */
     --t-occhiello: 13px;
-    --t-etichetta: 14px;
-    --t-corpo: 16px;
-    --t-corpo: clamp(16px, 15.71px + 0.081vw, 17px);
-    --t-guida: 18px;
-    --t-guida: clamp(17px, 16.13px + 0.242vw, 20px);
-    --t-h3: 24px;
-    --t-h3: clamp(22px, 20.55px + 0.403vw, 27px);
-    --t-h2: 34px;
-    --t-h2: clamp(28px, 20.45px + 2.097vw, 54px);
-    --t-h1: 46px;
-    --t-h1: clamp(36px, 18.58px + 4.839vw, 96px);
+    --t-etichetta: 15px;
+    --t-corpo: 17px;
+    --t-corpo: clamp(17px, 16.63px + 0.10vw, 18px);
+    --t-guida: 19px;
+    --t-guida: clamp(19px, 18.26px + 0.21vw, 21px);
+    --t-h3: 21px;
+    --t-h3: clamp(20px, 18.89px + 0.31vw, 23px);
+    --t-h2: 30px;
+    --t-h2: clamp(26px, 22.30px + 1.03vw, 36px);
+    --t-h1: 38px;
+    --t-h1: clamp(32px, 26.81px + 1.44vw, 46px);
+    --t-dato: 34px;
+    --t-dato: clamp(28px, 23.56px + 1.23vw, 40px);
 
     /* Spazi */
     --s-1: 8px;
@@ -114,13 +119,15 @@
     --s-9: 96px;
     --s-9: clamp(64px, 8.6vw, 128px);
 
-    /* Misure di pagina */
-    --bordo-pagina: 24px;
+    /* Misure di pagina. La riga di testo non supera i 68 caratteri: oltre,
+       l'occhio perde il capo della riga successiva. */
+    --bordo-pagina: 20px;
     --bordo-pagina: clamp(20px, 4vw, 40px);
-    --misura: 1160px;
-    --misura-testo: 940px;
-    --raggio: 3px;
-    --ombra: 0 30px 72px -34px rgba(0, 0, 0, 0.6);
+    --misura: 1120px;
+    --misura-testo: 900px;
+    --riga: 68ch;
+    --raggio: 4px;
+    --ombra: 0 1px 2px rgba(16, 24, 32, 0.06), 0 8px 24px -16px rgba(16, 24, 32, 0.30);
 }
 
 /* ------------------------------------------------------------------ base */
@@ -136,28 +143,27 @@ body {
     color: var(--inchiostro);
     font-family: var(--testo);
     font-size: var(--t-corpo);
-    line-height: 1.58;
+    line-height: 1.6;
     /* Un nome botanico o un indirizzo di posta lungo non deve spingere la
        pagina fuori dallo schermo di un telefono da 360px */
     overflow-wrap: break-word;
     -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
 }
 
 img { max-width: 100%; }
-h1, h2, h3 { margin: 0; font-weight: 400; }
+h1, h2, h3 { margin: 0; font-weight: 600; }
 p { margin: 0 0 var(--s-2); }
 a { color: var(--bosco); text-underline-offset: 0.18em; }
 
 /* Il fuoco si vede sempre, e cambia colore secondo il fondo su cui sta */
 :focus-visible {
-    outline: 3px solid var(--oro-scuro);
+    outline: 3px solid var(--bosco);
     outline-offset: 2px;
 }
 .testata :focus-visible,
 .chiusura :focus-visible,
 .sc-scuro :focus-visible {
-    outline-color: var(--oro-chiaro);
+    outline-color: #fff;
 }
 
 /* Salto al contenuto: primo elemento raggiungibile con il tabulatore */
@@ -166,11 +172,12 @@ a { color: var(--bosco); text-underline-offset: 0.18em; }
     left: -9999px;
     top: 0;
     z-index: 30;
-    background: var(--oro-chiaro);
-    color: var(--notte-fondo);
+    background: #fff;
+    color: var(--bosco);
     padding: 12px 20px;
     font-size: var(--t-occhiello);
-    letter-spacing: 0.16em;
+    font-weight: 600;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     text-decoration: none;
 }
@@ -200,130 +207,136 @@ main:where(.pagina-piena) { padding: 0; }
    altro, e la pagina sembrerebbe montata male. */
 body.pagina-stretta .sc-contenitore { max-width: var(--misura-testo); }
 
-/* Le fasce orizzontali con cui si compone una pagina */
-.sc-scuro { background: var(--notte); color: var(--chiaro); }
+/* Le fasce orizzontali con cui si compone una pagina. Due fondi chiari che
+   si alternano, più il colore dell'ente per testata e piede: tre in tutto. */
+.sc-scuro { background: var(--bosco); color: #fff; }
 .sc-avorio { background: var(--avorio); color: var(--inchiostro); }
 .sc-carta { background: var(--carta); color: var(--inchiostro); }
-.sc-sezione { padding-top: var(--s-7); padding-bottom: var(--s-7); }
+.sc-sezione { padding-top: var(--s-6); padding-bottom: var(--s-6); }
+.sc-carta + .sc-carta, .sc-avorio + .sc-avorio { border-top: 1px solid var(--filo); }
 
 /* ------------------------------------------------------------ tipografia */
 .sc-occhiello {
-    font-family: var(--testo);
+    display: block;
+    margin: 0 0 var(--s-2);
     font-size: var(--t-occhiello);
-    font-weight: 500;
+    font-weight: 600;
     line-height: 1.2;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--inchiostro-2);
 }
-.sc-occhiello-oro { color: var(--oro-scuro); }
-.sc-occhiello-luce { color: var(--oro-chiaro); }
+/* I due nomi che le pagine usavano per gli occhielli colorati restano
+   validi: qui l'accento è uno solo, il colore dell'ente. */
+.sc-occhiello-ente { color: var(--bosco); }
+.sc-occhiello-luce { color: #fff; opacity: 0.82; }
 
 /* Occhiello e filetto sulla stessa riga: apre ogni sezione */
-.sc-testa-sezione { display: flex; align-items: center; gap: var(--s-3); }
+.sc-testa-sezione { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-2); }
+.sc-testa-sezione .sc-occhiello { margin-bottom: 0; }
 .sc-testa-sezione .sc-filo { flex: 1; }
 .sc-filo { height: 1px; background: var(--filo); border: 0; }
+.sc-scuro .sc-filo { background: rgba(255, 255, 255, 0.28); }
 
 .sc-h1 {
-    font-family: var(--titolo);
-    font-weight: 300;
     font-size: var(--t-h1);
-    line-height: 0.98;
-    letter-spacing: -0.025em;
-    color: var(--bosco);
-    text-wrap: balance;
-}
-.sc-h2 {
-    font-family: var(--titolo);
-    font-weight: 300;
-    font-size: var(--t-h2);
-    line-height: 1.06;
+    font-weight: 600;
+    line-height: 1.12;
     letter-spacing: -0.018em;
     color: var(--bosco);
     text-wrap: balance;
 }
+.sc-h2 {
+    font-size: var(--t-h2);
+    font-weight: 600;
+    line-height: 1.18;
+    letter-spacing: -0.014em;
+    color: var(--bosco);
+    text-wrap: balance;
+}
 .sc-h3 {
-    font-family: var(--titolo);
-    font-weight: 400;
     font-size: var(--t-h3);
-    line-height: 1.12;
-    letter-spacing: -0.008em;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.006em;
     color: var(--bosco);
 }
 /* Sui fondi scuri i titoli si schiariscono: il bosco lì non si leggerebbe */
 .sc-scuro .sc-h1, .sc-scuro .sc-h2, .sc-scuro .sc-h3 { color: #fff; }
-.sc-h1 em, .sc-h2 em, .sc-h3 em { font-style: italic; font-weight: 400; color: var(--oro-scuro); }
-/* Il corsivo d'oro cambia gradino secondo il fondo: l'oro scuro sullo scuro
-   non si leggerebbe. La regola vale per tutti e tre i corpi, o un <em> in un
-   titolo minore uscirebbe con il gradino sbagliato. */
-.sc-scuro :where(.sc-h1, .sc-h2, .sc-h3) em { color: var(--oro-chiaro); }
+/* Il corsivo dei titoli è quello dei nomi botanici: resta corsivo, senza
+   cambiare colore. Un secondo colore nel titolo sarebbe decorazione. */
+.sc-h1 em, .sc-h2 em, .sc-h3 em { font-style: italic; font-weight: 500; }
 
 /* Un titolo senza classe (l'informativa, una pagina di servizio) prende
-   comunque il carattere da titoli: non deve sembrare di un altro sito.
+   comunque colore e peso dei titoli: non deve sembrare di un altro sito.
    :where() lo tiene a specificità zero, così qualunque classe lo scavalca. */
-main :where(h1, h2, h3) { font-family: var(--titolo); color: var(--bosco); }
+main :where(h1, h2, h3) { color: var(--bosco); letter-spacing: -0.012em; }
 .sc-scuro :where(h1, h2, h3) { color: #fff; }
 
 .sc-guida {
     font-size: var(--t-guida);
     line-height: 1.5;
     color: var(--inchiostro-2);
+    max-width: var(--riga);
     text-wrap: pretty;
 }
-.sc-scuro .sc-guida { color: var(--chiaro); }
+.sc-scuro .sc-guida { color: rgba(255, 255, 255, 0.88); }
 .sc-nota {
     font-size: var(--t-etichetta);
-    line-height: 1.62;
+    line-height: 1.55;
     color: var(--inchiostro-2);
+    max-width: var(--riga);
     text-wrap: pretty;
 }
+.sc-scuro .sc-nota { color: rgba(255, 255, 255, 0.82); }
 /* Le cifre incolonnate: misure, conteggi, coordinate */
 .sc-num { font-variant-numeric: tabular-nums lining-nums; }
 
-/* L'asterisco dei valori stimati: segno piccolo, bersaglio da 48px */
+/* L'asterisco dei valori stimati: segno piccolo, bersaglio da 44px */
 .sc-ast {
     position: relative;
-    color: var(--oro-scuro);
+    color: var(--bosco);
     text-decoration: none;
-    font-weight: 600;
-    font-size: 0.62em;
+    font-weight: 700;
+    font-size: 0.7em;
     vertical-align: super;
     line-height: 0;
-    padding-left: 0.12em;
+    padding-left: 0.14em;
 }
+.sc-scuro .sc-ast { color: #fff; }
 .sc-ast::after {
     content: "";
     position: absolute;
     left: -12px; right: -12px; top: 50%;
-    height: 48px;
+    height: 44px;
     transform: translateY(-50%);
 }
 
 /* ------------------------------------------------------------ componenti */
-/* Due pulsanti in tutto il portale, non uno di più: il pieno per l'azione
-   principale sul chiaro, quello d'oro per la stessa azione sullo scuro */
-.sc-bottone, .sc-bottone-oro {
+/* Due pulsanti in tutto il portale: il pieno per l'azione principale sul
+   chiaro, il bianco per la stessa azione sul colore dell'ente. I nomi delle
+   classi restano quelli di prima, così le pagine non si riscrivono. */
+.sc-bottone, .sc-bottone-chiaro {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-height: 48px;
-    padding: 8px 20px;
+    padding: 10px 22px;
     border-radius: var(--raggio);
     font-family: var(--testo);
-    font-size: var(--t-occhiello);
+    font-size: var(--t-corpo);
     font-weight: 600;
     line-height: 1.2;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
+    letter-spacing: 0;
     text-align: center;
     text-decoration: none;
     cursor: pointer;
 }
-.sc-bottone { background: var(--bosco); color: var(--chiaro); border: 1px solid var(--bosco); }
+.sc-bottone { background: var(--bosco); color: #fff; border: 1px solid var(--bosco); }
 .sc-bottone:hover { background: var(--notte); border-color: var(--notte); }
-/* Il solo pulsante d'oro, e solo sui fondi scuri */
-.sc-bottone-oro { background: var(--oro-chiaro); color: var(--notte-fondo); border: 1px solid var(--oro-chiaro); }
-.sc-bottone-oro:hover { background: #fff; border-color: #fff; }
+/* Il pulsante che sta sopra il colore dell'ente */
+.sc-bottone-chiaro { background: #fff; color: var(--bosco); border: 1px solid #fff; }
+.sc-bottone-chiaro:hover { background: var(--chiaro); border-color: var(--chiaro); }
 
 /* Lo stato della pianta ha due sole forme in tutto il portale.
    (a) targhetta piena dove si dichiara lo stato di UNA pianta: il bianco sui
@@ -331,20 +344,20 @@ main :where(h1, h2, h3) { font-family: var(--titolo); color: var(--bosco); }
 .sc-targhetta {
     display: inline-flex;
     align-items: center;
-    min-height: 24px;
-    padding: 2px 10px;
+    min-height: 26px;
+    padding: 3px 10px;
     border-radius: var(--raggio);
     background: var(--c, var(--bosco));
     color: #fff;
     font-size: var(--t-occhiello);
-    font-weight: 500;
+    font-weight: 600;
     line-height: 1.2;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
 }
 /* (b) pallino più parola in inchiostro dove gli stati si ELENCANO */
 .sc-pallino {
-    width: 9px; height: 9px;
+    width: 10px; height: 10px;
     border-radius: 50%;
     background: var(--c, var(--bosco));
     flex: none;
@@ -354,10 +367,12 @@ main :where(h1, h2, h3) { font-family: var(--titolo); color: var(--bosco); }
 .sc-collegamento {
     position: relative;
     color: var(--bosco);
-    text-decoration: none;
-    border-bottom: 1px solid var(--filo-2);
+    font-weight: 500;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
 }
-.sc-collegamento:hover { border-bottom-color: var(--bosco); }
+.sc-collegamento:hover { text-decoration-thickness: 2px; }
 .sc-collegamento::after {
     content: "";
     position: absolute;
@@ -367,12 +382,13 @@ main :where(h1, h2, h3) { font-family: var(--titolo); color: var(--bosco); }
 }
 
 /* ---------------------------------------------------------------- testata
-   Fondo scuro: la testata si cuce con la copertina della home, che comincia
-   con lo stesso --notte. Poche voci che vanno a capo sul telefono: niente
-   menu a scomparsa, niente pulsante da scoprire. */
+   La fascia porta il colore dell'ente, come l'intestazione di un atto.
+   Poche voci che vanno a capo sul telefono: niente menu a scomparsa, niente
+   pulsante da scoprire. */
 header.testata {
-    background: var(--notte);
-    color: var(--chiaro);
+    background: var(--bosco);
+    color: #fff;
+    border-bottom: 3px solid var(--notte);
 }
 header.testata .testata-dentro {
     display: flex;
@@ -394,49 +410,48 @@ header.testata .marchio {
 header.testata img.stemma { height: 44px; width: auto; display: block; }
 header.testata .marchio-testo { display: flex; flex-direction: column; }
 header.testata .marchio-nome {
-    font-family: var(--titolo);
-    font-size: 20px;
-    font-weight: 400;
-    line-height: 1.34;
-    letter-spacing: -0.004em;
+    font-size: 19px;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
     color: #fff;
 }
 header.testata .marchio-ruolo {
     margin-top: 2px;
     font-size: var(--t-occhiello);
     line-height: 1.2;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--oro-chiaro);
+    color: rgba(255, 255, 255, 0.82);
 }
 header.testata nav.menu {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0 var(--s-4);
+    gap: 0 var(--s-3);
 }
 header.testata nav.menu a {
     display: inline-flex;
     align-items: center;
     min-height: 44px;
-    font-size: var(--t-occhiello);
+    padding: 0 2px;
+    font-size: var(--t-etichetta);
+    font-weight: 500;
     line-height: 1.2;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
     text-decoration: none;
-    color: var(--chiaro);
-    border-bottom: 1px solid transparent;
+    color: #fff;
+    border-bottom: 2px solid transparent;
 }
-header.testata nav.menu a:hover { color: #fff; border-bottom-color: var(--oro-chiaro); }
+header.testata nav.menu a:hover { border-bottom-color: #fff; }
 
 /* ------------------------------------------------------------------ piede */
 footer.chiusura {
-    background: var(--notte-fondo);
-    color: var(--chiaro);
+    background: var(--notte);
+    color: rgba(255, 255, 255, 0.88);
     padding-top: var(--s-5);
     padding-bottom: var(--s-5);
     font-size: var(--t-etichetta);
-    line-height: 1.62;
+    line-height: 1.55;
 }
 footer.chiusura .dentro {
     display: flex;
@@ -445,14 +460,14 @@ footer.chiusura .dentro {
     justify-content: space-between;
 }
 footer.chiusura .chiusura-ente { max-width: 46ch; }
-footer.chiusura .chiusura-nome { display: block; color: #fff; }
+footer.chiusura .chiusura-nome { display: block; color: #fff; font-weight: 600; }
 footer.chiusura .chiusura-ruolo {
     display: block;
     margin-top: var(--s-1);
     font-size: var(--t-occhiello);
-    letter-spacing: 0.2em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--oro-chiaro);
+    color: rgba(255, 255, 255, 0.72);
 }
 footer.chiusura nav.chiusura-voci {
     display: flex;
@@ -463,12 +478,12 @@ footer.chiusura nav.chiusura-voci a {
     display: inline-flex;
     align-items: center;
     min-height: 44px;
-    color: var(--oro-chiaro);
+    color: #fff;
     text-decoration: none;
     border-bottom: 1px solid transparent;
     align-self: flex-start;
 }
-footer.chiusura nav.chiusura-voci a:hover { color: #fff; border-bottom-color: #fff; }
+footer.chiusura nav.chiusura-voci a:hover { border-bottom-color: #fff; }
 
 /* ====================== SCHEDA DELL'ELEMENTO: il contorno =================
    Il foglio della scheda porta il proprio stile dentro la vista che lo
@@ -503,9 +518,8 @@ a.indietro {
     gap: var(--s-1);
     min-height: 44px;
     margin-bottom: var(--s-2);
-    font-size: var(--t-occhiello);
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
+    font-size: var(--t-etichetta);
+    font-weight: 500;
     text-decoration: none;
     color: var(--inchiostro-2);
 }

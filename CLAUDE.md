@@ -61,6 +61,30 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - La stima CO2 applica il modello scritto in `config/co2.php` con i suoi riferimenti: il
   programma non inventa formule e la pagina dichiara sempre il metodo.
 
+### Veste del portale (dal 14/09/2026)
+
+- Registro **istituzionale e sobrio**, lo stesso del sito aziendale (decisione committente
+  14/09/2026, sostituisce la veste editoriale "Sotto la chioma" del 29/08). Un portale
+  civico deve somigliare a un atto dell'ente, non a una rivista. Il sistema e' documentato
+  in testa a `resources/views/portale/layout.blade.php`: scala tipografica, spazi, misure.
+- Un solo carattere, **Inter** tondo e corsivo, ospitato in `public/portale/font` (il
+  corsivo serve ai nomi botanici e non si lascia disegnare al browser). Nessuna richiesta a
+  terzi: e' quello che permette di scrivere nell'informativa che non ci sono cookie.
+- Un solo accento: il **colore scelto dal Comune**. I fondi sono grigio chiarissimo e
+  bianco; l'oro della veste precedente resta solo come anello del "sei qui" sulla mappa,
+  dove deve distinguersi dai quattro colori di stato qualunque tinta abbia scelto l'ente.
+  I quattro colori di stato non si ritingono mai.
+- **Il testo non scende sotto i 17px**, bersagli alti almeno 44px, niente esce dallo
+  schermo a 390px: il difetto da battere era "sul telefono si legge male".
+- **Niente illustrazioni.** Restano solo i disegni che spiegano un dato: la tavola delle
+  quote sulla home e' un disegno tecnico. Dove manca la fotografia di un elemento **non si
+  disegna una pianta al suo posto**: prima erano fino a 560px da scorrere prima di leggere
+  la specie, e un disegno che non e' quella pianta non e' un dato.
+- L'ordine della home e' quello di chi arriva: **prima il campo del cartellino** (nel primo
+  schermo, non sotto la piega), poi la mappa, poi i numeri, e solo dopo il racconto.
+- I contrasti li garantisce `PortalPalette` con le sue guardie, non l'occhio: la tinta la
+  sceglie il Comune, la leggibilita' no (`PortalPaletteTest`).
+
 ## Ricerca (dal 23/08/2026)
 
 - Tutti i campi di ricerca usano `App\Support\RicercaTestuale`: il testo si spezza

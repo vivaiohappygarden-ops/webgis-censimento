@@ -23,12 +23,10 @@ class PortalPaletteTest extends TestCase
 
         $attesi = [
             'notte', 'notte-fondo', 'bosco',
-            'fogliame-lontano', 'fogliame-medio', 'fogliame-vicino',
-            'luce', 'luce-2',
             'oro', 'oro-scuro', 'oro-chiaro',
             'avorio', 'avorio-2', 'carta', 'chiaro', 'chiaro-2',
             'inchiostro', 'inchiostro-2', 'filo', 'filo-2',
-            'corteccia', 'corteccia-2',
+            'm-parco',
         ];
 
         foreach ($attesi as $nome) {
@@ -61,7 +59,7 @@ class PortalPaletteTest extends TestCase
         foreach ($tinte as $tinta) {
             $token = PortalPalette::da($tinta)->token();
 
-            foreach (['carta', 'avorio', 'avorio-2', 'chiaro', 'oro-chiaro', 'luce'] as $nome) {
+            foreach (['carta', 'avorio', 'avorio-2', 'chiaro', 'oro-chiaro'] as $nome) {
                 $this->assertGreaterThan(
                     0.5,
                     PortalPalette::luminanza($token[$nome]),
@@ -69,7 +67,7 @@ class PortalPaletteTest extends TestCase
                 );
             }
 
-            foreach (['notte', 'notte-fondo', 'bosco', 'inchiostro', 'oro-scuro', 'corteccia-2'] as $nome) {
+            foreach (['notte', 'notte-fondo', 'bosco', 'inchiostro', 'oro-scuro'] as $nome) {
                 $this->assertLessThan(
                     0.25,
                     PortalPalette::luminanza($token[$nome]),
@@ -83,24 +81,6 @@ class PortalPaletteTest extends TestCase
                 PortalPalette::luminanza($token['notte-fondo']),
                 "Con la tinta {$tinta} la notte di fondo è più chiara della notte"
             );
-        }
-    }
-
-    /**
-     * Prospettiva aerea: il fogliame lontano è più chiaro di quello di mezzo,
-     * che è più chiaro di quello vicino. È il disegno stesso della copertina.
-     */
-    public function test_i_piani_del_fogliame_restano_in_ordine(): void
-    {
-        foreach (self::TINTE as $tinta) {
-            $token = PortalPalette::da($tinta)->token();
-
-            $lontano = PortalPalette::luminanza($token['fogliame-lontano']);
-            $medio = PortalPalette::luminanza($token['fogliame-medio']);
-            $vicino = PortalPalette::luminanza($token['fogliame-vicino']);
-
-            $this->assertGreaterThan($medio, $lontano, "Piani invertiti con la tinta {$tinta}");
-            $this->assertGreaterThan($vicino, $medio, "Piani invertiti con la tinta {$tinta}");
         }
     }
 
@@ -220,7 +200,7 @@ class PortalPaletteTest extends TestCase
 
         $this->assertStringContainsString('    --notte: #', $righe);
         $this->assertStringContainsString('    --inchiostro: #', $righe);
-        $this->assertStringContainsString('    --corteccia-2: #3b3126;', $righe);
+        $this->assertStringContainsString('    --m-parco: #', $righe);
 
         // Una riga per token, nella forma "--nome: #rrggbb;" e nient'altro
         foreach (explode("\n", $righe) as $riga) {

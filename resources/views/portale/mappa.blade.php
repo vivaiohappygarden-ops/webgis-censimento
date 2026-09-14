@@ -78,7 +78,7 @@
         gap: var(--s-1) var(--s-3);
         padding: 10px var(--bordo-pagina) 12px;
     }
-    .m-alto :focus-visible { outline-color: var(--oro-chiaro); }
+    .m-alto :focus-visible { outline-color: #fff; }
 
     .m-marchio {
         display: flex;
@@ -99,10 +99,11 @@
     .m-marchio-testo { min-width: 0; }
     .m-marchio-nome {
         display: block;
-        font-family: var(--titolo);
-        font-size: 20px;
-        line-height: 1.34;
-        letter-spacing: -0.004em;
+        font-family: var(--testo);
+        font-size: 19px;
+        font-weight: 600;
+        line-height: 1.25;
+        letter-spacing: -0.01em;
         color: #fff;
     }
     .m-marchio-torna {
@@ -110,9 +111,9 @@
         margin-top: 2px;
         font-size: var(--t-occhiello);
         line-height: 1.2;
-        letter-spacing: 0.2em;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: var(--oro-chiaro);
+        color: rgba(255, 255, 255, 0.82);
     }
     .m-marchio:hover .m-marchio-torna { color: #fff; }
 
@@ -130,32 +131,34 @@
         margin-bottom: 5px;
         font-size: var(--t-occhiello);
         line-height: 1.2;
-        letter-spacing: 0.2em;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: var(--oro-chiaro);
+        color: rgba(255, 255, 255, 0.82);
     }
     .m-cerca-campo {
         width: 100%;
         min-height: 48px;
         padding: 8px 12px;
-        border: 1px solid var(--oro-chiaro);
+        border: 1px solid #fff;
         border-radius: var(--raggio);
-        /* Fondo pieno, non velato: il --chiaro sopra il --notte-fondo è
-           garantito 4,5:1 dalla tavolozza, un velo lo renderebbe incerto */
-        background: var(--notte-fondo);
-        color: #fff;
+        /* Scatola bianca, come il campo della home: un campo da compilare si
+           riconosce perché è chiaro, e il testo nero su bianco non dipende da
+           quale tinta ha scelto il Comune */
+        background: #fff;
+        color: var(--inchiostro);
         font-family: var(--testo);
-        font-size: var(--t-corpo);
+        /* mai sotto i 16px, o il telefono ingrandisce la pagina da sé */
+        font-size: 17px;
         font-weight: 500;
-        letter-spacing: 0.06em;
+        letter-spacing: 0;
         font-variant-numeric: tabular-nums lining-nums;
     }
     .m-cerca-campo::placeholder {
-        color: var(--chiaro);
+        color: var(--inchiostro-2);
         font-weight: 400;
-        letter-spacing: 0.18em;
+        opacity: 0.7;
     }
-    .m-cerca .sc-bottone-oro { flex: none; padding: 8px 16px; }
+    .m-cerca .sc-bottone-chiaro { flex: none; padding: 8px 16px; }
 
     /* --------------------------------------------------------- il cartiglio
        Legenda, simboli, sfondi e note in un solo oggetto, come il cartiglio
@@ -181,7 +184,7 @@
            riquadro dalla carta bastano il filetto e l'ombra. */
         background: var(--carta);
         border: 1px solid var(--filo);
-        border-top: 2px solid var(--oro);
+        border-top: 2px solid var(--bosco);
         border-radius: var(--raggio);
         box-shadow: var(--ombra);
         color: var(--inchiostro);
@@ -192,7 +195,7 @@
         margin-bottom: 6px;
         font-size: var(--t-occhiello);
         line-height: 1.2;
-        letter-spacing: 0.14em;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
         color: var(--inchiostro-2);
     }
@@ -209,7 +212,7 @@
         font-size: var(--t-occhiello);
         font-weight: 500;
         line-height: 1.2;
-        letter-spacing: 0.12em;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
         cursor: pointer;
     }
@@ -268,7 +271,7 @@
         align-items: center;
         min-height: 44px;
         font-size: var(--t-occhiello);
-        letter-spacing: 0.14em;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
         text-decoration: none;
         color: var(--inchiostro-2);
@@ -311,11 +314,11 @@
     #pannello .barra .titolo {
         font-size: var(--t-occhiello);
         line-height: 1.2;
-        letter-spacing: 0.2em;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: var(--oro-chiaro);
+        color: rgba(255, 255, 255, 0.82);
     }
-    #pannello .barra :focus-visible { outline-color: var(--oro-chiaro); }
+    #pannello .barra :focus-visible { outline-color: #fff; }
     #pannello-chiudi {
         flex: none;
         width: 48px;
@@ -487,7 +490,7 @@
                        inputmode="{{ $prefisso !== '' ? 'numeric' : 'text' }}" autocomplete="off"
                        placeholder="{{ $esempioCartellino }}">
             </span>
-            <button class="sc-bottone-oro" type="submit">Cerca</button>
+            <button class="sc-bottone-chiaro" type="submit">Cerca</button>
         </form>
     </div>
 
@@ -498,7 +501,7 @@
             <div id="mappa"></div>
 
             <aside id="comandi" aria-label="Come si legge la carta">
-                <p class="sc-occhiello sc-occhiello-oro">Come si legge la carta</p>
+                <p class="sc-occhiello sc-occhiello-ente">Come si legge la carta</p>
 
                 <div class="m-gruppo">
                     <p class="m-gruppo-nome" id="sfondi-nome">Sfondo della carta</p>
@@ -529,7 +532,7 @@
                         <circle cx="22" cy="18" r="14" fill="var(--m-parco)" fill-opacity="0.55"
                                 stroke="var(--stato-sano)" stroke-width="1.2" stroke-opacity="0.8"/>
                         <circle cx="22" cy="18" r="3.5" fill="var(--stato-sano)" stroke="#ffffff" stroke-width="1.5"/>
-                        <g stroke="var(--oro-scuro)" stroke-width="1" fill="none">
+                        <g stroke="var(--inchiostro-2)" stroke-width="1" fill="none">
                             <path d="M8 39 H36"/>
                             <path d="M8 35.5 V42.5 M36 35.5 V42.5"/>
                         </g>
@@ -571,9 +574,12 @@
                     'zoom' => 15,
                     'sfondi' => $sfondi,
                     'colori' => \App\Services\Portale\PortalState::COLORI,
-                    // I colori della carta escono dalla tavolozza del Comune:
-                    // l'anello dell'elemento aperto è oro (l'accento del
-                    // portale) e non più rosso, che è il colore di uno stato
+                    // I colori della carta escono dalla tavolozza del Comune.
+                    // L'anello che segna l'elemento aperto e' l'unico posto in
+                    // cui resta l'ambra della vecchia tavolozza, e per un
+                    // motivo: deve distinguersi dai quattro colori di stato e
+                    // dal colore dell'ente, qualunque tinta abbia scelto il
+                    // Comune. Non e' decorazione, e' il "sei qui".
                     'accento' => $tav->colore('oro'),
                     'verde' => $tav->colore('m-parco'),
                     'bosco' => $tav->colore('bosco'),

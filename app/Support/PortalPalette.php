@@ -33,15 +33,17 @@ final class PortalPalette
 
     /**
      * Le ricette della tavolozza: token => [sorgente, quota della sorgente in
-     * centesimi, colore di base]. Le percentuali vengono dalle bozze
-     * approvate (il blocco <style> di Chioma.dc.html e ChiomaScheda.dc.html):
-     * "56%" significa 56 parti di sorgente e 44 di base, mescolate in oklab,
-     * esattamente come color-mix(in oklab, var(--tinta) 56%, #050d09).
+     * centesimi, colore di base]. "56%" significa 56 parti di sorgente e 44
+     * di base, mescolate in oklab, esattamente come
+     * color-mix(in oklab, var(--tinta) 56%, #050d09).
      *
-     * La sorgente è quasi sempre la tinta; l'oro scuro nasce dall'oro (così
-     * resta oro anche quando la tinta è un rosso mattone) e le due cortecce
-     * non nascono da niente: nessuna corteccia è verde, e se la tinta fosse
-     * un viola gli alberi disegnati diventerebbero di plastica.
+     * La sorgente è sempre la tinta, tranne l'ambra scura che nasce
+     * dall'ambra: così resta ambra anche quando la tinta è un rosso mattone.
+     *
+     * I token delle illustrazioni (fogliame, luce, corteccia, la carta
+     * disegnata) sono stati tolti il 14/09/2026 insieme ai disegni: la veste
+     * istituzionale non ha figure, e una tavolozza che descrive un disegno
+     * che non esiste piu' fa perdere tempo a chi la legge.
      */
     private const RICETTE = [
         // --- notte e bosco: i fondi scuri di testata, copertina e piede ----
@@ -49,44 +51,32 @@ final class PortalPalette
         'notte-fondo' => ['tinta', 32, '#030806'],
         'bosco' => ['tinta', 88, '#0b1a12'],
 
-        // --- i tre piani del fogliame disegnato: prospettiva aerea, cioè
-        //     luminanza crescente e croma calante man mano che si allontana --
-        'fogliame-vicino' => ['tinta', 68, '#16281c'],
-        'fogliame-medio' => ['tinta', 50, '#a8bda0'],
-        'fogliame-lontano' => ['tinta', 26, '#c9d6c4'],
-
-        // --- la luce del sole, una sola in tutto il portale ----------------
-        'luce' => ['tinta', 10, '#f9e8bf'],
-        'luce-2' => ['tinta', 40, '#e5cb92'],
-
-        // --- accento unico: oro -------------------------------------------
+        // --- l'ambra del "sei qui" sulla carta -----------------------------
+        //     Unico avanzo della veste editoriale del 29/08, e per un motivo:
+        //     l'anello che segna l'elemento aperto sulla mappa deve staccarsi
+        //     dai quattro colori di stato e dal colore dell'ente, qualunque
+        //     tinta abbia scelto il Comune. Non e' decorazione, e' un segno.
         'oro' => ['tinta', 12, '#c2933a'],
         'oro-scuro' => ['oro', 46, '#2e2207'],
         'oro-chiaro' => ['tinta', 8, '#eed7a2'],
 
         // --- il corpo chiaro delle pagine ---------------------------------
-        'avorio' => ['tinta', 4, '#faf5ea'],
-        'avorio-2' => ['tinta', 7, '#f2ebd9'],
-        'carta' => ['tinta', 2, '#fdfbf5'],
-        'chiaro' => ['tinta', 8, '#f6f0e3'],
-        'chiaro-2' => ['tinta', 26, '#ded8c6'],
-        'inchiostro' => ['tinta', 62, '#14170f'],
-        'inchiostro-2' => ['tinta', 44, '#6c7163'],
-        'filo' => ['tinta', 15, '#dad1ba'],
-        'filo-2' => ['tinta', 34, '#b3a68a'],
+        //     Grigi neutri, non avorio: il registro e' quello di un atto
+        //     dell'ente (decisione committente 14/09/2026). La tinta del
+        //     Comune entra in dose piccolissima, quel tanto che basta perche'
+        //     la pagina non sia la stessa in tutti i Comuni.
+        'avorio' => ['tinta', 3, '#f4f6f5'],
+        'avorio-2' => ['tinta', 5, '#e9edec'],
+        'carta' => ['tinta', 1, '#ffffff'],
+        'chiaro' => ['tinta', 6, '#f2f5f4'],
+        'chiaro-2' => ['tinta', 22, '#d3d9d7'],
+        'inchiostro' => ['tinta', 55, '#14181a'],
+        'inchiostro-2' => ['tinta', 40, '#5b6360'],
+        'filo' => ['tinta', 10, '#e2e7e5'],
+        'filo-2' => ['tinta', 28, '#a9b2af'],
 
-        // --- corteccia: sganciata dalla tinta ------------------------------
-        'corteccia' => [null, 0, '#6c5c48'],
-        'corteccia-2' => [null, 0, '#3b3126'],
-
-        // --- la carta del censimento disegnata (fondali di home e mappa) ---
-        'm-fondo' => ['tinta', 9, '#e8dfd0'],
-        'm-iso' => ['tinta', 16, '#dad0bc'],
-        'm-casa' => ['tinta', 30, '#beb28e'],
-        'm-orlo' => ['tinta', 20, '#cbc1a8'],
+        // --- il verde delle aree sulla carta -------------------------------
         'm-parco' => ['tinta', 22, '#dbe3c2'],
-        'm-acqua' => ['tinta', 22, '#b6d1d6'],
-        'm-testo' => ['tinta', 58, '#262a21'],
     ];
 
     /**
@@ -110,8 +100,6 @@ final class PortalPalette
         ['bosco', 'scurisci', 'chiaro', 4.5],
         // Gli occhielli in oro sono maiuscoletto piccolo: testo normale.
         ['oro-scuro', 'scurisci', 'avorio', 4.5],
-        // Le scritte sulla carta disegnata stanno sopra il verde del parco.
-        ['m-testo', 'scurisci', 'm-parco', 4.5],
         // Il filo forte cinge i campi da compilare: è un componente
         // d'interfaccia, gli basta 3:1.
         ['filo-2', 'scurisci', 'avorio', 3.0],

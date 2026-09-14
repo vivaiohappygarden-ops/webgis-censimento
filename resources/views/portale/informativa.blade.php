@@ -15,10 +15,10 @@
     .proprio { white-space: pre-line; }
     /* Manca un dato che l'ente deve mettere prima di aprire il portale: non è
        un errore del programma, è una cosa da fare. Il segno è il filetto
-       d'oro dei richiami, non un colore d'allarme preso da fuori tavolozza. */
+       dell'ente per i richiami, non un colore d'allarme preso da fuori tavolozza. */
     .mancante {
         padding: var(--s-2) var(--s-3);
-        border-left: 3px solid var(--oro-scuro);
+        border-left: 3px solid var(--bosco);
         background: var(--avorio-2);
         color: var(--inchiostro);
         font-size: var(--t-etichetta);

@@ -126,7 +126,7 @@
 .scheda .sc-occhiello { margin: 0; }
 .scheda .titolo-sezione {
     font-family: var(--titolo);
-    font-weight: 400;
+    font-weight: 600;
     font-size: var(--sc-titolo);
     line-height: 1.12;
     letter-spacing: -0.008em;
@@ -143,13 +143,12 @@
 }
 
 /* ------------------------------------------------------------ apertura
-   La fotografia (o il disegno) tocca i bordi del foglio; sopra, il numero
-   del cartellino. Il velo è NERO, non tinto: una fotografia non prende il
-   colore del Comune. È anche l'unico modo di garantire il contrasto sopra
-   una fotografia che non abbiamo mai visto: dove sta il testo il nero è al
-   90%, quindi il bianco legge almeno 7:1 anche sul cielo più chiaro. Per
-   questo qui il testo è bianco e non d'oro: l'oro sopra una fotografia
-   qualsiasi non arriverebbe a 4,5:1. */
+   La fotografia tocca i bordi del foglio; sopra, il numero del cartellino.
+   Il velo è NERO, non tinto: una fotografia non prende il colore del Comune.
+   È anche l'unico modo di garantire il contrasto sopra una fotografia che non
+   abbiamo mai visto: dove sta il testo il nero è al 90%, quindi il bianco
+   legge almeno 7:1 anche sul cielo più chiaro.
+   Senza fotografia non si disegna niente al suo posto: vedi .senza-foto. */
 .scheda .foto {
     position: relative;
     margin: 0;
@@ -168,15 +167,16 @@
     object-fit: cover;
     object-position: center;
 }
-.scheda .foto .disegno { display: block; width: 100%; height: auto; }
-/* Il disegno non è una fotografia: non ha una sua proporzione da rispettare,
-   quindi riempie esattamente il riquadro (preserveAspectRatio="slice" nel
-   disegno stesso) e l'altezza la decide la scheda. */
-.scheda .foto-disegno { height: 380px; height: clamp(380px, 82cqi, 560px); }
-/* Sul disegno il velo può essere più basso: il fondo lo abbiamo disegnato noi
-   e non c'è una fotografia da salvare dal buio, quindi si lascia vedere */
-.scheda .foto-disegno .velo { padding-top: 40px; }
-.scheda .foto-disegno .disegno { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* Senza fotografia la testata si stringe a quello che dice davvero: il
+   numero del cartellino, lo stato e la data del rilievo. Niente velo, niente
+   sfumatura da coprire, e soprattutto niente disegno di una pianta che non è
+   questa: prima erano fino a 560px da scorrere prima di leggere la specie. */
+.scheda .senza-foto { min-height: 0; background: var(--bosco); }
+.scheda .senza-foto .velo {
+    position: static;
+    padding: var(--sc-vuoto) var(--sc-lato);
+    background: none;
+}
 .scheda .velo {
     position: absolute;
     left: 0; right: 0; bottom: 0;
@@ -194,14 +194,14 @@
     margin: 0;
     font-size: var(--t-occhiello);
     line-height: 1.2;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: #fff;
 }
 .scheda .cartellino {
     margin: var(--s-1) 0 0;
     font-family: var(--titolo);
-    font-weight: 350;
+    font-weight: 600;
     font-size: var(--sc-cartellino);
     line-height: 0.98;
     letter-spacing: 0.02em;
@@ -210,13 +210,13 @@
 }
 /* Senza cartellino non si stampa un numero finto: si dice che non c'è */
 .scheda .cartellino-muto { font-size: var(--sc-titolo); letter-spacing: 0; font-style: italic; }
-.scheda .filo-oro {
+.scheda .filo-titolo {
     display: block;
     width: 72px;
     max-width: 40%;
     height: 2px;
     margin-top: var(--s-2);
-    background: var(--oro);
+    background: rgba(255, 255, 255, 0.5);
 }
 .scheda .velo-piede {
     display: flex;
@@ -230,7 +230,7 @@
 }
 .scheda .velo-nota {
     margin: var(--s-2) 0 0;
-    font-size: var(--t-occhiello);
+    font-size: var(--t-etichetta);
     line-height: 1.55;
     color: #fff;
 }
@@ -260,14 +260,14 @@
     display: block;
     font-size: var(--t-occhiello);
     line-height: 1.2;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--inchiostro-2);
 }
 .scheda .nome {
     margin: var(--s-2) 0 0;
     font-family: var(--titolo);
-    font-weight: 400;
+    font-weight: 600;
     font-size: var(--sc-nome);
     line-height: 1.06;
     letter-spacing: -0.017em;
@@ -280,11 +280,11 @@
     display: block;
     font-family: var(--titolo);
     font-style: italic;
-    font-weight: 400;
+    font-weight: 600;
     font-size: var(--sc-titolo);
     line-height: 1.12;
     letter-spacing: -0.008em;
-    color: var(--oro-scuro);
+    color: var(--inchiostro-2);
 }
 .scheda .specie span {
     display: block;
@@ -323,7 +323,7 @@
     margin: 0;
     text-align: left;
     font-family: var(--titolo);
-    font-weight: 400;
+    font-weight: 600;
     font-size: var(--sc-valore);
     line-height: 1;
     letter-spacing: -0.016em;
@@ -333,7 +333,7 @@
 .scheda .misura-spiega {
     display: block;
     margin-top: 6px;
-    font-size: var(--t-occhiello);
+    font-size: var(--t-etichetta);
     line-height: 1.55;
     color: var(--inchiostro-2);
     text-wrap: pretty;
@@ -352,7 +352,7 @@
 .scheda .sigillo h2 {
     margin: var(--s-1) 0 0;
     font-family: var(--titolo);
-    font-weight: 400;
+    font-weight: 600;
     font-size: var(--sc-titolo);
     line-height: 1.12;
     letter-spacing: -0.008em;
@@ -407,7 +407,7 @@
 .scheda .valore-stimato .cifra {
     margin: 0;
     font-family: var(--titolo);
-    font-weight: 400;
+    font-weight: 600;
     font-size: var(--sc-stima);
     line-height: 0.98;
     letter-spacing: -0.024em;
@@ -415,8 +415,13 @@
     font-variant-numeric: tabular-nums lining-nums;
 }
 /* L'unità di misura non è una cifra: resta nel carattere del testo e piccola,
-   o "kg/anno" peserebbe quanto il numero */
+   o "kg/anno" peserebbe quanto il numero. L'unità non si spezza mai a metà:
+   la scheda eredita overflow-wrap:break-word dal corpo della pagina, e in una
+   colonna stretta "litri/anno" usciva come "litri/a" a capo "nno". */
 .scheda .valore-stimato .unita {
+    overflow-wrap: normal;
+    word-break: keep-all;
+    white-space: nowrap;
     font-family: var(--testo);
     font-size: var(--t-corpo);
     font-weight: 500;
@@ -435,7 +440,7 @@
 .scheda .stima {
     margin: var(--s-3) 0 0;
     padding: 0;
-    font-size: var(--t-occhiello);
+    font-size: var(--t-etichetta);
     line-height: 1.55;
     color: var(--inchiostro-2);
     text-wrap: pretty;
@@ -443,12 +448,12 @@
 
 /* --------------------------------------------------------- cronologia
    Il cuore della scheda: si deve leggere come un racconto. Un filo verticale
-   tiene insieme le tappe, il pallino d'oro segna la data. */
+   tiene insieme le tappe, il pallino segna la data. */
 .scheda .cronologia { padding-left: var(--sc-lato); padding-right: var(--sc-lato); border-top: 1px solid var(--filo); }
 .scheda .cronologia h2 {
     margin: var(--s-1) 0 0;
     font-family: var(--titolo);
-    font-weight: 400;
+    font-weight: 600;
     font-size: var(--sc-titolo);
     line-height: 1.12;
     letter-spacing: -0.008em;
@@ -476,13 +481,13 @@
     left: 0; top: 6px;
     width: 11px; height: 11px;
     border-radius: 50%;
-    background: var(--oro);
+    background: var(--bosco);
     outline: 4px solid var(--carta);
 }
 .scheda .quando {
     margin: 0;
     font-family: var(--titolo);
-    font-weight: 400;
+    font-weight: 600;
     font-size: var(--sc-titolo);
     line-height: 1;
     letter-spacing: -0.008em;
@@ -493,10 +498,10 @@
 .scheda .fatto {
     display: block;
     margin-top: var(--s-1);
-    font-size: var(--t-occhiello);
-    font-weight: 500;
+    font-size: var(--t-etichetta);
+    font-weight: 600;
     line-height: 1.35;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.06em;
     color: var(--inchiostro-2);
 }
 /* L'annotazione del tecnico è la sua voce: resta com'è stata scritta, a capo
@@ -525,7 +530,7 @@
 }
 .scheda .foto-evento img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .scheda .atti { background: transparent; border-radius: 0; padding: 0; margin-top: var(--s-3); }
-.scheda .atti-titolo { margin-bottom: var(--s-2); color: var(--oro-scuro); }
+.scheda .atti-titolo { margin-bottom: var(--s-2); color: var(--inchiostro-2); }
 .scheda .atto {
     padding: var(--s-2);
     font-size: var(--t-etichetta);
@@ -546,7 +551,7 @@
     display: block;
     font-size: var(--t-occhiello);
     line-height: 1.2;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--inchiostro-2);
 }
@@ -568,11 +573,9 @@
     color: var(--chiaro);
     border: 1px solid var(--bosco);
     font-family: var(--testo);
-    font-size: var(--t-occhiello);
+    font-size: var(--t-corpo);
     font-weight: 600;
     line-height: 1.2;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
     text-align: center;
     text-decoration: none;
 }
@@ -587,7 +590,7 @@
 .scheda .azione.secondaria:hover { border-color: var(--bosco); }
 .scheda .azioni-nota {
     margin: var(--s-2) 0 0;
-    font-size: var(--t-occhiello);
+    font-size: var(--t-etichetta);
     line-height: 1.55;
     color: var(--inchiostro-2);
     text-wrap: pretty;
@@ -621,46 +624,15 @@
 
 <article class="scheda{{ $contesto === 'pagina' ? ' scheda-pagina' : '' }}">
 
-    {{-- Apertura: la fotografia se c'è, altrimenti un disegno che si dichiara
-         tale. Sopra, il numero stampato sul cartellino. --}}
-    <figure class="foto{{ $hasFoto ? '' : ' foto-disegno' }}">
+    {{-- Apertura: la fotografia, se c'è. Se non c'è, non si mette niente al
+         suo posto: la versione precedente disegnava una pianta di fantasia
+         alta mezzo schermo, e prima di arrivare alla specie bisognava
+         scorrere. Un disegno che non è quella pianta non è un dato: qui
+         resta la sola testata con il numero del cartellino. --}}
+    <figure class="foto{{ $hasFoto ? '' : ' senza-foto' }}">
         @if ($hasFoto)
             <img src="{{ $urlFoto }}" alt="Fotografia dell'elemento">
             <button type="button" class="lente" data-ingrandisci="{{ $urlFoto }}" aria-label="Ingrandisci la fotografia">+</button>
-        @elseif ($albero)
-            {{-- Disegno della chioma: masse piatte e nessuna ombra fotografica,
-                 perché non sembri una fotografia che non è arrivata. Una sola
-                 luce, da destra in alto, come in tutto il portale. --}}
-            <svg class="disegno" viewBox="0 0 600 480" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
-                <rect width="600" height="480" fill="var(--luce)"/>
-                <circle cx="498" cy="96" r="34" fill="var(--luce-2)"/>
-                <path d="M0 336 C 92 320 148 330 212 326 C 302 320 380 334 470 326 C 520 322 560 330 600 324 L600 480 L0 480 Z" fill="var(--fogliame-lontano)"/>
-                <path d="M0 378 C 122 364 260 376 360 372 C 462 368 540 378 600 372 L600 480 L0 480 Z" fill="var(--fogliame-medio)"/>
-                <ellipse cx="252" cy="394" rx="132" ry="16" fill="var(--fogliame-vicino)" opacity="0.28"/>
-                <path d="M286 206 C 288 288 284 344 272 394 L 332 394 C 320 344 316 288 318 220 Z" fill="var(--corteccia-2)"/>
-                <path d="M302 206 C 302 288 304 344 308 394 L 332 394 C 320 344 316 288 318 220 Z" fill="var(--corteccia)"/>
-                <ellipse cx="300" cy="190" rx="182" ry="112" fill="var(--fogliame-medio)"/>
-                <circle cx="230" cy="200" r="106" fill="var(--fogliame-vicino)"/>
-                <circle cx="354" cy="186" r="118" fill="var(--fogliame-vicino)"/>
-                <circle cx="296" cy="154" r="90" fill="var(--fogliame-vicino)"/>
-                <circle cx="392" cy="156" r="78" fill="var(--luce-2)" opacity="0.42"/>
-                <circle cx="434" cy="202" r="44" fill="var(--luce-2)" opacity="0.3"/>
-            </svg>
-        @else
-            {{-- Non è un albero: al posto della chioma il ritaglio di carta del
-                 censimento, con il segno del punto rilevato. --}}
-            <svg class="disegno" viewBox="0 0 600 480" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
-                <rect width="600" height="480" fill="var(--m-fondo)"/>
-                <path d="M0 78 C 140 54 260 100 388 78 C 480 62 540 82 600 70" fill="none" stroke="var(--m-iso)" stroke-width="3"/>
-                <path d="M0 332 C 132 310 268 354 392 330 C 486 312 546 332 600 322" fill="none" stroke="var(--m-iso)" stroke-width="3"/>
-                <path d="M62 136 L 236 100 L 268 240 L 94 278 Z" fill="var(--m-parco)" stroke="var(--m-orlo)" stroke-width="4"/>
-                <path d="M346 92 L 452 72 L 470 160 L 364 180 Z" fill="var(--m-casa)"/>
-                <path d="M392 218 L 512 196 L 528 274 L 408 296 Z" fill="var(--m-casa)"/>
-                <path d="M0 186 L 600 118" fill="none" stroke="var(--m-orlo)" stroke-width="12"/>
-                <circle cx="300" cy="182" r="34" fill="none" stroke="var(--carta)" stroke-width="8"/>
-                <circle cx="300" cy="182" r="34" fill="none" stroke="var(--bosco)" stroke-width="4"/>
-                <circle cx="300" cy="182" r="11" fill="var(--bosco)"/>
-            </svg>
         @endif
 
         <figcaption class="velo">
@@ -671,7 +643,7 @@
                 <p class="velo-occhiello">Elemento censito</p>
                 <p class="cartellino cartellino-muto">Senza cartellino</p>
             @endif
-            <span class="filo-oro" aria-hidden="true"></span>
+            <span class="filo-titolo" aria-hidden="true"></span>
 
             @if ($albero || $asset->surveyed_at)
                 <p class="velo-piede">
@@ -687,7 +659,7 @@
             @endif
 
             @unless ($hasFoto)
-                <p class="velo-nota">Disegno. Per questo elemento non è pubblicata una fotografia.</p>
+                <p class="velo-nota">Per questo elemento non è pubblicata una fotografia.</p>
             @endunless
         </figcaption>
     </figure>
@@ -771,7 +743,7 @@
 
     @if (! empty($co2) || ! empty($benefici))
         <section class="sezione lato">
-            <p class="sc-occhiello sc-occhiello-oro">Valori stimati, non misurati</p>
+            <p class="sc-occhiello sc-occhiello-ente">Valori stimati, non misurati</p>
             <h2 class="titolo-sezione">Il contributo di questa pianta</h2>
 
             <div class="stime">
@@ -840,7 +812,7 @@
 
     @if (! empty($cronologia))
         <section class="cronologia sezione">
-            <p class="sc-occhiello sc-occhiello-oro">La cura di questo elemento</p>
+            <p class="sc-occhiello sc-occhiello-ente">La cura di questo elemento</p>
             <h2>Cronologia eventi</h2>
             <p class="guida-sezione">Ogni intervento resta qui con la sua data, quello che è stato annotato in campo e l'atto pubblico che lo ha disposto.</p>
 
@@ -894,7 +866,7 @@
     @endif
 
     <section class="sezione lato">
-        <p class="sc-occhiello sc-occhiello-oro">Dove si trova</p>
+        <p class="sc-occhiello sc-occhiello-ente">Dove si trova</p>
         <h2 class="titolo-sezione">{{ $asset->area?->name ?: 'Posizione rilevata' }}</h2>
 
         @if ($asset->area?->locality?->name)
