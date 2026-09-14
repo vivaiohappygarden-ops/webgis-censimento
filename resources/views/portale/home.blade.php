@@ -173,7 +173,7 @@
 
 .stati {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: var(--s-3) var(--s-5);
     margin: var(--s-4) 0 0;
     padding: 0;
@@ -198,8 +198,8 @@
 /* I numeri del patrimonio: cifra grande, nome, glossa piccola */
 .voci {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-    gap: var(--s-4) var(--s-5);
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--s-4);
     margin: var(--s-6) 0 0;
     padding: 0;
     list-style: none;
