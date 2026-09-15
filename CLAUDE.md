@@ -294,9 +294,12 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   (chiavi `SITO_*`): quello che e' vuoto **non viene stampato**, mai un segnaposto.
   Finche' `SITO_BASE_HOST` non e' impostato il sito non e' pubblico: e' la leva con cui
   si decide quando aprirlo.
-- Registro visivo **istituzionale e sobrio** (decisione committente 13/09/2026),
-  volutamente diverso dal portale civico: fondo chiaro, un solo verde come accento,
-  nessuna illustrazione. Sistema di design documentato in testa a
+- Registro visivo **istituzionale e sobrio** (decisione committente 13/09/2026):
+  fondo chiaro, un solo verde come accento, nessuna illustrazione. Dal 14/09/2026 e'
+  lo stesso registro del portale civico, che ha seguito: stesso carattere, stessa
+  scala, stesse misure. L'unica differenza voluta e' l'accento degli occhielli, qui
+  ambra e nel portale il colore dell'ente - il portale non puo' fissarne uno, perche'
+  ogni Comune sceglie il suo. Sistema di design documentato in testa a
   `resources/views/sito/layout.blade.php` (scala tipografica, spazi, colori con i
   contrasti gia' verificati). Corpo del testo mai sotto i 17px, riga entro 68 caratteri,
   bersagli da toccare alti almeno 44px: il difetto da battere era "sul telefono si legge
