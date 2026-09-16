@@ -200,7 +200,8 @@
         color: var(--inchiostro-2);
     }
 
-    #sfondi { display: flex; flex-wrap: wrap; gap: 6px; }
+    /* almeno 8px fra bersagli vicini, o il pollice ne prende due */
+    #sfondi { display: flex; flex-wrap: wrap; gap: 8px; }
     #sfondi button {
         min-height: 44px;
         padding: 0 14px;

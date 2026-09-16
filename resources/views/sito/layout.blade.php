@@ -122,6 +122,12 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+/* Richiami interni che scorrono e passaggi di colore da 150ms (lista di
+   controllo UI/UX adottata il 16/09/2026), solo senza "riduci movimento" */
+@media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+    a, button { transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, text-decoration-color 150ms ease; }
+}
 
 body {
     margin: 0;
@@ -307,6 +313,11 @@ a:hover { text-decoration-thickness: 2px; }
 .piede-voci a { display: inline-flex; min-height: 44px; align-items: center; }
 .piede-legale { margin-top: var(--s5); padding-top: var(--s3); border-top: 1px solid rgba(255,255,255,0.18); font-size: var(--t-piccolo); color: #c3d0c6; }
 .piede-legale p + p { margin-top: var(--s1); }
+/* Un collegamento dentro una frase (l'informativa nel piede e nei contatti):
+   il segno resta alto quanto la riga, il bersaglio da toccare si allarga a
+   44px senza spostare niente. In una frase si usa la classe .collegamento. */
+.piede-legale a, .collegamento { position: relative; }
+.piede-legale a::after, .collegamento::after { content: ""; position: absolute; left: -6px; right: -6px; top: 50%; height: 44px; transform: translateY(-50%); }
 
 @media print {
     .testata, .piede-voci, .invito { display: none; }

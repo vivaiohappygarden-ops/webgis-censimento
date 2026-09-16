@@ -103,7 +103,7 @@
         <p class="nota">
             Scrivendoci per email i vostri dati vengono usati solo per rispondere alla
             richiesta e non vengono comunicati a terzi.
-            <a href="{{ $u('privacy') }}">Privacy e note legali</a>.
+            <a class="collegamento" href="{{ $u('privacy') }}">Privacy e note legali</a>.
         </p>
         @if ($azienda['ragione_sociale'])
             <p class="piccolo" style="margin-top: var(--s3);">{{ $azienda['ragione_sociale'] }}</p>

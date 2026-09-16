@@ -18,6 +18,17 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - Ammessi solo simboli tipografici funzionali: frecce di navigazione (← →), "✕" per chiudere.
 - Preferire testo sobrio, dati in evidenza, tabelle dense; l'informazione prevale sulla decorazione.
 - Lingua dell'interfaccia e dei messaggi: italiano.
+- **Lista di controllo UI/UX** (dal 16/09/2026, richiesta del committente): in
+  `.claude/skills/ui-ux-pro-max/` c'e' la skill "UI/UX Pro Max" (banca dati di stili,
+  tavolozze, caratteri e 99 regole di usabilita', con il suo cercatore
+  `python3 .claude/skills/ui-ux-pro-max/scripts/search.py "<parole>" --domain ux`).
+  Prima di consegnare un'interfaccia si passa la sua lista di controllo (contrasto 4,5:1,
+  bersagli 44px, fuoco visibile, niente emoji come icone, passaggi di 150-300ms,
+  `prefers-reduced-motion`, nessuno scorrimento orizzontale a 375/768/1024/1440).
+  **Le decisioni del committente vincono sulla skill**: dove propone caratteri di Google
+  o una tavolozza sua, restano i caratteri ospitati in casa e il colore dell'ente. La
+  skill e' con licenza CC BY-NC 4.0 (uso non commerciale): e' uno strumento di lavoro,
+  non finisce nel prodotto.
 - Le pagine di gestione si usano anche dal telefono: sotto il punto di rottura `md` il menu
   laterale è a scomparsa (pulsante "Menu" nella barra in alto) e **niente deve uscire dallo
   schermo a 390 px**. Le tabelle larghe vanno in un contenitore `overflow-x-auto` (mai
@@ -84,6 +95,15 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   schermo, non sotto la piega), poi la mappa, poi i numeri, e solo dopo il racconto.
 - I contrasti li garantisce `PortalPalette` con le sue guardie, non l'occhio: la tinta la
   sceglie il Comune, la leggibilita' no (`PortalPaletteTest`).
+- **Patrimonio dimostrativo** (`php artisan demo:patrimonio`, dal 16/09/2026): riempie il
+  Comune Demo con alberi, valutazioni e lavori verosimili per mostrare portale e gestionale
+  a un Comune prima di avere i suoi dati. `App\Services\Demo\PatrimonioDimostrativo`
+  scrive **solo nell'organizzazione con slug `demo`** (su ogni altra lancia un'eccezione,
+  qualunque opzione gli si passi) e **non si somma** a un patrimonio gia' popolato
+  (`SOGLIA_GIA_POPOLATO`). Anteprima ed esecuzione passano dallo stesso metodo (`$prova`),
+  come le azioni multiple; seme fisso, cosi' due lanci danno lo stesso patrimonio. Ogni
+  elemento generato porta in `notes` che e' dimostrativo. Prima serve `db:seed`, che crea
+  l'organizzazione, il committente e il catalogo.
 
 ## Ricerca (dal 23/08/2026)
 

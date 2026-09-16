@@ -133,6 +133,15 @@
 /* ------------------------------------------------------------------ base */
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+/* I richiami interni (#mappa, #segnalare, la nota sul metodo) scorrono
+   invece di saltare, e i passaggi di colore di pulsanti e collegamenti
+   durano un attimo (150ms) invece di scattare: sono le due regole della
+   lista di controllo UI/UX adottata il 16/09/2026. Solo per chi non ha
+   chiesto al sistema di ridurre il movimento. */
+@media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+    a, button { transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, text-decoration-color 150ms ease; }
+}
 
 body {
     margin: 0;
