@@ -134,6 +134,12 @@ class PortaleImpreseTest extends TestCase
 
     public function test_l_accettazione_sposta_le_date_e_conserva_la_durata(): void
     {
+        // Le date della prova sono scritte per esteso (ordine dal 07/09 all'11/09,
+        // proposta per il 14/09) e la richiesta vale solo per date da oggi in
+        // poi: la prova si mette a quel settembre, o smette di passare quando
+        // il calendario va avanti - e' successo il 16/09/2026
+        $this->travelTo(now()->parse('2026-09-10 09:00'));
+
         [$teamId, $utente] = $this->creaImpresa();
         $ordine = $this->creaOrdine($teamId);   // dal 07/09 all'11/09: 4 giorni
 
@@ -167,6 +173,12 @@ class PortaleImpreseTest extends TestCase
 
     public function test_un_ordine_chiuso_nel_frattempo_non_si_riprogramma(): void
     {
+        // Le date della prova sono scritte per esteso (ordine dal 07/09 all'11/09,
+        // proposta per il 14/09) e la richiesta vale solo per date da oggi in
+        // poi: la prova si mette a quel settembre, o smette di passare quando
+        // il calendario va avanti - e' successo il 16/09/2026
+        $this->travelTo(now()->parse('2026-09-10 09:00'));
+
         [$teamId, $utente] = $this->creaImpresa();
         $ordine = $this->creaOrdine($teamId);
 
