@@ -2,8 +2,9 @@
 #
 # Riscrive /etc/caddy/Caddyfile leggendo i valori dal file .env
 # dell'applicazione. La configurazione del server web non si scrive mai a
-# mano: la generano set-domain.sh (indirizzo del gestionale) e
-# set-portal-domain.sh (dominio dei portali pubblici dei Comuni).
+# mano: la generano set-domain.sh (indirizzo del gestionale),
+# set-portal-domain.sh (dominio dei portali pubblici dei Comuni) e
+# set-sito-domain.sh (dominio nudo del sito aziendale).
 #
 # Uso (da root, sul server):
 #   bash /var/www/webgis/deploy/caddy-config.sh
@@ -25,6 +26,11 @@ valore_env() {
 
 APP_URL="$(valore_env APP_URL)"
 PORTALI="$(valore_env PORTAL_BASE_HOST)"
+# Il sito aziendale sta sul dominio nudo. Senza un valore suo prende quello
+# dei portali, come fa config/sito.php: se i Comuni stanno su
+# <comune>.esempio.it, il sito risponde su esempio.it e www.esempio.it.
+SITO="$(valore_env SITO_BASE_HOST)"
+SITO="${SITO:-${PORTALI}}"
 
 # Quando esiste il blocco jolly dei Comuni, il nome del gestionale ci finisce
 # dentro. Caddy in quel caso, di suo, smette di procurare un certificato per il
@@ -82,6 +88,7 @@ trap 'rm -f "${TEMPORANEO}"' EXIT
   echo "# File generato da deploy/caddy-config.sh: non modificarlo a mano."
   echo "# Per cambiare l'indirizzo del gestionale: deploy/set-domain.sh"
   echo "# Per il dominio dei portali dei Comuni: deploy/set-portal-domain.sh"
+  echo "# Per il dominio del sito aziendale: deploy/set-sito-domain.sh"
   echo
 
   if [[ -n "${PORTALI}" ]]; then
@@ -189,6 +196,23 @@ COMUNE
     echo -e "\timport comune"
     echo "}"
   fi
+
+  # Il sito che parla ai Comuni: il dominio nudo e il suo www. Senza questo
+  # blocco il dominio nudo non risponderebbe affatto, anche con il DNS a
+  # posto e l'applicazione pronta: Caddy serve solo i nomi che conosce.
+  if [[ -n "${SITO}" ]]; then
+    echo
+    echo "# Sito aziendale: ${SITO} e www.${SITO}"
+    echo "${SITO}, www.${SITO} {"
+    echo -e "\timport comune"
+    if [[ -n "${PORTALI}" && "${SITO}" = "${PORTALI}" && "${SCHEMA}" = "https" ]] && supporta_force_automate; then
+      echo
+      echo -e "\t# www.${SITO} rientra nel blocco jolly dei Comuni qui sopra: come per"
+      echo -e "\t# il gestionale, senza questa riga Caddy non gli chiederebbe il certificato"
+      echo -e "\ttls force_automate"
+    fi
+    echo "}"
+  fi
 } > "${TEMPORANEO}"
 
 if command -v caddy >/dev/null && [[ -z "${WEBGIS_FORCE_AUTOMATE:-}" ]]; then
@@ -218,4 +242,9 @@ if [[ -n "${PORTALI}" ]]; then
   echo "  portali dei Comuni: https://<comune>.${PORTALI}"
 else
   echo "  portali dei Comuni: non configurati (deploy/set-portal-domain.sh)"
+fi
+if [[ -n "${SITO}" ]]; then
+  echo "  sito aziendale: https://${SITO} (e www.${SITO})"
+else
+  echo "  sito aziendale: non configurato (deploy/set-sito-domain.sh)"
 fi

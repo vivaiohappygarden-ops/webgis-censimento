@@ -45,4 +45,13 @@ chown -R www-data:www-data "${APP_DIR}"
 systemctl restart webgis-queue
 systemctl reload php8.4-fpm || true
 
+# La configurazione del server web nasce dal file .env e da caddy-config.sh:
+# quando lo script cambia (per esempio quando ha imparato a servire il sito
+# aziendale sul dominio nudo) il server deve saperlo senza aspettare che
+# qualcuno lo rilanci a mano. Si tocca solo un file generato da noi, mai uno
+# scritto a mano; se la configurazione non fosse valida resta quella di prima.
+if head -1 /etc/caddy/Caddyfile 2>/dev/null | grep -q "generato da deploy/caddy-config.sh"; then
+  bash "${APP_DIR}/deploy/caddy-config.sh" || echo "  (server web non riconfigurato: si prosegue con la configurazione attuale)"
+fi
+
 echo "==> Aggiornamento completato."

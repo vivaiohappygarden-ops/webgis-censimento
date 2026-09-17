@@ -148,6 +148,7 @@ completo dei 387 tipi.
 | Attività | Come |
 |---|---|
 | **Aggiornare l'applicazione** | `bash /var/www/webgis/deploy/update.sh` (30 secondi di manutenzione) |
+| **Accendere il sito aziendale** | `bash /var/www/webgis/deploy/set-sito-domain.sh <dominio>` (paragrafo 6.2-bis) |
 | **Cambiare indirizzo / attivare HTTPS** | `bash /var/www/webgis/deploy/set-domain.sh nome.dominio.it` (vedi 6.2) |
 | **Backup** | automatico ogni notte alle 03:30 in `/var/backups/webgis` (14 giorni conservati); in più, dal pannello Aruba si può attivare lo **snapshot** del server |
 | **Nuovi utenti** | dalla pagina **Utenti** dell'applicazione |
@@ -213,31 +214,49 @@ Per tornare all'indirizzo IP (raro): `bash /var/www/webgis/deploy/set-domain.sh 
 ### 6.2-bis Pubblicare il sito aziendale
 
 Il sito che parla ai Comuni sta sul **dominio nudo**
-(`censimentoalberature.it`, senza prefisso). Finche' non lo si accende, quel
-dominio non risponde e il sito si guarda solo dall'indirizzo di collaudo
-`https://<indirizzo del server>/sito`.
+(`censimentoalberature.it`, senza prefisso) e sul suo `www`. Finche' non lo si
+accende, quel dominio non risponde e il sito si guarda solo dall'indirizzo di
+collaudo `https://<indirizzo del gestionale>/sito`.
 
-Prima di accenderlo servono i dati veri, altrimenti il sito pubblica pagine
-a meta': ragione sociale, sede, partita IVA, telefono ed email. Si scrivono
-nel file `.env` del server (chiavi `SITO_*`, elencate in `.env.example`), e
-quello che si lascia vuoto semplicemente non compare.
+Si accende con un comando solo, che fa tre cose: controlla il DNS, scrive la
+configurazione (applicazione e server web) e chiede i dati dell'azienda.
 
-1. Nel pannello DNS del dominio: un record **A** per `@` (il dominio nudo) e
-   uno per `www`, tutti e due verso l'indirizzo IP del server. Sono gli stessi
-   valori del record dei portali.
-2. Sul server, nel file `/var/www/webgis/.env`:
+1. Nel pannello DNS del dominio, due record verso l'indirizzo IP del server
+   (lo stesso dei portali dei Comuni):
+
+   | Nome | Tipo | Valore |
+   | --- | --- | --- |
+   | `@` (il dominio nudo) | A | indirizzo IP del server |
+   | `www` | A | indirizzo IP del server |
+
+2. Sul server:
 
    ```
-   SITO_BASE_HOST=censimentoalberature.it
-   SITO_RAGIONE_SOCIALE=...
-   SITO_PIVA=...
-   SITO_TELEFONO=...
-   SITO_EMAIL=...
+   bash /var/www/webgis/deploy/set-sito-domain.sh censimentoalberature.it
    ```
-3. `bash /var/www/webgis/deploy/update.sh` (rilegge la configurazione e
-   rigenera le pagine in cache).
 
-Il lucchetto HTTPS lo prende da solo, come per gli altri indirizzi.
+   Il comando dice subito se i due record DNS sono a posto e, se mancano,
+   stampa esattamente quelli da creare. Poi chiede i dati dell'azienda, uno
+   per riga: ragione sociale, sede, partita IVA, telefono, email, PEC e le
+   voci facoltative (orari, territorio servito, chi firma le perizie e con
+   che titolo). **Quello che si lascia vuoto non compare sul sito**: il
+   programma non stampa mai un dato inventato. Invio salta la voce, un
+   trattino (`-`) la svuota.
+
+3. Per compilare o correggere i dati in un secondo momento:
+
+   ```
+   bash /var/www/webgis/deploy/set-sito-domain.sh --dati
+   ```
+
+Il lucchetto HTTPS lo prende da solo appena i record DNS sono attivi, di
+solito entro un'ora; non serve rilanciare niente. Per spegnere il sito sul
+dominio nudo: `set-sito-domain.sh --rimuovi` (resta l'indirizzo di collaudo).
+
+Attenzione al ripiego: se i portali dei Comuni stanno sullo stesso dominio
+(paragrafo 6.3), il sito risponde sul dominio nudo anche senza questo
+comando, perche' l'applicazione e il server web prendono quel dominio come
+suo. Il comando serve comunque, per il controllo del DNS e per i dati.
 
 ### 6.3 Il dominio dei portali dei Comuni
 
@@ -395,7 +414,8 @@ aver verificato che la configurazione sia valida.
 ---
 
 *Questa guida accompagna gli script in `deploy/`: `provision.sh`
-(installazione), `update.sh` (aggiornamenti), `set-domain.sh` (indirizzo del
+(installazione), `update.sh` (aggiornamenti), `set-sito-domain.sh` (sito
+aziendale), `set-domain.sh` (indirizzo del
 sito e HTTPS), `set-portal-domain.sh` (dominio dei portali dei Comuni),
 `caddy-config.sh` (configurazione del server web, generata dal file `.env`),
 `php-fpm-config.sh` (dimensionamento dei processi PHP), `diagnostica.sh`

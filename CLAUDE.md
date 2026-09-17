@@ -313,7 +313,12 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   recapiti, titolo di chi firma le perizie e referenze stanno in `config/sito.php`
   (chiavi `SITO_*`): quello che e' vuoto **non viene stampato**, mai un segnaposto.
   Finche' `SITO_BASE_HOST` non e' impostato il sito non e' pubblico: e' la leva con cui
-  si decide quando aprirlo.
+  si decide quando aprirlo. **Il server web serve solo i nomi che conosce**: il blocco per
+  il dominio nudo e il suo `www` lo scrive `deploy/caddy-config.sh` (con il ripiego sul
+  dominio dei portali, come `config/sito.php`), e si accende con
+  `deploy/set-sito-domain.sh <dominio>`, che controlla i due record DNS (`@` e `www`) e
+  chiede i dati dell'azienda. Senza quel blocco il sito "manca" anche con DNS e
+  applicazione a posto (successo il 17/09/2026).
 - Registro visivo **istituzionale e sobrio** (decisione committente 13/09/2026):
   fondo chiaro, un solo verde come accento, nessuna illustrazione. Dal 14/09/2026 e'
   lo stesso registro del portale civico, che ha seguito: stesso carattere, stessa

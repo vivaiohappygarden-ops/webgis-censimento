@@ -102,7 +102,9 @@ log "Controllo del DNS per ${DOMINIO}"
 echo "  Questo server è ${IP_SERVER:-di indirizzo non rilevabile}."
 
 # Un nome che nessuno creerebbe a mano: se risponde, c'è il record jolly
-IP_JOLLY="$(getent ahostsv4 "verifica-jolly.${DOMINIO}" 2>/dev/null | awk '{print $1; exit}')"
+# getent esce con 2 quando il nome non esiste: con pipefail lo script morirebbe
+# in silenzio proprio nel caso "nessun record jolly", quello da spiegare
+IP_JOLLY="$(getent ahostsv4 "verifica-jolly.${DOMINIO}" 2>/dev/null | awk '{print $1; exit}' || true)"
 JOLLY="no"
 
 if [[ -n "${IP_JOLLY}" && "${IP_JOLLY}" = "${IP_SERVER}" ]]; then

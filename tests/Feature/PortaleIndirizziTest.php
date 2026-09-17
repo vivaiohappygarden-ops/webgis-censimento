@@ -199,6 +199,75 @@ class PortaleIndirizziTest extends TestCase
         $this->assertStringNotContainsString('force_automate', $generata);
     }
 
+    public function test_il_sito_aziendale_risponde_sul_dominio_nudo_e_sul_www(): void
+    {
+        $cartella = sys_get_temp_dir().'/webgis-caddy-'.uniqid();
+        mkdir($cartella);
+        file_put_contents($cartella.'/.env', "APP_URL=https://gestionale.esempio.it\nPORTAL_BASE_HOST=censimentoalberi.it\nSITO_BASE_HOST=verdepubblico.it\n");
+
+        $generata = $this->generaCaddyfile($cartella);
+
+        // Senza questo blocco il dominio nudo non risponderebbe affatto, anche
+        // con il DNS a posto: il server web serve solo i nomi che conosce
+        $this->assertStringContainsString('verdepubblico.it, www.verdepubblico.it {', $generata);
+        // Un dominio suo, fuori dal jolly dei Comuni: nessuna forzatura del certificato
+        $blocco = substr($generata, strpos($generata, 'verdepubblico.it, www.verdepubblico.it {'));
+        $this->assertStringNotContainsString('force_automate', $blocco);
+    }
+
+    public function test_sullo_stesso_dominio_dei_comuni_il_sito_ottiene_comunque_il_certificato(): void
+    {
+        $cartella = sys_get_temp_dir().'/webgis-caddy-'.uniqid();
+        mkdir($cartella);
+        // Nessun SITO_BASE_HOST: il sito prende il dominio dei portali, come
+        // fa config/sito.php, e il suo www rientra nel blocco jolly
+        file_put_contents($cartella.'/.env', "APP_URL=https://gestionale.censimentoalberi.it\nPORTAL_BASE_HOST=censimentoalberi.it\n");
+
+        $generata = $this->generaCaddyfile($cartella, forceAutomate: 'si');
+
+        $inizio = strpos($generata, 'censimentoalberi.it, www.censimentoalberi.it {');
+        $this->assertNotFalse($inizio, 'Manca il blocco del sito sul dominio dei portali');
+        $this->assertStringContainsString('tls force_automate', substr($generata, $inizio));
+    }
+
+    public function test_senza_nessun_dominio_il_sito_non_compare(): void
+    {
+        $cartella = sys_get_temp_dir().'/webgis-caddy-'.uniqid();
+        mkdir($cartella);
+        file_put_contents($cartella.'/.env', "APP_URL=https://gestionale.esempio.it\n");
+
+        $generata = $this->generaCaddyfile($cartella);
+
+        $this->assertStringNotContainsString('Sito aziendale', $generata);
+        $this->assertStringNotContainsString('www.', $generata);
+    }
+
+    public function test_lo_script_del_sito_scrive_il_dominio_e_dice_quali_record_dns_mancano(): void
+    {
+        $cartella = sys_get_temp_dir().'/webgis-caddy-'.uniqid();
+        mkdir($cartella.'/deploy', 0777, true);
+        file_put_contents($cartella.'/.env', "APP_URL=https://gestionale.esempio.it\n");
+
+        // In prova lo script non tocca cache ne' server web e non fa domande
+        $comando = sprintf(
+            'WEBGIS_PROVA=1 WEBGIS_IP_SERVER=%s WEBGIS_APP_DIR=%s bash %s %s 2>&1 </dev/null',
+            escapeshellarg('80.211.79.223'), escapeshellarg($cartella),
+            escapeshellarg(base_path('deploy/set-sito-domain.sh')), escapeshellarg('https://WWW.Esempio-Nuovo.it/'),
+        );
+        exec($comando, $righe, $esito);
+        $uscita = implode("\n", $righe);
+
+        $this->assertSame(0, $esito, $uscita);
+        // Il dominio si normalizza: minuscolo, senza schema, senza www
+        $this->assertStringContainsString('SITO_BASE_HOST=esempio-nuovo.it', file_get_contents($cartella.'/.env'));
+        // Un nome inventato non ha DNS: lo script stampa i due record da creare
+        $this->assertStringContainsString('Nome: @', $uscita);
+        $this->assertStringContainsString('Nome: www', $uscita);
+        $this->assertStringContainsString('80.211.79.223', $uscita);
+        // I dati dell'azienda non si chiedono senza terminale, e lo si dice
+        $this->assertStringContainsString('--dati', $uscita);
+    }
+
     private function generaCaddyfile(string $cartella, string $ip = '80.211.79.223', ?string $forceAutomate = null): string
     {
         $script = base_path('deploy/caddy-config.sh');
