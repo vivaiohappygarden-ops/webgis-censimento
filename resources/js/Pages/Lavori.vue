@@ -319,7 +319,11 @@ async function createOrder() {
     }
 }
 
-async function openDetail(id) {
+async function openDetail(ordine) {
+    // Le viste passano l'id; se una passasse l'ordine intero, l'indirizzo
+    // diventerebbe ".../work-orders/[object Object]" e la risposta un 404 che
+    // non spiega niente (e' successo con il Gantt, 17/09/2026)
+    const id = ordine !== null && typeof ordine === 'object' ? ordine.id : ordine;
     try {
         const { data } = await axios.get(`/api/v1/work-orders/${id}`);
         detail.value = data.data;

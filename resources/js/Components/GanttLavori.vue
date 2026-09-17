@@ -255,7 +255,7 @@ defineExpose({ carica });
                                     :style="o.barra.stile"
                                     :title="o.barra.titolo"
                                     data-test="gantt-barra"
-                                    @click="emit('open', o)"
+                                    @click="emit('open', o.id)"
                                 >
                                     <span class="whitespace-nowrap">{{ o.barra.tagliataPrima ? '←' : '' }}{{ o.code }} {{ o.title }}{{ o.barra.tagliataDopo ? '→' : '' }}</span>
                                 </button>
