@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebGIS Censimento - depliant</title>
+<meta name="description" content="Depliant commerciale del programma WebGIS Censimento: censimento del verde, catasto alberi e stabilità, lavori, registri e portale pubblico.">
+<style>
+/* ==========================================================================
+   DEPLIANT COMMERCIALE — WebGIS Censimento
+   ==========================================================================
+
+   Otto pagine A4, pensate per la stampa e per il PDF da allegare a una
+   email. Stesso registro del sito aziendale e del portale civico
+   (resources/views/sito/layout.blade.php): fondo chiaro, un solo verde,
+   Inter ospitato in casa, nessuna illustrazione, nessuna emoji. Un
+   depliant per un ufficio tecnico deve somigliare a un documento, non a
+   una rivista: chi legge cerca prove, non aggettivi.
+
+   Le schermate in docs/depliant/img vengono dal Comune dimostrativo
+   (php artisan demo:patrimonio) e si rifanno con docs/depliant/schermate.mjs;
+   il PDF si rifà con docs/depliant/genera-pdf.mjs.
+
+   Il blocco dei recapiti sta in fondo all'ultima pagina, segnato con il
+   commento "RECAPITI": si compila prima di stampare.
+   ========================================================================== */
+
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 300 700; src: url('../../public/portale/font/inter-tondo-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 300 700; src: url('../../public/portale/font/inter-tondo-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Inter'; font-style: italic; font-weight: 300 700; src: url('../../public/portale/font/inter-corsivo-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Inter'; font-style: italic; font-weight: 300 700; src: url('../../public/portale/font/inter-corsivo-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+:root {
+    color-scheme: light;
+    --carta: #ffffff;
+    --carta-alt: #f4f6f4;
+    --inchiostro: #16211c;
+    --inchiostro-tenue: #566158;
+    --linea: #dde3de;
+    --verde: #14532d;
+    --verde-scuro: #14261d;
+    --verde-tenue: #eaf1ec;
+    --ambra: #7a5c12;
+
+    --t-occhiello: 7.2pt;
+    --t-piccolo: 8.2pt;
+    --t-corpo: 9.2pt;
+    --t-guida: 11pt;
+    --t-h3: 10.2pt;
+    --t-h2: 19pt;
+    --t-h1: 34pt;
+    --t-dato: 26pt;
+
+    --s1: 2mm; --s2: 3.2mm; --s3: 4.5mm; --s4: 6.5mm; --s5: 11mm;
+    --raggio: 1.2mm;
+}
+
+@page { size: A4; margin: 0; }
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #e9ece9; }
+body {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    font-size: var(--t-corpo);
+    line-height: 1.45;
+    color: var(--inchiostro);
+    font-variant-numeric: tabular-nums;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+@media print { html, body { background: var(--carta); } }
+
+h1, h2, h3, p, ul, ol, figure { margin: 0; }
+ul, ol { padding: 0; }
+h1 { font-size: var(--t-h1); line-height: 1.05; font-weight: 600; letter-spacing: -0.02em; }
+h2 { font-size: var(--t-h2); line-height: 1.15; font-weight: 600; letter-spacing: -0.015em; }
+h3 { font-size: var(--t-h3); line-height: 1.3; font-weight: 600; letter-spacing: -0.005em; }
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+/* ---------- La pagina --------------------------------------------------- */
+
+.pagina {
+    position: relative;
+    width: 210mm;
+    height: 297mm;
+    margin: 0 auto;
+    padding: 12mm 14mm 15mm;
+    background: var(--carta);
+    overflow: hidden;
+    break-after: page;
+    page-break-after: always;
+    display: flex;
+    flex-direction: column;
+}
+@media screen { .pagina { margin-block: 8mm; box-shadow: 0 1px 4px rgba(0,0,0,.12); } }
+.pagina:last-child { break-after: auto; page-break-after: auto; }
+
+.testata {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding-bottom: var(--s2); margin-bottom: var(--s4);
+    border-bottom: 1px solid var(--linea);
+    font-size: var(--t-piccolo); color: var(--inchiostro-tenue);
+}
+.testata .marchio { font-weight: 600; color: var(--inchiostro); letter-spacing: -0.01em; }
+
+.pie {
+    position: absolute; left: 14mm; right: 14mm; bottom: 8mm;
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: var(--t-piccolo); color: var(--inchiostro-tenue);
+    border-top: 1px solid var(--linea); padding-top: var(--s1);
+}
+.pie .numero { font-weight: 600; color: var(--inchiostro); }
+
+/* ---------- Testi ------------------------------------------------------- */
+
+.occhiello {
+    display: block; font-size: var(--t-occhiello); font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ambra);
+    margin-bottom: var(--s1);
+}
+.guida { font-size: var(--t-guida); line-height: 1.45; color: var(--inchiostro-tenue); max-width: 150mm; margin-top: var(--s2); }
+.piccolo { font-size: var(--t-piccolo); color: var(--inchiostro-tenue); }
+.nota {
+    font-size: var(--t-piccolo); color: var(--inchiostro-tenue); line-height: 1.45;
+    border-left: 3px solid var(--verde); padding-left: var(--s2);
+}
+.riquadro {
+    background: var(--verde-tenue); border-radius: var(--raggio);
+    padding: var(--s2) var(--s3);
+}
+.riquadro h3 { margin-bottom: var(--s1); }
+
+/* ---------- Griglie e blocchi ------------------------------------------- */
+
+.griglia { display: grid; gap: var(--s3) var(--s4); }
+.griglia-2 { grid-template-columns: repeat(2, 1fr); }
+.griglia-3 { grid-template-columns: repeat(3, 1fr); }
+.griglia-4 { grid-template-columns: repeat(4, 1fr); }
+
+.blocco { border-top: 2px solid var(--verde); padding-top: var(--s2); }
+.blocco h3 { margin-bottom: var(--s1); }
+.blocco p + p { margin-top: var(--s1); }
+
+.elenco { list-style: none; }
+.elenco li { position: relative; padding-left: 4mm; }
+.elenco li + li { margin-top: 1.2mm; }
+.elenco li::before { content: ''; position: absolute; left: 0; top: 0.62em; width: 2mm; height: 2px; background: var(--verde); }
+
+.passi { list-style: none; counter-reset: passo; display: grid; gap: var(--s2); }
+.passi li { counter-increment: passo; display: grid; grid-template-columns: 7mm 1fr; gap: var(--s2); }
+.passi li::before {
+    content: counter(passo); display: flex; align-items: center; justify-content: center;
+    width: 6mm; height: 6mm; border-radius: 50%; background: var(--verde); color: #fff;
+    font-size: var(--t-piccolo); font-weight: 600;
+}
+.passi h3 { font-size: var(--t-corpo); }
+
+.pannello {
+    border: 1px solid var(--linea); border-top: 3px solid var(--verde);
+    border-radius: var(--raggio); background: var(--carta-alt);
+    padding: var(--s3);
+}
+.pannello h2, .pannello h3 { margin-bottom: var(--s2); }
+
+.tabella { width: 100%; border-collapse: collapse; font-size: 8pt; }
+.tabella th, .tabella td { text-align: left; vertical-align: top; padding: 0.8mm 2mm; border-bottom: 1px solid var(--linea); line-height: 1.3; }
+.tabella th { font-weight: 600; color: var(--inchiostro); }
+.tabella td:first-child { font-weight: 600; white-space: nowrap; }
+
+/* ---------- Figure ------------------------------------------------------ */
+
+.figura img { display: block; width: 100%; height: auto; border: 1px solid var(--linea); border-radius: var(--raggio); }
+.figura figcaption { font-size: var(--t-piccolo); color: var(--inchiostro-tenue); margin-top: var(--s1); line-height: 1.4; }
+.telefoni { display: flex; gap: var(--s2); align-items: flex-start; justify-content: flex-end; }
+.telefoni .figura { width: 40mm; flex: 0 0 auto; }
+.accanto { display: grid; gap: var(--s4); align-items: start; }
+.pila { display: grid; gap: var(--s2); }
+
+/* ---------- Copertina --------------------------------------------------- */
+
+.copertina { padding-top: 22mm; }
+.copertina .marchio-grande { font-size: var(--t-piccolo); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--inchiostro-tenue); }
+.copertina h1 { margin-top: var(--s3); max-width: 160mm; }
+.copertina .guida { max-width: 158mm; margin-top: var(--s4); }
+.copertina .apertura { display: grid; grid-template-columns: 1.35fr 1fr; gap: var(--s5); margin-top: var(--s5); align-items: start; }
+.facce { display: grid; gap: var(--s3); }
+
+.indice { list-style: none; display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--s2) var(--s4); margin-top: var(--s2); }
+.indice li { display: grid; grid-template-columns: 7mm 1fr; gap: var(--s2); align-items: start; }
+.indice .n {
+    display: flex; align-items: center; justify-content: center;
+    width: 6mm; height: 6mm; border-radius: 50%; border: 1.5px solid var(--verde); color: var(--verde);
+    font-size: var(--t-piccolo); font-weight: 600;
+}
+.indice h3 { font-size: var(--t-corpo); }
+.indice p { font-size: var(--t-piccolo); color: var(--inchiostro-tenue); line-height: 1.4; }
+
+.cifre {
+    margin-top: auto;
+    margin-left: -14mm; margin-right: -14mm; margin-bottom: -15mm;
+    background: var(--verde-scuro); color: #fff;
+    padding: var(--s4) 14mm var(--s5);
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s4);
+}
+.cifra .dato { font-size: var(--t-dato); font-weight: 600; line-height: 1; letter-spacing: -0.02em; }
+.cifra p { font-size: var(--t-piccolo); color: rgba(255,255,255,.82); margin-top: var(--s1); line-height: 1.4; }
+
+/* ---------- Ultima pagina ----------------------------------------------- */
+
+.recapiti { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s3); margin-top: var(--s3); }
+.recapiti .voce { border-bottom: 1px dotted var(--inchiostro-tenue); padding-bottom: 1.5mm; min-height: 9mm; }
+.recapiti .etichetta { display: block; font-size: var(--t-occhiello); letter-spacing: 0.08em; text-transform: uppercase; color: var(--inchiostro-tenue); }
+.recapiti .valore { display: block; font-weight: 600; font-size: var(--t-corpo); }
+
+.spazio-1 { margin-top: var(--s1); }
+.spazio-2 { margin-top: var(--s2); }
+.spazio-3 { margin-top: var(--s3); }
+.spazio-4 { margin-top: var(--s4); }
+.spazio-5 { margin-top: var(--s5); }
+.stretto { max-width: 150mm; }
+</style>
+</head>
+<body>
+
+<!-- ======================================================= 1. COPERTINA -->
+<section class="pagina copertina">
+    <span class="marchio-grande">Programma per la gestione del verde</span>
+    <h1>WebGIS Censimento</h1>
+    <p class="guida">
+        Il registro del verde di un territorio in un solo programma: dove sta ogni albero,
+        che cosa è, come sta, che cosa gli è stato fatto e quando. Da quel registro escono
+        le consegne nei formati richiesti dai Capitolati Ambientali Minimi, le valutazioni
+        di stabilità, i lavori con la loro contabilità e il portale che i cittadini vedono.
+    </p>
+
+    <div class="apertura">
+        <div class="facce">
+            <div class="blocco">
+                <h3>Il gestionale, in ufficio</h3>
+                <p>Censimento, mappa, valutazioni di stabilità, lavori, registri e consegne. Dal computer e dal telefono.</p>
+            </div>
+            <div class="blocco">
+                <h3>L'app di campo, sul posto</h3>
+                <p>Rilievo con GPS, fotografie, cartellini, consuntivi e ispezioni. Funziona anche senza rete e si allinea da sola.</p>
+            </div>
+            <div class="blocco">
+                <h3>I portali, per chi sta fuori</h3>
+                <p>Il portale pubblico di ogni Comune, l'area riservata del committente, il portale delle imprese a cui si affidano lavori.</p>
+            </div>
+        </div>
+        <aside class="pannello" aria-label="A chi serve">
+            <h3>A chi serve</h3>
+            <ul class="elenco">
+                <li>Comuni ed enti pubblici che gestiscono il verde in proprio o lo affidano a imprese</li>
+                <li>Imprese di manutenzione del verde con più committenti</li>
+                <li>Studi agronomici e forestali che rilevano e periziano alberi</li>
+                <li>Gestori di parchi, cimiteri, scuole, ospedali e altri patrimoni verdi</li>
+            </ul>
+        </aside>
+    </div>
+
+    <div class="spazio-5">
+        <span class="occhiello">In queste pagine</span>
+        <ol class="indice">
+            <li><span class="n">2</span><div><h3>Censimento e territorio</h3><p>Catalogo ministeriale, mappa, schede, cartellini, importazioni ed esportazioni CAM.</p></div></li>
+            <li><span class="n">3</span><div><h3>Catasto alberi e stabilità</h3><p>Scheda dell'albero, VTA, perizie validate, scadenzario, bilancio arboreo, benefici ambientali.</p></div></li>
+            <li><span class="n">4</span><div><h3>L'app di campo</h3><p>Rilievo con GPS e fotografie, cartellini, consuntivi, ispezioni: anche senza rete.</p></div></li>
+            <li><span class="n">5</span><div><h3>Lavori ed economia</h3><p>Ordini, agenda, Gantt, listini, preventivi, SAL, piani pluriennali, imprese esterne.</p></div></li>
+            <li><span class="n">6</span><div><h3>Controlli e registri</h3><p>Ispezioni, non conformità, segnalazioni, fitosanitari, patentini, irrigazione, le dieci stampe.</p></div></li>
+            <li><span class="n">7</span><div><h3>I portali</h3><p>Il portale pubblico del Comune, l'area riservata del committente, il portale delle imprese.</p></div></li>
+            <li><span class="n">8</span><div><h3>Sicurezza, dati e avvio</h3><p>Ruoli, storico, formati aperti, server in Italia, come si parte e come si prova.</p></div></li>
+        </ol>
+    </div>
+
+    <div class="cifre">
+        <div class="cifra"><div class="dato">387</div><p>tipi di elemento del Modello Dati ministeriale per il censimento del verde, già installati</p></div>
+        <div class="cifra"><div class="dato">10</div><p>documenti PDF pronti da consegnare: schede, perizie, verbali, registri, preventivi, SAL, relazioni</p></div>
+        <div class="cifra"><div class="dato">5</div><p>formati di scambio dei dati: CSV, Excel, GeoJSON, Shapefile e pacchetto CAM</p></div>
+        <div class="cifra"><div class="dato">0</div><p>cookie sul portale pubblico: niente da far accettare al cittadino, niente da dichiarare</p></div>
+    </div>
+</section>
+
+<!-- ============================================ 2. CENSIMENTO E TERRITORIO -->
+<section class="pagina">
+    <header class="testata"><span class="marchio">WebGIS Censimento</span><span>Censimento e territorio</span></header>
+
+    <span class="occhiello">Censimento</span>
+    <h2>Che cosa c'è, e dove</h2>
+    <p class="guida">
+        Ogni elemento del verde, dall'albero alla panchina, ha una posizione, un tipo del
+        catalogo ministeriale, le sue misure, le fotografie e la storia delle modifiche.
+    </p>
+
+    <div class="griglia griglia-2 spazio-4">
+        <div class="blocco">
+            <h3>Il territorio in ordine</h3>
+            <p>Committenti, sedi con codice ISTAT, località e aree disegnate sulla mappa, con superficie e perimetro calcolati da soli. Vincoli con il documento allegato, che la scheda dell'albero mostra da sé. Contratti con CIG, CUP, importo e durata.</p>
+        </div>
+        <div class="blocco">
+            <h3>Il catalogo ministeriale</h3>
+            <p>I 387 tipi del Modello Dati per il censimento del verde urbano, richiesti dalle consegne CAM, già installati e non modificabili. A ogni tipo si aggiungono campi propri, per esempio la larghezza delle siepi, e se serve tipi personalizzati fuori dal tracciato.</p>
+        </div>
+        <div class="blocco">
+            <h3>La scheda di ogni elemento</h3>
+            <p>Tipo, misure, attributi, fotografie con la data dello scatto, cartellini collegati, vincoli, note. La storia delle modifiche dice chi ha cambiato che cosa e quando. Un albero abbattuto si registra con data e motivo: esce dagli elenchi, resta nel registro.</p>
+        </div>
+        <div class="blocco">
+            <h3>La mappa</h3>
+            <p>Tutto il patrimonio sulla carta, con le chiome disegnate in scala reale. Sfondi propri per ogni committente, come l'ortofoto comunale o la carta tecnica regionale, via WMS o a riquadri. Le aree si disegnano direttamente qui.</p>
+        </div>
+        <div class="blocco">
+            <h3>Elenchi che ricordano i filtri</h3>
+            <p>Filtri per committente, area, tipo, specie, stato e data di rilievo, salvabili come viste con un nome, personali o condivise. Ricerca a parole che ignora gli accenti e ricerca rapida da tastiera. Le azioni su più schede dicono prima quante ne cambierebbero.</p>
+        </div>
+        <div class="blocco">
+            <h3>Cartellino e pagina pubblica</h3>
+            <p>Da ogni scheda si stampa il cartellino A6 con codice e QR: chi lo inquadra vede una pagina con foto e dati essenziali, senza accesso, che si accende e si spegne elemento per elemento. La scheda si stampa in PDF scegliendo le sezioni.</p>
+        </div>
+    </div>
+
+    <div class="accanto spazio-4" style="grid-template-columns: 92mm 1fr;">
+        <figure class="figura">
+            <img src="img/mappa.png" alt="La mappa del gestionale con gli elementi censiti del Comune dimostrativo">
+            <figcaption>La mappa del gestionale sul Comune dimostrativo: ogni elemento al suo posto, le chiome in scala, i livelli da accendere e spegnere, le aree disegnate sul territorio.</figcaption>
+        </figure>
+        <div class="pila">
+            <div class="riquadro">
+                <h3>Dentro: le importazioni</h3>
+                <p>Excel o CSV di un censimento esistente, con l'abbinamento delle colonne che si salva per la volta dopo; GeoJSON; consegne CAM di altri fornitori. Ogni importazione fa prima una prova a vuoto e mostra l'anteprima.</p>
+            </div>
+            <div class="riquadro">
+                <h3>Fuori: le esportazioni</h3>
+                <p>CSV ed Excel dell'elenco così come si vede; GeoJSON e Shapefile per il sistema cartografico dell'ente; consegna CAM completa: tutti i livelli con le codifiche ministeriali, sistema di riferimento RDN2008, fotografie e riepilogo dei conteggi.</p>
+            </div>
+        </div>
+    </div>
+
+    <footer class="pie"><span>Il dato resta di chi lo ha pagato: formati aperti, nessun archivio chiuso.</span><span class="numero">2</span></footer>
+</section>
+
+<!-- ============================================= 3. ALBERI E STABILITÀ -->
+<section class="pagina">
+    <header class="testata"><span class="marchio">WebGIS Censimento</span><span>Catasto alberi e stabilità</span></header>
+
+    <span class="occhiello">Catasto alberi</span>
+    <h2>Ogni albero ha una storia, non una riga</h2>
+    <p class="guida">
+        La scheda dell'albero, le valutazioni di stabilità, le perizie e il bilancio arboreo
+        stanno nello stesso posto del censimento: nessun dato si ricopia da un programma
+        all'altro.
+    </p>
+
+    <div class="griglia griglia-2 spazio-4">
+        <div class="blocco">
+            <h3>La scheda dell'albero</h3>
+            <p>Genere, specie, cultivar e nome comune; diametro a 1,30 m, circonferenza, altezza, chioma e sua inserzione, numero di fusti; età precisa o stimata, stato vegetativo, posizione sociale, bersaglio, sito di crescita; tutori e consolidamenti; messa a dimora e abbattimento. Alberi monumentali, tutelati e dedicati.</p>
+        </div>
+        <div class="blocco">
+            <h3>Le valutazioni di stabilità (VTA)</h3>
+            <p>Difetti per parte della pianta, bersagli, classe di propensione al cedimento (A, B, C, C/D, D), esito, prescrizioni e data della prossima verifica. Analisi strumentali con il referto allegato. Gli intervalli di ricontrollo per classe si impostano dall'interfaccia.</p>
+        </div>
+        <div class="blocco">
+            <h3>La perizia come atto</h3>
+            <p>Da ogni valutazione esce la perizia in PDF con protocollo, data di emissione, fotografie e riga per la firma. Validata, si congela: contenuto bloccato, impronta SHA-256, fotografie fissate alla firma. Ristampata fra un anno è identica. Si valida anche in blocco.</p>
+        </div>
+        <div class="blocco">
+            <h3>Lo scadenzario che diventa agenda</h3>
+            <p>Ogni albero ha la data del prossimo controllo. Con un gesto i ricontrolli dovuti diventano ordini di lavoro in agenda, senza doppioni anche se lo si preme due volte. Il cruscotto Oggi conta anche quelli ancora senza ordine.</p>
+        </div>
+        <div class="blocco">
+            <h3>Il bilancio arboreo (legge 10/2013)</h3>
+            <p>Messi a dimora, abbattuti e sostituiti fra due date, per committente, con la stampa PDF pronta per il consiglio comunale o per il bilancio di fine mandato.</p>
+        </div>
+        <div class="blocco">
+            <h3>I benefici ambientali, dichiarati</h3>
+            <p>Anidride carbonica immagazzinata e assorbimento annuo con il controvalore economico; ossigeno, polveri sottili e pioggia intercettata. Il modello è scritto nella configurazione con i suoi riferimenti e ogni pagina dichiara il metodo. In pubblico escono solo se il committente li accende.</p>
+        </div>
+    </div>
+
+    <div class="accanto spazio-4" style="grid-template-columns: 98mm 1fr;">
+        <figure class="figura">
+            <img src="img/vta.png" alt="La pagina VTA del gestionale con scadenzario, bilancio arboreo ed export CAM">
+            <figcaption>La pagina VTA: lo stato delle valutazioni, i ricontrolli in scadenza, il bilancio arboreo fra due date e l'esportazione CAM.</figcaption>
+        </figure>
+        <div class="pila">
+            <p class="nota">
+                Lo stato che vedono i cittadini (sano, in cura, da potare, in verifica) non si
+                scrive a mano: nasce dall'ultima valutazione e dai lavori aperti, con una regola
+                sola, e cambia da solo quando si chiude un lavoro o si registra una nuova
+                valutazione.
+            </p>
+            <p class="nota">
+                La valutazione si compila nel gestionale, dove si ha tutto sotto gli occhi; in
+                campo si fanno sopralluogo, fotografie e appunti, e l'app apre la scheda
+                giusta.
+            </p>
+        </div>
+    </div>
+
+    <footer class="pie"><span>Un dato non rilevato resta vuoto e nella perizia compare come "non rilevato", mai come zero.</span><span class="numero">3</span></footer>
+</section>
+
+<!-- ==================================================== 4. APP DI CAMPO -->
+<section class="pagina">
+    <header class="testata"><span class="marchio">WebGIS Censimento</span><span>L'app di campo</span></header>
+
+    <span class="occhiello">In campo</span>
+    <h2>Il rilievo si fa sul posto, anche senza rete</h2>
+    <p class="guida">
+        L'app di campo si installa sul telefono e lavora senza copertura: tutto resta in coda
+        sul dispositivo e parte da solo appena torna la rete. Sotto gli alberi e nei parchi
+        non è un dettaglio.
+    </p>
+
+    <div class="accanto spazio-4" style="grid-template-columns: 1fr 46mm;">
+        <div class="griglia griglia-2">
+            <div class="blocco">
+                <h3>Quattro cose da fare, in una schermata</h3>
+                <p>Nuovo albero; misure, fotografie, cartellino e segnalazione su un elemento già in archivio; ispezione di un'area con lista di verifica; valutazione VTA, che apre la scheda giusta nel gestionale. Chi entra come operatore arriva qui direttamente.</p>
+            </div>
+            <div class="blocco">
+                <h3>Posizione e misure</h3>
+                <p>GPS con l'indicazione della precisione e il punto spostabile a mano; l'app propone l'area in cui ci si trova. Specie cercata per nome comune o botanico; diametro, altezza e chioma con le stesse quote per tutti gli alberi.</p>
+            </div>
+            <div class="blocco">
+                <h3>Fotografie e cartellini</h3>
+                <p>Le foto scattate dall'app finiscono nella scheda giusta e partono con la sincronizzazione. Il cartellino si registra con la fotocamera (QR e codici a barre), con un lettore esterno o digitando il codice; l'archivio registra anche tag NFC e RFID.</p>
+            </div>
+            <div class="blocco">
+                <h3>I miei lavori</h3>
+                <p>Gli ordini assegnati alla squadra con gli elementi da lavorare, l'avvio, la sospensione e il consuntivo: ore, quantità, mezzi, attrezzature, materiali. Il giro del giorno ordina i lavori per vicinanza e la navigazione porta all'elemento.</p>
+            </div>
+            <div class="blocco">
+                <h3>Ispezioni e segnalazioni</h3>
+                <p>Le liste di verifica si compilano sul posto, con le foto; una segnalazione si apre in due passaggi. Anche queste vanno in coda e si allineano da sole.</p>
+            </div>
+            <div class="blocco">
+                <h3>Una sincronizzazione che spiega</h3>
+                <p>La scheda Sync dice quante operazioni aspettano e, se il server ne rifiuta una, il motivo scritto chiaro: si corregge o si scarta, e nulla resta a metà. Il registro attività tiene traccia di tutto.</p>
+            </div>
+        </div>
+        <figure class="figura">
+            <img src="img/operatore.png" alt="La schermata iniziale dell'app di campo sul telefono">
+            <figcaption>La schermata di partenza dell'app di campo, sul telefono.</figcaption>
+        </figure>
+    </div>
+
+    <div class="riquadro spazio-4">
+        <h3>Come si lavora, in una giornata</h3>
+        <ol class="passi" style="grid-template-columns: repeat(4, 1fr); gap: var(--s2) var(--s3);">
+            <li><div><h3>La sera prima, con il Wi-Fi</h3><p>Si scaricano i dati di lavoro: aree, catalogo ed elementi già censiti della zona.</p></div></li>
+            <li><div><h3>Sul posto</h3><p>Posizione, tipo, specie, misure, foto, cartellino. Il codice lo assegna il programma.</p></div></li>
+            <li><div><h3>Senza copertura</h3><p>Si continua a lavorare: ogni registrazione va in coda, numerata in ordine.</p></div></li>
+            <li><div><h3>A fine giornata</h3><p>Sincronizza ora, e si aspetta la scritta "Sincronizzato": da lì i dati sono al sicuro.</p></div></li>
+        </ol>
+    </div>
+
+    <p class="nota spazio-3 stretto">
+        Le stesse funzioni si usano anche dal computer, dalla voce Campo del menu: per provare,
+        o per lavorare in ufficio con gli stessi strumenti.
+    </p>
+
+    <footer class="pie"><span>Un dato che non si è misurato resta vuoto: il programma non inventa quello che non sa.</span><span class="numero">4</span></footer>
+</section>
+
+<!-- ========================================================= 5. LAVORI -->
+<section class="pagina">
+    <header class="testata"><span class="marchio">WebGIS Censimento</span><span>Lavori ed economia</span></header>
+
+    <span class="occhiello">Lavori ed economia</span>
+    <h2>Dall'ordine di lavoro al SAL</h2>
+    <p class="guida">
+        Ogni intervento è un ordine con un codice, gli elementi coinvolti, la squadra e uno
+        stato che avanza: bozza, pianificato, assegnato, in corso, sospeso, completato o
+        annullato. Chiuso l'ordine, la storia dell'albero si aggiorna da sola.
+    </p>
+
+    <div class="griglia griglia-2 spazio-4">
+        <div class="blocco">
+            <h3>Otto viste sugli stessi ordini</h3>
+            <p>Elenco, Agenda per giorno e per squadra, Gantt sulla linea del tempo, Rendiconto per committente e periodo valorizzato dal listino, Qualità, Preventivi, SAL e Piani.</p>
+        </div>
+        <div class="blocco">
+            <h3>Quantità dalla geometria</h3>
+            <p>Collegando un elemento a un ordine, i metri quadrati vengono dalla superficie del poligono, i metri dalla lunghezza, "cadauno" vale uno per elemento. Il prezzo del listino fa il resto.</p>
+        </div>
+        <div class="blocco">
+            <h3>Listini e preventivi</h3>
+            <p>Voci con prezzo per unità di misura, spese generali e oneri di sicurezza. Il preventivo si compone dal catalogo delle lavorazioni o con voci libere, calcola l'IVA, esce in PDF e, accettato, diventa ordine di lavoro con un clic.</p>
+        </div>
+        <div class="blocco">
+            <h3>SAL e incassi</h3>
+            <p>Stati di avanzamento con IVA per riga e spese generali ripartite in proporzione, validazione, fatturato e incasso registrati, stampa PDF ed elenco dei crediti ancora aperti.</p>
+        </div>
+        <div class="blocco">
+            <h3>Piani pluriennali</h3>
+            <p>Lavorazioni ricorrenti per area con intervallo in mesi e finestra stagionale. Gli ordini dovuti in un periodo si generano in blocco, con l'anteprima di quanti ne nascerebbero e senza doppioni.</p>
+        </div>
+        <div class="blocco">
+            <h3>Squadre interne e imprese esterne</h3>
+            <p>Le squadre interne lavorano per chiunque; un'impresa appaltatrice appartiene a un committente e le si affidano solo i suoi lavori. Dal suo portale vede gli ordini e chiede la riprogrammazione con un motivo codificato; decide l'ufficio.</p>
+        </div>
+    </div>
+
+    <div class="accanto spazio-4" style="grid-template-columns: 100mm 1fr;">
+        <figure class="figura">
+            <img src="img/gantt.png" alt="Il diagramma a barre dei lavori nel gestionale">
+            <figcaption>Gli ordini di lavoro sulla linea del tempo, per squadra o per committente: il clic sulla barra apre la scheda.</figcaption>
+        </figure>
+        <div class="pila">
+            <div class="riquadro">
+                <h3>Il cruscotto Oggi</h3>
+                <p class="piccolo" style="color: var(--inchiostro);">Lavori in ritardo e dei prossimi sette giorni, controlli scaduti, segnalazioni fuori tempo, non conformità aperte, patentini in scadenza, ricontrolli VTA, stagione irrigua. Le stesse voci per email ogni mattina, solo se c'è qualcosa da dire.</p>
+            </div>
+            <div class="riquadro">
+                <h3>Il calendario sul telefono</h3>
+                <p class="piccolo" style="color: var(--inchiostro);">L'agenda dei lavori e le scadenze si leggono da Google Calendar, iPhone e Outlook con un abbonamento personale, senza aprire il gestionale.</p>
+            </div>
+            <div class="riquadro">
+                <h3>Le statistiche</h3>
+                <p class="piccolo" style="color: var(--inchiostro);">Consistenze per tipologia e specie, alberi per classe di stabilità, ordini per stato e per mese, segnalazioni e tempi di risoluzione, trattamenti per anno e prodotto.</p>
+            </div>
+        </div>
+    </div>
+
+    <footer class="pie"><span>Anteprima ed esecuzione contano allo stesso modo: quello che il programma annuncia è quello che fa.</span><span class="numero">5</span></footer>
+</section>
+
+<!-- ============================================ 6. CONTROLLI E REGISTRI -->
+<section class="pagina">
+    <header class="testata"><span class="marchio">WebGIS Censimento</span><span>Controlli e registri</span></header>
+
+    <span class="occhiello">Controlli e registri</span>
+    <h2>Gli adempimenti, con la carta che li dimostra</h2>
+    <p class="guida">
+        Ispezioni, segnalazioni, trattamenti, abilitazioni e irrigazione nello stesso
+        programma del censimento, ognuno con la sua stampa.
+    </p>
+
+    <div class="griglia griglia-2 spazio-4">
+        <div class="blocco">
+            <h3>Ispezioni con lista di verifica</h3>
+            <p>Modelli per aree o per elementi con domande sì/no, testi e numeri; periodicità e scadenzario con i ritardi in cima. L'esito è calcolato dalle risposte e ogni voce negativa può aprire da sola una non conformità. Verbale in PDF.</p>
+        </div>
+        <div class="blocco">
+            <h3>Aree gioco</h3>
+            <p>Con un gesto si installano la scheda dell'attrezzo e tre liste di verifica costruite sulla struttura della norma EN 1176 (non il suo testo, che è protetto). Quello che esiste già non viene toccato.</p>
+        </div>
+        <div class="blocco">
+            <h3>Non conformità e controlli di fine lavoro</h3>
+            <p>Aperta, azione correttiva, verificata, chiusa: ogni non conformità ha il suo percorso. Il verbale di controllo qualità si compila dal dettaglio dell'ordine di lavoro.</p>
+        </div>
+        <div class="blocco">
+            <h3>Segnalazioni con i tempi</h3>
+            <p>Codice, gravità e due scadenze fissate dal programma: presa in carico entro 1-10 giorni e risoluzione entro 3-30, secondo la gravità. Arrivano dai colleghi, dal portale del committente o dai cittadini, e con un pulsante diventano un ordine.</p>
+        </div>
+        <div class="blocco">
+            <h3>Registro dei trattamenti fitosanitari</h3>
+            <p>Il quaderno di campagna: data, area o singolo albero, coltura, prodotto con numero di registrazione, principio attivo, avversità, metodo, quantità, acqua, superficie, tempo di rientro, chi ha eseguito. Il registro dell'anno si stampa in PDF.</p>
+        </div>
+        <div class="blocco">
+            <h3>Patentini e certificati</h3>
+            <p>Patentino fitosanitario, abilitazioni, corsi sulla sicurezza, taratura dell'irroratrice, assicurazioni: intestatario, ente, numero, date. Scaduto in rosso, in scadenza entro 60 giorni in ambra, e tutto nel cruscotto Oggi.</p>
+        </div>
+        <div class="blocco">
+            <h3>Irrigazione</h3>
+            <p>Impianti per area con settori, portata e programma settimanale, stagione di apertura e chiusura, stato. Le letture del contatore danno il consumo e lo confrontano con la stima del programma: una perdita salta all'occhio.</p>
+        </div>
+        <div class="blocco">
+            <h3>Relazione annuale e scheda della località</h3>
+            <p>La relazione annuale del verde per committente: patrimonio, bilancio arboreo, lavori, controlli, segnalazioni, trattamenti, stima CO2 e fotografie. La scheda della località con superfici totale e gestita, piante, documenti e planimetrie.</p>
+        </div>
+    </div>
+
+    <div class="spazio-4">
+        <span class="occhiello">Le dieci stampe</span>
+        <table class="tabella">
+            <thead><tr><th>Stampa</th><th>Che cosa contiene</th><th>Da dove esce</th></tr></thead>
+            <tbody>
+                <tr><td>Scheda dell'elemento</td><td>Dati, misure, foto, posizione; sezioni a scelta</td><td>Scheda del censimento</td></tr>
+                <tr><td>Cartellino QR</td><td>Formato A6 con codice e QR verso la pagina pubblica</td><td>Scheda del censimento</td></tr>
+                <tr><td>Perizia di stabilità</td><td>Protocollo, valutazione, difetti, fotografie, firma</td><td>Valutazione VTA</td></tr>
+                <tr><td>Bilancio arboreo</td><td>Messi a dimora, abbattuti, sostituiti fra due date</td><td>Pagina VTA</td></tr>
+                <tr><td>Verbale di ispezione</td><td>Lista di verifica compilata, esito, foto</td><td>Dettaglio dell'ispezione</td></tr>
+                <tr><td>Registro fitosanitari</td><td>I trattamenti dell'anno, anche per una sola area</td><td>Pagina Fitosanitari</td></tr>
+                <tr><td>Preventivo</td><td>Voci, quantità, prezzi, IVA, totale</td><td>Vista Preventivi</td></tr>
+                <tr><td>SAL</td><td>Righe, IVA per aliquota, spese generali, totale</td><td>Vista SAL</td></tr>
+                <tr><td>Scheda della località</td><td>Superfici, piante, lavori, planimetrie delle aree</td><td>Pagina Territorio</td></tr>
+                <tr><td>Relazione annuale</td><td>Il lavoro dell'anno per un committente</td><td>Pagina Lavori</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <footer class="pie"><span>Su uno stesso foglio non compaiono mai due date diverse: la firma riusa la data del documento.</span><span class="numero">6</span></footer>
+</section>
+
+<!-- ========================================================= 7. PORTALI -->
+<section class="pagina">
+    <header class="testata"><span class="marchio">WebGIS Censimento</span><span>I portali</span></header>
+
+    <span class="occhiello">Chi sta fuori dall'ufficio</span>
+    <h2>Un portale per i cittadini, uno per il committente, uno per le imprese</h2>
+    <p class="guida">
+        Nessun dato esce da solo. Ogni lavoro, perizia e vincolo ha il proprio interruttore
+        "pubblico"; i singoli alberi si possono nascondere; le note interne e le fotografie
+        dei difetti non escono mai.
+    </p>
+
+    <div class="accanto spazio-4" style="grid-template-columns: 1fr 84mm;">
+        <div>
+            <h3>Il portale pubblico del Comune</h3>
+            <ul class="elenco spazio-2">
+                <li><strong>Un indirizzo per Comune</strong> (nomedelcomune.dominio), con stemma, colore dell'ente, testo di benvenuto, recapito per le segnalazioni e informativa. Si accende con un gesto quando il censimento è presentabile.</li>
+                <li><strong>Il campo del cartellino nel primo schermo:</strong> il cittadino legge il numero sull'albero, lo scrive o inquadra il QR, e apre la scheda.</li>
+                <li><strong>La mappa del verde</strong> con lo stato di ogni elemento a quattro voci: sano, in cura, da potare, in verifica.</li>
+                <li><strong>La scheda di ogni albero:</strong> specie, misure, data del rilievo, cronologia degli atti pubblici (lavori conclusi e relazioni tecniche), vincoli con il documento, come raggiungerlo e come segnalare un problema.</li>
+                <li><strong>I numeri dell'ente</strong> in prima pagina, aggiornati da soli; le stime ambientali si accendono a parte e sono dichiarate come tali, con il metodo.</li>
+                <li><strong>Fatto per il telefono e per la legge:</strong> testo mai sotto i 17 px, contrasti garantiti qualunque colore scelga l'ente, nessun cookie, nessuna richiesta a terzi.</li>
+            </ul>
+        </div>
+        <div class="telefoni">
+            <figure class="figura">
+                <img src="img/portale-home-telefono.png" alt="La prima pagina del portale pubblico sul telefono">
+                <figcaption>La prima pagina del portale, sul telefono.</figcaption>
+            </figure>
+            <figure class="figura">
+                <img src="img/portale-elemento-telefono.png" alt="La scheda pubblica di un albero sul telefono">
+                <figcaption>La scheda pubblica di un albero.</figcaption>
+            </figure>
+        </div>
+    </div>
+
+    <div class="accanto spazio-4" style="grid-template-columns: 88mm 1fr;">
+        <figure class="figura">
+            <img src="img/portale-mappa.png" alt="La mappa pubblica del Comune dimostrativo dal computer">
+            <figcaption>La mappa pubblica: lo stato di ogni pianta con la sua legenda, le chiome in scala, la ricerca del cartellino sempre a portata di mano.</figcaption>
+        </figure>
+        <div class="pila">
+            <div class="pannello">
+                <h3>L'area riservata del committente</h3>
+                <p>Il Comune o il cliente privato entra con il proprio utente e vede solo il suo territorio: aree, elementi censiti, ultimi lavori completati e segnalazioni, senza dati economici. Può inviare una richiesta con descrizione, urgenza e fino a tre fotografie, e ne segue lo stato e l'esito.</p>
+            </div>
+            <div class="pannello">
+                <h3>Il portale delle imprese appaltatrici</h3>
+                <p>Un ingresso dedicato per le ditte a cui si affidano lavori: vedono solo gli ordini delle proprie squadre e chiedono formalmente una riprogrammazione, con motivo e data proposta. La decisione resta all'ufficio e tutto rimane agli atti.</p>
+            </div>
+        </div>
+    </div>
+
+    <footer class="pie"><span>Il portale non è un modulo a parte: nasce dagli stessi dati del censimento.</span><span class="numero">7</span></footer>
+</section>
+
+<!-- ============================================ 8. COME È FATTO, CONTATTI -->
+<section class="pagina">
+    <header class="testata"><span class="marchio">WebGIS Censimento</span><span>Sicurezza, dati e avvio</span></header>
+
+    <span class="occhiello">Come è fatto</span>
+    <h2>Sicuro, controllabile, vostro</h2>
+
+    <div class="griglia griglia-3 spazio-4">
+        <div class="blocco">
+            <h3>Ognuno vede il suo</h3>
+            <p>Ogni organizzazione vede solo i propri dati. Dentro, cinque ruoli di serie (amministratore, tecnico, operatore, cliente, impresa) e ruoli su misura con i permessi scelti uno per uno, spiegati in italiano.</p>
+        </div>
+        <div class="blocco">
+            <h3>Niente si perde</h3>
+            <p>Storia delle modifiche su ogni scheda, registro delle operazioni, eliminazioni che restano in archivio. Se due persone salvano la stessa scheda, la seconda viene avvisata: nessuna modifica va persa in silenzio.</p>
+        </div>
+        <div class="blocco">
+            <h3>Errori che si spiegano</h3>
+            <p>Nessun caricamento fallisce in silenzio: ogni avviso porta il numero dell'errore e il pulsante Riprova, e le richieste respinte per motivi passeggeri si ripetono da sole.</p>
+        </div>
+        <div class="blocco">
+            <h3>Il dato è vostro</h3>
+            <p>Formati aperti in uscita (CSV, Excel, GeoJSON, Shapefile, CAM) e importazione dai file di altri. Se domani cambiate fornitore, il lavoro fatto non si perde.</p>
+        </div>
+        <div class="blocco">
+            <h3>Documenti che reggono</h3>
+            <p>Dieci stampe con lo stesso impianto: una sola data per foglio, riga "Luogo, data" per la firma, fotografie con didascalia, nessuna risorsa esterna, perizie immutabili dopo la validazione.</p>
+        </div>
+        <div class="blocco">
+            <h3>Server in Italia</h3>
+            <p>Installazione su un server cloud in data center italiano, certificato HTTPS automatico, copia di sicurezza giornaliera di dati e fotografie, aggiornamento con un comando e diagnosi del server in italiano.</p>
+        </div>
+    </div>
+
+    <div class="accanto spazio-5" style="grid-template-columns: 1fr 1fr; gap: var(--s5);">
+        <div>
+            <span class="occhiello">Come si parte</span>
+            <ol class="passi spazio-2">
+                <li><div><h3>Attivazione</h3><p>Organizzazione, utenti e ruoli, dati dello studio e di chi firma.</p></div></li>
+                <li><div><h3>Territorio</h3><p>Committenti, sedi, località, aree e vincoli: il contenitore prima del contenuto.</p></div></li>
+                <li><div><h3>Dati esistenti</h3><p>Importazione da Excel, CSV, GeoJSON o consegne CAM, con anteprima prima di scrivere.</p></div></li>
+                <li><div><h3>Rilievo in campo</h3><p>Con l'app e i cartellini; controllo in ufficio entro pochi giorni.</p></div></li>
+                <li><div><h3>Portale pubblico</h3><p>Quando il censimento è presentabile e l'ente è d'accordo.</p></div></li>
+            </ol>
+        </div>
+        <div>
+            <span class="occhiello">Per una prova</span>
+            <div class="riquadro spazio-2">
+                <h3>Un Comune dimostrativo, pronto</h3>
+                <p>Il programma prepara con un comando un Comune di prova con alberi, valutazioni e lavori verosimili: portale e gestionale si vedono prima di avere i vostri dati, e la prova continua con i vostri.</p>
+                <p class="spazio-2">La guida all'uso è dentro il programma e il manuale operativo è in italiano semplice: prima il territorio, poi il rilievo, poi le consegne.</p>
+            </div>
+            <p class="nota spazio-3">
+                Le stime ambientali applicano un modello dichiarato con i suoi riferimenti; i
+                coefficienti vanno verificati dal tecnico prima di pubblicarli. Il programma non
+                inventa formule, e lo scrive.
+            </p>
+        </div>
+    </div>
+
+    <!-- RECAPITI: compilare le tre voci prima di stampare. Le voci vuote
+         restano come righe da completare a mano. -->
+    <div class="pannello" style="margin-top: auto;">
+        <h3>Per una dimostrazione su un caso concreto</h3>
+        <p>Si parte dal vostro patrimonio: un'area, un viale, un parco. Si importa quello che avete, si accende il portale di prova, si guarda il programma con i vostri dati.</p>
+        <div class="recapiti">
+            <div class="voce"><span class="etichetta">Telefono</span><span class="valore">&nbsp;</span></div>
+            <div class="voce"><span class="etichetta">Email</span><span class="valore">&nbsp;</span></div>
+            <div class="voce"><span class="etichetta">Sito</span><span class="valore">&nbsp;</span></div>
+        </div>
+    </div>
+
+    <footer class="pie"><span>WebGIS Censimento, depliant informativo. Edizione settembre 2026.</span><span class="numero">8</span></footer>
+</section>
+
+</body>
+</html>

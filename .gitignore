@@ -27,3 +27,6 @@ Homestead.yaml
 Thumbs.db
 /dump.rdb
 __pycache__/
+
+# Anteprime del depliant: si rigenerano con VERIFICA=1 node docs/depliant/genera-pdf.mjs
+/docs/depliant/anteprima/

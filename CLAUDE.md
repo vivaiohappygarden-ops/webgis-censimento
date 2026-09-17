@@ -105,6 +105,20 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   elemento generato porta in `notes` che e' dimostrativo. Prima serve `db:seed`, che crea
   l'organizzazione, il committente e il catalogo.
 
+## Depliant commerciale (dal 17/09/2026)
+
+- In `docs/depliant/` c'e' il depliant del programma (otto pagine A4): sorgente
+  `depliant-commerciale.html`, PDF composto da `genera-pdf.mjs` (Chromium via
+  Playwright), schermate del Comune dimostrativo rifatte da `schermate.mjs`.
+  Stesso registro del sito aziendale: Inter ospitato in casa, un solo verde, niente
+  illustrazioni ne' emoji, niente superlativi, fatti e non aggettivi.
+- **Non descrive i collegamenti con il gestionale del vivaio** (invio al gestionale
+  giardini WordPress): sono funzioni nostre, non del prodotto che si vende. Parla a
+  Comuni, imprese del verde, studi agronomici e gestori di patrimoni verdi.
+- Ogni pagina ha l'altezza fissa del foglio: `genera-pdf.mjs` si ferma se il
+  contenuto sborda, invece di stampare una pagina tagliata. I recapiti in ultima
+  pagina si compilano nella sorgente (commento `RECAPITI`) prima di consegnarlo.
+
 ## Ricerca (dal 23/08/2026)
 
 - Tutti i campi di ricerca usano `App\Support\RicercaTestuale`: il testo si spezza
