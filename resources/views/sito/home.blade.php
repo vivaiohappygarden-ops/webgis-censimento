@@ -44,11 +44,9 @@
 
 {{-- Il messaggio centrale, messo in grande --}}
 <section class="sezione" aria-labelledby="titolo-messaggio">
-    <div class="contenitore griglia">
-        <div class="c-1-4"><p class="occhiello">Il punto di partenza</p></div>
-        <div class="c-4-13">
-            <h2 id="titolo-messaggio" class="affermazione">Dal censimento alla consultazione pubblica: ogni albero diventa un dato verificabile, aggiornabile e di proprietà del Comune.</h2>
-        </div>
+    <div class="contenitore">
+        <p class="occhiello">Il punto di partenza</p>
+        <h2 id="titolo-messaggio" class="affermazione">Dal censimento alla consultazione pubblica: ogni albero diventa un dato verificabile, aggiornabile e di proprietà del Comune.</h2>
     </div>
 </section>
 

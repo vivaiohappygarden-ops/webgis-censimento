@@ -8,7 +8,7 @@
             <p class="occhiello">Conformità ai capitolati e ai CAM</p>
             <h1 id="titolo-pagina">I dati nel formato che il capitolato chiede</h1>
         </div>
-        <div class="c-4-13">
+        <div class="c-1-9">
             <p class="guida">
                 Il tracciato di consegna viene adeguato alle specifiche tecniche del capitolato
                 e ai requisiti applicabili alla singola procedura. Non esiste un unico formato

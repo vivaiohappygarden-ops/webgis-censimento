@@ -19,7 +19,7 @@
             <p class="occhiello">Note legali</p>
             <h1 id="titolo-pagina">Privacy e note legali</h1>
         </div>
-        <div class="c-4-13">
+        <div class="c-1-9">
             <p class="guida">
                 Questo sito presenta un servizio. Non raccoglie dati di chi lo legge, e questa
                 pagina spiega perché non c'è niente da accettare.

@@ -8,7 +8,7 @@
             <p class="occhiello">Censimento</p>
             <h1 id="titolo-pagina">L'inventario di quello che c'è</h1>
         </div>
-        <div class="c-4-13">
+        <div class="c-1-9">
             <p class="guida">
                 Dove si trova ogni albero, di che specie è, quanto è grande, in che condizioni si
                 trova. Senza questo, ogni decisione sul verde pubblico si prende a memoria.

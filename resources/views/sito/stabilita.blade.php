@@ -12,7 +12,7 @@
             <p class="occhiello">Stabilità VTA</p>
             <h1 id="titolo-pagina">Dimostrare di aver vigilato</h1>
         </div>
-        <div class="c-4-13">
+        <div class="c-1-9">
             <p class="guida">
                 La valutazione visiva di stabilità (VTA, Visual Tree Assessment) documenta le
                 condizioni di un albero e le osservazioni del tecnico. Non elimina il rischio:

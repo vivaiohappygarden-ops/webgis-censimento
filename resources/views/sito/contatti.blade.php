@@ -14,7 +14,7 @@
             <p class="occhiello">Contatti</p>
             <h1 id="titolo-pagina">Richiedi un sopralluogo</h1>
         </div>
-        <div class="c-4-13">
+        <div class="c-1-9">
             <p class="guida">
                 Per un preventivo serve sapere che cosa c'è da censire. Bastano poche righe:
                 l'ente, l'ambito che vi interessa (alberature stradali, parchi, scuole) e, se lo

@@ -184,6 +184,7 @@ a:hover { text-decoration-thickness: 2px; }
 .su-scuro .occhiello::before { border-color: var(--color-ivory); }
 
 .guida { font-size: var(--t-guida); line-height: 1.45; color: var(--color-muted); max-width: var(--misura); }
+.griglia > .c-1-9 + .c-1-9 { margin-top: calc(-1 * var(--s2)); }
 .su-scuro .guida { color: var(--color-ivory-dim); }
 .prosa { max-width: var(--misura); }
 .prosa > * + * { margin-top: var(--s3); }

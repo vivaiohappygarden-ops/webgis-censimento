@@ -21,7 +21,7 @@
             <p class="occhiello">{{ $azienda['ragione_sociale'] ?? 'Chi siamo' }}</p>
             <h1 id="titolo-pagina">Con chi avete a che fare</h1>
         </div>
-        <div class="c-4-13">
+        <div class="c-1-9">
             <p class="guida">
                 Un fornitore tecnico per il censimento e il controllo del patrimonio arboreo
                 pubblico: dati societari in chiaro e un modo di lavorare che si vede in quello

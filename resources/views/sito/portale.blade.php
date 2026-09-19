@@ -14,7 +14,7 @@
             <p class="occhiello">Per i cittadini</p>
             <h1 id="titolo-pagina">Il patrimonio arboreo, consultabile da tutti</h1>
         </div>
-        <div class="c-4-13">
+        <div class="c-1-9">
             <p class="guida">
                 Il portale pubblico fa parte del servizio di censimento: nasce dagli stessi dati
                 del rilievo e mostra ai cittadini quello che il Comune decide di pubblicare.
