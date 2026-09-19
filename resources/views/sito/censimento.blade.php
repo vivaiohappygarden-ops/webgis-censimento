@@ -1,109 +1,127 @@
 @extends('sito.layout')
 
-@section('titolo', 'Il censimento del verde')
-@section('descrizione', 'Come si svolge un censimento del verde urbano: definizione dell\'ambito, rilievo in campo con GPS anche senza copertura telefonica, cartellinatura con QR, verifica e consegna.')
-
 @section('contenuto')
 
-<section class="sezione">
-    <div class="contenitore">
-        <span class="occhiello">Il censimento</span>
-        <h1 style="max-width: 22ch;">L'inventario di quello che c'è</h1>
-        <p class="guida" style="margin-top: var(--s3);">
-            Dove si trova ogni albero, di che specie è, quanto è grande, in che condizioni si
-            trova. Senza questo, ogni decisione sul verde pubblico si prende a memoria.
-        </p>
+<section class="sezione" aria-labelledby="titolo-pagina">
+    <div class="contenitore griglia">
+        <div class="c-1-9">
+            <p class="occhiello">Censimento</p>
+            <h1 id="titolo-pagina">L'inventario di quello che c'è</h1>
+        </div>
+        <div class="c-4-13">
+            <p class="guida">
+                Dove si trova ogni albero, di che specie è, quanto è grande, in che condizioni si
+                trova. Senza questo, ogni decisione sul verde pubblico si prende a memoria.
+            </p>
+        </div>
     </div>
 </section>
 
-<section class="sezione sezione-alt">
+{{-- Le quattro fasi: qui il numero e' un dato, perche' la sequenza e' vera --}}
+<section class="sezione sezione-avorio filo-sopra" aria-labelledby="titolo-fasi">
     <div class="contenitore">
-        <span class="occhiello">Come lavoriamo</span>
-        <h2 style="max-width: 24ch;">Quattro fasi, in quest'ordine</h2>
-
-        <ol class="passi" style="margin-top: var(--s5); max-width: 62ch;">
-            <li class="passo">
-                <div>
-                    <h3>Definizione dell'ambito</h3>
-                    <p>
-                        Con l'ufficio tecnico si stabilisce cosa rilevare: alberature stradali,
-                        parchi, aree scolastiche, cimiteri. Si concorda il livello di dettaglio,
-                        che determina tempi e costo.
-                    </p>
-                </div>
+        <div class="testa">
+            <p class="occhiello">Come lavoriamo</p>
+            <h2 id="titolo-fasi">Quattro fasi, in quest'ordine</h2>
+        </div>
+        <ol class="fasi">
+            <li class="fase">
+                <span class="fase-numero" aria-hidden="true">01</span>
+                <h3>Definizione dell'ambito</h3>
+                <p>
+                    Con l'ufficio tecnico si stabilisce che cosa rilevare: alberature stradali,
+                    parchi, aree scolastiche, cimiteri. Si concorda il livello di dettaglio, che
+                    determina tempi e costo, e il tracciato con cui i dati saranno consegnati.
+                </p>
             </li>
-            <li class="passo">
-                <div>
-                    <h3>Rilievo in campo</h3>
-                    <p>
-                        Ogni elemento viene posizionato con GPS e schedato sul posto, con
-                        fotografia. Il rilievo funziona <strong>anche senza copertura
-                        telefonica</strong>: i dati si allineano da soli quando il segnale
-                        torna. Nelle aree rurali e nei parchi non è un dettaglio.
-                    </p>
-                </div>
+            <li class="fase">
+                <span class="fase-numero" aria-hidden="true">02</span>
+                <h3>Rilievo in campo</h3>
+                <p>
+                    Ogni albero viene posizionato con il GPS e schedato sul posto, con
+                    fotografia. Il rilievo funziona anche senza copertura telefonica: i dati si
+                    allineano quando il segnale torna. Nei parchi e nelle aree rurali non è un
+                    dettaglio.
+                </p>
             </li>
-            <li class="passo">
-                <div>
-                    <h3>Cartellinatura</h3>
-                    <p>
-                        Ogni albero riceve un cartellino numerato con codice QR. La numerazione
-                        è progressiva per Comune, con un prefisso dedicato, e non viene mai
-                        riassegnata: un cartellino applicato resta valido.
-                    </p>
-                </div>
+            <li class="fase">
+                <span class="fase-numero" aria-hidden="true">03</span>
+                <h3>Cartellinatura</h3>
+                <p>
+                    Ogni albero riceve un cartellino con un numero univoco e un codice QR. La
+                    numerazione è progressiva per ente e non viene mai riassegnata: un cartellino
+                    applicato resta valido.
+                </p>
             </li>
-            <li class="passo">
-                <div>
-                    <h3>Verifica e consegna</h3>
-                    <p>
-                        I dati vengono controllati, e il Comune riceve l'archivio completo con
-                        le fotografie, nei formati previsti dai CAM.
-                    </p>
-                </div>
+            <li class="fase">
+                <span class="fase-numero" aria-hidden="true">04</span>
+                <h3>Verifica e consegna</h3>
+                <p>
+                    I dati vengono controllati, e il Comune riceve l'archivio completo con le
+                    fotografie, nel tracciato concordato con il capitolato.
+                </p>
             </li>
         </ol>
     </div>
 </section>
 
-<section class="sezione">
-    <div class="contenitore">
-        <span class="occhiello">Che cosa viene registrato</span>
-        <h2 style="max-width: 24ch;">Per ogni albero</h2>
-
-        <ul class="campi" style="margin-top: var(--s4); max-width: 760px;">
-            <li>Specie e cultivar</li>
-            <li>Circonferenza del tronco</li>
-            <li>Altezza</li>
-            <li>Ampiezza della chioma</li>
-            <li>Data del rilievo</li>
-            <li>Area e località</li>
-            <li>Coordinate</li>
-            <li>Stato fitosanitario</li>
-            <li>Difetti rilevati</li>
-            <li>Interventi già eseguiti</li>
-            <li>Vincoli che gravano sull'area</li>
-            <li>Numero del cartellino</li>
-        </ul>
-
-        <p class="nota" style="margin-top: var(--s4);">
-            Le misure derivate — superfici, lunghezze, perimetri — si calcolano dalla geometria
-            rilevata: non si copiano a mano e non si sbagliano.
-        </p>
-    </div>
-</section>
-
-<section class="sezione sezione-alt">
-    <div class="contenitore">
-        <h2 style="max-width: 22ch;">Quanto verde c'è da censire?</h2>
-        <p class="guida" style="margin-top: var(--s3);">
-            È la prima domanda a cui rispondere insieme: da lì escono l'ambito, i tempi e il
-            costo. Un sopralluogo basta per avere numeri invece di stime.
-        </p>
-        <div class="inviti">
-            <a class="invito" href="{{ $u('contatti') }}">Richiedi un sopralluogo</a>
+{{-- Che cosa puo' contenere una scheda: un elenco, non una promessa --}}
+<section class="sezione" aria-labelledby="titolo-campi">
+    <div class="contenitore griglia">
+        <div class="c-1-4">
+            <p class="occhiello">Che cosa viene registrato</p>
+            <h2 id="titolo-campi">Per ogni albero, secondo il capitolato</h2>
+        </div>
+        <div class="c-5-13">
+            <p class="guida">
+                Queste sono le informazioni che una scheda può registrare. Non sono tutte sempre
+                previste: il livello di dettaglio viene definito in base al capitolato e alle
+                esigenze dell'ente, prima di iniziare il rilievo.
+            </p>
+            <ul class="campi" style="margin-top: var(--s4);">
+                <li>Codice univoco</li>
+                <li>Posizione geografica</li>
+                <li>Fotografia</li>
+                <li>Nome botanico</li>
+                <li>Nome comune</li>
+                <li>Altezza</li>
+                <li>Circonferenza</li>
+                <li>Diametro</li>
+                <li>Ampiezza della chioma</li>
+                <li>Area di appartenenza</li>
+                <li>Stato vegetativo</li>
+                <li>Condizioni osservate</li>
+                <li>Danni e anomalie</li>
+                <li>Interventi</li>
+                <li>Data del controllo</li>
+                <li>Data del ricontrollo</li>
+                <li>Documenti collegati</li>
+            </ul>
+            <p class="nota" style="margin-top: var(--s4);">
+                Le misure derivate, come superfici e lunghezze, si calcolano dalla geometria
+                rilevata: non si copiano a mano. Un dato non rilevato resta vuoto e non diventa
+                uno zero.
+            </p>
         </div>
     </div>
 </section>
+
+<section class="sezione sezione-bianca filo-sopra" aria-labelledby="titolo-misure">
+    <div class="contenitore">
+        <div class="testa">
+            <p class="occhiello">Le misure in campo</p>
+            <h2 id="titolo-misure">Quattro grandezze, prese allo stesso modo su ogni pianta</h2>
+            <p class="guida">Così due rilievi a distanza di anni si possono confrontare.</p>
+        </div>
+        <div style="margin-top: var(--s5);">
+            @include('sito.parti.quote')
+        </div>
+    </div>
+</section>
+
+@include('sito.parti.chiusura', [
+    'titolo' => 'Stimiamo insieme quanto verde c\'è da censire.',
+    'testo' => 'È la prima domanda a cui rispondere: da lì escono l\'ambito, i tempi e il costo. Un sopralluogo basta per avere numeri invece di stime.',
+])
 
 @endsection

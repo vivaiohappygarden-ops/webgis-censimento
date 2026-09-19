@@ -91,14 +91,19 @@ server_web() {
 
 # ------------------------------------------------------------ i dati
 # Ogni voce: chiave del file .env | domanda | esempio. Vuoto = non compare.
+# I valori di serie (senza chiave nel .env) sono quelli scritti in
+# config/sito.php: i dati societari verificati di DAMA S.R.L. e la sua PEC.
 DATI=(
-  "SITO_RAGIONE_SOCIALE|Ragione sociale (come in visura)|Verde Pubblico srl"
-  "SITO_SEDE|Sede legale (via, CAP, citta')|Via Roma 1, 00013 Mentana (RM)"
-  "SITO_PIVA|Partita IVA|01234567890"
-  "SITO_REA|Numero REA (facoltativo)|RM-1234567"
+  "SITO_RAGIONE_SOCIALE|Ragione sociale (come in visura)|DAMA S.R.L."
+  "SITO_SEDE|Sede legale (via, CAP, citta')|Via Crescenzio 58, 00193 Roma (RM), Italia"
+  "SITO_CODICE_FISCALE|Codice fiscale|17947161000"
+  "SITO_PIVA|Partita IVA|17947161000"
+  "SITO_REGISTRO_IMPRESE|Registro delle Imprese (facoltativo)|Registro delle Imprese di Roma"
+  "SITO_REA|Numero REA (facoltativo)|RM-1751463"
+  "SITO_CAPITALE_SOCIALE|Capitale sociale, come in visura (facoltativo)|€ 1.000,00 sottoscritto"
   "SITO_TELEFONO|Telefono|06 1234567"
   "SITO_EMAIL|Email|info@esempio.it"
-  "SITO_PEC|PEC (facoltativa)|azienda@pec.it"
+  "SITO_PEC|PEC (facoltativa)|dama25@pec.it"
   "SITO_ORARI|Orari in cui si risponde (facoltativi)|lunedi'-venerdi' 9-13 e 14-18"
   "SITO_INDIRIZZO|Indirizzo dell'ufficio, se diverso dalla sede (facoltativo)|"
   "SITO_TERRITORIO|Una riga sul territorio servito (facoltativa)|Operiamo nel Lazio e nelle regioni vicine"
@@ -139,7 +144,8 @@ riepilogo_dati() {
   done
   if (( ${#mancanti[@]} )); then
     echo
-    echo "Voci ancora vuote (sul sito non compaiono; la pagina Contatti lo dice):"
+    echo "Voci ancora vuote nel file .env (sul sito compare solo quello che e' compilato,"
+    echo "qui o di serie in config/sito.php):"
     printf '  - %s\n' "${mancanti[@]}"
     echo "Per compilarle: bash ${APP_DIR}/deploy/set-sito-domain.sh --dati"
   fi
@@ -152,11 +158,8 @@ if [[ "${ARGOMENTO}" = "--rimuovi" ]]; then
   ricarica
   server_web
   echo
-  echo "Fatto. Il sito resta visibile solo dall'indirizzo di collaudo:"
+  echo "Fatto. Il sito resta visibile solo dall'indirizzo di collaudo (noindex):"
   echo "  $(valore_env APP_URL)/sito"
-  echo "Attenzione: se i portali dei Comuni stanno sullo stesso dominio, il sito"
-  echo "torna a rispondere sul dominio nudo con il prossimo caddy-config.sh:"
-  echo "e' il ripiego scritto in config/sito.php."
   exit 0
 fi
 

@@ -1,113 +1,103 @@
 @extends('sito.layout')
 
-@section('titolo', 'Contatti')
-@section('descrizione', 'Come chiedere un sopralluogo o un preventivo per il censimento del verde urbano e le valutazioni di stabilità.')
-
 @php
-    $c = config('sito.contatti');
-    $azienda = config('sito.azienda');
-    $haRecapiti = (bool) ($c['telefono'] || $c['email'] || $c['pec']);
+    $c = \App\Support\SitoDati::gruppo('contatti');
+    $territorio = \App\Support\SitoDati::testo('azienda.territorio');
+    $haRecapiti = isset($c['telefono']) || isset($c['email']) || isset($c['pec']) || isset($c['orari']) || $territorio !== null;
 @endphp
 
 @section('contenuto')
 
-<section class="sezione">
-    <div class="contenitore">
-        <span class="occhiello">Contatti</span>
-        <h1 style="max-width: 22ch;">Richiedi un sopralluogo</h1>
-        <p class="guida" style="margin-top: var(--s3);">
-            Per un preventivo serve sapere che cosa c'è da censire. Bastano poche righe:
-            il Comune, l'ambito che vi interessa (alberature stradali, parchi, scuole) e,
-            se lo sapete, quanti alberi più o meno. Rispondiamo con le domande che mancano.
-        </p>
-    </div>
-</section>
-
-<section class="sezione sezione-alt">
-    <div class="contenitore">
-        <div class="griglia griglia-2">
-            <div>
-                <h2>Recapiti</h2>
-                @if ($haRecapiti)
-                    <ul class="campi" style="margin-top: var(--s4); grid-template-columns: 1fr;">
-                        @if ($c['telefono'])
-                            <li>
-                                <span class="piccolo" style="display: block;">Telefono</span>
-                                <a href="tel:{{ preg_replace('/[^+0-9]/', '', $c['telefono']) }}">{{ $c['telefono'] }}</a>
-                            </li>
-                        @endif
-                        @if ($c['email'])
-                            <li>
-                                <span class="piccolo" style="display: block;">Email</span>
-                                <a href="mailto:{{ $c['email'] }}?subject=Richiesta%20di%20sopralluogo">{{ $c['email'] }}</a>
-                            </li>
-                        @endif
-                        @if ($c['pec'])
-                            <li>
-                                <span class="piccolo" style="display: block;">Posta certificata</span>
-                                <a href="mailto:{{ $c['pec'] }}">{{ $c['pec'] }}</a>
-                            </li>
-                        @endif
-                        @if ($c['indirizzo'])
-                            <li>
-                                <span class="piccolo" style="display: block;">Indirizzo</span>
-                                {{ $c['indirizzo'] }}
-                            </li>
-                        @endif
-                        @if ($c['orari'])
-                            <li>
-                                <span class="piccolo" style="display: block;">Orari</span>
-                                {{ $c['orari'] }}
-                            </li>
-                        @endif
-                    </ul>
-                @else
-                    {{-- Nessun recapito configurato: si dice, non si inventa un
-                         numero di telefono. Finche' e' cosi' il sito non
-                         andrebbe pubblicato sul dominio. --}}
-                    <p class="nota" style="margin-top: var(--s4);">
-                        I recapiti non sono ancora stati pubblicati su questo sito.
-                    </p>
-                @endif
-            </div>
-
-            <div>
-                <h2>Che cosa succede dopo</h2>
-                <ol class="passi" style="margin-top: var(--s4);">
-                    <li class="passo">
-                        <div>
-                            <h3>Una telefonata</h3>
-                            <p>Dieci minuti per capire l'ambito e se ha senso vedersi.</p>
-                        </div>
-                    </li>
-                    <li class="passo">
-                        <div>
-                            <h3>Il sopralluogo</h3>
-                            <p>Si guarda il patrimonio insieme all'ufficio tecnico. Non si paga.</p>
-                        </div>
-                    </li>
-                    <li class="passo">
-                        <div>
-                            <h3>Il preventivo</h3>
-                            <p>Con numeri: quanti elementi, che dettaglio, in quanto tempo, a che costo.</p>
-                        </div>
-                    </li>
-                </ol>
-            </div>
+<section class="sezione" aria-labelledby="titolo-pagina">
+    <div class="contenitore griglia">
+        <div class="c-1-9">
+            <p class="occhiello">Contatti</p>
+            <h1 id="titolo-pagina">Richiedi un sopralluogo</h1>
+        </div>
+        <div class="c-4-13">
+            <p class="guida">
+                Per un preventivo serve sapere che cosa c'è da censire. Bastano poche righe:
+                l'ente, l'ambito che vi interessa (alberature stradali, parchi, scuole) e, se lo
+                sapete, quanti alberi più o meno. Rispondiamo con le domande che mancano.
+            </p>
         </div>
     </div>
 </section>
 
-<section class="sezione">
+<section class="sezione sezione-avorio filo-sopra" aria-labelledby="titolo-recapiti">
+    <div class="contenitore griglia" style="align-items: start;">
+        <div class="c-1-6">
+            <p class="occhiello">Recapiti</p>
+            <h2 id="titolo-recapiti">Dove scriverci</h2>
+            @if ($haRecapiti)
+                {{-- Ogni voce vuota sparisce del tutto: niente etichette senza valore,
+                     niente trattini, niente "da definire" --}}
+                <dl class="recapiti" style="margin-top: var(--s4);">
+                    @if (isset($c['telefono']))
+                        <div class="recapito">
+                            <dt>Telefono</dt>
+                            <dd><a href="{{ \App\Support\SitoDati::telefonoHref($c['telefono']) }}">{{ $c['telefono'] }}</a></dd>
+                        </div>
+                    @endif
+                    @if (isset($c['email']))
+                        <div class="recapito">
+                            <dt>Posta elettronica</dt>
+                            <dd><a href="mailto:{{ $c['email'] }}?subject=Richiesta%20di%20sopralluogo">{{ $c['email'] }}</a></dd>
+                        </div>
+                    @endif
+                    @if (isset($c['pec']))
+                        <div class="recapito">
+                            <dt>Posta elettronica certificata</dt>
+                            <dd><a href="mailto:{{ $c['pec'] }}?subject=Richiesta%20di%20sopralluogo">{{ $c['pec'] }}</a></dd>
+                        </div>
+                    @endif
+                    @if (isset($c['orari']))
+                        <div class="recapito">
+                            <dt>Orari</dt>
+                            <dd>{{ $c['orari'] }}</dd>
+                        </div>
+                    @endif
+                    @if ($territorio !== null)
+                        <div class="recapito">
+                            <dt>Territorio servito</dt>
+                            <dd>{{ $territorio }}</dd>
+                        </div>
+                    @endif
+                </dl>
+            @endif
+        </div>
+
+        <div class="c-7-13">
+            <p class="occhiello">Che cosa succede dopo</p>
+            <h2>Tre passaggi, in quest'ordine</h2>
+            <ol class="registro registro-compatto" style="margin-top: var(--s4);">
+                <li class="voce">
+                    <span class="voce-indice" aria-hidden="true">1</span>
+                    <h3>Primo contatto</h3>
+                    <p>Poche righe o una telefonata per capire l'ambito e se ha senso vedersi.</p>
+                </li>
+                <li class="voce">
+                    <span class="voce-indice" aria-hidden="true">2</span>
+                    <h3>Sopralluogo</h3>
+                    <p>Si guarda il patrimonio insieme all'ufficio tecnico e si concorda che cosa rilevare e con quale dettaglio.</p>
+                </li>
+                <li class="voce">
+                    <span class="voce-indice" aria-hidden="true">3</span>
+                    <h3>Preventivo tecnico ed economico</h3>
+                    <p>Con numeri: quanti elementi, che dettaglio, in quanto tempo, a che costo, e con quale tracciato di consegna.</p>
+                </li>
+            </ol>
+        </div>
+    </div>
+</section>
+
+<section class="sezione" aria-label="Nota sul trattamento dei dati">
     <div class="contenitore">
         <p class="nota">
-            Scrivendoci per email i vostri dati vengono usati solo per rispondere alla
-            richiesta e non vengono comunicati a terzi.
-            <a class="collegamento" href="{{ $u('privacy') }}">Privacy e note legali</a>.
+            Scrivendoci, i vostri dati vengono usati soltanto per rispondere alla richiesta e
+            non vengono comunicati a terzi. Questo sito non ha moduli e non usa cookie:
+            <a href="{{ $u('privacy') }}">privacy e note legali</a>.
         </p>
-        @if ($azienda['ragione_sociale'])
-            <p class="piccolo" style="margin-top: var(--s3);">{{ $azienda['ragione_sociale'] }}</p>
-        @endif
     </div>
 </section>
 

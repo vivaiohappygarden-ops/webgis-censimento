@@ -213,10 +213,13 @@ Per tornare all'indirizzo IP (raro): `bash /var/www/webgis/deploy/set-domain.sh 
 
 ### 6.2-bis Pubblicare il sito aziendale
 
-Il sito che parla ai Comuni sta sul **dominio nudo**
-(`censimentoalberature.it`, senza prefisso) e sul suo `www`. Finche' non lo si
-accende, quel dominio non risponde e il sito si guarda solo dall'indirizzo di
-collaudo `https://<indirizzo del gestionale>/sito`.
+Il sito che parla ai Comuni sta sul **dominio nudo** (`censimentoalberature.it`,
+senza prefisso); il suo `www` rinvia al dominio nudo. Finche' non lo si accende,
+quel dominio non risponde e il sito si guarda solo dall'indirizzo di collaudo
+`https://<indirizzo del gestionale>/sito`, che resta sempre attivo ma fuori dai
+motori di ricerca (`noindex`). Non c'e' nessun ripiego automatico: senza il
+comando qui sotto la radice del dominio non pubblica niente, nemmeno se i
+portali dei Comuni stanno sullo stesso dominio.
 
 Si accende con un comando solo, che fa tre cose: controlla il DNS, scrive la
 configurazione (applicazione e server web) e chiede i dati dell'azienda.
@@ -237,11 +240,13 @@ configurazione (applicazione e server web) e chiede i dati dell'azienda.
 
    Il comando dice subito se i due record DNS sono a posto e, se mancano,
    stampa esattamente quelli da creare. Poi chiede i dati dell'azienda, uno
-   per riga: ragione sociale, sede, partita IVA, telefono, email, PEC e le
-   voci facoltative (orari, territorio servito, chi firma le perizie e con
-   che titolo). **Quello che si lascia vuoto non compare sul sito**: il
-   programma non stampa mai un dato inventato. Invio salta la voce, un
-   trattino (`-`) la svuota.
+   per riga: ragione sociale, sede, codice fiscale, partita IVA, Registro delle
+   Imprese, REA, capitale sociale, telefono, email, PEC e le voci facoltative
+   (orari, territorio servito, da quanto si opera, chi firma le perizie e con
+   che titolo). I dati societari verificati di DAMA S.R.L. e la PEC sono gia'
+   scritti di serie in `config/sito.php`: Invio li conferma. **Quello che si
+   lascia vuoto non compare sul sito**: il programma non stampa mai un dato
+   inventato, ne' un'etichetta vuota. Un trattino (`-`) svuota una voce.
 
 3. Per compilare o correggere i dati in un secondo momento:
 
@@ -249,14 +254,13 @@ configurazione (applicazione e server web) e chiede i dati dell'azienda.
    bash /var/www/webgis/deploy/set-sito-domain.sh --dati
    ```
 
-Il lucchetto HTTPS lo prende da solo appena i record DNS sono attivi, di
-solito entro un'ora; non serve rilanciare niente. Per spegnere il sito sul
-dominio nudo: `set-sito-domain.sh --rimuovi` (resta l'indirizzo di collaudo).
-
-Attenzione al ripiego: se i portali dei Comuni stanno sullo stesso dominio
-(paragrafo 6.3), il sito risponde sul dominio nudo anche senza questo
-comando, perche' l'applicazione e il server web prendono quel dominio come
-suo. Il comando serve comunque, per il controllo del DNS e per i dati.
+Con il dominio acceso le pagine portano la `canonical` sul dominio nudo, i dati
+strutturati (organizzazione e briciole) e l'anteprima per i social; il server
+serve `robots.txt` (con la mappa e il divieto sul percorso di collaudo) e
+`sitemap.xml`. Il lucchetto HTTPS lo prende da solo appena i record DNS sono
+attivi, di solito entro un'ora; non serve rilanciare niente. Per spegnere il
+sito sul dominio nudo: `set-sito-domain.sh --rimuovi` (resta l'indirizzo di
+collaudo).
 
 ### 6.3 Il dominio dei portali dei Comuni
 

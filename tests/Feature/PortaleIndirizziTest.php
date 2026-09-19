@@ -219,15 +219,30 @@ class PortaleIndirizziTest extends TestCase
     {
         $cartella = sys_get_temp_dir().'/webgis-caddy-'.uniqid();
         mkdir($cartella);
-        // Nessun SITO_BASE_HOST: il sito prende il dominio dei portali, come
-        // fa config/sito.php, e il suo www rientra nel blocco jolly
-        file_put_contents($cartella.'/.env', "APP_URL=https://gestionale.censimentoalberi.it\nPORTAL_BASE_HOST=censimentoalberi.it\n");
+        // Sito e portali sullo stesso dominio, dichiarato: il www del sito
+        // rientra nel blocco jolly dei Comuni e il certificato va forzato
+        file_put_contents($cartella.'/.env', "APP_URL=https://gestionale.censimentoalberi.it\nPORTAL_BASE_HOST=censimentoalberi.it\nSITO_BASE_HOST=censimentoalberi.it\n");
 
         $generata = $this->generaCaddyfile($cartella, forceAutomate: 'si');
 
         $inizio = strpos($generata, 'censimentoalberi.it, www.censimentoalberi.it {');
         $this->assertNotFalse($inizio, 'Manca il blocco del sito sul dominio dei portali');
         $this->assertStringContainsString('tls force_automate', substr($generata, $inizio));
+    }
+
+    public function test_senza_sito_base_host_il_dominio_dei_portali_non_diventa_il_sito(): void
+    {
+        $cartella = sys_get_temp_dir().'/webgis-caddy-'.uniqid();
+        mkdir($cartella);
+        // Nessun ripiego (decisione del 19/09/2026): finche' il sito non e'
+        // acceso con set-sito-domain.sh, la radice del dominio non pubblica
+        // niente, nemmeno con i Comuni sullo stesso dominio
+        file_put_contents($cartella.'/.env', "APP_URL=https://gestionale.censimentoalberi.it\nPORTAL_BASE_HOST=censimentoalberi.it\n");
+
+        $generata = $this->generaCaddyfile($cartella, forceAutomate: 'si');
+
+        $this->assertStringNotContainsString('Sito aziendale', $generata);
+        $this->assertStringNotContainsString('censimentoalberi.it, www.censimentoalberi.it {', $generata);
     }
 
     public function test_senza_nessun_dominio_il_sito_non_compare(): void

@@ -26,11 +26,12 @@ valore_env() {
 
 APP_URL="$(valore_env APP_URL)"
 PORTALI="$(valore_env PORTAL_BASE_HOST)"
-# Il sito aziendale sta sul dominio nudo. Senza un valore suo prende quello
-# dei portali, come fa config/sito.php: se i Comuni stanno su
-# <comune>.esempio.it, il sito risponde su esempio.it e www.esempio.it.
+# Il sito aziendale sta sul dominio nudo, e SOLO quando SITO_BASE_HOST e'
+# impostato (deploy/set-sito-domain.sh): finche' e' vuoto la radice del
+# dominio non pubblica niente, ne' qui ne' nell'applicazione (config/sito.php).
+# E' la leva con cui si decide quando aprire il sito. Se i Comuni stanno su
+# <comune>.esempio.it e il sito su esempio.it, il www rientra nel jolly.
 SITO="$(valore_env SITO_BASE_HOST)"
-SITO="${SITO:-${PORTALI}}"
 
 # Quando esiste il blocco jolly dei Comuni, il nome del gestionale ci finisce
 # dentro. Caddy in quel caso, di suo, smette di procurare un certificato per il

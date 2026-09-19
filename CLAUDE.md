@@ -312,37 +312,64 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   inventano). La VTA si compila nel gestionale: senza rete l'app lo dice e apre la
   scheda dell'albero, dove misure e foto vanno offline.
 
-## Sito aziendale (dal 13/09/2026)
+## Sito aziendale (dal 13/09/2026, ridisegnato il 19/09/2026)
 
 - Tre indirizzi sullo stesso dominio: il **sito che parla ai Comuni** sul dominio nudo
-  (`SITO_BASE_HOST`, piu' il suo `www`), i **portali civici** sui sottodomini, il
-  **gestionale** sul suo. Le rotte del sito stanno in `routes/sito.php`, gruppo di
-  middleware `sito`: come i portali, **niente sessione e niente cookie** - e' quello che
-  permette di scrivere in pie' di pagina che non c'e' niente da accettare, e
-  `SitoAziendaleTest` lo verifica.
-- Percorso di collaudo `/sito`, sempre attivo. I collegamenti interni passano da
-  `App\Support\SitoUrl`: restano nella strada da cui si e' arrivati (dominio o `/sito`),
-  come `PortalContext::url()` per i portali.
-- **Il programma non inventa fatti sull'azienda.** Ragione sociale, partita IVA,
-  recapiti, titolo di chi firma le perizie e referenze stanno in `config/sito.php`
-  (chiavi `SITO_*`): quello che e' vuoto **non viene stampato**, mai un segnaposto.
-  Finche' `SITO_BASE_HOST` non e' impostato il sito non e' pubblico: e' la leva con cui
-  si decide quando aprirlo. **Il server web serve solo i nomi che conosce**: il blocco per
-  il dominio nudo e il suo `www` lo scrive `deploy/caddy-config.sh` (con il ripiego sul
-  dominio dei portali, come `config/sito.php`), e si accende con
-  `deploy/set-sito-domain.sh <dominio>`, che controlla i due record DNS (`@` e `www`) e
-  chiede i dati dell'azienda. Senza quel blocco il sito "manca" anche con DNS e
-  applicazione a posto (successo il 17/09/2026).
-- Registro visivo **istituzionale e sobrio** (decisione committente 13/09/2026):
-  fondo chiaro, un solo verde come accento, nessuna illustrazione. Dal 14/09/2026 e'
-  lo stesso registro del portale civico, che ha seguito: stesso carattere, stessa
-  scala, stesse misure. L'unica differenza voluta e' l'accento degli occhielli, qui
-  ambra e nel portale il colore dell'ente - il portale non puo' fissarne uno, perche'
-  ogni Comune sceglie il suo. Sistema di design documentato in testa a
-  `resources/views/sito/layout.blade.php` (scala tipografica, spazi, colori con i
-  contrasti gia' verificati). Corpo del testo mai sotto i 17px, riga entro 68 caratteri,
-  bersagli da toccare alti almeno 44px: il difetto da battere era "sul telefono si legge
-  male". Niente JavaScript, nessuna risorsa di terzi, caratteri gia' ospitati in casa.
+  (`SITO_BASE_HOST`; il `www` rinvia al nudo con un 301), i **portali civici** sui
+  sottodomini, il **gestionale** sul suo. Le rotte del sito stanno in `routes/sito.php`,
+  gruppo di middleware `sito`: come i portali, **niente sessione e niente cookie** - e'
+  quello che permette di scrivere in pie' di pagina "Nessun cookie, niente da accettare",
+  e `SitoAziendaleTest` lo verifica insieme a: nessuno `<script>`, nessun `<form>`,
+  nessun `<iframe>`, nessuna risorsa da altri domini.
+- **Otto pagine**, indirizzi puliti: `/`, `/censimento`, `/stabilita-vta`,
+  `/portale-cittadini`, `/conformita-cam`, `/chi-siamo`, `/contatti`, `/privacy` (i vecchi
+  `/stabilita`, `/portale`, `/conformita` rinviano). Titolo, descrizione, etichetta di menu e
+  briciola di ogni pagina stanno in `SitoController::PAGINE`, in un posto solo. Le prime
+  sette nel menu, la privacy solo nel pie'.
+- Percorso di collaudo `/sito`, sempre attivo e **sempre `noindex, nofollow`**, senza
+  canonical. Finche' `SITO_BASE_HOST` e' vuoto la radice del dominio non pubblica niente
+  (nessun ripiego sul dominio dei portali, ne' in `config/sito.php` ne' in
+  `deploy/caddy-config.sh`): e' la leva con cui si decide quando aprire il sito, e la
+  accende `deploy/set-sito-domain.sh <dominio>` (controlla i record DNS `@` e `www`, chiede
+  i dati). Con il dominio acceso: canonical sul dominio nudo, Open Graph con immagine
+  locale, dati strutturati prudenti (Organization, WebSite, BreadcrumbList: niente
+  valutazioni, niente numeri), `robots.txt` dinamico (ha preso il posto del file statico:
+  sugli altri nomi non vieta niente) e `sitemap.xml`. I collegamenti interni passano da
+  `App\Support\SitoUrl` (mai `/sito` scritto a mano); le risorse statiche stanno in
+  `public/sito-risorse/` - non `public/sito/`, perche' una cartella con quel nome
+  coprirebbe il percorso di collaudo.
+- **Il programma non inventa fatti sull'azienda.** Tutti i dati modificabili stanno in
+  `config/sito.php` (chiavi `SITO_*`, di serie i dati societari verificati di DAMA S.R.L.
+  del 19/09/2026 e la sola PEC; il capitale e' "sottoscritto", non "versato") e le viste li
+  leggono **solo** attraverso `App\Support\SitoDati`: quello che e' vuoto, nullo, di soli
+  spazi o elenco vuoto **non viene stampato** - niente etichette vuote, trattini, "da
+  definire". `SitoDati::problemi()` e' la validazione del file (la prova la vuole vuota).
+  Anni di esperienza, alberi censiti, Comuni serviti, referenze, professionisti, portali
+  realizzati: compaiono solo se compilati. Senza firmatario la pagina VTA usa la formula
+  prudente ("il professionista incaricato, secondo la natura dell'attivita' e le competenze
+  richieste"); la conformita' non si dichiara mai automatica o assoluta e non si citano
+  norme non verificate; i benefici ambientali del portale sono dichiarati stime.
+- Direzione grafica **"Impatto"** (decisione committente 19/09/2026, sostituisce il registro
+  sobrio del 13/09): grandi titoli editoriali su griglia a 12 colonne, forte contrasto,
+  grandi campiture verde bosco alternate a molta carta, impaginazione asimmetrica ma
+  ordinata, e i **segni del rilievo** come linguaggio grafico (mappa stilizzata, targhetta
+  con numero del cartellino e cronologia, crocette di rilievo, coordinate, numerazione solo
+  delle sequenze vere). Nessuna fotografia finche' non ce ne sono di vere: nessun
+  segnaposto. La tavolozza sta in `resources/views/sito/stile.blade.php` come variabili
+  `--color-*` (forest, forest-dark, leaf, accent, ivory, paper, ink, muted, line, white,
+  focus), pensate per essere condivise con il futuro portale civico; le coppie di contrasto
+  verificate sono elencate in testa al file. Il verde acido (`accent`) non fa mai testo su
+  fondo chiaro: fa il pulsante (testo in ink), i segni e gli occhielli sui fondi scuri.
+  Il fuoco da tastiera e' un doppio anello (giallo + ink o forest-dark).
+- **Niente JavaScript, nemmeno per il menu**: sul telefono e' un `details/summary`, dai
+  1000px la testata ha due righe (marchio e pulsante, poi le sette voci in linea). Solo
+  Inter variabile ospitato in casa (`caratteri.blade.php`, pesi dichiarati 100-900 perche'
+  sono quelli veri), corpo del testo mai sotto i 17px, bersagli alti almeno 44px, un solo
+  `h1`, briciole su tutte le pagine tranne la home, "Salta al contenuto". La verifica in
+  Chromium (`scratchpad/verifica-sito.mjs` della sessione del 19/09) controlla a 320, 375,
+  768, 1024 e 1440px: nessuno scorrimento laterale, nessun testo sotto i 17px, nessun
+  bersaglio sotto i 44px, contrasti, nessuna richiesta esterna, nessun cookie, axe-core
+  senza violazioni, menu funzionante con JavaScript disattivato.
 
 ## Flusso di lavoro
 
