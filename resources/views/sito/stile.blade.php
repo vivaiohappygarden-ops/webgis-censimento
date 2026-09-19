@@ -416,8 +416,11 @@ a.testata-azione { display: none; }
 
 .quote { display: grid; gap: var(--s4); align-items: start; }
 @media (min-width: 900px) { .quote { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s6); } }
-.quote-disegno { background: var(--color-white); border: 1px solid var(--color-line); padding: var(--s3); }
+.quote-disegno { background: var(--color-white); border: 1px solid var(--color-ink); padding: var(--s3) var(--s3) 0; }
 .quote-disegno svg { display: block; width: 100%; height: auto; }
+/* Il cartiglio della tavola: come su un elaborato, in basso, a due celle */
+.cartiglio-tavola { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px var(--s3); margin: var(--s3) calc(-1 * var(--s3)) 0; padding: var(--s2) var(--s3); border-top: 1px solid var(--color-ink); font-size: 17px; color: var(--color-muted); }
+.cartiglio-tavola strong { color: var(--color-ink); margin-right: 8px; }
 .legenda { display: grid; }
 .legenda li { display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: baseline; padding-block: 10px; border-bottom: 1px solid var(--color-line); }
 .legenda .n { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--color-ink); color: var(--color-accent); font-weight: 700; font-size: 16px; transform: translateY(6px); }
