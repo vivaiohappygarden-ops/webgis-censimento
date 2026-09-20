@@ -100,4 +100,13 @@ sudo -u postgres psql -tAc "SELECT count(*) || ' collegamenti su ' || setting FR
 redis-cli info memory 2>/dev/null | grep -E '^(used_memory_human|maxmemory_human)' | sed 's/^/  Redis: /' \
   || echo "  Redis: non interrogabile"
 
+titolo "Aggiornamento automatico"
+if systemctl list-timers --all 2>/dev/null | grep -q webgis-aggiornamento; then
+  systemctl list-timers --all --no-pager 2>/dev/null | grep -E 'NEXT|webgis-aggiornamento' | sed 's/^/  /'
+  echo "  ultime righe del registro:"
+  tail -n 6 /var/log/webgis-aggiornamento.log 2>/dev/null | sed 's/^/    /' || echo "    (registro vuoto)"
+else
+  echo "  spento: il server si aggiorna solo a mano (deploy/abilita-aggiornamento-automatico.sh per accenderlo)"
+fi
+
 printf '\nFine. Copia e incolla tutto quello che vedi qui sopra.\n'

@@ -147,7 +147,7 @@ completo dei 387 tipi.
 
 | Attività | Come |
 |---|---|
-| **Aggiornare l'applicazione** | `bash /var/www/webgis/deploy/update.sh` (30 secondi di manutenzione) |
+| **Aggiornare l'applicazione** | da solo, entro cinque minuti da ogni pubblicazione, se l'aggiornamento automatico e' acceso (paragrafo 6.6); a mano: `bash /var/www/webgis/deploy/update.sh` (30 secondi di manutenzione) |
 | **Accendere il sito aziendale** | `bash /var/www/webgis/deploy/set-sito-domain.sh <dominio>` (paragrafo 6.2-bis) |
 | **Cambiare indirizzo / attivare HTTPS** | `bash /var/www/webgis/deploy/set-domain.sh nome.dominio.it` (vedi 6.2) |
 | **Backup** | automatico ogni notte alle 03:30 in `/var/backups/webgis` (14 giorni conservati); in più, dal pannello Aruba si può attivare lo **snapshot** del server |
@@ -369,6 +369,36 @@ si cambia fornitore. Una riga vuota non vale "usa il valore predefinito", vale
 Le immagini aeree recenti non sono gratuite da nessun fornitore: le ortofoto
 pubbliche degli enti sono libere ma vecchie di anni, le riprese aggiornate si
 pagano. È un costo da mettere nel preventivo al committente, come il dominio.
+
+### 6.6 Aggiornamento automatico
+
+Invece di collegarsi al server a ogni modifica, il server puo' aggiornarsi da
+solo: ogni cinque minuti controlla se sul ramo che segue e' stata pubblicata
+una versione nuova e, se c'e', lancia `update.sh` (con la sua breve
+manutenzione). Pubblicare una modifica diventa quindi un'operazione sola, da
+parte di chi la scrive; sul server non serve fare niente.
+
+Si accende una volta sola, da root:
+
+```
+bash /var/www/webgis/deploy/abilita-aggiornamento-automatico.sh
+```
+
+Per vedere che cosa ha fatto (stato del timer e ultime righe del registro
+`/var/log/webgis-aggiornamento.log`):
+
+```
+bash /var/www/webgis/deploy/abilita-aggiornamento-automatico.sh --stato
+```
+
+Per spegnerlo: lo stesso comando con `--disabilita`. Anche `diagnostica.sh`
+riporta lo stato dell'aggiornamento automatico.
+
+Prudenze incorporate: si aggiorna solo se la storia del codice avanza in linea
+retta (se qualcuno ha modificato file sul server, non tocca niente e lo scrive
+nel registro); due aggiornamenti non partono mai insieme; un aggiornamento
+fallito resta scritto nel registro con il suo errore, e il sito torna comunque
+raggiungibile perche' `update.sh` toglie la manutenzione in ogni caso.
 
 ## 7. Se qualcosa non va
 

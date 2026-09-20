@@ -381,6 +381,11 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   cosi' chi riprende non riparte da una storia vecchia. Mai push su rami diversi da
   questi due.
 - Test: `php artisan test` (DB `webgis_test`); la suite deve restare verde prima del push.
+  **Dal 20/09/2026 il push e' una pubblicazione**: se sul server e' acceso l'aggiornamento
+  automatico (`deploy/abilita-aggiornamento-automatico.sh`, timer di sistema ogni cinque
+  minuti che lancia `update.sh` quando il ramo seguito avanza), quello che si spinge sul ramo
+  di riferimento va in produzione da solo entro cinque minuti. Solo avanzamenti in linea
+  retta: una storia divergente ferma l'aggiornamento e lo scrive nel registro.
 - Verifica ogni blocco anche nel browser reale (Playwright/Chromium) oltre che con i test.
 - Il committente non è tecnico: i resoconti si scrivono in italiano semplice, senza tecnicismi
   non spiegati e senza emoji.
