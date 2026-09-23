@@ -94,12 +94,12 @@ Si lavora dal telefono con l'app di campo (`/operatore`), che l'operatore trova 
 **Nuovo albero, nell'ordine in cui lo chiede l'app:**
 
 1. `Usa posizione GPS`: ci si mette accanto al fusto e si aspetta che la precisione sia buona. Se il segnale e' cattivo (sotto gli alberi capita) si sposta il punto a mano sulla mappa.
-2. `Tipo oggetto`: per un albero e' sempre lo stesso tipo del catalogo (Albero, P103108). `Area`: l'app propone quella in cui ci si trova.
-3. `Specie`: si cerca per nome comune o botanico. Se non si e' sicuri, meglio il solo genere che una specie sbagliata.
-4. Misure: `Diametro fusto (cm)` a 1,30 m da terra, sempre a quell'altezza; `Altezza (m)`; `Diametro chioma (m)`. Sono le stesse quote per tutti gli alberi: e' quello che rende confrontabili i dati.
-5. Foto: almeno una dell'intera pianta, da lontano; una del colletto o di un difetto quando c'e'. Le foto restano in coda e partono con la sincronizzazione.
-6. Cartellino: si applica il cartellino fisico e si registra con `Scansiona tag` (fotocamera o lettore) oppure digitando il codice. Da quel momento chiunque inquadri il cartellino arriva alla scheda.
-7. Salva. Il codice del censimento (`MEN-0001`...) lo assegna il programma alla sincronizzazione: non va inventato.
+2. `Tipo oggetto`: per un albero e' sempre lo stesso tipo del catalogo (Albero, P103108). `Area di lavoro`: si sceglie dall'elenco (se ce n'e' una sola e' gia' scelta). Se il posto non ha ancora un'area, `Nuova area di lavoro` la apre sul momento, per chi ha il permesso di creare aree: committente esistente oppure nuovo (per chi gestisce i committenti), nome dell'area e perimetro, camminato con il GPS, disegnato sulla mappa o provvisorio attorno alla posizione. Con il perimetro provvisorio l'area nasce "prevista": si censisce subito, ma l'ufficio la ridisegna da Territorio prima che esca sul portale.
+3. `Specie` e `Nome comune`: si scrivono nel modulo; l'app suggerisce le specie gia' presenti sul telefono. Se non si e' sicuri, meglio il solo genere che una specie sbagliata.
+4. Misure: `Diametro fusto (cm)` a 1,30 m da terra, sempre a quell'altezza; `Altezza (m)`; `Diametro chioma (m)`; `Stato vegetativo` dalla tendina. Sono le stesse quote per tutti gli alberi: e' quello che rende confrontabili i dati.
+5. `Registra elemento`: si apre subito la scheda dell'elemento appena creato. Il codice del censimento (`MEN-0001`...) lo assegna il programma alla sincronizzazione: non va inventato.
+6. Foto, dalla scheda: almeno una dell'intera pianta, da lontano; una del colletto o di un difetto quando c'e'. Le foto restano in coda e partono con la sincronizzazione.
+7. Cartellino, dalla scheda: si applica il cartellino fisico e si registra con `Scansiona tag` (fotocamera o lettore) oppure digitando il codice. Da quel momento chiunque inquadri il cartellino arriva alla scheda. `Indietro` riporta al modulo, pronto per la pianta successiva.
 
 **A fine giornata.** Scheda Sync: `Operazioni in coda` dice quante registrazioni aspettano; con la rete si preme `Sincronizza ora` e si aspetta la scritta `Sincronizzato`. Le foto sono la parte lenta: meglio farlo sotto il Wi-Fi. Finche' non si e' sincronizzato, i dati stanno solo su quel telefono.
 

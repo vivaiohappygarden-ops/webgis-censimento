@@ -967,6 +967,20 @@ function goTo(id) {
                             dell'albero, dove misure e fotografie si registrano anche offline.
                         </p>
                         <p>
+                            <strong>Nuovo albero</strong> chiede tutto in una volta: posizione, specie e nome
+                            comune (l'app suggerisce le specie già presenti sul telefono), altezza, diametro del
+                            fusto, diametro della chioma e stato vegetativo. Toccando "Registra elemento" si apre
+                            subito la scheda dell'elemento appena creato, dove si aggiungono fotografie e
+                            cartellino; "Indietro" riporta al modulo, pronto per la pianta successiva. Se il posto
+                            non ha ancora un'area di lavoro, sotto la tendina delle aree c'è
+                            <strong>Nuova area di lavoro</strong> (per chi ha il permesso di creare aree): si sceglie
+                            il committente, oppure se ne registra uno nuovo (per chi gestisce i committenti), e il
+                            perimetro si cammina con il GPS, si disegna sulla mappa o si prende provvisoriamente
+                            attorno alla propria posizione. In quest'ultimo caso l'area nasce "prevista": si usa
+                            subito per censire, ma non compare sul portale pubblico finché l'ufficio non la
+                            ridisegna e la conferma da Territorio.
+                        </p>
+                        <p>
                             Chi in campo non ci va (chi programma i lavori o gestisce gli utenti) continua
                             ad atterrare nel programma completo; il passaggio fra le due parti è sempre a
                             un tocco: "Campo (operatore)" nel menu laterale, "Gestione →" in alto nell'app.

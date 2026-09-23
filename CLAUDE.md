@@ -327,6 +327,20 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   lavori ne' utenti - guarda i permessi, non il nome del ruolo, perche' i ruoli ora si
   inventano). La VTA si compila nel gestionale: senza rete l'app lo dice e apre la
   scheda dell'albero, dove misure e foto vanno offline.
+- **Rilievo completo dal campo (dal 23/09/2026)**: il modulo "Nuovo rilievo" porta specie e
+  misure dentro `asset.create` (blocco `tree`, stesse regole di `asset.update_measures`, stato
+  vegetativo dal dizionario `config/agronomia.php`): una sola revisione, niente storico "da
+  vuoto a pieno". Dopo "Registra elemento" si apre la scheda del nuovo elemento per foto e
+  cartellino. **Area nata in campo**: comando `area.create` (permesso `areas.create`; con un
+  committente nuovo anche `clients.manage`, controllato nell'applier). Con un committente
+  esistente l'area finisce in una localita' **nuova con il nome dell'area** sotto la sua prima
+  sede (mai sotto una localita' che si chiama in un altro modo); il committente nuovo nasce con
+  prefisso etichette, sede e localita'. Il perimetro "attorno alla posizione"
+  (`poligonoAttorno` in `resources/js/geometria.js`) nasce `planned` con la nota che lo dice:
+  non esce sul portale finche' l'ufficio non lo ridisegna. Sul telefono le aree in coda sono
+  `dirty` come gli elementi (sopravvivono al ri-scarico, il pull le rimanda per id, lo scarto
+  le toglie e conta gli elementi orfani); lo scarico porta anche l'elenco dei committenti a
+  chi puo' aprire aree. Prove: `CampoAreeTest`, `tests/js/geometria.test.mjs`.
 
 ## Sito aziendale (dal 13/09/2026, ridisegnato il 19/09/2026)
 

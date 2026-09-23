@@ -55,3 +55,33 @@ export function contornoSiIncrocia(punti) {
 
     return false;
 }
+
+/**
+ * Il perimetro provvisorio di un'area attorno a una posizione: un poligono
+ * regolare di `lati` lati inscritto nel cerchio di raggio `raggioM` metri.
+ * Serve in campo quando non si cammina il confine (decisione committente
+ * 23/09/2026): l'area nasce "prevista" e l'ufficio la ridisegna. Le
+ * coordinate sono [lon, lat] in gradi WGS84; il passaggio da metri a gradi
+ * usa il raggio terrestre medio e il coseno della latitudine, piu' che
+ * sufficiente per qualche centinaio di metri. Anello antiorario e chiuso,
+ * come vuole il GeoJSON.
+ *
+ * @returns {{type: 'Polygon', coordinates: Array<Array<[number, number]>>}}
+ */
+export function poligonoAttorno(lon, lat, raggioM, lati = 24) {
+    const raggioTerra = 6371008.8;
+    const latitudine = Math.max(-89, Math.min(89, lat));
+    const dLat = (raggioM / raggioTerra) * (180 / Math.PI);
+    const dLon = dLat / Math.cos((latitudine * Math.PI) / 180);
+    const anello = [];
+    for (let i = 0; i < lati; i++) {
+        const angolo = (2 * Math.PI * i) / lati;
+        anello.push([
+            Number((lon + dLon * Math.cos(angolo)).toFixed(7)),
+            Number((latitudine + dLat * Math.sin(angolo)).toFixed(7)),
+        ]);
+    }
+    anello.push(anello[0]);
+
+    return { type: 'Polygon', coordinates: [anello] };
+}

@@ -388,7 +388,8 @@ Campi chiave:
 
 | Tipo | Append-only | `base_version` | Note |
 |---|---|---|---|
-| `asset.create` | sì (insert) | — | include `geom` obbligatoria, `object_type_id`, attributi |
+| `asset.create` | sì (insert) | — | include `geom` obbligatoria, `object_type_id`, attributi; dal 23/09/2026 anche il blocco `tree` (specie e misure: gli stessi campi di `asset.update_measures`) così il rilievo nasce completo con una sola revisione |
+| `area.create` | sì (insert) | — | dal 23/09/2026: area di lavoro nata in campo, `geom` Polygon/MultiPolygon, `payload.name`, e **uno** fra `locality_id`, `client_id` (committente esistente: localita' nuova con il nome dell'area sotto la sua prima sede) e `client {id, name, client_type}` (committente nuovo con prefisso etichette, sede e localita'; richiede anche `clients.manage`). `status` `active` oppure `planned` per il perimetro provvisorio (cerchio attorno alla posizione), che non esce sul portale finche' l'ufficio non lo ridisegna. Permesso: `areas.create` |
 | `asset.update_attrs` | no | sì | patch attributi/campi custom |
 | `asset.update_measures` | no | sì | dendrometria alberi (LWW con warning, §6.2) |
 | `asset.update_geom` | no | sì | v. §2.3 e §6.2 |

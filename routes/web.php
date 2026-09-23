@@ -85,6 +85,10 @@ Route::middleware('auth')->group(function () {
     // app di mappe si apre (config/portal.php, PORTAL_NAVIGATION_URL)
     Route::get('/operatore', fn () => Inertia::render('Operatore', [
         'urlNavigazione' => config('portal.navigation_url'),
+        // Lo stato vegetativo si sceglie dal dizionario del gestionale, non
+        // si scrive a mano: la pagina lo porta con se' (e resta nella cache
+        // del service worker, quindi vale anche senza rete)
+        'statiVegetativi' => config('agronomia.stato_vegetativo'),
     ]))->middleware('can:assets.create')->name('operatore');
 
     Route::get('/lavori', fn () => Inertia::render('Lavori'))

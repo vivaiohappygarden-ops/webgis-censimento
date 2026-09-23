@@ -2,18 +2,32 @@
 
 namespace App\Services\Sync;
 
+use App\Models\Area;
 use App\Models\Asset;
+use App\Models\AssetTag;
 use App\Models\CatalogObjectType;
+use App\Models\Client;
+use App\Models\Inspection;
+use App\Models\Issue;
+use App\Models\Locality;
 use App\Models\PlantingSite;
+use App\Models\Site;
 use App\Models\Tree;
 use App\Models\User;
 use App\Models\WorkLog;
 use App\Models\WorkOrder;
 use App\Services\Catalog\AttributeValidator;
+use App\Services\Inspections\InspectionRunner;
+use App\Support\AssetStatus;
 use App\Support\Audit;
 use App\Support\Geometry;
+use App\Support\IssueSla;
+use App\Support\PortalLabels;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -27,6 +41,9 @@ class CommandApplier
         'asset.create', 'asset.update_attrs', 'asset.update_measures',
         'asset.update_geom', 'asset.change_status', 'tag.associate',
         'work_order.transition', 'work_log.add', 'issue.create', 'inspection.complete',
+        // Un'area di lavoro nata in campo (dal 23/09/2026): chi arriva da un
+        // committente nuovo censisce subito, senza passare dall'ufficio
+        'area.create',
     ];
 
     /**
@@ -40,7 +57,7 @@ class CommandApplier
         'suspended' => ['in_progress'],
     ];
 
-    /** Campi dendrometrici ammessi da asset.update_measures. */
+    /** Campi della scheda albero ammessi da asset.update_measures e dal blocco `tree` di asset.create. */
     private const MEASURE_FIELDS = [
         'genus', 'species', 'common_name', 'height_m', 'dbh_cm',
         'trunk_circumference_cm', 'trunk_count', 'crown_diameter_m',
@@ -58,6 +75,8 @@ class CommandApplier
 
         $permission = match ($type) {
             'asset.create' => 'assets.create',
+            // Il committente nuovo chiede in piu' clients.manage: lo controlla l'applier
+            'area.create' => 'areas.create',
             // La regola fine (proprio ordine/squadra) è dentro l'applier
             'work_order.transition', 'work_log.add', 'issue.create', 'inspection.complete' => 'works.view',
             default => 'assets.update',
@@ -69,6 +88,7 @@ class CommandApplier
         try {
             return DB::transaction(fn () => match ($type) {
                 'asset.create' => $this->applyCreate($command, $user),
+                'area.create' => $this->applyAreaCreate($command, $user),
                 'asset.update_attrs' => $this->applyUpdate($command, $user, ['census_code', 'attributes', 'notes']),
                 'asset.update_measures' => $this->applyMeasures($command, $user),
                 'asset.update_geom' => $this->applyGeom($command, $user),
@@ -81,7 +101,7 @@ class CommandApplier
             });
         } catch (ValidationException $e) {
             return $this->rejected($command, 'VALIDATION_FAILED', collect($e->errors())->flatten()->first());
-        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+        } catch (UniqueConstraintViolationException $e) {
             // Due comandi concorrenti con lo stesso identificativo:
             // l'esito di business è la collisione, non un errore interno
             if ($type === 'issue.create') {
@@ -94,7 +114,7 @@ class CommandApplier
             // è già annullata, si rilegge l'occupante e si risponde con l'esito
             // di business corretto invece di un errore interno
             if ($type === 'tag.associate') {
-                $occupant = \App\Models\AssetTag::query()
+                $occupant = AssetTag::query()
                     ->where('tag_type', $command['payload']['tag_type'] ?? '')
                     ->where('uid', $command['payload']['uid'] ?? '')
                     ->whereIn('status', ['active', 'unassigned'])
@@ -117,9 +137,13 @@ class CommandApplier
             'census_code' => ['nullable', 'string', 'max:80'],
             // Dal campo una scheda non nasce in archivio: abbattimento e
             // dismissione passano dai loro flussi nel gestionale
-            'status' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['active', 'dead', 'stump'])],
+            'status' => ['nullable', 'string', Rule::in(['active', 'dead', 'stump'])],
             'attributes' => ['sometimes', 'array'],
             'notes' => ['nullable', 'string'],
+            // Specie e misure arrivano insieme al rilievo (decisione committente
+            // 23/09/2026): un solo comando e una sola revisione, senza uno
+            // storico "da vuoto a pieno" un istante dopo la nascita della scheda
+            'tree' => ['sometimes', 'array'],
         ])->validate();
 
         $geom = $command['geom'] ?? null;
@@ -132,7 +156,7 @@ class CommandApplier
         }
 
         $type = CatalogObjectType::query()->find($payload['object_type_id']);
-        $area = \App\Models\Area::query()->find($payload['area_id']);
+        $area = Area::query()->find($payload['area_id']);
         if (! $type || ! $area) {
             return $this->rejected($command, 'VALIDATION_FAILED', 'Area o tipo oggetto inesistente per questa organizzazione.');
         }
@@ -157,6 +181,12 @@ class CommandApplier
 
         $attributes = app(AttributeValidator::class)->validate($type, $payload['attributes'] ?? []);
 
+        $misure = $this->misureValidate($payload['tree'] ?? []);
+        if ($misure !== [] && ! $type->requires_tree_record) {
+            return $this->rejected($command, 'VALIDATION_FAILED',
+                "Il tipo {$type->code} non ha una scheda albero: specie e misure non si applicano.");
+        }
+
         // L'UUID proposto dal device è l'ID definitivo (OFFLINE-SYNC §1.2):
         // non è mass-assignable, va impostato esplicitamente
         $asset = new Asset([
@@ -166,7 +196,7 @@ class CommandApplier
             // Se il dispositivo non propone un codice, lo assegna il server con
             // il prefisso del committente: due operatori che rientrano da
             // offline nello stesso momento non possono prendere lo stesso numero
-            'census_code' => $payload['census_code'] ?? \App\Support\PortalLabels::nextCode($area->id),
+            'census_code' => $payload['census_code'] ?? PortalLabels::nextCode($area->id),
             'status' => $payload['status'] ?? 'active',
             'notes' => $payload['notes'] ?? null,
             'attributes' => $attributes,
@@ -181,7 +211,7 @@ class CommandApplier
         $asset->save();
 
         if ($type->requires_tree_record) {
-            Tree::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id]);
+            Tree::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id, ...$misure]);
         }
         if ($type->is_planting_site) {
             PlantingSite::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id]);
@@ -211,7 +241,7 @@ class CommandApplier
             'notes' => ['sometimes', 'nullable', 'string'],
             // Solo il vocabolario di AssetStatus: uno stato inventato dal
             // device non lo saprebbe leggere nessun filtro
-            'status' => ['sometimes', 'string', \Illuminate\Validation\Rule::in(array_keys(\App\Support\AssetStatus::LABELS))],
+            'status' => ['sometimes', 'string', Rule::in(array_keys(AssetStatus::LABELS))],
         ])->validate();
 
         // Dal campo non si entra e non si esce dall'archivio: l'abbattimento
@@ -220,8 +250,8 @@ class CommandApplier
         // sync lascerebbe tutto questo a meta' (e la stessa guardia sta in
         // AssetController::update per la modifica dal gestionale)
         if (array_key_exists('status', $payload) && $payload['status'] !== $asset->status
-            && (\App\Support\AssetStatus::inArchivio($payload['status'])
-                || \App\Support\AssetStatus::inArchivio($asset->status))) {
+            && (AssetStatus::inArchivio($payload['status'])
+                || AssetStatus::inArchivio($asset->status))) {
             return $this->rejected($command, 'VALIDATION_FAILED',
                 'Abbattimento e dismissione (e i loro annullamenti) si registrano dal gestionale, non dal campo.');
         }
@@ -264,18 +294,7 @@ class CommandApplier
             return $this->rejected($command, 'VALIDATION_FAILED', 'Nessuna misura applicabile nel comando.');
         }
 
-        Validator::make($payload, [
-            'genus' => ['sometimes', 'nullable', 'string', 'max:100'],
-            'species' => ['sometimes', 'nullable', 'string', 'max:150'],
-            'common_name' => ['sometimes', 'nullable', 'string', 'max:150'],
-            'height_m' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:150'],
-            'dbh_cm' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:2000'],
-            'trunk_circumference_cm' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:6000'],
-            'trunk_count' => ['sometimes', 'integer', 'min:1', 'max:50'],
-            'crown_diameter_m' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
-            'crown_insertion_m' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
-            'vegetative_state' => ['sometimes', 'nullable', 'string', 'max:50'],
-        ])->validate();
+        $payload = $this->misureValidate($payload);
 
         $asset->tree->fill($payload);
         $treeChanged = $asset->tree->isDirty();
@@ -330,6 +349,158 @@ class CommandApplier
         Audit::log('asset.updated', $asset, ['source' => 'sync', 'fields' => ['geom']]);
 
         return $this->applied($command, $asset->fresh()->version);
+    }
+
+    /** Regole delle misure della scheda albero, le stesse per rilievo e aggiornamento. */
+    private function regoleMisure(): array
+    {
+        return [
+            'genus' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'species' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'common_name' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'height_m' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:150'],
+            'dbh_cm' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:2000'],
+            'trunk_circumference_cm' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:6000'],
+            'trunk_count' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:50'],
+            'crown_diameter_m' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
+            'crown_insertion_m' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
+            // Lo stesso dizionario della scheda nel gestionale (config/agronomia.php):
+            // uno stato scritto in un altro modo dal telefono non entra in archivio
+            'vegetative_state' => ['sometimes', 'nullable', 'string', Rule::in(config('agronomia.stato_vegetativo'))],
+        ];
+    }
+
+    /**
+     * Le sole misure ammesse, validate. Il numero di fusti lasciato vuoto non
+     * si scrive: la colonna non ammette il nullo e tiene il valore che ha.
+     */
+    private function misureValidate(array $dati): array
+    {
+        $misure = array_intersect_key($dati, array_flip(self::MEASURE_FIELDS));
+        if ($misure === []) {
+            return [];
+        }
+        Validator::make($misure, $this->regoleMisure())->validate();
+        if (array_key_exists('trunk_count', $misure) && $misure['trunk_count'] === null) {
+            unset($misure['trunk_count']);
+        }
+
+        return $misure;
+    }
+
+    /**
+     * Un'area di lavoro nata in campo (decisione committente 23/09/2026): chi
+     * arriva da un committente nuovo deve poter censire subito, senza passare
+     * dall'ufficio. L'area porta il proprio UUID dal telefono, come gli elementi.
+     *
+     * Dove finisce nell'albero del territorio:
+     *  - con `locality_id`: sotto quella localita';
+     *  - con `client_id` (committente esistente): in una localita' nuova con il
+     *    nome dell'area, sotto la prima sede del committente (o una sede con il
+     *    suo nome, se non ne ha). Mai sotto una localita' che si chiama in un
+     *    altro modo: l'ufficio sposta e rinomina da Territorio;
+     *  - con `client` {id, name}: il committente nasce qui (serve clients.manage)
+     *    con il prefisso delle etichette proposto dal nome, la sua sede e la
+     *    localita' dell'area. Se un committente con quell'id c'e' gia' (seconda
+     *    area dello stesso giro offline) lo si riusa senza altri permessi.
+     *
+     * Il perimetro provvisorio (un cerchio attorno alla posizione) arriva con
+     * stato "prevista": non esce sul portale pubblico finche' l'ufficio non lo
+     * ridisegna e conferma l'area.
+     */
+    private function applyAreaCreate(array $command, User $user): array
+    {
+        $payload = Validator::make($command['payload'] ?? [], [
+            'name' => ['required', 'string', 'max:254'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'status' => ['nullable', 'string', Rule::in(['active', 'planned'])],
+            'locality_id' => ['nullable', 'uuid'],
+            'client_id' => ['nullable', 'uuid'],
+            'client' => ['nullable', 'array'],
+            'client.id' => ['required_with:client', 'uuid'],
+            'client.name' => ['required_with:client', 'string', 'max:254'],
+            'client.client_type' => ['nullable', 'string', Rule::in(['public', 'private', 'condo', 'other'])],
+        ])->validate();
+
+        $geom = $command['geom'] ?? null;
+        if (! is_array($geom) || ! in_array($geom['type'] ?? '', ['Polygon', 'MultiPolygon'], true)) {
+            return $this->rejected($command, 'VALIDATION_FAILED', 'Per un\'area serve un perimetro (poligono).');
+        }
+        unset($geom['properties']);
+
+        $riferimenti = array_filter([
+            $payload['locality_id'] ?? null, $payload['client_id'] ?? null, $payload['client'] ?? null,
+        ]);
+        if (count($riferimenti) !== 1) {
+            return $this->rejected($command, 'VALIDATION_FAILED',
+                'Indica a chi appartiene l\'area: una localita\', un committente esistente oppure un committente nuovo.');
+        }
+
+        if (Area::withoutGlobalScopes()->withTrashed()->whereKey($command['entity_id'])->exists()) {
+            return $this->rejected($command, 'ID_COLLISION', 'Esiste gia\' un\'area con questo identificativo.');
+        }
+
+        // Il perimetro si controlla prima di toccare l'albero del territorio
+        $ewkb = Geometry::toEwkb($geom, forceMultiPolygon: true);
+
+        if (! empty($payload['locality_id'])) {
+            $localita = Locality::query()->find($payload['locality_id']);
+            if (! $localita) {
+                return $this->rejected($command, 'NOT_FOUND', 'Localita\' inesistente o non accessibile.');
+            }
+        } else {
+            if (! empty($payload['client_id'])) {
+                $cliente = Client::query()->find($payload['client_id']);
+                if (! $cliente) {
+                    return $this->rejected($command, 'NOT_FOUND', 'Committente inesistente o non accessibile.');
+                }
+            } else {
+                $nuovo = $payload['client'];
+                $cliente = Client::query()->find($nuovo['id']);
+                if (! $cliente) {
+                    if (Client::withoutGlobalScopes()->withTrashed()->whereKey($nuovo['id'])->exists()) {
+                        return $this->rejected($command, 'ID_COLLISION', 'Esiste gia\' un committente con questo identificativo.');
+                    }
+                    if (! $user->can('clients.manage')) {
+                        return $this->rejected($command, 'FORBIDDEN', 'Permesso mancante: clients.manage (serve per un committente nuovo).');
+                    }
+                    $cliente = new Client([
+                        'tenant_id' => $user->tenant_id,
+                        'name' => $nuovo['name'],
+                        'client_type' => $nuovo['client_type'] ?? 'private',
+                        // Il prefisso delle etichette come dal gestionale: senza,
+                        // gli elementi censiti qui non avrebbero il codice
+                        'label_prefix' => PortalLabels::uniquePrefix($user->tenant_id, $nuovo['name']),
+                        'notes' => 'Committente registrato dal campo il '.now()->format('d/m/Y').'.',
+                    ]);
+                    $cliente->id = $nuovo['id'];
+                    $cliente->save();
+                    Audit::log('client.created', $cliente, ['name' => $cliente->name, 'source' => 'sync']);
+                }
+            }
+
+            $sede = Site::query()->where('client_id', $cliente->id)
+                ->orderBy('created_at')->orderBy('name')->first()
+                ?? Site::create(['tenant_id' => $user->tenant_id, 'client_id' => $cliente->id, 'name' => $cliente->name]);
+            $localita = Locality::create(['tenant_id' => $user->tenant_id, 'site_id' => $sede->id, 'name' => $payload['name']]);
+        }
+
+        $area = new Area([
+            'tenant_id' => $user->tenant_id,
+            'locality_id' => $localita->id,
+            'name' => $payload['name'],
+            'status' => $payload['status'] ?? 'active',
+            'notes' => $payload['notes'] ?? null,
+            'geom' => $ewkb,
+            'created_by' => $user->id,
+            'updated_by' => $user->id,
+        ]);
+        $area->id = $command['entity_id'];
+        $area->save();
+
+        Audit::log('area.created', $area, ['name' => $area->name, 'source' => 'sync', 'device_seq' => $command['device_seq'] ?? null]);
+
+        return $this->applied($command, 1);
     }
 
     /**
@@ -395,12 +566,12 @@ class CommandApplier
         // Un tag fisico si aggancia solo a patrimonio in gestione: su una
         // scheda in archivio lo scan deve dire com'e' andata, non agganciare
         // in silenzio un cartellino a un abbattuto o a un dismesso
-        if (\App\Support\AssetStatus::inArchivio($asset->status)) {
+        if (AssetStatus::inArchivio($asset->status)) {
             return $this->rejected($command, 'VALIDATION_FAILED',
-                'Elemento in archivio ('.\App\Support\AssetStatus::label($asset->status).'): il tag non si associa. Se serve, ripristina prima la scheda dal gestionale.');
+                'Elemento in archivio ('.AssetStatus::label($asset->status).'): il tag non si associa. Se serve, ripristina prima la scheda dal gestionale.');
         }
 
-        $existing = \App\Models\AssetTag::query()
+        $existing = AssetTag::query()
             ->where('tag_type', $payload['tag_type'])
             ->where('uid', $payload['uid'])
             ->whereIn('status', ['active', 'unassigned'])
@@ -429,7 +600,7 @@ class CommandApplier
             ]);
             $tag = $existing;
         } else {
-            $tag = \App\Models\AssetTag::create([
+            $tag = AssetTag::create([
                 'tenant_id' => $user->tenant_id,
                 'asset_id' => $asset->id,
                 'tag_type' => $payload['tag_type'],
@@ -510,7 +681,7 @@ class CommandApplier
             // sull'ora del server (OFFLINE-SYNC §10.3)
             $completedAt = now();
             if (! empty($command['client_ts'])) {
-                $claimed = \Illuminate\Support\Carbon::parse($command['client_ts'])->utc();
+                $claimed = Carbon::parse($command['client_ts'])->utc();
                 if ($claimed->lte(now()->addMinutes(10)) && $claimed->gte(now()->subDays(30))) {
                     $completedAt = $claimed;
                 }
@@ -570,8 +741,8 @@ class CommandApplier
             'asset_id' => $payload['asset_id'] ?? null,
             'team_id' => $order->team_id,
             'operator_id' => $user->id,
-            'started_at' => \Illuminate\Support\Carbon::parse($payload['started_at'])->utc(),
-            'ended_at' => isset($payload['ended_at']) ? \Illuminate\Support\Carbon::parse($payload['ended_at'])->utc() : null,
+            'started_at' => Carbon::parse($payload['started_at'])->utc(),
+            'ended_at' => isset($payload['ended_at']) ? Carbon::parse($payload['ended_at'])->utc() : null,
             'man_hours' => $payload['man_hours'] ?? null,
             'quantity' => $payload['quantity'] ?? null,
             'unit' => $payload['unit'] ?? null,
@@ -596,7 +767,7 @@ class CommandApplier
             'area_id' => ['nullable', 'uuid'],
         ])->validate();
 
-        if (\App\Models\Issue::withoutGlobalScopes()->withTrashed()->whereKey($command['entity_id'])->exists()) {
+        if (Issue::withoutGlobalScopes()->withTrashed()->whereKey($command['entity_id'])->exists()) {
             return $this->rejected($command, 'ID_COLLISION', 'Esiste già una segnalazione con questo identificativo.');
         }
         // withTrashed: se il backoffice ha eliminato l'elemento mentre il device
@@ -604,13 +775,13 @@ class CommandApplier
         if (! empty($payload['asset_id']) && ! Asset::query()->withTrashed()->whereKey($payload['asset_id'])->exists()) {
             return $this->rejected($command, 'VALIDATION_FAILED', 'Elemento inesistente per questa organizzazione.');
         }
-        if (! empty($payload['area_id']) && ! \App\Models\Area::query()->withTrashed()->whereKey($payload['area_id'])->exists()) {
+        if (! empty($payload['area_id']) && ! Area::query()->withTrashed()->whereKey($payload['area_id'])->exists()) {
             return $this->rejected($command, 'VALIDATION_FAILED', 'Area inesistente per questa organizzazione.');
         }
 
-        $issue = new \App\Models\Issue([
+        $issue = new Issue([
             'tenant_id' => $user->tenant_id,
-            'code' => \App\Models\Issue::nextCode($user->tenant_id),
+            'code' => Issue::nextCode($user->tenant_id),
             'status' => 'open',
             'severity' => $payload['severity'] ?? 'medium',
             'reporter_type' => 'internal',
@@ -625,14 +796,14 @@ class CommandApplier
         // di quando il device ha ritrovato la rete (stessa finestra di
         // plausibilità della chiusura lavori)
         if (! empty($command['client_ts'])) {
-            $claimed = \Illuminate\Support\Carbon::parse($command['client_ts'])->utc();
+            $claimed = Carbon::parse($command['client_ts'])->utc();
             if ($claimed->lte(now()->addMinutes(10)) && $claimed->gte(now()->subDays(30))) {
                 $issue->created_at = $claimed;
             }
         }
         // Le scadenze SLA decorrono da quando è stata scritta in campo
-        $issue->sla_due_at = \App\Support\IssueSla::resolveDueAt($issue->created_at ?? now(), $issue->severity);
-        $issue->taken_charge_due_at = \App\Support\IssueSla::takeChargeDueAt($issue->created_at ?? now(), $issue->severity);
+        $issue->sla_due_at = IssueSla::resolveDueAt($issue->created_at ?? now(), $issue->severity);
+        $issue->taken_charge_due_at = IssueSla::takeChargeDueAt($issue->created_at ?? now(), $issue->severity);
         $issue->save();
 
         Audit::log('issue.created', $issue, ['source' => 'sync', 'code' => $issue->code]);
@@ -653,7 +824,7 @@ class CommandApplier
             'answers' => ['required', 'array'],
         ])->validate();
 
-        if (\App\Models\Inspection::withoutGlobalScopes()->withTrashed()->whereKey($command['entity_id'])->exists()) {
+        if (Inspection::withoutGlobalScopes()->withTrashed()->whereKey($command['entity_id'])->exists()) {
             return $this->rejected($command, 'ID_COLLISION', 'Esiste già un\'ispezione con questo identificativo.');
         }
 
@@ -661,13 +832,13 @@ class CommandApplier
         // quando il device ha ritrovato la rete (finestra di plausibilità)
         $completedAt = now();
         if (! empty($command['client_ts'])) {
-            $claimed = \Illuminate\Support\Carbon::parse($command['client_ts'])->utc();
+            $claimed = Carbon::parse($command['client_ts'])->utc();
             if ($claimed->lte(now()->addMinutes(10)) && $claimed->gte(now()->subDays(30))) {
                 $completedAt = $claimed;
             }
         }
 
-        $inspection = app(\App\Services\Inspections\InspectionRunner::class)
+        $inspection = app(InspectionRunner::class)
             ->run($user, $payload, forcedId: $command['entity_id'], completedAt: $completedAt);
 
         return [

@@ -71,6 +71,8 @@ export class SyncManager {
                 // le righe ottimistiche sopravvivono al ri-scarico del working set
                 const dirtyRows = await this.db.assets.filter((a) => a.dirty === true).toArray();
                 const dirtyIds = new Set(dirtyRows.map((a) => a.id));
+                // Le aree aperte in campo e non ancora inviate sopravvivono come gli elementi
+                const dirtyAreas = await this.db.areas.filter((a) => a.dirty === true).toArray();
                 const localTags = await this.db.asset_tags
                     .filter((t) => dirtyIds.has(t.asset_id)).toArray();
                 const dirtyOrders = await this.db.work_orders.filter((w) => w.dirty === true).toArray();
@@ -83,7 +85,8 @@ export class SyncManager {
                     this.db.asset_tags.clear(), this.db.catalog_types.clear(), this.db.custom_fields.clear(),
                     this.db.work_orders.clear(), this.db.inspection_templates.clear(),
                 ]);
-                await this.db.areas.bulkPut(data.areas);
+                await this.db.areas.bulkPut(data.areas.map((a) => ({ ...a, dirty: false })));
+                await this.db.areas.bulkPut(dirtyAreas);
                 await this.db.assets.bulkPut(data.assets.map((a) => ({ ...a, dirty: false })));
                 await this.db.trees.bulkPut(data.assets.filter((a) => a.tree).map((a) => a.tree));
                 await this.db.asset_tags.bulkPut(data.assets.flatMap((a) => a.tags ?? []));
@@ -99,6 +102,9 @@ export class SyncManager {
                 await this.db.catalog_types.bulkPut(data.catalog.object_types);
                 await this.db.custom_fields.bulkPut(data.custom_fields);
                 await this.db.meta.put({ key: 'cursor', value: data.cursor });
+                // I committenti (solo per chi puo' aprire aree): l'elenco si
+                // rinfresca a ogni scarico, quelli nati in campo li portano le aree
+                await this.db.meta.put({ key: 'clients', value: data.clients ?? [] });
                 await this.db.meta.put({ key: 'catalog_version', value: data.catalog_version });
                 await this.db.meta.put({ key: 'bootstrapped_at', value: data.server_time });
             });
@@ -108,7 +114,7 @@ export class SyncManager {
     }
 
     /** Accoda un comando e applica ottimisticamente la modifica locale. */
-    async enqueueAssetCreate({ areaId, objectTypeId, censusCode, notes, geometry, gpsAccuracy, surveyMethod = 'gps' }) {
+    async enqueueAssetCreate({ areaId, objectTypeId, censusCode, notes, geometry, gpsAccuracy, surveyMethod = 'gps', tree = null }) {
         const entityId = uuidv7();
         const command = {
             idempotency_key: randomUuid(),
@@ -120,6 +126,8 @@ export class SyncManager {
                 object_type_id: objectTypeId,
                 census_code: censusCode || null,
                 notes: notes || null,
+                // Specie e misure viaggiano con il rilievo: una sola revisione
+                ...(tree && Object.keys(tree).length ? { tree } : {}),
             },
             geom: {
                 ...geometry,
@@ -153,11 +161,64 @@ export class SyncManager {
             // Un albero censito offline deve essere misurabile subito: la riga
             // della scheda albero nasce insieme all'elemento, come sul server
             if (type?.requires_tree_record) {
-                await this.db.trees.put({ asset_id: entityId });
+                await this.db.trees.put({ asset_id: entityId, ...(tree ?? {}) });
             }
         });
 
         await this.log('info', `In coda: nuovo elemento ${censusCode || entityId.slice(0, 8)}.`);
+        await this.notify();
+        return entityId;
+    }
+
+    /**
+     * Un'area di lavoro aperta in campo (decisione committente 23/09/2026).
+     * `committente` e' { id, name } di uno gia' noto, oppure
+     * { id, name, client_type, nuovo: true } per uno che nasce qui: l'id lo
+     * assegna il telefono, cosi' una seconda area dello stesso giro lo riusa
+     * anche senza rete. Il perimetro provvisorio arriva con stato "prevista".
+     */
+    async enqueueAreaCreate({ name, notes, stato = 'active', geometry, committente }) {
+        const entityId = uuidv7();
+        const command = {
+            idempotency_key: randomUuid(),
+            device_seq: await this.nextDeviceSeq(),
+            type: 'area.create',
+            entity_id: entityId,
+            payload: {
+                name,
+                notes: notes || null,
+                status: stato,
+                ...(committente.nuovo
+                    ? { client: { id: committente.id, name: committente.name, client_type: committente.client_type ?? 'private' } }
+                    : { client_id: committente.id }),
+            },
+            geom: geometry,
+            client_ts: new Date().toISOString(),
+            status: 'PENDING',
+            attempts: 0,
+            last_error: null,
+        };
+
+        await this.db.transaction('rw', [this.db.sync_queue, this.db.areas], async () => {
+            await this.db.sync_queue.add(command);
+            // Apply ottimistico: l'area si sceglie subito per il rilievo
+            const adesso = new Date().toISOString();
+            await this.db.areas.put({
+                id: entityId,
+                name,
+                status: stato,
+                notes: notes || null,
+                client_id: committente.id,
+                client_name: committente.name,
+                geom_geojson: geometry,
+                version: 1,
+                created_at: adesso,
+                updated_at: adesso,
+                dirty: true,
+            });
+        });
+
+        await this.log('info', `In coda: nuova area "${name}"${committente.nuovo ? ` del nuovo committente "${committente.name}"` : ''}.`);
         await this.notify();
         return entityId;
     }
@@ -553,9 +614,10 @@ export class SyncManager {
                 if (entityId) {
                     const remaining = await this.db.sync_queue.where('entity_id').equals(entityId).count();
                     if (remaining === 0) {
-                        const table = byKey.get(result.idempotency_key)?.type === 'work_order.transition'
-                            ? this.db.work_orders
-                            : this.db.assets;
+                        const tipo = byKey.get(result.idempotency_key)?.type;
+                        const table = tipo === 'work_order.transition' ? this.db.work_orders
+                            : tipo === 'area.create' ? this.db.areas
+                                : this.db.assets;
                         const row = await table.get(entityId);
                         if (row) {
                             await table.put({
@@ -615,8 +677,16 @@ export class SyncManager {
             await this.db.transaction('rw', [this.db.meta, this.db.areas, this.db.assets, this.db.trees, this.db.asset_tags, this.db.work_orders, this.db.inspection_templates], async () => {
                 for (const change of data.changes) {
                     if (change.table === 'areas') {
-                        if (change.op === 'delete') await this.db.areas.delete(change.id);
-                        else await this.db.areas.put(change.row);
+                        const id = change.op === 'delete' ? change.id : change.row.id;
+                        // Un'area aperta in campo e ancora in coda non si sovrascrive:
+                        // la si riprende per id quando il suo comando e' passato
+                        if (dirtyIds.has(id)) {
+                            deferred.add(id);
+                            continue;
+                        }
+                        if (change.op === 'delete') await this.db.areas.delete(id);
+                        else await this.db.areas.put({ ...change.row, dirty: false });
+                        deferred.delete(id);
                     } else if (change.table === 'inspection_templates') {
                         // I modelli non hanno stato locale: la verità del server basta
                         if (change.op === 'delete') await this.db.inspection_templates.delete(change.id);
@@ -692,6 +762,16 @@ export class SyncManager {
             await this.db.assets.delete(cmd.entity_id);
             await this.db.trees.delete(cmd.entity_id);
             await this.db.asset_tags.where('asset_id').equals(cmd.entity_id).delete();
+        }
+        // Un'area mai arrivata al server sparisce dal telefono; gli elementi
+        // censiti dentro restano in coda e verranno respinti a loro volta
+        // (l'area non esiste): si dice quanti sono, non si buttano in silenzio
+        if (cmd.type === 'area.create') {
+            await this.db.areas.delete(cmd.entity_id);
+            const orfani = await this.db.assets.filter((a) => a.area_id === cmd.entity_id).count();
+            if (orfani) {
+                await this.log('warn', `${orfani} element${orfani === 1 ? 'o' : 'i'} dell'area scartata rest${orfani === 1 ? 'a' : 'ano'} in coda: da scartare o da rifare in un'area esistente.`);
+            }
         }
         // Una transizione scartata lascia sul device uno stato ottimistico ormai
         // falso: si toglie il flag dirty così la verità del server (già richiesta

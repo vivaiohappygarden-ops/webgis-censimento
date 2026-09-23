@@ -8,11 +8,14 @@ use App\Models\Asset;
 use App\Models\CatalogMainType;
 use App\Models\CatalogObjectType;
 use App\Models\CatalogSubType;
+use App\Models\Client;
 use App\Models\CustomField;
+use App\Models\InspectionTemplate;
 use App\Models\SyncOperation;
 use App\Models\User;
 use App\Models\WorkOrder;
 use App\Services\Sync\CommandApplier;
+use App\Support\AssetStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -75,6 +78,11 @@ class SyncController extends Controller implements HasMiddleware
             'assets' => $assets,
             'work_orders' => $user->can('works.view') ? $this->workOrderRows($user) : [],
             'inspection_templates' => $user->can('works.view') ? $this->inspectionTemplateRows() : [],
+            // Chi puo' aprire un'area dal campo sceglie il committente anche fra
+            // quelli senza aree sul telefono, altrimenti ne creerebbe un doppione
+            'clients' => $user->can('areas.create')
+                ? Client::query()->where('is_active', true)->orderBy('name')->get(['id', 'name'])
+                : [],
             'catalog' => [
                 'main_types' => CatalogMainType::query()->orderBy('code')->get(),
                 'sub_types' => CatalogSubType::query()->orderBy('code')->get(),
@@ -122,7 +130,14 @@ class SyncController extends Controller implements HasMiddleware
 
         $changes = [];
 
-        $changedAreaIds = $byTable->get('areas', []);
+        // Anche un'area puo' essere rimasta indietro (nata sul telefono e
+        // saltata dal pull mentre era ancora in coda): si serve per id
+        $requestedAreaIds = Area::query()->withTrashed()
+            ->whereIn('id', $request->input('ids', []))
+            ->pluck('id');
+        $changedAreaIds = collect($byTable->get('areas', []))
+            ->merge($requestedAreaIds)
+            ->unique()->values()->all();
         if ($changedAreaIds !== []) {
             $changedAreas = Area::query()->withTrashed()
                 ->whereIn('areas.id', $changedAreaIds)
@@ -149,7 +164,7 @@ class SyncController extends Controller implements HasMiddleware
             // Una scheda finita in archivio esce dal device come le eliminate
             // (stessa logica degli ordini non piu' visibili dal campo): il
             // ripristino la fa tornare con un normale upsert al pull dopo
-            $changes[] = ($asset->deleted_at !== null || \App\Support\AssetStatus::inArchivio($asset->status))
+            $changes[] = ($asset->deleted_at !== null || AssetStatus::inArchivio($asset->status))
                 ? ['op' => 'delete', 'table' => 'assets', 'id' => $asset->id]
                 : ['op' => 'upsert', 'table' => 'assets', 'row' => $asset];
         }
@@ -390,7 +405,7 @@ class SyncController extends Controller implements HasMiddleware
             return collect();
         }
 
-        return \App\Models\InspectionTemplate::query()
+        return InspectionTemplate::query()
             ->when($ids !== null, fn ($q) => $q->whereIn('id', $ids))
             ->where('is_active', true)
             // Un modello senza domande non è compilabile: non arriva sul device

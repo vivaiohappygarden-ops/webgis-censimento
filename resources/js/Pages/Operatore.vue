@@ -1,17 +1,23 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { contornoSiIncrocia } from '@/geometria';
+import { contornoSiIncrocia, poligonoAttorno } from '@/geometria';
 import { Head, usePage } from '@inertiajs/vue3';
 import * as maplibregl from 'maplibre-gl';
 import { openFieldDb } from '@/field/db';
 import { eDelGiorno, formattaDistanza, ordinaGiro, puntoDaGeoJson } from '@/field/giro';
 import { compressImage } from '@/field/photo';
 import { SyncManager } from '@/field/sync';
+import { uuidv7 } from '@/field/uuidv7';
 
 const page = usePage();
 const user = page.props.auth.user;
 const canAssociate = computed(() => (user.permissions ?? []).includes('assets.update'));
 const canWorks = computed(() => (user.permissions ?? []).includes('works.view'));
+// Aprire un'area dal campo e' un permesso a parte, come registrare un committente nuovo
+const canCreateAreas = computed(() => (user.permissions ?? []).includes('areas.create'));
+const canCreateClients = computed(() => (user.permissions ?? []).includes('clients.manage'));
+// Gli stati vegetativi ammessi: il dizionario del gestionale, passato dalla pagina
+const statiVegetativi = page.props.statiVegetativi ?? [];
 
 const db = openFieldDb(user.tenant_id, user.id);
 const sync = new SyncManager(db);
@@ -27,13 +33,65 @@ const logRows = ref([]);
 const busy = ref(false);
 const message = reactive({ text: '', ok: true });
 
+/** La scheda albero vuota: quello che non si misura resta vuoto, mai zero. */
+function alberoVuoto() {
+    return {
+        species: '', common_name: '', genus: '', height_m: null, dbh_cm: null,
+        trunk_circumference_cm: null, trunk_count: null, crown_diameter_m: null,
+        crown_insertion_m: null, vegetative_state: '',
+    };
+}
+
 const form = reactive({
     areaId: '', typeId: '', censusCode: '', notes: '',
     lat: '', lon: '', accuracy: null, locating: false,
     // Vertici di una linea o di una superficie: dal tocco sulla mappa
     // (penna o dito) o dalla posizione GPS camminando lungo il bordo
     vertici: [],
+    // Specie e misure nascono con il rilievo (decisione committente
+    // 23/09/2026): prima si registrava un albero senza poter dire che cosa fosse
+    albero: alberoVuoto(),
 });
+
+// Il tipo scelto ha una scheda albero? Allora il modulo chiede specie e misure
+const tipoConAlbero = computed(() => Boolean(typesById.value[form.typeId]?.requires_tree_record));
+
+// Le specie gia' scritte sul telefono: suggerimenti che valgono anche offline
+const specieNote = ref([]);
+
+// Nuova area di lavoro aperta dal campo (decisione committente 23/09/2026):
+// committente esistente o nuovo, nome e perimetro
+const nuovaArea = reactive({
+    open: false, nome: '', committenteId: '', nuovoCommittente: false,
+    nomeCommittente: '', tipoCommittente: 'private',
+    // 'perimetro': camminato con il GPS o disegnato; 'attorno': cerchio
+    // provvisorio attorno alla posizione, che nasce "prevista"
+    modo: 'perimetro', raggio: 30, vertici: [], locating: false,
+});
+
+// I committenti fra cui scegliere: quelli scaricati (chi puo' aprire aree li
+// riceve tutti) piu' quelli delle aree sul telefono, comprese le aree nate
+// qui e non ancora inviate
+const clientiScaricati = ref([]);
+const committentiNoti = computed(() => {
+    const perId = new Map();
+    for (const c of clientiScaricati.value) perId.set(c.id, { id: c.id, name: c.name });
+    for (const a of areas.value) {
+        if (a.client_id && ! perId.has(a.client_id)) {
+            perId.set(a.client_id, { id: a.client_id, name: a.client_name ?? 'Committente' });
+        }
+    }
+
+    return [...perId.values()].sort((a, b) => a.name.localeCompare(b.name));
+});
+
+// Con piu' committenti sul telefono il nome dell'area da solo non basta
+const piuCommittenti = computed(() => new Set(areas.value.map((a) => a.client_id).filter(Boolean)).size > 1);
+function etichettaArea(a) {
+    return a.name
+        + (piuCommittenti.value && a.client_name ? ` (${a.client_name})` : '')
+        + (a.dirty ? ' - da inviare' : '');
+}
 
 // La geometria che il tipo scelto richiede: P un punto, L e S un disegno
 const geoRilievo = computed(() => typesById.value[form.typeId]?.allowed_geometry ?? 'P');
@@ -49,13 +107,6 @@ watch(() => form.typeId, (nuovo, vecchio) => {
         aggiornaDisegnoLocale();
     }
     if (geoNuova === 'P') mapState.drawing = false;
-});
-
-// Durante il disegno il doppio tocco non deve far saltare l'inquadratura
-watch(() => mapState.drawing, (attivo) => {
-    if (! map) return;
-    if (attivo) map.doubleClickZoom.disable();
-    else map.doubleClickZoom.enable();
 });
 
 // Scheda elemento aperta (da elenco o da scansione)
@@ -192,7 +243,7 @@ async function submitAreaIssue() {
         Object.assign(areaIssue, { description: '', severity: 'medium' });
     }
 }
-const measureForm = reactive({ species: '', height_m: null, dbh_cm: null, crown_diameter_m: null });
+const measureForm = reactive(alberoVuoto());
 const tagForm = reactive({ uid: '', tagType: 'qr' });
 
 // Scansione tag (fotocamera dove disponibile, inserimento manuale sempre)
@@ -238,11 +289,18 @@ async function openAsset(asset) {
     // scritta: aprendo un altro elemento si riparte da zero
     resetAssetIssue();
     selected.value = { asset, tree: tree ?? null, tags, photos };
+    const numero = (v) => (v != null && v !== '' ? Number(v) : null);
     Object.assign(measureForm, {
         species: tree?.species ?? '',
-        height_m: tree?.height_m != null ? Number(tree.height_m) : null,
-        dbh_cm: tree?.dbh_cm != null ? Number(tree.dbh_cm) : null,
-        crown_diameter_m: tree?.crown_diameter_m != null ? Number(tree.crown_diameter_m) : null,
+        common_name: tree?.common_name ?? '',
+        genus: tree?.genus ?? '',
+        height_m: numero(tree?.height_m),
+        dbh_cm: numero(tree?.dbh_cm),
+        trunk_circumference_cm: numero(tree?.trunk_circumference_cm),
+        trunk_count: numero(tree?.trunk_count),
+        crown_diameter_m: numero(tree?.crown_diameter_m),
+        crown_insertion_m: numero(tree?.crown_insertion_m),
+        vegetative_state: tree?.vegetative_state ?? '',
     });
     Object.assign(tagForm, { uid: '', tagType: 'qr' });
 }
@@ -250,17 +308,39 @@ async function openAsset(asset) {
 // Campo numerico svuotato = valore assente (mai zero implicito)
 const numOrNull = (v) => (v === '' || v == null || Number.isNaN(v) ? null : Number(v));
 
+/**
+ * Le voci della scheda albero pronte per il comando: testi ripuliti, numeri
+ * o null. Con `soloCompilate` restano solo i campi scritti (per il rilievo,
+ * dove niente esiste ancora); il numero di fusti vuoto non si manda mai,
+ * perche' sul server la colonna non ammette il nullo e tiene il suo valore.
+ */
+function misureDaModulo(albero, soloCompilate = false) {
+    const testo = (v) => (String(v ?? '').trim() === '' ? null : String(v).trim());
+    const voci = {
+        species: testo(albero.species),
+        common_name: testo(albero.common_name),
+        genus: testo(albero.genus),
+        height_m: numOrNull(albero.height_m),
+        dbh_cm: numOrNull(albero.dbh_cm),
+        trunk_circumference_cm: numOrNull(albero.trunk_circumference_cm),
+        trunk_count: numOrNull(albero.trunk_count),
+        crown_diameter_m: numOrNull(albero.crown_diameter_m),
+        crown_insertion_m: numOrNull(albero.crown_insertion_m),
+        vegetative_state: testo(albero.vegetative_state),
+    };
+    if (voci.trunk_count === null) delete voci.trunk_count;
+
+    return soloCompilate
+        ? Object.fromEntries(Object.entries(voci).filter(([, v]) => v !== null))
+        : voci;
+}
+
 async function saveMeasures() {
     busy.value = true;
     try {
         await sync.enqueueMeasures({
             assetId: selected.value.asset.id,
-            measures: {
-                species: measureForm.species || null,
-                height_m: numOrNull(measureForm.height_m),
-                dbh_cm: numOrNull(measureForm.dbh_cm),
-                crown_diameter_m: numOrNull(measureForm.crown_diameter_m),
-            },
+            measures: misureDaModulo(measureForm),
         });
         setMessage(state.online
             ? 'Misure registrate: sincronizzazione in corso.'
@@ -517,7 +597,16 @@ const mapEl = ref(null);
 let map = null;
 let geoWatchId = null;
 let mapFitted = false;
-const mapState = reactive({ placing: false, drawing: false, located: false, clientId: '', areaId: '' });
+const mapState = reactive({ placing: false, drawing: false, located: false, clientId: '', areaId: '', disegnoPer: 'rilievo' });
+
+// Durante il disegno il doppio tocco non deve far saltare l'inquadratura.
+// (Sta dopo la dichiarazione di mapState: un watch la legge subito, e prima
+// della dichiarazione lanciava "Cannot access before initialization")
+watch(() => mapState.drawing, (attivo) => {
+    if (! map) return;
+    if (attivo) map.doubleClickZoom.disable();
+    else map.doubleClickZoom.enable();
+});
 
 // Committenti presenti fra le aree scaricate sul dispositivo: il filtro
 // funziona anche senza rete, perche' legge la replica locale
@@ -702,7 +791,7 @@ async function initOrRefreshMap() {
 
         map.on('click', async (e) => {
             if (mapState.drawing) {
-                form.vertici.push({ lon: e.lngLat.lng, lat: e.lngLat.lat, gps: false, accuracy: null });
+                verticiCorrenti().push({ lon: e.lngLat.lng, lat: e.lngLat.lat, gps: false, accuracy: null });
                 aggiornaDisegnoLocale();
                 return;
             }
@@ -887,6 +976,14 @@ async function refreshLocal() {
     // Chi ha una scheda albero: l'elenco lo usa la schermata operativa per
     // mostrare i soli alberi quando si sceglie che cosa valutare
     idAlberi.value = new Set(await db.trees.toCollection().primaryKeys());
+    const alberiLocali = await db.trees.toArray();
+    specieNote.value = [...new Set(alberiLocali
+        .flatMap((t) => [t.species, t.common_name])
+        .filter(Boolean)
+        .map((s) => String(s).trim()))]
+        .sort((a, b) => a.localeCompare(b))
+        .slice(0, 300);
+    clientiScaricati.value = (await db.meta.get('clients'))?.value ?? [];
     localOrders.value = await db.work_orders.toArray();
     // I punti seguono i lavori: dopo un sync un ordine nuovo o cambiato deve
     // entrare nel giro con la sua posizione
@@ -959,8 +1056,8 @@ function locate() {
 function aggiornaDisegnoLocale() {
     const sorgente = map?.getSource('disegno');
     if (! sorgente) return;
-    const pts = form.vertici.map((v) => [v.lon, v.lat]);
-    const chiudi = geoRilievo.value === 'S';
+    const pts = verticiCorrenti().map((v) => [v.lon, v.lat]);
+    const chiudi = mapState.disegnoPer === 'area' || geoRilievo.value === 'S';
     const features = pts.map((c) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: c }, properties: {} }));
     if (pts.length >= 2) {
         features.push({ type: 'Feature', geometry: {
@@ -970,12 +1067,20 @@ function aggiornaDisegnoLocale() {
     sorgente.setData({ type: 'FeatureCollection', features });
 }
 
-function iniziaDisegno() {
+/** I vertici che si stanno raccogliendo: quelli del rilievo o della nuova area. */
+function verticiCorrenti(per = mapState.disegnoPer) {
+    return per === 'area' ? nuovaArea.vertici : form.vertici;
+}
+
+function iniziaDisegno(per = 'rilievo') {
+    mapState.disegnoPer = per;
     mapState.placing = false;
     mapState.drawing = true;
     map?.doubleClickZoom.disable();
     switchTab('mappa');
-    setMessage('Tocca la mappa (penna o dito) per aggiungere i punti; "Fatto" riporta al rilievo.');
+    setMessage(per === 'area'
+        ? 'Tocca la mappa (penna o dito) lungo il confine dell\'area; "Fatto" riporta al rilievo.'
+        : 'Tocca la mappa (penna o dito) per aggiungere i punti; "Fatto" riporta al rilievo.');
 }
 
 function fineDisegno() {
@@ -983,33 +1088,153 @@ function fineDisegno() {
     switchTab('rilievo');
 }
 
-function annullaUltimoVertice() {
-    form.vertici.pop();
+function annullaUltimoVertice(per = null) {
+    // Dal modulo arriva il destinatario; dalla mappa arriva l'evento del
+    // tocco, e allora vale il disegno in corso
+    if (typeof per === 'string') mapState.disegnoPer = per;
+    verticiCorrenti().pop();
     aggiornaDisegnoLocale();
 }
 
 /** Un vertice dalla posizione GPS: si traccia il bordo camminando. */
-function aggiungiVerticeGps() {
+function aggiungiVerticeGps(per = 'rilievo') {
     if (! navigator.geolocation) {
         setMessage('Geolocalizzazione non disponibile su questo dispositivo.', false);
         return;
     }
-    form.locating = true;
+    mapState.disegnoPer = per;
+    const stato = per === 'area' ? nuovaArea : form;
+    stato.locating = true;
     navigator.geolocation.getCurrentPosition(
         (pos) => {
-            form.vertici.push({
+            verticiCorrenti(per).push({
                 lon: pos.coords.longitude, lat: pos.coords.latitude,
                 gps: true, accuracy: Math.round(pos.coords.accuracy * 10) / 10,
             });
-            form.locating = false;
+            stato.locating = false;
             aggiornaDisegnoLocale();
         },
         () => {
-            form.locating = false;
+            stato.locating = false;
             setMessage('Posizione GPS non disponibile.', false);
         },
         { enableHighAccuracy: true, timeout: 10000 },
     );
+}
+
+/** La posizione GPS una volta sola, come promessa. */
+function posizioneAttuale() {
+    return new Promise((resolve, reject) => {
+        if (! navigator.geolocation) {
+            reject(new Error('Geolocalizzazione non disponibile.'));
+
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({
+                lon: pos.coords.longitude, lat: pos.coords.latitude,
+                accuracy: Math.round(pos.coords.accuracy * 10) / 10,
+            }),
+            (err) => reject(err),
+            { enableHighAccuracy: true, timeout: 10000 },
+        );
+    });
+}
+
+function apriNuovaArea() {
+    Object.assign(nuovaArea, {
+        open: true, nome: '', nuovoCommittente: false, nomeCommittente: '', tipoCommittente: 'private',
+        committenteId: committentiNoti.value.length === 1 ? committentiNoti.value[0].id : '',
+        modo: 'perimetro', raggio: 30, vertici: [], locating: false,
+    });
+    mapState.disegnoPer = 'area';
+    aggiornaDisegnoLocale();
+}
+
+function chiudiNuovaArea() {
+    nuovaArea.open = false;
+    nuovaArea.vertici = [];
+    if (mapState.disegnoPer === 'area') mapState.drawing = false;
+    mapState.disegnoPer = 'rilievo';
+    aggiornaDisegnoLocale();
+}
+
+/**
+ * L'area nasce sul telefono e si sceglie subito per il rilievo; parte con la
+ * sincronizzazione come gli elementi. Con il perimetro provvisorio (cerchio
+ * attorno alla posizione) nasce "prevista" e la nota dice perche'.
+ */
+async function creaArea() {
+    setMessage('');
+    const nome = nuovaArea.nome.trim();
+    if (! nome) {
+        setMessage('Dai un nome all\'area.', false);
+        return;
+    }
+
+    let committente;
+    if (nuovaArea.nuovoCommittente) {
+        const nomeCommittente = nuovaArea.nomeCommittente.trim();
+        if (! nomeCommittente) {
+            setMessage('Scrivi il nome del committente nuovo.', false);
+            return;
+        }
+        // L'identificativo lo assegna il telefono: una seconda area dello
+        // stesso committente, nello stesso giro senza rete, lo riusa
+        committente = { id: uuidv7(), name: nomeCommittente, client_type: nuovaArea.tipoCommittente, nuovo: true };
+    } else {
+        committente = committentiNoti.value.find((c) => c.id === nuovaArea.committenteId);
+        if (! committente) {
+            setMessage('Scegli il committente dell\'area.', false);
+            return;
+        }
+    }
+
+    let geometry;
+    let stato = 'active';
+    let note = '';
+    busy.value = true;
+    try {
+        if (nuovaArea.modo === 'attorno') {
+            let posizione;
+            try {
+                posizione = await posizioneAttuale();
+            } catch {
+                setMessage('Posizione GPS non disponibile: cammina il perimetro o disegnalo sulla mappa.', false);
+                return;
+            }
+            geometry = poligonoAttorno(posizione.lon, posizione.lat, Number(nuovaArea.raggio));
+            stato = 'planned';
+            note = `Perimetro provvisorio: cerchio di ${nuovaArea.raggio} m attorno alla posizione GPS `
+                + `rilevata il ${new Date().toLocaleDateString('it-IT')}`
+                + (posizione.accuracy != null ? ` (precisione ${posizione.accuracy} m)` : '')
+                + '. Da ridisegnare in ufficio.';
+        } else {
+            if (nuovaArea.vertici.length < 3) {
+                setMessage('Servono almeno 3 punti per il perimetro dell\'area.', false);
+                return;
+            }
+            const coords = nuovaArea.vertici.map((v) => [v.lon, v.lat]);
+            if (contornoSiIncrocia(coords)) {
+                setMessage('Il contorno si incrocia su se stesso: sposta o togli i punti che si accavallano.', false);
+                return;
+            }
+            geometry = { type: 'Polygon', coordinates: [[...coords, coords[0]]] };
+        }
+
+        const id = await sync.enqueueAreaCreate({ name: nome, notes: note, stato, geometry, committente });
+        chiudiNuovaArea();
+        await refreshLocal();
+        form.areaId = id;
+        setMessage(state.online
+            ? `Area "${nome}" creata: la usi subito per il rilievo, viene inviata ora.`
+            : `Area "${nome}" creata sul dispositivo: la usi subito, verrà inviata quando torna la rete.`);
+        if (state.online) await runSync();
+    } catch {
+        setMessage('Salvataggio locale non riuscito: riprova.', false);
+    } finally {
+        busy.value = false;
+    }
 }
 
 // Accetta anche la virgola decimale italiana; il campo vuoto NON vale zero
@@ -1061,7 +1286,7 @@ async function saveCensus() {
 
     busy.value = true;
     try {
-        await sync.enqueueAssetCreate({
+        const nuovoId = await sync.enqueueAssetCreate({
             areaId: form.areaId,
             objectTypeId: form.typeId,
             censusCode: form.censusCode.trim(),
@@ -1069,15 +1294,25 @@ async function saveCensus() {
             geometry,
             gpsAccuracy,
             surveyMethod,
+            tree: tipoConAlbero.value ? misureDaModulo(form.albero, true) : null,
         });
-        Object.assign(form, { censusCode: '', notes: '', lat: '', lon: '', accuracy: null, vertici: [] });
+        Object.assign(form, { censusCode: '', notes: '', lat: '', lon: '', accuracy: null, vertici: [], albero: alberoVuoto() });
         mapState.drawing = false;
         aggiornaDisegnoLocale();
         await refreshLocal();
+        // La scheda del nuovo elemento si apre da sola: foto e cartellino
+        // sono il passo dopo, non una ricerca nell'elenco
+        const nuovo = await db.assets.get(nuovoId);
+        if (nuovo) await openAsset(nuovo);
         setMessage(state.online
-            ? 'Elemento registrato: verrà sincronizzato ora.'
-            : 'Elemento registrato sul dispositivo: verrà inviato quando torna la rete.');
-        if (state.online) await runSync();
+            ? 'Elemento registrato: aggiungi fotografie e cartellino da qui, oppure torna indietro per il prossimo rilievo. Viene sincronizzato ora.'
+            : 'Elemento registrato sul dispositivo: aggiungi fotografie e cartellino da qui, oppure torna indietro per il prossimo rilievo. Verrà inviato quando torna la rete.');
+        if (state.online) {
+            await runSync();
+            // Dopo l'invio il server ha assegnato il codice: la scheda aperta lo mostra
+            const aggiornato = await db.assets.get(nuovoId);
+            if (aggiornato && selected.value?.asset.id === nuovoId) selected.value = { ...selected.value, asset: aggiornato };
+        }
     } catch {
         setMessage('Salvataggio locale non riuscito: riprova.', false);
     } finally {
@@ -1515,11 +1750,101 @@ onBeforeUnmount(() => {
                 <div class="mt-3 space-y-3 rounded-xl border border-gray-200 bg-white p-4">
                     <label class="block text-xs">
                         <span class="text-gray-500">Area di lavoro *</span>
-                        <select v-model="form.areaId" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2.5 text-sm">
+                        <select v-model="form.areaId" data-test="op-area" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2.5 text-sm">
                             <option value="" disabled>Seleziona…</option>
-                            <option v-for="a in areas" :key="a.id" :value="a.id">{{ a.name }}</option>
+                            <option v-for="a in areas" :key="a.id" :value="a.id">{{ etichettaArea(a) }}</option>
                         </select>
                     </label>
+                    <button
+                        v-if="canCreateAreas && ! nuovaArea.open"
+                        class="w-full rounded-lg border border-green-700 px-3 py-2.5 text-sm font-medium text-green-700"
+                        data-test="op-nuova-area"
+                        @click="apriNuovaArea"
+                    >Nuova area di lavoro</button>
+
+                    <!-- Nuova area di lavoro dal campo: committente, nome, perimetro -->
+                    <div v-if="nuovaArea.open" class="space-y-3 rounded-lg border border-green-700 bg-green-50 p-3" data-test="op-pannello-area">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-sm font-semibold">Nuova area di lavoro</h2>
+                            <button class="px-2 py-1 text-xs font-medium text-gray-600" @click="chiudiNuovaArea">Annulla</button>
+                        </div>
+                        <label class="block text-xs">
+                            <span class="text-gray-500">Committente *</span>
+                            <select
+                                v-model="nuovaArea.committenteId"
+                                data-test="op-area-committente"
+                                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm disabled:opacity-50"
+                                :disabled="nuovaArea.nuovoCommittente"
+                            >
+                                <option value="" disabled>Seleziona…</option>
+                                <option v-for="c in committentiNoti" :key="c.id" :value="c.id">{{ c.name }}</option>
+                            </select>
+                        </label>
+                        <label v-if="canCreateClients" class="flex items-center gap-2 py-1 text-sm">
+                            <input v-model="nuovaArea.nuovoCommittente" type="checkbox" class="rounded border-gray-300" data-test="op-area-nuovo-committente">
+                            Committente nuovo, non è nell'elenco
+                        </label>
+                        <template v-if="nuovaArea.nuovoCommittente">
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Nome del committente *</span>
+                                <input v-model="nuovaArea.nomeCommittente" data-test="op-area-nome-committente" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Condominio Le Querce">
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Tipo di committente</span>
+                                <select v-model="nuovaArea.tipoCommittente" class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm">
+                                    <option value="private">Privato</option>
+                                    <option value="condo">Condominio</option>
+                                    <option value="public">Ente pubblico</option>
+                                    <option value="other">Altro</option>
+                                </select>
+                            </label>
+                        </template>
+                        <label class="block text-xs">
+                            <span class="text-gray-500">Nome dell'area *</span>
+                            <input v-model="nuovaArea.nome" data-test="op-area-nome" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Giardino via Roma 12">
+                        </label>
+                        <fieldset class="text-xs">
+                            <legend class="text-gray-500">Perimetro</legend>
+                            <label class="mt-1 flex items-start gap-2 py-1 text-sm">
+                                <input v-model="nuovaArea.modo" type="radio" value="perimetro" class="mt-1">
+                                <span>Cammino il confine con il GPS o lo disegno sulla mappa</span>
+                            </label>
+                            <label class="mt-1 flex items-start gap-2 py-1 text-sm">
+                                <input v-model="nuovaArea.modo" type="radio" value="attorno" class="mt-1" data-test="op-area-attorno">
+                                <span>Provvisorio, attorno alla mia posizione: l'area nasce "prevista" e l'ufficio la ridisegna prima che esca sul portale</span>
+                            </label>
+                        </fieldset>
+                        <template v-if="nuovaArea.modo === 'perimetro'">
+                            <p class="text-xs text-gray-600" data-test="op-area-vertici">
+                                Punti raccolti: <span class="font-semibold text-gray-900">{{ nuovaArea.vertici.length }}</span> (minimo 3).
+                            </p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button class="rounded-lg bg-green-700 px-3 py-2.5 text-sm font-medium text-white" @click="iniziaDisegno('area')">Disegna sulla mappa</button>
+                                <button
+                                    class="rounded-lg border border-green-700 bg-white px-3 py-2.5 text-sm font-medium text-green-700 disabled:opacity-50"
+                                    :disabled="nuovaArea.locating"
+                                    @click="aggiungiVerticeGps('area')"
+                                >{{ nuovaArea.locating ? 'Rilevamento…' : 'Aggiungi posizione GPS' }}</button>
+                                <button class="rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm disabled:opacity-50" :disabled="! nuovaArea.vertici.length" @click="annullaUltimoVertice('area')">← Ultimo punto</button>
+                                <button class="rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm disabled:opacity-50" :disabled="! nuovaArea.vertici.length" @click="nuovaArea.vertici = []; aggiornaDisegnoLocale()">Svuota i punti</button>
+                            </div>
+                        </template>
+                        <label v-else class="block text-xs">
+                            <span class="text-gray-500">Raggio attorno alla posizione</span>
+                            <select v-model="nuovaArea.raggio" data-test="op-area-raggio" class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm">
+                                <option :value="15">15 m (un giardino piccolo)</option>
+                                <option :value="30">30 m</option>
+                                <option :value="50">50 m</option>
+                                <option :value="100">100 m (un parco)</option>
+                            </select>
+                        </label>
+                        <button
+                            class="w-full rounded-lg bg-green-700 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                            :disabled="busy"
+                            data-test="op-crea-area"
+                            @click="creaArea"
+                        >Crea l'area e usala per il rilievo</button>
+                    </div>
                     <label class="block text-xs">
                         <span class="text-gray-500">Tipo oggetto *</span>
                         <select v-model="form.typeId" data-test="op-tipo" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2.5 text-sm">
@@ -1563,17 +1888,17 @@ onBeforeUnmount(() => {
                             <button
                                 class="rounded-lg bg-green-700 px-3 py-2.5 text-sm font-medium text-white"
                                 data-test="op-disegna"
-                                @click="iniziaDisegno"
+                                @click="iniziaDisegno('rilievo')"
                             >Disegna sulla mappa</button>
                             <button
                                 class="rounded-lg border border-green-700 px-3 py-2.5 text-sm font-medium text-green-700 disabled:opacity-50"
                                 :disabled="form.locating"
-                                @click="aggiungiVerticeGps"
+                                @click="aggiungiVerticeGps('rilievo')"
                             >{{ form.locating ? 'Rilevamento…' : 'Aggiungi posizione GPS' }}</button>
                             <button
                                 class="rounded-lg border border-gray-300 px-3 py-2.5 text-sm disabled:opacity-50"
                                 :disabled="! form.vertici.length"
-                                @click="annullaUltimoVertice"
+                                @click="annullaUltimoVertice('rilievo')"
                             >← Ultimo punto</button>
                             <button
                                 class="rounded-lg border border-gray-300 px-3 py-2.5 text-sm disabled:opacity-50"
@@ -1582,6 +1907,62 @@ onBeforeUnmount(() => {
                             >Svuota i punti</button>
                         </div>
                     </template>
+
+                    <!-- Scheda dell'albero: specie e misure nascono con il rilievo -->
+                    <div v-if="tipoConAlbero" class="space-y-3 border-t border-gray-200 pt-3" data-test="op-scheda-albero">
+                        <h2 class="text-sm font-semibold">Specie e misure</h2>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="col-span-2 block text-xs">
+                                <span class="text-gray-500">Specie (nome botanico)</span>
+                                <input v-model="form.albero.species" list="specie-note" data-test="op-specie" autocomplete="off" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Tilia cordata">
+                            </label>
+                            <label class="col-span-2 block text-xs">
+                                <span class="text-gray-500">Nome comune</span>
+                                <input v-model="form.albero.common_name" list="specie-note" autocomplete="off" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Tiglio selvatico">
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Altezza (m)</span>
+                                <input v-model.number="form.albero.height_m" type="number" inputmode="decimal" step="0.1" min="0" data-test="op-altezza" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Diametro fusto a 1,30 m (cm)</span>
+                                <input v-model.number="form.albero.dbh_cm" type="number" inputmode="decimal" step="0.5" min="0" data-test="op-diametro" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Diametro chioma (m)</span>
+                                <input v-model.number="form.albero.crown_diameter_m" type="number" inputmode="decimal" step="0.5" min="0" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Stato vegetativo</span>
+                                <select v-model="form.albero.vegetative_state" data-test="op-stato-vegetativo" class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm">
+                                    <option value="">Non rilevato</option>
+                                    <option v-for="s in statiVegetativi" :key="s" :value="s">{{ s }}</option>
+                                </select>
+                            </label>
+                        </div>
+                        <details class="text-xs">
+                            <summary class="cursor-pointer py-1 font-medium text-green-700">Altre misure: genere, circonferenza, fusti, inserzione della chioma</summary>
+                            <div class="mt-2 grid grid-cols-2 gap-3">
+                                <label class="col-span-2 block text-xs">
+                                    <span class="text-gray-500">Genere</span>
+                                    <input v-model="form.albero.genus" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Tilia">
+                                </label>
+                                <label class="block text-xs">
+                                    <span class="text-gray-500">Circonferenza fusto (cm)</span>
+                                    <input v-model.number="form.albero.trunk_circumference_cm" type="number" inputmode="decimal" step="1" min="0" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                                </label>
+                                <label class="block text-xs">
+                                    <span class="text-gray-500">Numero di fusti</span>
+                                    <input v-model.number="form.albero.trunk_count" type="number" inputmode="numeric" step="1" min="1" max="50" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                                </label>
+                                <label class="block text-xs">
+                                    <span class="text-gray-500">Inserzione chioma (m)</span>
+                                    <input v-model.number="form.albero.crown_insertion_m" type="number" inputmode="decimal" step="0.1" min="0" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                                </label>
+                            </div>
+                        </details>
+                        <p class="text-xs text-gray-500">Quello che non si misura resta vuoto: meglio un campo vuoto di un numero inventato.</p>
+                    </div>
 
                     <label class="block text-xs">
                         <span class="text-gray-500">Note</span>
@@ -1747,10 +2128,10 @@ onBeforeUnmount(() => {
                             class="flex flex-wrap items-center gap-2 self-start rounded-lg bg-white px-3 py-2 shadow"
                             data-test="op-barra-disegno"
                         >
-                            <span class="text-sm font-medium">Punti: {{ form.vertici.length }}</span>
+                            <span class="text-sm font-medium">Punti: {{ verticiCorrenti().length }}</span>
                             <button
                                 class="rounded-lg border border-gray-300 px-3 py-2.5 text-sm disabled:opacity-50"
-                                :disabled="! form.vertici.length"
+                                :disabled="! verticiCorrenti().length"
                                 @click="annullaUltimoVertice"
                             >← Ultimo</button>
                             <button
@@ -2033,25 +2414,57 @@ onBeforeUnmount(() => {
 
                 <!-- Misure albero -->
                 <div v-if="selected.tree" class="rounded-xl border border-gray-200 bg-white p-4">
-                    <h2 class="text-sm font-semibold">Misure albero</h2>
+                    <h2 class="text-sm font-semibold">Specie e misure</h2>
                     <div class="mt-2 grid grid-cols-2 gap-3">
                         <label class="col-span-2 block text-xs">
-                            <span class="text-gray-500">Specie</span>
-                            <input v-model="measureForm.species" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            <span class="text-gray-500">Specie (nome botanico)</span>
+                            <input v-model="measureForm.species" list="specie-note" autocomplete="off" data-test="measure-species" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                        </label>
+                        <label class="col-span-2 block text-xs">
+                            <span class="text-gray-500">Nome comune</span>
+                            <input v-model="measureForm.common_name" list="specie-note" autocomplete="off" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
                         </label>
                         <label class="block text-xs">
                             <span class="text-gray-500">Altezza (m)</span>
-                            <input v-model.number="measureForm.height_m" type="number" step="0.1" min="0" data-test="measure-height" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            <input v-model.number="measureForm.height_m" type="number" inputmode="decimal" step="0.1" min="0" data-test="measure-height" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
                         </label>
                         <label class="block text-xs">
-                            <span class="text-gray-500">Diametro fusto (cm)</span>
-                            <input v-model.number="measureForm.dbh_cm" type="number" step="0.5" min="0" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            <span class="text-gray-500">Diametro fusto a 1,30 m (cm)</span>
+                            <input v-model.number="measureForm.dbh_cm" type="number" inputmode="decimal" step="0.5" min="0" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
                         </label>
                         <label class="block text-xs">
                             <span class="text-gray-500">Diametro chioma (m)</span>
-                            <input v-model.number="measureForm.crown_diameter_m" type="number" step="0.5" min="0" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            <input v-model.number="measureForm.crown_diameter_m" type="number" inputmode="decimal" step="0.5" min="0" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                        </label>
+                        <label class="block text-xs">
+                            <span class="text-gray-500">Stato vegetativo</span>
+                            <select v-model="measureForm.vegetative_state" class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-2.5 text-sm">
+                                <option value="">Non rilevato</option>
+                                <option v-for="s in statiVegetativi" :key="s" :value="s">{{ s }}</option>
+                            </select>
                         </label>
                     </div>
+                    <details class="mt-2 text-xs">
+                        <summary class="cursor-pointer py-1 font-medium text-green-700">Altre misure: genere, circonferenza, fusti, inserzione della chioma</summary>
+                        <div class="mt-2 grid grid-cols-2 gap-3">
+                            <label class="col-span-2 block text-xs">
+                                <span class="text-gray-500">Genere</span>
+                                <input v-model="measureForm.genus" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Circonferenza fusto (cm)</span>
+                                <input v-model.number="measureForm.trunk_circumference_cm" type="number" inputmode="decimal" step="1" min="0" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Numero di fusti</span>
+                                <input v-model.number="measureForm.trunk_count" type="number" inputmode="numeric" step="1" min="1" max="50" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Inserzione chioma (m)</span>
+                                <input v-model.number="measureForm.crown_insertion_m" type="number" inputmode="decimal" step="0.1" min="0" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            </label>
+                        </div>
+                    </details>
                     <button
                         class="mt-3 w-full rounded-lg bg-green-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                         :disabled="busy"
@@ -2393,6 +2806,11 @@ onBeforeUnmount(() => {
                 >Registra l'ispezione</button>
             </div>
         </div>
+
+        <!-- Le specie gia' sul telefono, suggerite nel modulo e nella scheda -->
+        <datalist id="specie-note">
+            <option v-for="s in specieNote" :key="s" :value="s" />
+        </datalist>
 
         <!-- Barra di navigazione inferiore (uso a una mano in campo) -->
         <nav
