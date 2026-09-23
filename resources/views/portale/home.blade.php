@@ -39,6 +39,33 @@
    serve, e il campo. Niente immagine davanti. */
 .apertura { padding-top: var(--s-5); padding-bottom: var(--s-6); }
 .apertura-titolo { max-width: 22ch; }
+/* Dagli schermi larghi l'apertura sta su due colonne: a sinistra nome,
+   presentazione e le due strade, a destra il campo del cartellino. Prima
+   tutto stava incolonnato a sinistra e meta' schermo restava vuota. */
+@media (min-width: 1100px) {
+    .apertura-griglia {
+        display: grid;
+        grid-template-columns: minmax(0, 7fr) minmax(360px, 5fr);
+        column-gap: var(--s-7);
+        align-items: center;
+    }
+    .apertura-cerca .cerca { margin-top: 0; max-width: none; }
+    /* La griglia ha due righe: testo e campo sopra, le due strade sotto il
+       testo. La colonna destra scende sulle due righe, cosi' il campo resta
+       centrato sull'altezza del blocco di sinistra. */
+    .apertura-cerca { grid-column: 2; grid-row: 1 / span 2; }
+    .apertura-testo { grid-column: 1; grid-row: 1; }
+    .apertura-vie { grid-column: 1; grid-row: 2; align-self: start; }
+    /* Senza fotografia il campo a destra sta in una scatola chiara, cosi'
+       non sembra un modulo dimenticato nel vuoto */
+    .apertura:not(.apertura-foto) .apertura-cerca .cerca {
+        background: var(--avorio);
+        border: 1px solid var(--filo);
+        border-radius: var(--raggio);
+        padding: var(--s-3) var(--s-4);
+    }
+    .apertura-foto .apertura-cerca .cerca { padding: var(--s-3) var(--s-4); }
+}
 .apertura-benvenuto {
     margin-top: var(--s-2);
     font-size: var(--t-guida);
@@ -197,7 +224,9 @@
     list-style: none;
 }
 @media (min-width: 900px) {
-    .tessere { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-3); }
+    /* Tante colonne quanti sono i riquadri (--tessere, scritto dalla pagina):
+       con due soli numeri la fila non resta mezza vuota */
+    .tessere { grid-template-columns: repeat(var(--tessere, 4), minmax(0, 1fr)); gap: var(--s-3); }
 }
 .tessera {
     background: var(--carta);
@@ -633,7 +662,8 @@
          stessa: il campo del cartellino viene prima di tutto il resto. --}}
     <section class="apertura sc-sezione {{ $conCopertina ? 'apertura-foto' : 'sc-carta' }}"
         @if ($conCopertina) style="background-image: url('{{ $portale->url('/copertina') }}')" @endif>
-        <div class="sc-contenitore">
+        <div class="sc-contenitore apertura-griglia">
+            <div class="apertura-testo">
             {{-- Il nome dell'ente fa da titolo, come in testa a un atto. La
                  versione precedente lo infilava dentro una frase ("Il verde di
                  ...") e con i nomi veri usciva storta: "Il verde di Comune di
@@ -643,7 +673,9 @@
 
             <p class="apertura-benvenuto">{{ $portale->welcomeText()
                 ?: 'Ogni albero del territorio ha una scheda con la specie, le misure e gli interventi eseguiti. Si consulta dalla mappa oppure cercando il numero riportato sul cartellino.' }}</p>
+            </div>
 
+            <div class="apertura-cerca">
             {{-- L'azione principale della pagina, nel primo schermo: il numero
                  letto sul cartellino applicato alla pianta --}}
             <form class="cerca" method="get" action="{{ $portale->url('/cerca') }}" role="search">
@@ -672,8 +704,11 @@
                     Controlla il numero riportato sul cartellino{{ $soloCifre ? ': si scrive anche solo con le cifre.' : '.' }}
                 </p>
             @endif
+            </div>
 
-            <div class="vie">
+            {{-- Le altre due strade: sul telefono sotto il campo, sullo
+                 schermo largo sotto la presentazione (ordine di griglia) --}}
+            <div class="vie apertura-vie">
                 <a href="{{ $conCopertina ? $portale->url('/mappa') : '#mappa' }}">{{ $conCopertina ? 'Apri la mappa del verde' : 'Oppure guarda la mappa del verde' }}</a>
                 @if ($urlSegnala)
                     <a href="#segnalare">Segnala un problema</a>
@@ -686,7 +721,7 @@
     @if ($tessere !== [] || $conCo2)
         <section class="numeri sc-avorio{{ $conCopertina ? ' numeri-sopra' : '' }}" aria-label="Il patrimonio in numeri">
             <div class="sc-contenitore">
-                <ul class="tessere">
+                <ul class="tessere" style="--tessere: {{ count($tessere) + ($conCo2 ? 1 : 0) }}">
                     @foreach ($tessere as $voce)
                         <li class="tessera">
                             <span class="tessera-cifra sc-num">{{ $numero($voce['valore']) }}</span>
@@ -812,7 +847,10 @@
                         </li>
                     @endforeach
                 </ul>
-            @else
+            @elseif ($elementi === 0)
+                {{-- Solo quando non c'e' davvero niente: con pochi elementi i
+                     conteggi salgono tutti nei riquadri e questa lista resta
+                     vuota, ma il rilievo non e' "in corso" --}}
                 <p class="sc-nota" style="margin-top: var(--s-5)">
                     Il rilievo sul territorio è in corso: i primi elementi compariranno qui appena saranno registrati.
                 </p>

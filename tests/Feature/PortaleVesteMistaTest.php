@@ -140,6 +140,26 @@ class PortaleVesteMistaTest extends TestCase
         // Quello che sale nei riquadri non si ripete piu' sotto
         $this->assertSame(1, substr_count($html, 'Elementi censiti'));
         $this->assertStringContainsString('Variet', $html);
+
+        // La fila ha tante colonne quanti sono i riquadri (qui tre: elementi,
+        // alberi, varieta'), e con tutti i conteggi saliti nei riquadri la
+        // pagina NON dice che il rilievo e' "in corso": due alberi ci sono
+        $this->assertStringContainsString('style="--tessere: 3"', $html);
+        $this->assertStringNotContainsString('Il rilievo sul territorio è in corso', $html);
+
+        // L'apertura e' su due colonne: testo da una parte, campo dall'altra,
+        // con il campo del cartellino sempre prima della mappa
+        $this->assertStringContainsString('class="sc-contenitore apertura-griglia"', $html);
+        $this->assertStringContainsString('class="apertura-cerca"', $html);
+        $this->assertLessThan(strpos($html, 'La mappa pubblica'), strpos($html, 'id="cartellino"'));
+    }
+
+    public function test_senza_elementi_la_pagina_dice_che_il_rilievo_e_in_corso(): void
+    {
+        $html = $this->get('/comune/mentana')->assertOk()->getContent();
+
+        $this->assertStringContainsString('Il rilievo sul territorio è in corso', $html);
+        $this->assertStringNotContainsString('class="tessera"', $html);
     }
 
     public function test_i_recapiti_del_pie_di_pagina_escono_solo_se_compilati(): void

@@ -216,6 +216,13 @@ main:where(.pagina-piena) { padding: 0; }
     padding-left: var(--bordo-pagina);
     padding-right: var(--bordo-pagina);
 }
+/* Sugli schermi larghi la pagina si allarga con loro (osservazione del
+   committente 23/09/2026: a 1920px restava una colonna stretta in mezzo a
+   due bande vuote). Si allargano griglie, mappa e riquadri; le righe di testo
+   restano sotto i 68 caratteri grazie a --riga, quindi la lettura non ne
+   soffre. */
+@media (min-width: 1500px) { :root { --misura: 1320px; } }
+@media (min-width: 1800px) { :root { --misura: 1480px; } }
 /* Sulle pagine a colonna stretta si stringono anche testata e piede: se
    restassero larghe, lo stemma partirebbe da un margine e il testo da un
    altro, e la pagina sembrerebbe montata male. */
