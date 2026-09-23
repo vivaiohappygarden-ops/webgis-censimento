@@ -147,10 +147,9 @@ class PortaleVesteMistaTest extends TestCase
         $this->assertStringContainsString('style="--tessere: 3"', $html);
         $this->assertStringNotContainsString('Il rilievo sul territorio è in corso', $html);
 
-        // L'apertura e' su due colonne: testo da una parte, campo dall'altra,
-        // con il campo del cartellino sempre prima della mappa
-        $this->assertStringContainsString('class="sc-contenitore apertura-griglia"', $html);
-        $this->assertStringContainsString('class="apertura-cerca"', $html);
+        // Il campo del cartellino resta sotto il titolo, a sinistra, prima
+        // della mappa: spostarlo a destra copriva la fotografia del Comune
+        $this->assertLessThan(strpos($html, 'class="vie apertura-vie"'), strpos($html, 'id="cartellino"'));
         $this->assertLessThan(strpos($html, 'La mappa pubblica'), strpos($html, 'id="cartellino"'));
     }
 

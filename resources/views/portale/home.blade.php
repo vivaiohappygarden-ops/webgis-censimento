@@ -39,37 +39,10 @@
    serve, e il campo. Niente immagine davanti. */
 .apertura { padding-top: var(--s-5); padding-bottom: var(--s-6); }
 .apertura-titolo { max-width: 22ch; }
-/* Dagli schermi larghi l'apertura sta su due colonne: a sinistra nome,
-   presentazione e le due strade, a destra il campo del cartellino. Prima
-   tutto stava incolonnato a sinistra e meta' schermo restava vuota. */
-@media (min-width: 1100px) {
-    .apertura-griglia {
-        display: grid;
-        /* La scatola del cartellino non si allarga con lo schermo: resta di
-           una misura da modulo (al massimo 460px) appoggiata al bordo destro
-           del contenuto, cosi' il centro della fotografia resta libero e la
-           scatola non "sta in mezzo" (osservazione del committente) */
-        grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
-        column-gap: var(--s-8);
-        align-items: center;
-    }
-    .apertura-cerca .cerca { margin-top: 0; max-width: none; }
-    /* La griglia ha due righe: testo e campo sopra, le due strade sotto il
-       testo. La colonna destra scende sulle due righe, cosi' il campo resta
-       centrato sull'altezza del blocco di sinistra. */
-    .apertura-cerca { grid-column: 2; grid-row: 1 / span 2; }
-    .apertura-testo { grid-column: 1; grid-row: 1; }
-    .apertura-vie { grid-column: 1; grid-row: 2; align-self: start; }
-    /* Senza fotografia il campo a destra sta in una scatola chiara, cosi'
-       non sembra un modulo dimenticato nel vuoto */
-    .apertura:not(.apertura-foto) .apertura-cerca .cerca {
-        background: var(--avorio);
-        border: 1px solid var(--filo);
-        border-radius: var(--raggio);
-        padding: var(--s-3) var(--s-4);
-    }
-    .apertura-foto .apertura-cerca .cerca { padding: var(--s-3) var(--s-4); }
-}
+/* Anche sugli schermi larghi nome, presentazione, campo del cartellino e le
+   due strade restano incolonnati a sinistra, nella parte velata: la meta'
+   destra della fotografia deve restare visibile (decisione committente
+   23/09/2026: una scatola spostata a destra copriva la veduta del Comune). */
 .apertura-benvenuto {
     margin-top: var(--s-2);
     font-size: var(--t-guida);
@@ -666,7 +639,7 @@
          stessa: il campo del cartellino viene prima di tutto il resto. --}}
     <section class="apertura sc-sezione {{ $conCopertina ? 'apertura-foto' : 'sc-carta' }}"
         @if ($conCopertina) style="background-image: url('{{ $portale->url('/copertina') }}')" @endif>
-        <div class="sc-contenitore apertura-griglia">
+        <div class="sc-contenitore">
             <div class="apertura-testo">
             {{-- Il nome dell'ente fa da titolo, come in testa a un atto. La
                  versione precedente lo infilava dentro una frase ("Il verde di
@@ -710,8 +683,7 @@
             @endif
             </div>
 
-            {{-- Le altre due strade: sul telefono sotto il campo, sullo
-                 schermo largo sotto la presentazione (ordine di griglia) --}}
+            {{-- Le altre due strade, sotto il campo --}}
             <div class="vie apertura-vie">
                 <a href="{{ $conCopertina ? $portale->url('/mappa') : '#mappa' }}">{{ $conCopertina ? 'Apri la mappa del verde' : 'Oppure guarda la mappa del verde' }}</a>
                 @if ($urlSegnala)

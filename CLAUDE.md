@@ -113,10 +113,11 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   Il raggio unico e' salito da 4 a 8 px. Le regole stanno in `PortaleVesteMistaTest`.
   **Schermi larghi** (osservazione del committente 23/09/2026, "si spreca tanto spazio
   laterale"): la pagina si allarga con lo schermo (`--misura` 1320 px da 1500 px, 1480 px da
-  1800 px; le righe di testo restano sotto `--riga`), dai 1100 px l'apertura sta su due
-  colonne (testo e strade a sinistra, campo del cartellino a destra, in una scatola chiara
-  quando non c'e' la foto) e la fila dei numeri ha tante colonne quanti sono i riquadri
-  (`--tessere` scritto dalla pagina). La nota "il rilievo e' in corso" esce solo senza
+  1800 px; le righe di testo restano sotto `--riga`) e la fila dei numeri ha tante colonne
+  quanti sono i riquadri (`--tessere` scritto dalla pagina). Nell'apertura nome, testo,
+  campo del cartellino e strade **restano a sinistra, nella parte velata**: spostare il
+  campo a destra copriva la meta' visibile della fotografia (decisione committente
+  23/09/2026), e la veduta del Comune viene prima del riempire lo schermo. La nota "il rilievo e' in corso" esce solo senza
   elementi: con pochi elementi i conteggi salgono tutti nei riquadri e la lista sotto resta
   vuota, ma il rilievo non e' in corso.
 - **Patrimonio dimostrativo** (`php artisan demo:patrimonio`, dal 16/09/2026): riempie il
