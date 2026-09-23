@@ -117,6 +117,116 @@
     text-underline-offset: 0.2em;
 }
 
+/* Con la fotografia di copertina (veste mista, 23/09/2026) l'apertura
+   diventa la veduta del Comune: la foto sotto, un velo sopra e il testo in
+   bianco. Il velo e' NERO, non tinto: una fotografia non prende il colore
+   dell'ente, ed e' l'unico modo di garantire il contrasto sopra una foto che
+   non abbiamo mai visto. Il campo del cartellino resta il primo oggetto della
+   pagina: diventa una scatola bianca appoggiata sulla foto. Senza fotografia
+   resta l'apertura qui sopra: niente immagine di riempimento. */
+.apertura-foto {
+    position: relative;
+    isolation: isolate;
+    background-color: var(--notte);
+    background-size: cover;
+    background-position: center;
+    color: #fff;
+    padding-top: var(--s-7);
+    /* spazio per i riquadri dei numeri, che salgono a cavallo della foto */
+    padding-bottom: calc(var(--s-7) + 64px);
+}
+.apertura-foto::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    /* sul telefono il testo occupa tutta la larghezza: velo uniforme, nero
+       all'84%, che tiene il bianco sopra 4,5:1 anche su un cielo chiaro */
+    background: rgba(0, 0, 0, 0.84);
+}
+@media (min-width: 900px) {
+    /* sullo schermo largo il testo sta nella meta' sinistra: li' il velo
+       resta pieno, a destra si apre e lascia vedere la fotografia */
+    .apertura-foto::before {
+        background:
+            linear-gradient(90deg, rgba(0, 0, 0, 0.86) 0%, rgba(0, 0, 0, 0.84) 46%, rgba(0, 0, 0, 0.30) 72%, rgba(0, 0, 0, 0.12) 100%),
+            linear-gradient(180deg, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.45) 100%);
+    }
+}
+.apertura-foto .sc-occhiello { color: rgba(255, 255, 255, 0.82); }
+.apertura-foto .apertura-titolo { color: #fff; }
+.apertura-foto .apertura-benvenuto { color: rgba(255, 255, 255, 0.92); }
+.apertura-foto .cerca {
+    background: var(--carta);
+    color: var(--inchiostro);
+    padding: var(--s-2) var(--s-3);
+    border-radius: var(--raggio);
+    box-shadow: var(--ombra-2);
+}
+.apertura-foto .avviso { color: var(--inchiostro); }
+.apertura-foto .vie { gap: var(--s-2); }
+.apertura-foto .vie a {
+    min-height: 48px;
+    padding: 0 18px;
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    border-radius: var(--raggio);
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+}
+.apertura-foto .vie a:hover { background: rgba(255, 255, 255, 0.14); }
+.apertura-foto :focus-visible { outline-color: #fff; }
+.apertura-foto .cerca :focus-visible { outline-color: var(--bosco); }
+
+/* --------------------------------------------------- 1b. I NUMERI GRANDI
+   Quattro riquadri subito sotto l'apertura: elementi, alberi, varieta' e la
+   stima dell'anidride carbonica quando il Comune l'ha accesa (altrimenti il
+   conteggio successivo). Sono i numeri che si leggono da lontano; gli altri
+   conteggi restano nella fascia "come sta il verde", e quello che sale qui
+   non si ripete la' sotto. Con la fotografia i riquadri salgono a cavallo
+   del suo bordo, come nella bozza approvata. */
+.numeri { padding-bottom: var(--s-3); }
+.numeri:not(.numeri-sopra) { padding-top: var(--s-5); }
+.numeri-sopra .sc-contenitore { position: relative; z-index: 2; margin-top: -80px; }
+.tessere {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+@media (min-width: 900px) {
+    .tessere { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-3); }
+}
+.tessera {
+    background: var(--carta);
+    border: 1px solid var(--filo);
+    border-top: 4px solid var(--bosco);
+    border-radius: var(--raggio);
+    box-shadow: var(--ombra-2);
+    padding: var(--s-3);
+}
+@media (max-width: 899px) { .tessera { padding: var(--s-2); } }
+.tessera-cifra {
+    display: block;
+    font-size: var(--t-dato);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    color: var(--bosco);
+}
+/* L'unita' segue la cifra ma non scende mai sotto i 17px del corpo */
+.tessera-unita { font-size: max(17px, 0.45em); font-weight: 600; margin-left: 0.18em; color: var(--inchiostro-2); }
+.tessera-nome { display: block; margin-top: var(--s-1); font-weight: 600; line-height: 1.3; }
+.tessera-glossa {
+    display: block;
+    margin-top: 4px;
+    font-size: var(--t-etichetta);
+    line-height: 1.5;
+    color: var(--inchiostro-2);
+}
+
 /* --------------------------------------------------------------- 2. MAPPA
    Grande, non un francobollo: è il secondo modo di cercare la propria via. */
 .anteprima {
@@ -492,6 +602,22 @@
             && ($statistiche['co2']['euro'] ?? null) !== null
             && ($statistiche['co2']['prezzo'] ?? null) !== null;
 
+        // I numeri grandi sotto l'apertura: i primi tre conteggi (elementi,
+        // alberi, varieta') e, se il Comune l'ha accesa, la stima della CO2
+        // come quarto riquadro; altrimenti il quarto e' il conteggio
+        // successivo. Quello che sale nei riquadri non si ripete piu' sotto.
+        $tessere = [];
+        foreach ($voci as $indice => $voce) {
+            if (count($tessere) >= ($conCo2 ? 3 : 4)) {
+                break;
+            }
+            $tessere[] = $voce;
+            unset($voci[$indice]);
+        }
+        $voci = array_values($voci);
+
+        $conCopertina = $portale->hasCover();
+
         // La data che si mostra è quella dell'ULTIMO RILIEVO registrato, non
         // quella di oggi: "aggiornato al" deve dire da quando il registro non
         // si muove, altrimenti un censimento fermo da tre anni si presenterebbe
@@ -502,7 +628,11 @@
     @endphp
 
     {{-- ============================================== 1. LA RICERCA --}}
-    <section class="apertura sc-carta sc-sezione">
+    {{-- Con la fotografia di copertina caricata dal Comune l'apertura diventa
+         la sua veduta; senza, resta su fondo chiaro. La struttura e' la
+         stessa: il campo del cartellino viene prima di tutto il resto. --}}
+    <section class="apertura sc-sezione {{ $conCopertina ? 'apertura-foto' : 'sc-carta' }}"
+        @if ($conCopertina) style="background-image: url('{{ $portale->url('/copertina') }}')" @endif>
         <div class="sc-contenitore">
             {{-- Il nome dell'ente fa da titolo, come in testa a un atto. La
                  versione precedente lo infilava dentro una frase ("Il verde di
@@ -544,13 +674,37 @@
             @endif
 
             <div class="vie">
-                <a href="#mappa">Oppure guarda la mappa del verde</a>
+                <a href="{{ $conCopertina ? $portale->url('/mappa') : '#mappa' }}">{{ $conCopertina ? 'Apri la mappa del verde' : 'Oppure guarda la mappa del verde' }}</a>
                 @if ($urlSegnala)
                     <a href="#segnalare">Segnala un problema</a>
                 @endif
             </div>
         </div>
     </section>
+
+    {{-- ========================================= 1b. I NUMERI GRANDI --}}
+    @if ($tessere !== [] || $conCo2)
+        <section class="numeri sc-avorio{{ $conCopertina ? ' numeri-sopra' : '' }}" aria-label="Il patrimonio in numeri">
+            <div class="sc-contenitore">
+                <ul class="tessere">
+                    @foreach ($tessere as $voce)
+                        <li class="tessera">
+                            <span class="tessera-cifra sc-num">{{ $numero($voce['valore']) }}</span>
+                            <span class="tessera-nome">{{ $voce['valore'] === 1 ? $voce['uno'] : $voce['molti'] }}</span>
+                            <span class="tessera-glossa">{{ $voce['glossa'] }}</span>
+                        </li>
+                    @endforeach
+                    @if ($conCo2)
+                        <li class="tessera">
+                            <span class="tessera-cifra sc-num">{{ number_format($statistiche['co2']['kg'] / 1000, 1, ',', '.') }}<span class="tessera-unita">t</span><a class="sc-ast" href="#nota-metodo">*</a></span>
+                            <span class="tessera-nome">Anidride carbonica immagazzinata</span>
+                            <span class="tessera-glossa">stima sugli alberi di cui e' noto il diametro del tronco: il metodo e' in fondo alla pagina.</span>
+                        </li>
+                    @endif
+                </ul>
+            </div>
+        </section>
+    @endif
 
     {{-- ================================================ 2. LA MAPPA --}}
     <section class="sezione-mappa sc-avorio sc-sezione" id="mappa">
@@ -853,10 +1007,19 @@
                         </div>
                         <div>
                             <p class="blocco-nome">Segnalazione ordinaria</p>
-                            @if ($posta)
+                            @php $telefonoEnte = $portale->contactPhone(); @endphp
+                            @if ($posta || $telefonoEnte)
+                                {{-- Posta e telefono escono solo se l'ente li ha scritti: con
+                                     tutti e due, "scrivere ... oppure telefonare ..." --}}
                                 <p>Ramo basso, ceppaia, radice che solleva il marciapiede, pianta che sembra
-                                   sofferente: scrivere a
-                                   <a class="sc-collegamento" href="{{ $urlSegnala }}">{{ $posta }}</a>
+                                   sofferente:
+                                   @if ($posta)
+                                       scrivere a <a class="sc-collegamento" href="{{ $urlSegnala }}">{{ $posta }}</a>@if ($telefonoEnte) oppure @endif
+                                   @endif
+                                   @if ($telefonoEnte)
+                                       telefonare al <a class="sc-collegamento sc-num" href="{{ $portale->contactPhoneHref() }}">{{ $telefonoEnte }}</a>
+                                       negli orari dell'ufficio
+                                   @endif
                                    indicando la via e, se c'è, il numero del cartellino.</p>
                             @else
                                 <p>Ramo basso, ceppaia, radice che solleva il marciapiede, pianta che sembra

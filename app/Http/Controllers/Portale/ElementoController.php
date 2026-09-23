@@ -5,6 +5,12 @@ namespace App\Http\Controllers\Portale;
 use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use App\Models\Photo;
+use App\Models\TreeAssessment;
+use App\Models\WorkOrder;
+use App\Services\Benefits\CarbonEstimate;
+use App\Services\Benefits\ServiziEcosistemici;
+use App\Services\Photos\PublicPhotoCache;
+use App\Services\Portale\AssetTimeline;
 use App\Services\Portale\PortalSearch;
 use App\Services\Portale\PortalState;
 use App\Support\PortalContext;
@@ -52,22 +58,27 @@ class ElementoController extends Controller
         $lat = (float) $dati->lat;
         $lon = (float) $dati->lon;
 
+        // La data sotto la fotografia e' quella dello scatto (EXIF), non
+        // quella del caricamento: se manca, si tace
+        $foto = $this->fotoPubblica($asset);
+
         $dativista = [
             'portale' => $portale,
             'asset' => $asset,
             'stato' => $dati->stato,
             'lat' => $lat,
             'lon' => $lon,
-            'hasFoto' => $this->fotoPubblica($asset) !== null,
+            'hasFoto' => $foto !== null,
+            'fotoData' => $foto?->taken_at,
             'urlNavigazione' => $this->conCoordinate(config('portal.navigation_url'), $lat, $lon),
             'urlPosizione' => $this->conCoordinate(config('portal.position_url'), $lat, $lon),
             'urlSegnalazione' => $this->urlSegnalazione($portale, $asset),
-            'cronologia' => \App\Services\Portale\AssetTimeline::per($portale->client, $asset),
+            'cronologia' => AssetTimeline::per($portale->client, $asset),
             'co2' => $portale->mostraCo2()
-                ? \App\Services\Benefits\CarbonEstimate::per($asset->tree)
+                ? CarbonEstimate::per($asset->tree)
                 : null,
             'benefici' => $portale->mostraBenefici()
-                ? \App\Services\Benefits\ServiziEcosistemici::per($asset->tree)
+                ? ServiziEcosistemici::per($asset->tree)
                 : null,
             'vincoli' => $this->vincoli($portale, $asset),
         ];
@@ -91,7 +102,7 @@ class ElementoController extends Controller
         $foto = $this->fotoPubblica($asset);
         abort_if($foto === null, 404);
 
-        $jpeg = \App\Services\Photos\PublicPhotoCache::jpeg($foto);
+        $jpeg = PublicPhotoCache::jpeg($foto);
         abort_if($jpeg === null, 404);
 
         return response($jpeg, 200, [
@@ -122,7 +133,7 @@ class ElementoController extends Controller
         abort_unless(in_array($foto->category, ['before', 'during', 'after', 'census', 'reference'], true), 404);
         abort_unless($this->eventoPubblico($foto), 404);
 
-        $jpeg = \App\Services\Photos\PublicPhotoCache::jpeg($foto);
+        $jpeg = PublicPhotoCache::jpeg($foto);
         abort_if($jpeg === null, 404);
 
         return response($jpeg, 200, [
@@ -192,10 +203,10 @@ class ElementoController extends Controller
         }
 
         return match ($foto->subject_type) {
-            \App\Models\WorkOrder::class => \App\Models\WorkOrder::query()->withoutGlobalScopes()
+            WorkOrder::class => WorkOrder::query()->withoutGlobalScopes()
                 ->whereNull('deleted_at')->whereKey($foto->subject_id)
                 ->where('is_public', true)->where('status', 'completed')->exists(),
-            \App\Models\TreeAssessment::class => \App\Models\TreeAssessment::query()->withoutGlobalScopes()
+            TreeAssessment::class => TreeAssessment::query()->withoutGlobalScopes()
                 ->whereNull('deleted_at')->whereKey($foto->subject_id)
                 ->where('is_public', true)->exists(),
             default => false,

@@ -88,4 +88,60 @@ class PortalContext
     {
         return ! empty($this->client->public_profile['logo_path']);
     }
+
+    /**
+     * Vero se il Comune ha caricato la fotografia di copertina della home
+     * (veste mista del 23/09/2026). Senza fotografia l'apertura resta su
+     * fondo colorato: non si mette un'immagine di riempimento al suo posto.
+     */
+    public function hasCover(): bool
+    {
+        return ! empty($this->client->public_profile['cover_path']);
+    }
+
+    /**
+     * Recapiti dell'ufficio per il pie' di pagina. Ogni voce esce solo se
+     * l'ente l'ha compilata: niente etichette vuote, niente trattini.
+     */
+    public function address(): ?string
+    {
+        return $this->testo('address');
+    }
+
+    public function openingHours(): ?string
+    {
+        return $this->testo('opening_hours');
+    }
+
+    public function contactPhone(): ?string
+    {
+        return $this->testo('contact_phone');
+    }
+
+    /** Il numero ridotto a cifre e prefisso, come lo vuole un collegamento tel: */
+    public function contactPhoneHref(): ?string
+    {
+        $numero = $this->contactPhone();
+
+        return $numero === null ? null : 'tel:'.preg_replace('/[^0-9+]/', '', $numero);
+    }
+
+    public function contactPec(): ?string
+    {
+        $pec = trim((string) ($this->client->public_profile['contact_pec'] ?? ''));
+
+        return filter_var($pec, FILTER_VALIDATE_EMAIL) ? $pec : null;
+    }
+
+    public function accessibilityUrl(): ?string
+    {
+        return filter_var($this->client->public_profile['accessibility_url'] ?? '', FILTER_VALIDATE_URL) ?: null;
+    }
+
+    private function testo(string $chiave): ?string
+    {
+        $valore = trim((string) ($this->client->public_profile[$chiave] ?? ''));
+
+        return $valore === '' ? null : $valore;
+    }
 }

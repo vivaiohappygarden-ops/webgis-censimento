@@ -95,6 +95,22 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   schermo, non sotto la piega), poi la mappa, poi i numeri, e solo dopo il racconto.
 - I contrasti li garantisce `PortalPalette` con le sue guardie, non l'occhio: la tinta la
   sceglie il Comune, la leggibilita' no (`PortalPaletteTest`).
+- **Veste mista (dal 23/09/2026)**, approvata dal committente su bozza: il nostro impianto
+  piu' le idee del portale di Mentana. Testata bianca con stemma e nome (il colore dell'ente
+  lo portano pulsanti e apertura). **Fotografia di copertina** facoltativa
+  (`public_profile.cover_path`, caricata da Territorio, ricodificata in JPEG entro 1920 px e
+  servita da `/copertina`; il nome del file porta l'ora del caricamento, cosi' la cache non
+  mostra la foto vecchia): con la foto l'apertura ha il velo nero e il campo del cartellino
+  in una scatola bianca; **senza foto resta l'apertura chiara, niente immagine di
+  riempimento**. Sotto l'apertura i **quattro numeri grandi** (elementi, alberi, varieta' e la
+  CO2 se accesa, altrimenti il conteggio successivo): quello che sale li' non si ripete
+  nella fascia "come sta il verde". **Pie' di pagina a tre colonne** con i recapiti
+  dell'ufficio (`address`, `contact_phone`, `contact_pec`, `opening_hours`): ogni riga esce
+  solo se compilata, il telefono entra anche fra i modi di segnalare. Nella **scheda** prima
+  la fotografia (4:3, con stato e data dello scatto sul bordo), poi cartellino, stato, nome,
+  specie, misure su due colonne e **i due pulsanti subito dopo le misure** (erano in fondo,
+  sotto la cronologia). Il pannello della mappa e' chiaro e porta alla scheda completa.
+  Il raggio unico e' salito da 4 a 8 px. Le regole stanno in `PortaleVesteMistaTest`.
 - **Patrimonio dimostrativo** (`php artisan demo:patrimonio`, dal 16/09/2026): riempie il
   Comune Demo con alberi, valutazioni e lavori verosimili per mostrare portale e gestionale
   a un Comune prima di avere i suoi dati. `App\Services\Demo\PatrimonioDimostrativo`

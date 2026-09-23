@@ -210,6 +210,9 @@ function avvia(config) {
     const pannello = document.getElementById('pannello');
     const contenuto = document.getElementById('pannello-contenuto');
     const chiudi = document.getElementById('pannello-chiudi');
+    // Il collegamento alla scheda a pagina intera, da condividere o stampare:
+    // punta all'elemento aperto nel pannello
+    const schedaIntera = document.getElementById('pannello-apri');
 
     function evidenzia(codice) {
         const scelto = codice ?? NESSUNO;
@@ -226,6 +229,7 @@ function avvia(config) {
     async function apri(codice) {
         pannello.hidden = false;
         contenuto.innerHTML = '<p class="attesa">Caricamento…</p>';
+        if (schedaIntera) schedaIntera.href = `${config.urlElemento}/${encodeURIComponent(codice)}`;
         evidenzia(codice);
         try {
             const risposta = await fetch(`${config.urlElemento}/${encodeURIComponent(codice)}?riquadro=1`, {

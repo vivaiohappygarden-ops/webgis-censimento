@@ -86,8 +86,8 @@
     container-type: inline-size;
 
     /* Corpi propri della scheda, tarati sulla sua larghezza */
-    --sc-cartellino: 42px;
-    --sc-cartellino: clamp(38px, 13cqi, 84px);
+    --sc-cartellino: 36px;
+    --sc-cartellino: clamp(34px, 10cqi, 60px);
     --sc-nome: 28px;
     --sc-nome: clamp(26px, 8.4cqi, 46px);
     --sc-titolo: 21px;
@@ -143,95 +143,54 @@
 }
 
 /* ------------------------------------------------------------ apertura
-   La fotografia tocca i bordi del foglio; sopra, il numero del cartellino.
-   Il velo è NERO, non tinto: una fotografia non prende il colore del Comune.
-   È anche l'unico modo di garantire il contrasto sopra una fotografia che non
-   abbiamo mai visto: dove sta il testo il nero è al 90%, quindi il bianco
-   legge almeno 7:1 anche sul cielo più chiaro.
-   Senza fotografia non si disegna niente al suo posto: vedi .senza-foto. */
+   La fotografia tocca i bordi del foglio, in proporzione 4:3, e porta sul
+   bordo basso soltanto lo stato e la data dello scatto; il numero del
+   cartellino sta subito sotto, in testa all'identita' (veste mista del
+   23/09/2026: prima la fotografia, poi i dati, come sui portali civici di
+   riferimento). Il velo e' NERO, non tinto: una fotografia non prende il
+   colore del Comune, ed e' l'unico modo di garantire il contrasto sopra una
+   foto che non abbiamo mai visto: la data sta in un tondo nero all'82%, che
+   tiene il bianco sopra 4,5:1 anche su un cielo bianco.
+   Senza fotografia non si disegna niente al suo posto: la scheda parte dal
+   numero del cartellino (vedi .senza-foto-nota). */
 .scheda .foto {
     position: relative;
     margin: 0;
     background: var(--notte);
-    /* Il velo cresce dal basso: sotto questa altezza sborderebbe sopra la
-       fotografia e il foglio, che taglia quel che esce, mangerebbe il numero.
-       Una fotografia più bassa lascia vedere il fondo scuro in alto: è voluto. */
-    min-height: 280px;
 }
 .scheda .foto img {
     display: block;
     width: 100%;
     height: auto;
+    aspect-ratio: 4 / 3;
     /* Un ritratto d'albero molto alto non deve occupare tutto lo schermo */
     max-height: 56vh;
     object-fit: cover;
     object-position: center;
 }
-/* Senza fotografia la testata si stringe a quello che dice davvero: il
-   numero del cartellino, lo stato e la data del rilievo. Niente velo, niente
-   sfumatura da coprire, e soprattutto niente disegno di una pianta che non è
-   questa: prima erano fino a 560px da scorrere prima di leggere la specie. */
-.scheda .senza-foto { min-height: 0; background: var(--bosco); }
-.scheda .senza-foto .velo {
-    position: static;
-    padding: var(--sc-vuoto) var(--sc-lato);
-    background: none;
-}
 .scheda .velo {
     position: absolute;
     left: 0; right: 0; bottom: 0;
-    padding: 64px var(--sc-lato) var(--s-3);
-    padding-top: clamp(56px, 14cqi, 104px);
-    /* Il nero pieno arriva fino all'80% dell'altezza del velo: il testo sta
-       tutto lì dentro, la sfumatura resta nel solo spazio vuoto in alto */
-    background: linear-gradient(to top,
-        rgba(0, 0, 0, 0.90) 0%,
-        rgba(0, 0, 0, 0.90) 80%,
-        rgba(0, 0, 0, 0) 100%);
-    color: #fff;
-}
-.scheda .velo-occhiello {
-    margin: 0;
-    font-size: var(--t-occhiello);
-    line-height: 1.2;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: #fff;
-}
-.scheda .cartellino {
-    margin: var(--s-1) 0 0;
-    font-family: var(--titolo);
-    font-weight: 600;
-    font-size: var(--sc-cartellino);
-    line-height: 0.98;
-    letter-spacing: 0.02em;
-    color: #fff;
-    font-variant-numeric: tabular-nums lining-nums;
-}
-/* Senza cartellino non si stampa un numero finto: si dice che non c'è */
-.scheda .cartellino-muto { font-size: var(--sc-titolo); letter-spacing: 0; font-style: italic; }
-.scheda .filo-titolo {
-    display: block;
-    width: 72px;
-    max-width: 40%;
-    height: 2px;
-    margin-top: var(--s-2);
-    background: rgba(255, 255, 255, 0.5);
-}
-.scheda .velo-piede {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    justify-content: space-between;
     gap: var(--s-1) var(--s-2);
-    margin: var(--s-2) 0 0;
+    margin: 0;
+    padding: 40px var(--sc-lato) 12px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 100%);
+    color: #fff;
     font-size: var(--t-etichetta);
     line-height: 1.35;
-    color: #fff;
 }
-.scheda .velo-nota {
-    margin: var(--s-2) 0 0;
-    font-size: var(--t-etichetta);
-    line-height: 1.55;
+.scheda .velo-data {
+    display: inline-flex;
+    gap: 0.3em; /* inline-flex scarta lo spazio fra "Foto del" e la data */
+    align-items: center;
+    min-height: 26px;
+    padding: 3px 10px;
+    border-radius: var(--raggio);
+    background: rgba(0, 0, 0, 0.82);
     color: #fff;
 }
 /* La lente sta in alto a destra, fuori dal velo e fuori dal soggetto. Il
@@ -254,18 +213,65 @@
 }
 .scheda .lente:hover { background: rgba(0, 0, 0, 0.88); }
 
-/* ------------------------------------------------------------ identità */
-.scheda .identita { padding-top: var(--sc-vuoto); padding-bottom: var(--sc-vuoto); }
-.scheda .tipo {
-    display: block;
+/* ------------------------------------------------------------ identità
+   Prima il numero del cartellino, che e' quello che il cittadino ha letto
+   sulla pianta; poi lo stato e la data del rilievo, il nome, la specie, le
+   misure e i due pulsanti. Tutto quello che serve sta nel primo schermo del
+   pannello, senza scorrere. */
+.scheda .identita { padding-top: var(--s-3); padding-bottom: var(--sc-vuoto); }
+.scheda .cartellino-occhiello {
+    margin: 0;
     font-size: var(--t-occhiello);
     line-height: 1.2;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--inchiostro-2);
 }
-.scheda .nome {
+.scheda .cartellino {
+    margin: 4px 0 0;
+    font-family: var(--titolo);
+    font-weight: 600;
+    font-size: var(--sc-cartellino);
+    line-height: 1;
+    letter-spacing: 0.01em;
+    color: var(--bosco);
+    font-variant-numeric: tabular-nums lining-nums;
+}
+/* Senza cartellino non si stampa un numero finto: si dice che non c'e' */
+.scheda .cartellino-muto { font-size: var(--sc-titolo); letter-spacing: 0; font-style: italic; color: var(--inchiostro-2); }
+.scheda .stato-riga {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-1) var(--s-2);
     margin: var(--s-2) 0 0;
+    font-size: var(--t-etichetta);
+    line-height: 1.35;
+    color: var(--inchiostro-2);
+}
+.scheda .senza-foto-nota {
+    margin: var(--s-1) 0 0;
+    font-size: var(--t-etichetta);
+    line-height: 1.55;
+    color: var(--inchiostro-2);
+}
+.scheda .tipo {
+    display: block;
+    margin-top: var(--s-3);
+    font-size: var(--t-occhiello);
+    line-height: 1.2;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--inchiostro-2);
+}
+.scheda .dove-riga {
+    margin: var(--s-2) 0 0;
+    font-size: var(--t-etichetta);
+    line-height: 1.5;
+    color: var(--inchiostro-2);
+}
+.scheda .nome {
+    margin: var(--s-1) 0 0;
     font-family: var(--titolo);
     font-weight: 600;
     font-size: var(--sc-nome);
@@ -302,14 +308,24 @@
    solo pezzo di testo ("6,5 m"): è la forma in cui il portale li pubblica
    da sempre e in cui i controlli li cercano, e spezzarli in due caselle
    per rimpicciolire l'unità li dividerebbe anche nel testo della pagina. */
-.scheda .misure { margin: var(--s-3) 0 0; padding: 0; display: grid; grid-template-columns: 1fr; }
+/* Due colonne anche nel pannello stretto: le misure sono quattro o cinque
+   valori corti e in una colonna sola facevano scorrere mezza scheda */
+.scheda .misure {
+    margin: var(--s-3) 0 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--s-3);
+    border-top: 1px solid var(--filo);
+}
 .scheda .misura {
     /* column-reverse: si legge etichetta-poi-valore (che è come si dice),
        si vede valore-poi-etichetta (che è come si guarda) */
     display: flex;
     flex-direction: column-reverse;
+    justify-content: flex-end;
     padding: var(--s-2) 0;
-    border-top: 1px solid var(--filo);
+    border-bottom: 1px solid var(--filo);
 }
 .scheda .misura dt {
     margin-top: var(--s-1);
@@ -602,8 +618,7 @@
    azioni stanno in riga. Sotto, e su ogni browser senza contenitori, resta
    la forma stretta: è quella giusta nel pannello della mappa e sul telefono. */
 @container (min-width: 520px) {
-    .scheda .foto { min-height: 320px; }
-    .scheda .misure { grid-template-columns: 1fr 1fr; column-gap: var(--s-4); }
+    .scheda .misure { column-gap: var(--s-4); }
     .scheda .azioni { flex-direction: row; }
     .scheda .azioni .azione { flex: 1 1 0; }
     .scheda .foto-evento button { width: 96px; height: 96px; }
@@ -624,48 +639,58 @@
 
 <article class="scheda{{ $contesto === 'pagina' ? ' scheda-pagina' : '' }}">
 
+    @php
+        // Lo stato racconta la salute di una pianta: su un prato o un arredo
+        // non avrebbe senso. Con la fotografia sta sul suo bordo basso; senza,
+        // nella riga sotto il numero del cartellino.
+        $targhettaStato = $albero
+            ? '<span class="sc-targhetta" style="--c: '.e(\App\Services\Portale\PortalState::colore($stato)).'">'.e(\App\Services\Portale\PortalState::etichetta($stato)).'</span>'
+            : '';
+        $dataFoto = $fotoData ?? null;
+    @endphp
+
     {{-- Apertura: la fotografia, se c'è. Se non c'è, non si mette niente al
          suo posto: la versione precedente disegnava una pianta di fantasia
          alta mezzo schermo, e prima di arrivare alla specie bisognava
-         scorrere. Un disegno che non è quella pianta non è un dato: qui
-         resta la sola testata con il numero del cartellino. --}}
-    <figure class="foto{{ $hasFoto ? '' : ' senza-foto' }}">
-        @if ($hasFoto)
+         scorrere. Un disegno che non è quella pianta non è un dato: la scheda
+         parte dal numero del cartellino. --}}
+    @if ($hasFoto)
+        <figure class="foto">
             <img src="{{ $urlFoto }}" alt="Fotografia dell'elemento">
             <button type="button" class="lente" data-ingrandisci="{{ $urlFoto }}" aria-label="Ingrandisci la fotografia">+</button>
+            <figcaption class="velo">
+                {!! $targhettaStato !!}
+                @if ($dataFoto)
+                    <span class="velo-data">Foto del <span class="sc-num">{{ $dataFoto->format('d/m/Y') }}</span></span>
+                @endif
+            </figcaption>
+        </figure>
+    @endif
+
+    {{-- Identità: il numero del cartellino, lo stato, il nome che si
+         riconosce, poi quello botanico, le misure e i due pulsanti. --}}
+    <header class="identita lato">
+        @if ($codice !== '')
+            <p class="cartellino-occhiello">Cartellino numero</p>
+            <p class="cartellino sc-num">{{ $codice }}</p>
+        @else
+            <p class="cartellino-occhiello">Elemento censito</p>
+            <p class="cartellino cartellino-muto">Senza cartellino</p>
         @endif
 
-        <figcaption class="velo">
-            @if ($codice !== '')
-                <p class="velo-occhiello">Cartellino numero</p>
-                <p class="cartellino sc-num">{{ $codice }}</p>
-            @else
-                <p class="velo-occhiello">Elemento censito</p>
-                <p class="cartellino cartellino-muto">Senza cartellino</p>
-            @endif
-            <span class="filo-titolo" aria-hidden="true"></span>
+        @if (($albero && ! $hasFoto) || $asset->surveyed_at)
+            <p class="stato-riga">
+                @unless ($hasFoto){!! $targhettaStato !!}@endunless
+                @if ($asset->surveyed_at)
+                    <span>rilevato il <span class="sc-num">{{ $asset->surveyed_at->format('d/m/Y') }}</span></span>
+                @endif
+            </p>
+        @endif
 
-            @if ($albero || $asset->surveyed_at)
-                <p class="velo-piede">
-                    @if ($albero)
-                        {{-- Lo stato racconta la salute di una pianta: su un prato o un
-                             arredo non avrebbe senso --}}
-                        <span class="sc-targhetta" style="--c: {{ \App\Services\Portale\PortalState::colore($stato) }}">{{ \App\Services\Portale\PortalState::etichetta($stato) }}</span>
-                    @endif
-                    @if ($asset->surveyed_at)
-                        <span>rilevato il <span class="sc-num">{{ $asset->surveyed_at->format('d/m/Y') }}</span></span>
-                    @endif
-                </p>
-            @endif
+        @unless ($hasFoto)
+            <p class="senza-foto-nota">Per questo elemento non è pubblicata una fotografia.</p>
+        @endunless
 
-            @unless ($hasFoto)
-                <p class="velo-nota">Per questo elemento non è pubblicata una fotografia.</p>
-            @endunless
-        </figcaption>
-    </figure>
-
-    {{-- Identità: il nome che si riconosce, poi quello botanico. --}}
-    <header class="identita lato">
         @if ($tipoRiga !== '')
             <span class="tipo">{{ $tipoRiga }}</span>
         @endif
@@ -687,6 +712,16 @@
             @endif
         @endif
 
+        @php
+            $doveRiga = implode(' · ', array_filter([
+                trim((string) ($asset->area?->name ?? '')),
+                trim((string) ($asset->area?->locality?->name ?? '')),
+            ]));
+        @endphp
+        @if ($doveRiga !== '')
+            <p class="dove-riga">{{ $doveRiga }}</p>
+        @endif
+
         @if (! empty($misure))
             <dl class="misure">
                 @foreach ($misure as [$etichettaMisura, $valoreMisura, $spiegaMisura])
@@ -699,6 +734,30 @@
                     </div>
                 @endforeach
             </dl>
+        @endif
+
+        {{-- Le due azioni stanno qui, subito dopo le misure: erano in fondo alla
+             scheda, sotto la cronologia, e nel pannello della mappa bisognava
+             scorrere tutto per raggiungere l'albero --}}
+        @if ($urlNavigazione || $urlSegnalazione)
+            <div class="azioni">
+                @if ($urlNavigazione)
+                    <a class="azione" href="{{ $urlNavigazione }}" target="_blank" rel="noopener nofollow">Raggiungi l'elemento</a>
+                @endif
+                @if ($urlSegnalazione)
+                    <a class="azione secondaria" href="{{ $urlSegnalazione }}">Segnala un problema</a>
+                @endif
+            </div>
+            <p class="azioni-nota">
+                @if ($urlNavigazione)
+                    Il primo collegamento apre le mappe del telefono sul punto rilevato.
+                @endif
+                @if ($urlSegnalazione)
+                    La segnalazione apre un messaggio già intestato a
+                    <a class="sc-collegamento" href="mailto:{{ $portale->contactEmail() }}">{{ $portale->contactEmail() }}</a>,
+                    con il numero del cartellino già scritto: descriva che cosa ha visto e, se può, alleghi una fotografia.
+                @endif
+            </p>
         @endif
     </header>
 
@@ -885,26 +944,5 @@
                 @endif
             </span>
         </div>
-
-        @if ($urlNavigazione || $urlSegnalazione)
-            <div class="azioni">
-                @if ($urlNavigazione)
-                    <a class="azione" href="{{ $urlNavigazione }}" target="_blank" rel="noopener nofollow">Raggiungi l'elemento</a>
-                @endif
-                @if ($urlSegnalazione)
-                    <a class="azione secondaria" href="{{ $urlSegnalazione }}">Segnala un problema</a>
-                @endif
-            </div>
-            @if ($urlNavigazione)
-                <p class="azioni-nota">Il primo collegamento apre le mappe del telefono sul punto rilevato.</p>
-            @endif
-            @if ($urlSegnalazione)
-                <p class="azioni-nota">
-                    La segnalazione apre un messaggio già intestato a
-                    <a class="sc-collegamento" href="mailto:{{ $portale->contactEmail() }}">{{ $portale->contactEmail() }}</a>,
-                    con il numero del cartellino già scritto: descriva che cosa ha visto e, se può, alleghi una fotografia.
-                </p>
-            @endif
-        @endif
     </section>
 </article>

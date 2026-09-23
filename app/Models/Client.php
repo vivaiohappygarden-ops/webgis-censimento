@@ -31,8 +31,8 @@ class Client extends Model
         ];
     }
 
-    /** Indirizzo del portale e presenza dello stemma servono a ogni schermata di gestione. */
-    protected $appends = ['portal_url', 'has_logo'];
+    /** Indirizzo del portale, stemma e copertina servono a ogni schermata di gestione. */
+    protected $appends = ['portal_url', 'has_logo', 'has_cover'];
 
     public function getPortalUrlAttribute(): ?string
     {
@@ -42,6 +42,11 @@ class Client extends Model
     public function getHasLogoAttribute(): bool
     {
         return ! empty($this->public_profile['logo_path']);
+    }
+
+    public function getHasCoverAttribute(): bool
+    {
+        return ! empty($this->public_profile['cover_path']);
     }
 
     public function contracts()

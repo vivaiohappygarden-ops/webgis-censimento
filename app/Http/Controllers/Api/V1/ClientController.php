@@ -4,14 +4,21 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
-use App\Support\RicercaTestuale;
+use App\Models\Sal;
+use App\Models\Team;
+use App\Models\User;
+use App\Services\Carto\SfondiCommittente;
+use App\Services\Photos\ImageDerivative;
 use App\Support\Audit;
 use App\Support\ListQuery;
+use App\Support\PortalLabels;
+use App\Support\RicercaTestuale;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -21,7 +28,7 @@ class ClientController extends Controller implements HasMiddleware
     {
         return [
             new Middleware('can:clients.view', only: ['index', 'show', 'sfondi']),
-            new Middleware('can:clients.manage', only: ['store', 'update', 'destroy', 'stemma', 'rimuoviStemma']),
+            new Middleware('can:clients.manage', only: ['store', 'update', 'destroy', 'stemma', 'rimuoviStemma', 'copertina', 'rimuoviCopertina']),
         ];
     }
 
@@ -49,7 +56,7 @@ class ClientController extends Controller implements HasMiddleware
 
         // Prefisso delle etichette proposto dal nome (MEN per "Comune di
         // Mentana"): resta modificabile finché non ci sono codici assegnati
-        $data['label_prefix'] ??= \App\Support\PortalLabels::uniquePrefix(
+        $data['label_prefix'] ??= PortalLabels::uniquePrefix(
             $request->user()->tenant_id, $data['name'],
         );
 
@@ -79,7 +86,7 @@ class ClientController extends Controller implements HasMiddleware
         $acceso = array_key_exists('public_enabled', $data) ? $data['public_enabled'] : $client->public_enabled;
         $slug = array_key_exists('public_slug', $data) ? $data['public_slug'] : $client->public_slug;
         if ($acceso && ($slug === null || $slug === '')) {
-            $data['public_slug'] = \App\Support\PortalLabels::uniqueSlug(
+            $data['public_slug'] = PortalLabels::uniqueSlug(
                 $data['name'] ?? $client->name, $client->id,
             );
         }
@@ -114,7 +121,7 @@ class ClientController extends Controller implements HasMiddleware
 
         $client = Client::findOrFail($id);
 
-        $png = \App\Services\Photos\ImageDerivative::png(
+        $png = ImageDerivative::png(
             file_get_contents($request->file('stemma')->getRealPath()), maxDimension: 512,
         );
 
@@ -125,7 +132,7 @@ class ClientController extends Controller implements HasMiddleware
         }
 
         $path = "portale/{$client->tenant_id}/{$client->id}/stemma.png";
-        \Illuminate\Support\Facades\Storage::disk()->put($path, $png);
+        Storage::disk()->put($path, $png);
 
         $client->public_profile = [...($client->public_profile ?? []), 'logo_path' => $path];
         $client->save();
@@ -140,13 +147,76 @@ class ClientController extends Controller implements HasMiddleware
         $profilo = $client->public_profile ?? [];
 
         if (! empty($profilo['logo_path'])) {
-            \Illuminate\Support\Facades\Storage::disk()->delete($profilo['logo_path']);
+            Storage::disk()->delete($profilo['logo_path']);
         }
         unset($profilo['logo_path']);
 
         $client->public_profile = $profilo;
         $client->save();
         Audit::log('client.logo_removed', $client);
+
+        return response()->json(['data' => $client->fresh()]);
+    }
+
+    /**
+     * Fotografia di copertina della home del portale (veste mista del
+     * 23/09/2026). Si ricodifica subito in JPEG entro i 1920 px: quello che
+     * si archivia è già senza i metadati del file originale (una foto dal
+     * telefono porta le coordinate di dove è stata scattata) e di una misura
+     * che la home carica in fretta anche dal telefono.
+     *
+     * Il nome del file porta l'ora del caricamento: l'indirizzo pubblico
+     * cambia a ogni sostituzione e la cache del browser non può mostrare la
+     * foto vecchia. La precedente si cancella.
+     */
+    public function copertina(Request $request, string $id): JsonResponse
+    {
+        $request->validate([
+            'copertina' => ['required', 'file', 'image', 'mimes:jpeg,jpg,png,webp', 'max:12288'],
+        ]);
+
+        $client = Client::findOrFail($id);
+
+        $jpeg = ImageDerivative::jpeg(
+            file_get_contents($request->file('copertina')->getRealPath()), maxDimension: 1920, quality: 82,
+        );
+
+        if ($jpeg === null) {
+            throw ValidationException::withMessages([
+                'copertina' => 'Immagine non leggibile: usa una fotografia JPEG, PNG o WEBP di dimensioni normali.',
+            ]);
+        }
+
+        $profilo = $client->public_profile ?? [];
+        $precedente = $profilo['cover_path'] ?? null;
+        $path = "portale/{$client->tenant_id}/{$client->id}/copertina-".now()->format('YmdHis').'.jpg';
+
+        $disk = Storage::disk();
+        $disk->put($path, $jpeg);
+        if ($precedente && $precedente !== $path) {
+            $disk->delete($precedente);
+        }
+
+        $client->public_profile = [...$profilo, 'cover_path' => $path];
+        $client->save();
+        Audit::log('client.cover_updated', $client);
+
+        return response()->json(['data' => $client->fresh()]);
+    }
+
+    public function rimuoviCopertina(string $id): JsonResponse
+    {
+        $client = Client::findOrFail($id);
+        $profilo = $client->public_profile ?? [];
+
+        if (! empty($profilo['cover_path'])) {
+            Storage::disk()->delete($profilo['cover_path']);
+        }
+        unset($profilo['cover_path']);
+
+        $client->public_profile = $profilo;
+        $client->save();
+        Audit::log('client.cover_removed', $client);
 
         return response()->json(['data' => $client->fresh()]);
     }
@@ -161,7 +231,7 @@ class ClientController extends Controller implements HasMiddleware
             ]);
         }
 
-        $portalUsers = \App\Models\User::query()->where('client_id', $client->id)->count();
+        $portalUsers = User::query()->where('client_id', $client->id)->count();
         if ($portalUsers > 0) {
             throw ValidationException::withMessages([
                 'client' => "Il cliente ha {$portalUsers} utenti del portale collegati: disattivali o spostali prima.",
@@ -170,7 +240,7 @@ class ClientController extends Controller implements HasMiddleware
 
         // Un SAL validato e' un documento numerato agli atti: non puo'
         // perdere il suo intestatario. Le bozze invece si eliminano prima.
-        $sals = \App\Models\Sal::query()->where('client_id', $client->id)->count();
+        $sals = Sal::query()->where('client_id', $client->id)->count();
         if ($sals > 0) {
             throw ValidationException::withMessages([
                 'client' => "Il cliente ha {$sals} SAL: elimina prima le bozze; con SAL validati agli atti il cliente non si può eliminare.",
@@ -179,7 +249,7 @@ class ClientController extends Controller implements HasMiddleware
 
         // Un'impresa esterna appartiene al suo committente: eliminandolo
         // resterebbe agganciata a un cliente fantasma
-        $imprese = \App\Models\Team::query()->where('client_id', $client->id)->count();
+        $imprese = Team::query()->where('client_id', $client->id)->count();
         if ($imprese > 0) {
             throw ValidationException::withMessages([
                 'client' => "Il cliente ha {$imprese} ".($imprese === 1 ? 'impresa esterna collegata' : 'imprese esterne collegate')
@@ -199,7 +269,7 @@ class ClientController extends Controller implements HasMiddleware
         $client = Client::findOrFail($id);
 
         return response()->json([
-            'data' => \App\Services\Carto\SfondiCommittente::perMappa($client),
+            'data' => SfondiCommittente::perMappa($client),
         ]);
     }
 
@@ -231,7 +301,7 @@ class ClientController extends Controller implements HasMiddleware
                 // Fra i nomi riservati c'e' anche quello del gestionale, quando
                 // sta sullo stesso dominio dei portali: assegnarlo a un
                 // committente renderebbe irraggiungibile il programma
-                Rule::notIn(\App\Support\PortalLabels::reservedSlugs()),
+                Rule::notIn(PortalLabels::reservedSlugs()),
                 // Unicità su TUTTO l'archivio: un sottodominio deve portare
                 // a un solo committente, anche fra imprese diverse
                 Rule::unique('clients', 'public_slug')
@@ -241,7 +311,7 @@ class ClientController extends Controller implements HasMiddleware
 
             // Sfondi cartografici del committente (z/x/y o WMS): le regole
             // stanno con la loro logica, in SfondiCommittente
-            ...\App\Services\Carto\SfondiCommittente::regole(),
+            ...SfondiCommittente::regole(),
 
             'public_profile' => ['sometimes', 'array'],
             'public_profile.display_name' => ['sometimes', 'nullable', 'string', 'max:120'],
@@ -254,6 +324,12 @@ class ClientController extends Controller implements HasMiddleware
             'public_profile.legal_owner' => ['sometimes', 'nullable', 'string', 'max:500'],
             'public_profile.privacy_text' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'public_profile.accessibility_url' => ['sometimes', 'nullable', 'url', 'max:500'],
+            // Recapiti dell'ufficio nel pie' di pagina del portale: ognuno
+            // esce solo se compilato (PortalContext)
+            'public_profile.address' => ['sometimes', 'nullable', 'string', 'max:300'],
+            'public_profile.contact_phone' => ['sometimes', 'nullable', 'string', 'max:40', 'regex:/^\+?[0-9][0-9 .\/-]{4,}$/'],
+            'public_profile.opening_hours' => ['sometimes', 'nullable', 'string', 'max:600'],
+            'public_profile.contact_pec' => ['sometimes', 'nullable', 'email', 'max:254'],
 
             // Prefisso delle etichette: la numerazione riparte da uno per
             // ogni committente (MEN-0001, GUI-0001)
@@ -269,6 +345,7 @@ class ClientController extends Controller implements HasMiddleware
             'label_prefix.regex' => 'Il prefisso va da due a sei caratteri, solo lettere maiuscole e numeri (esempio: MEN).',
             'label_prefix.unique' => 'Questo prefisso è già assegnato a un altro committente.',
             'public_profile.color.regex' => 'Il colore va scritto in esadecimale, per esempio #14532d.',
+            'public_profile.contact_phone.regex' => 'Il telefono va scritto con cifre, spazi o trattini, per esempio 06 1234 5678.',
         ]);
     }
 }

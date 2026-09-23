@@ -524,6 +524,12 @@ const portale = reactive({
     contact_email: '',
     welcome_text: '',
     footer_text: '',
+    // Recapiti dell'ufficio nel pie' di pagina del portale: ognuno esce
+    // solo se compilato
+    address: '',
+    contact_phone: '',
+    contact_pec: '',
+    opening_hours: '',
     show_co2: false,
     show_benefici: false,
     legal_owner: '',
@@ -532,6 +538,7 @@ const portale = reactive({
     salvato: '',
 });
 const stemmaInput = ref(null);
+const copertinaInput = ref(null);
 
 // Dominio dei portali (PORTAL_BASE_HOST sul server). Finché non è collegato,
 // gli indirizzi restano quelli di collaudo con /comune/<nome> nel percorso.
@@ -618,6 +625,10 @@ function caricaPortale(client) {
         contact_email: profilo.contact_email ?? '',
         welcome_text: profilo.welcome_text ?? '',
         footer_text: profilo.footer_text ?? '',
+        address: profilo.address ?? '',
+        contact_phone: profilo.contact_phone ?? '',
+        contact_pec: profilo.contact_pec ?? '',
+        opening_hours: profilo.opening_hours ?? '',
         show_co2: !! profilo.show_co2,
         show_benefici: !! profilo.show_benefici,
         legal_owner: profilo.legal_owner ?? '',
@@ -641,6 +652,10 @@ async function salvaPortale() {
                 contact_email: portale.contact_email || null,
                 welcome_text: portale.welcome_text || null,
                 footer_text: portale.footer_text || null,
+                address: portale.address || null,
+                contact_phone: portale.contact_phone || null,
+                contact_pec: portale.contact_pec || null,
+                opening_hours: portale.opening_hours || null,
                 show_co2: portale.show_co2,
                 show_benefici: portale.show_benefici,
                 legal_owner: portale.legal_owner || null,
@@ -687,6 +702,35 @@ async function rimuoviStemma() {
         const { data } = await axios.delete(`/api/v1/clients/${selectedClient.value.id}/stemma`);
         aggiornaClienteInElenco(data.data);
         portale.salvato = 'Stemma rimosso.';
+    } catch (err) {
+        error.value = firstError(err);
+    }
+}
+
+// Fotografia di copertina della home del portale: il server la ricodifica
+// e le toglie i metadati; senza foto l'apertura resta su fondo colorato
+async function caricaCopertina(evento) {
+    const file = evento.target.files?.[0];
+    if (! file) return;
+    error.value = '';
+    const modulo = new FormData();
+    modulo.append('copertina', file);
+    try {
+        const { data } = await axios.post(`/api/v1/clients/${selectedClient.value.id}/copertina`, modulo);
+        aggiornaClienteInElenco(data.data);
+        portale.salvato = 'Fotografia di copertina caricata.';
+    } catch (err) {
+        error.value = firstError(err);
+    } finally {
+        if (copertinaInput.value) copertinaInput.value.value = '';
+    }
+}
+async function rimuoviCopertina() {
+    error.value = '';
+    try {
+        const { data } = await axios.delete(`/api/v1/clients/${selectedClient.value.id}/copertina`);
+        aggiornaClienteInElenco(data.data);
+        portale.salvato = 'Fotografia di copertina rimossa.';
     } catch (err) {
         error.value = firstError(err);
     }
@@ -1059,6 +1103,56 @@ onMounted(() => carica(loadClients));
                                     >
                                 </label>
 
+                                <div class="border-t border-gray-100 pt-3">
+                                    <p class="mb-2 text-xs font-medium text-gray-600">
+                                        Recapiti dell'ufficio
+                                        <span class="block font-normal text-gray-500">
+                                            Escono in fondo a ogni pagina del portale. Ogni riga compare solo se
+                                            compilata: quello che resta vuoto non si stampa.
+                                        </span>
+                                    </p>
+                                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <label class="block text-sm">
+                                            <span class="mb-1 block text-xs text-gray-600">Indirizzo dell'ufficio</span>
+                                            <textarea
+                                                v-model="portale.address"
+                                                rows="2"
+                                                class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                                                placeholder="Ufficio Verde pubblico&#10;Piazza del Municipio 1, 00013 Mentana"
+                                                data-test="portale-indirizzo-ufficio"
+                                            />
+                                        </label>
+                                        <label class="block text-sm">
+                                            <span class="mb-1 block text-xs text-gray-600">Orari di apertura</span>
+                                            <textarea
+                                                v-model="portale.opening_hours"
+                                                rows="2"
+                                                class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                                                placeholder="Lunedì e mercoledì 9:00-12:30&#10;Giovedì 15:00-17:00"
+                                            />
+                                        </label>
+                                        <label class="block text-sm">
+                                            <span class="mb-1 block text-xs text-gray-600">Telefono</span>
+                                            <input
+                                                v-model="portale.contact_phone"
+                                                type="tel"
+                                                placeholder="06 9090 1234"
+                                                class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                                                data-test="portale-telefono"
+                                            >
+                                        </label>
+                                        <label class="block text-sm">
+                                            <span class="mb-1 block text-xs text-gray-600">PEC</span>
+                                            <input
+                                                v-model="portale.contact_pec"
+                                                type="email"
+                                                placeholder="protocollo@pec.comune.esempio.it"
+                                                class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                                            >
+                                        </label>
+                                    </div>
+                                </div>
+
                                 <label class="flex items-start gap-2 border-t border-gray-100 pt-3 text-sm">
                                     <input v-model="portale.show_co2" type="checkbox" class="mt-0.5 rounded border-gray-300">
                                     <span>
@@ -1143,6 +1237,40 @@ onMounted(() => carica(loadClients));
                                         class="text-xs text-red-500 hover:underline"
                                         @click="rimuoviStemma"
                                     >rimuovi stemma</button>
+                                </div>
+
+                                <div class="border-t border-gray-100 pt-3">
+                                    <p class="mb-2 text-xs font-medium text-gray-600">
+                                        Fotografia di copertina
+                                        <span class="block font-normal text-gray-500">
+                                            Apre la home del portale: una veduta orizzontale del paese o di un parco,
+                                            larga almeno 1600 px. Viene ridotta e ripulita dai dati nascosti del file.
+                                            Senza fotografia l'apertura resta su fondo colorato.
+                                        </span>
+                                    </p>
+                                    <div class="flex flex-wrap items-center gap-3">
+                                        <img
+                                            v-if="selezione.cliente.has_cover"
+                                            :src="`/comune/${selezione.cliente.public_slug}/copertina`"
+                                            alt="Fotografia di copertina del portale"
+                                            class="h-16 w-auto rounded border border-gray-200 bg-gray-50"
+                                            data-test="portale-copertina"
+                                        >
+                                        <span v-else class="text-xs text-gray-500">Nessuna fotografia caricata.</span>
+                                        <input
+                                            ref="copertinaInput"
+                                            type="file"
+                                            accept="image/png,image/jpeg,image/webp"
+                                            class="w-full text-xs sm:w-auto"
+                                            @change="caricaCopertina"
+                                        >
+                                        <button
+                                            v-if="selezione.cliente.has_cover"
+                                            type="button"
+                                            class="text-xs text-red-500 hover:underline"
+                                            @click="rimuoviCopertina"
+                                        >rimuovi fotografia</button>
+                                    </div>
                                 </div>
 
                                 <div class="flex flex-wrap items-center gap-3">

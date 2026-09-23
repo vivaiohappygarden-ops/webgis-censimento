@@ -34,6 +34,8 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('clients', ClientController::class)->whereUuid('client');
         Route::get('clients/{id}/sfondi', [ClientController::class, 'sfondi'])->whereUuid('id');
         Route::post('clients/{id}/stemma', [ClientController::class, 'stemma'])->whereUuid('id');
+        Route::post('clients/{id}/copertina', [ClientController::class, 'copertina'])->whereUuid('id');
+        Route::delete('clients/{id}/copertina', [ClientController::class, 'rimuoviCopertina'])->whereUuid('id');
 
         // Vincoli del territorio e loro collegamento agli elementi
         Route::get('constraints', [\App\Http\Controllers\Api\V1\LandConstraintController::class, 'index']);

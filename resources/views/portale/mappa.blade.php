@@ -77,8 +77,11 @@
         align-items: flex-end;
         gap: var(--s-1) var(--s-3);
         padding: 10px var(--bordo-pagina) 12px;
+        /* Bianca come la testata del portale (veste mista, 23/09/2026): il
+           colore dell'ente lo porta il pulsante, non la barra */
+        background: var(--carta);
+        border-bottom: 1px solid var(--filo);
     }
-    .m-alto :focus-visible { outline-color: #fff; }
 
     .m-marchio {
         display: flex;
@@ -104,7 +107,7 @@
         font-weight: 600;
         line-height: 1.25;
         letter-spacing: -0.01em;
-        color: #fff;
+        color: var(--inchiostro);
     }
     .m-marchio-torna {
         display: block;
@@ -113,9 +116,9 @@
         line-height: 1.2;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.82);
+        color: var(--inchiostro-2);
     }
-    .m-marchio:hover .m-marchio-torna { color: #fff; }
+    .m-marchio:hover .m-marchio-torna { color: var(--bosco); }
 
     /* La ricerca del cartellino: la stessa della home, in piccolo */
     .m-cerca {
@@ -133,17 +136,16 @@
         line-height: 1.2;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.82);
+        color: var(--inchiostro-2);
     }
     .m-cerca-campo {
         width: 100%;
         min-height: 48px;
         padding: 8px 12px;
-        border: 1px solid #fff;
+        border: 1px solid var(--filo-2);
         border-radius: var(--raggio);
-        /* Scatola bianca, come il campo della home: un campo da compilare si
-           riconosce perché è chiaro, e il testo nero su bianco non dipende da
-           quale tinta ha scelto il Comune */
+        /* Scatola bianca con il bordo, come il campo della home: un campo da
+           compilare si riconosce perché è chiaro e delimitato */
         background: #fff;
         color: var(--inchiostro);
         font-family: var(--testo);
@@ -158,7 +160,7 @@
         font-weight: 400;
         opacity: 0.7;
     }
-    .m-cerca .sc-bottone-chiaro { flex: none; padding: 8px 16px; }
+    .m-cerca .sc-bottone { flex: none; padding: 8px 16px; }
 
     /* --------------------------------------------------------- il cartiglio
        Legenda, simboli, sfondi e note in un solo oggetto, come il cartiglio
@@ -304,6 +306,9 @@
        riga il display:flex qui sopra lo terrebbe sempre aperto */
     #pannello[hidden] { display: none; }
 
+    /* La barra del pannello e' chiara come il foglio che contiene: a sinistra
+       che cosa si sta guardando, a destra il collegamento alla scheda a
+       pagina intera (da condividere o stampare) e la chiusura */
     #pannello .barra {
         flex: none;
         display: flex;
@@ -311,15 +316,29 @@
         justify-content: space-between;
         gap: var(--s-2);
         padding: 6px 6px 6px 18px;
+        background: var(--carta);
+        border-bottom: 1px solid var(--filo);
     }
     #pannello .barra .titolo {
         font-size: var(--t-occhiello);
         line-height: 1.2;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.82);
+        color: var(--inchiostro-2);
     }
-    #pannello .barra :focus-visible { outline-color: #fff; }
+    #pannello .barra-azioni { display: flex; align-items: center; gap: 4px; }
+    #pannello-apri {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 12px;
+        border-radius: var(--raggio);
+        font-size: var(--t-etichetta);
+        font-weight: 600;
+        text-decoration: none;
+        color: var(--bosco);
+    }
+    #pannello-apri:hover { background: var(--avorio); }
     #pannello-chiudi {
         flex: none;
         width: 48px;
@@ -327,13 +346,13 @@
         border: 0;
         border-radius: var(--raggio);
         background: transparent;
-        color: var(--chiaro);
+        color: var(--inchiostro);
         font-family: var(--testo);
         font-size: 20px;
         line-height: 1;
         cursor: pointer;
     }
-    #pannello-chiudi:hover { background: var(--notte-fondo); color: #fff; }
+    #pannello-chiudi:hover { background: var(--avorio); color: var(--bosco); }
 
     #pannello-contenuto {
         flex: 1 1 auto;
@@ -463,8 +482,9 @@
             max-width: min(940px, calc(100% - 468px));
             flex-wrap: nowrap;
             padding: 12px 20px 14px;
+            border: 1px solid var(--filo);
             border-radius: var(--raggio);
-            /* Il fondo pieno arriva da .sc-scuro: vedi la nota sul cartiglio */
+            /* Fondo pieno, non velato: vedi la nota sul cartiglio */
             box-shadow: var(--ombra);
         }
         .m-cerca { flex: 0 1 360px; }
@@ -473,7 +493,7 @@
 @endpush
 
 @section('contenuto')
-    <div class="m-alto sc-scuro">
+    <div class="m-alto">
         <a class="m-marchio" href="{{ $portale->url('/') }}">
             @if ($portale->hasLogo())
                 <img src="{{ $portale->url('/stemma') }}" alt="Stemma di {{ $portale->name() }}">
@@ -491,7 +511,7 @@
                        inputmode="{{ $prefisso !== '' ? 'numeric' : 'text' }}" autocomplete="off"
                        placeholder="{{ $esempioCartellino }}">
             </span>
-            <button class="sc-bottone-chiaro" type="submit">Cerca</button>
+            <button class="sc-bottone" type="submit">Cerca</button>
         </form>
     </div>
 
@@ -556,9 +576,14 @@
             </aside>
 
             <aside id="pannello" hidden aria-label="Scheda dell'elemento scelto">
-                <div class="barra sc-scuro">
+                <div class="barra">
                     <span class="titolo">Elemento scelto</span>
-                    <button type="button" id="pannello-chiudi" aria-label="Chiudi la scheda">&#10005;</button>
+                    <span class="barra-azioni">
+                        {{-- L'indirizzo lo completa portale-mappa.js con il codice
+                             dell'elemento aperto --}}
+                        <a id="pannello-apri" href="{{ $portale->url('/elemento') }}">Scheda completa</a>
+                        <button type="button" id="pannello-chiudi" aria-label="Chiudi la scheda">&#10005;</button>
+                    </span>
                 </div>
                 <div id="pannello-contenuto"></div>
             </aside>

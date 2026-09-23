@@ -91,4 +91,24 @@ class HomeController extends Controller
             'Cache-Control' => 'public, max-age=3600',
         ]);
     }
+
+    /**
+     * Fotografia di copertina della home. È stata ricodificata e ripulita
+     * dai metadati al caricamento (ClientController::copertina), quindi qui
+     * si serve com'è. Il nome del file cambia a ogni caricamento: la cache
+     * del browser non può mostrare la foto vecchia dopo una sostituzione.
+     */
+    public function copertina(PortalContext $portale)
+    {
+        $path = (string) ($portale->client->public_profile['cover_path'] ?? '');
+        abort_if($path === '', 404);
+
+        $disk = Storage::disk();
+        abort_unless($disk->exists($path), 404);
+
+        return response($disk->get($path), 200, [
+            'Content-Type' => 'image/jpeg',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    }
 }

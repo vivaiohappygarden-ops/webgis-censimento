@@ -126,8 +126,14 @@
     --misura: 1120px;
     --misura-testo: 900px;
     --riga: 68ch;
-    --raggio: 4px;
+    /* Un solo raggio. Era 4px; con la veste mista (23/09/2026) sale a 8px:
+       riquadri dei numeri, foglio della scheda e pannello della mappa hanno
+       gli angoli un po' piu' morbidi, come sui portali civici di riferimento,
+       senza per questo diventare una rivista. */
+    --raggio: 8px;
     --ombra: 0 1px 2px rgba(16, 24, 32, 0.06), 0 8px 24px -16px rgba(16, 24, 32, 0.30);
+    /* L'ombra dei riquadri che si staccano dalla pagina (numeri, pannello) */
+    --ombra-2: 0 1px 2px rgba(16, 24, 32, 0.08), 0 10px 28px -8px rgba(16, 24, 32, 0.22);
 }
 
 /* ------------------------------------------------------------------ base */
@@ -169,7 +175,6 @@ a { color: var(--bosco); text-underline-offset: 0.18em; }
     outline: 3px solid var(--bosco);
     outline-offset: 2px;
 }
-.testata :focus-visible,
 .chiusura :focus-visible,
 .sc-scuro :focus-visible {
     outline-color: #fff;
@@ -391,13 +396,15 @@ main :where(h1, h2, h3) { color: var(--bosco); letter-spacing: -0.012em; }
 }
 
 /* ---------------------------------------------------------------- testata
-   La fascia porta il colore dell'ente, come l'intestazione di un atto.
-   Poche voci che vanno a capo sul telefono: niente menu a scomparsa, niente
-   pulsante da scoprire. */
+   Bianca, con lo stemma e il nome dell'ente (veste mista del 23/09/2026):
+   il colore del Comune lo porta l'apertura della home, con la fotografia, e
+   una seconda fascia colorata sopra la foto sarebbe stata una fascia di
+   troppo. Poche voci che vanno a capo sul telefono: niente menu a scomparsa,
+   niente pulsante da scoprire. */
 header.testata {
-    background: var(--bosco);
-    color: #fff;
-    border-bottom: 3px solid var(--notte);
+    background: var(--carta);
+    color: var(--inchiostro);
+    border-bottom: 1px solid var(--filo);
 }
 header.testata .testata-dentro {
     display: flex;
@@ -416,14 +423,14 @@ header.testata .marchio {
     color: inherit;
     min-height: 44px;
 }
-header.testata img.stemma { height: 44px; width: auto; display: block; }
+header.testata img.stemma { height: 48px; width: auto; display: block; }
 header.testata .marchio-testo { display: flex; flex-direction: column; }
 header.testata .marchio-nome {
     font-size: 19px;
     font-weight: 600;
     line-height: 1.25;
     letter-spacing: -0.01em;
-    color: #fff;
+    color: var(--inchiostro);
 }
 header.testata .marchio-ruolo {
     margin-top: 2px;
@@ -431,7 +438,7 @@ header.testata .marchio-ruolo {
     line-height: 1.2;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.82);
+    color: var(--inchiostro-2);
 }
 header.testata nav.menu {
     display: flex;
@@ -448,35 +455,66 @@ header.testata nav.menu a {
     font-weight: 500;
     line-height: 1.2;
     text-decoration: none;
-    color: #fff;
+    color: var(--inchiostro);
     border-bottom: 2px solid transparent;
 }
-header.testata nav.menu a:hover { border-bottom-color: #fff; }
+header.testata nav.menu a:hover { color: var(--bosco); border-bottom-color: var(--bosco); }
 
-/* ------------------------------------------------------------------ piede */
+/* ------------------------------------------------------------------ piede
+   Tre colonne, come in fondo a un sito istituzionale: l'ente con i suoi
+   recapiti, le pagine del portale, gli orari dell'ufficio. Ogni recapito
+   esce solo se l'ente l'ha scritto nel gestionale: una riga vuota o un
+   trattino direbbero "non ce l'hanno", che non e' un dato. */
 footer.chiusura {
     background: var(--notte);
     color: rgba(255, 255, 255, 0.88);
-    padding-top: var(--s-5);
-    padding-bottom: var(--s-5);
-    font-size: var(--t-etichetta);
+    padding-top: var(--s-6);
+    padding-bottom: var(--s-4);
+    font-size: var(--t-corpo);
     line-height: 1.55;
 }
-footer.chiusura .dentro {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s-3) var(--s-6);
-    justify-content: space-between;
+footer.chiusura .chiusura-griglia {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-4) var(--s-6);
 }
-footer.chiusura .chiusura-ente { max-width: 46ch; }
-footer.chiusura .chiusura-nome { display: block; color: #fff; font-weight: 600; }
+@media (min-width: 760px) {
+    footer.chiusura .chiusura-griglia { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
+}
+footer.chiusura .chiusura-titolo {
+    display: block;
+    margin: 0 0 var(--s-2);
+    font-size: var(--t-etichetta);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.72);
+}
+footer.chiusura .chiusura-nome { display: block; color: #fff; font-weight: 600; font-size: var(--t-guida); line-height: 1.3; }
 footer.chiusura .chiusura-ruolo {
     display: block;
-    margin-top: var(--s-1);
+    margin-top: 4px;
     font-size: var(--t-occhiello);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: rgba(255, 255, 255, 0.72);
+}
+footer.chiusura address.chiusura-recapiti {
+    margin-top: var(--s-2);
+    font-style: normal;
+    max-width: 46ch;
+}
+footer.chiusura .chiusura-recapiti a,
+footer.chiusura .chiusura-orari a {
+    color: #fff;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    text-decoration-thickness: 1px;
+    /* un bersaglio da 44px anche per un numero di telefono in riga */
+    display: inline-block;
+    padding: 6px 0;
+    margin: -6px 0;
 }
 footer.chiusura nav.chiusura-voci {
     display: flex;
@@ -493,6 +531,17 @@ footer.chiusura nav.chiusura-voci a {
     align-self: flex-start;
 }
 footer.chiusura nav.chiusura-voci a:hover { border-bottom-color: #fff; }
+footer.chiusura .chiusura-orari p { margin: 0; white-space: pre-line; }
+footer.chiusura .chiusura-legale {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-1) var(--s-4);
+    margin: var(--s-5) 0 0;
+    padding-top: var(--s-3);
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
+    font-size: var(--t-etichetta);
+    color: rgba(255, 255, 255, 0.72);
+}
 
 /* ====================== SCHEDA DELL'ELEMENTO: il contorno =================
    Il foglio della scheda porta il proprio stile dentro la vista che lo
@@ -605,19 +654,58 @@ a.indietro:hover { color: var(--bosco); }
         })();
     </script>
 
+    @php
+        // I recapiti dell'ufficio: ognuno esce solo se compilato nel gestionale
+        $indirizzoEnte = $portale->address();
+        $telefonoEnte = $portale->contactPhone();
+        $pecEnte = $portale->contactPec();
+        $orariEnte = $portale->openingHours();
+        $accessibilitaUrl = $portale->accessibilityUrl();
+        $conRecapiti = $indirizzoEnte !== null || $telefonoEnte !== null || $posta !== null || $pecEnte !== null;
+    @endphp
     <footer class="chiusura">
-        <div class="sc-contenitore dentro">
-            <div class="chiusura-ente">
-                <span class="chiusura-nome">{{ $portale->footerText() ?: $portale->name() }}</span>
-                <span class="chiusura-ruolo">Censimento del verde pubblico</span>
-            </div>
-            <nav class="chiusura-voci" aria-label="Collegamenti di servizio">
-                <a href="{{ $portale->url('/mappa') }}">Mappa del verde</a>
-                @if ($posta)
-                    <a href="mailto:{{ $posta }}">{{ $posta }}</a>
+        <div class="sc-contenitore">
+            <div class="chiusura-griglia">
+                <div class="chiusura-ente">
+                    <span class="chiusura-nome">{{ $portale->footerText() ?: $portale->name() }}</span>
+                    <span class="chiusura-ruolo">Censimento del verde pubblico</span>
+                    @if ($conRecapiti)
+                        @php
+                            // Le righe si compongono qui, una per recapito, e si stampano
+                            // gia' sicure: cosi' l'indirizzo va a capo dove l'ha scritto
+                            // l'ente e non restano righe vuote per i recapiti mancanti
+                            $righeRecapiti = [];
+                            if ($indirizzoEnte) $righeRecapiti[] = nl2br(e($indirizzoEnte));
+                            if ($telefonoEnte) $righeRecapiti[] = 'Telefono <a class="sc-num" href="'.e($portale->contactPhoneHref()).'">'.e($telefonoEnte).'</a>';
+                            if ($posta) $righeRecapiti[] = 'Posta elettronica <a href="mailto:'.e($posta).'">'.e($posta).'</a>';
+                            if ($pecEnte) $righeRecapiti[] = 'PEC <a href="mailto:'.e($pecEnte).'">'.e($pecEnte).'</a>';
+                        @endphp
+                        <address class="chiusura-recapiti">{!! implode('<br>', $righeRecapiti) !!}</address>
+                    @endif
+                </div>
+                <nav class="chiusura-voci" aria-label="Collegamenti di servizio">
+                    <span class="chiusura-titolo">Il portale</span>
+                    <a href="{{ $portale->url('/mappa') }}">Mappa del verde</a>
+                    <a href="{{ $portale->url('/') }}#come-lavoriamo">Come lavoriamo</a>
+                    @if ($urlSegnala)
+                        <a href="{{ $urlSegnala }}">Segnala un problema</a>
+                    @endif
+                    <a href="{{ $portale->url('/privacy') }}">Privacy e note legali</a>
+                    @if ($accessibilitaUrl)
+                        <a href="{{ $accessibilitaUrl }}" rel="noopener">Dichiarazione di accessibilit&agrave;</a>
+                    @endif
+                </nav>
+                @if ($orariEnte)
+                    <div class="chiusura-orari">
+                        <span class="chiusura-titolo">Orari dell'ufficio</span>
+                        <p>{{ $orariEnte }}</p>
+                    </div>
                 @endif
-                <a href="{{ $portale->url('/privacy') }}">Privacy e note legali</a>
-            </nav>
+            </div>
+            <p class="chiusura-legale">
+                <span>Nessun cookie, niente da accettare.</span>
+                <span>Le schede si aggiornano a ogni controllo e a ogni lavoro registrato.</span>
+            </p>
         </div>
     </footer>
 </body>
