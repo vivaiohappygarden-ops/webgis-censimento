@@ -45,8 +45,12 @@
 @media (min-width: 1100px) {
     .apertura-griglia {
         display: grid;
-        grid-template-columns: minmax(0, 7fr) minmax(360px, 5fr);
-        column-gap: var(--s-7);
+        /* La scatola del cartellino non si allarga con lo schermo: resta di
+           una misura da modulo (al massimo 460px) appoggiata al bordo destro
+           del contenuto, cosi' il centro della fotografia resta libero e la
+           scatola non "sta in mezzo" (osservazione del committente) */
+        grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
+        column-gap: var(--s-8);
         align-items: center;
     }
     .apertura-cerca .cerca { margin-top: 0; max-width: none; }
