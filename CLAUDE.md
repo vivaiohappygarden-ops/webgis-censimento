@@ -136,7 +136,10 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   `depliant-commerciale.html`, PDF composto da `genera-pdf.mjs` (Chromium via
   Playwright), schermate del Comune dimostrativo rifatte da `schermate.mjs`.
   Stesso registro del sito aziendale: Inter ospitato in casa, un solo verde, niente
-  illustrazioni ne' emoji, niente superlativi, fatti e non aggettivi.
+  illustrazioni ne' emoji, niente superlativi, fatti e non aggettivi. Dal 23/09/2026
+  la veste e' piu' curata (richiesta del committente): copertina con fascia scura,
+  fasce chiare alternate, schermate incorniciate come schermo e telefono, un richiamo
+  per pagina, chiusura su fondo scuro. Resta un documento, non una rivista.
 - **Non descrive i collegamenti con il gestionale del vivaio** (invio al gestionale
   giardini WordPress): sono funzioni nostre, non del prodotto che si vende. Parla a
   Comuni, imprese del verde, studi agronomici e gestori di patrimoni verdi.
