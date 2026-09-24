@@ -279,9 +279,10 @@ em { font-style: italic; }
 .chiusura h3 { color: #fff; font-size: var(--t-guida); }
 .chiusura p { color: rgba(255,255,255,.82); max-width: 150mm; margin-top: var(--s1); }
 .recapiti { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s4); margin-top: var(--s3); }
-.recapiti .voce { border-bottom: 1px dotted rgba(255,255,255,.55); padding-bottom: 1.5mm; min-height: 9mm; }
+.recapiti .voce { border-bottom: 1px dotted rgba(255,255,255,.55); padding-bottom: 1.2mm; min-height: 8mm; }
 .recapiti .etichetta { display: block; font-size: var(--t-occhiello); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ambra-chiara); }
 .recapiti .valore { display: block; font-weight: 600; font-size: var(--t-corpo); color: #fff; }
+.chiusura .societari { margin-top: var(--s3); font-size: var(--t-piccolo); color: rgba(255,255,255,.72); max-width: none; }
 .chiusura .pie-scuro {
     display: flex; justify-content: space-between; margin-top: var(--s3); padding-top: var(--s2);
     border-top: 1px solid rgba(255,255,255,.22); font-size: var(--t-piccolo); color: rgba(255,255,255,.7);
@@ -825,10 +826,10 @@ em { font-style: italic; }
             <div>
                 <span class="occhiello">Come si parte</span>
                 <ol class="passi spazio-2">
-                    <li><div><h3>Attivazione</h3><p>Organizzazione, utenti e ruoli, dati dello studio e di chi firma.</p></div></li>
-                    <li><div><h3>Territorio</h3><p>Committenti, sedi, località, aree e vincoli: il contenitore prima del contenuto.</p></div></li>
-                    <li><div><h3>Dati esistenti</h3><p>Importazione da Excel, CSV, GeoJSON o consegne CAM, con anteprima prima di scrivere.</p></div></li>
-                    <li><div><h3>Rilievo in campo</h3><p>Con l'app e i cartellini; controllo in ufficio entro pochi giorni.</p></div></li>
+                    <li><div><h3>Attivazione</h3><p>Organizzazione, utenti e ruoli, dati di chi firma.</p></div></li>
+                    <li><div><h3>Territorio</h3><p>Committenti, sedi, località, aree e vincoli.</p></div></li>
+                    <li><div><h3>Dati esistenti</h3><p>Importazione da Excel, CSV, GeoJSON o CAM, con anteprima.</p></div></li>
+                    <li><div><h3>Rilievo in campo</h3><p>Con l'app e i cartellini; controllo in ufficio.</p></div></li>
                     <li><div><h3>Portale pubblico</h3><p>Quando il censimento è presentabile e l'ente è d'accordo.</p></div></li>
                 </ol>
             </div>
@@ -839,25 +840,22 @@ em { font-style: italic; }
                     <p>Il programma prepara con un comando un Comune di prova con alberi, valutazioni e lavori verosimili: portale e gestionale si vedono prima di avere i vostri dati, e la prova continua con i vostri.</p>
                     <p class="spazio-2">La guida all'uso è dentro il programma e il manuale operativo è in italiano semplice: prima il territorio, poi il rilievo, poi le consegne.</p>
                 </div>
-                <p class="nota spazio-3">
-                    Le stime ambientali applicano un modello dichiarato con i suoi riferimenti; i
-                    coefficienti vanno verificati dal tecnico prima di pubblicarli. Il programma non
-                    inventa formule, e lo scrive.
-                </p>
             </div>
         </div>
     </div>
 
-    <!-- RECAPITI: compilare le tre voci prima di stampare. Le voci vuote
-         restano come righe da completare a mano. -->
+    <!-- RECAPITI: i dati societari sono quelli verificati di config/sito.php
+         (DAMA S.R.L., 19/09/2026). Telefono ed email vanno compilati prima di
+         stampare: finche' restano vuoti escono come righe da completare a mano. -->
     <div class="chiusura sangue">
         <h3>Per una dimostrazione su un caso concreto</h3>
         <p>Si parte dal vostro patrimonio: un'area, un viale, un parco. Si importa quello che avete, si accende il portale di prova, si guarda il programma con i vostri dati.</p>
         <div class="recapiti">
             <div class="voce"><span class="etichetta">Telefono</span><span class="valore">&nbsp;</span></div>
             <div class="voce"><span class="etichetta">Email</span><span class="valore">&nbsp;</span></div>
-            <div class="voce"><span class="etichetta">Sito</span><span class="valore">&nbsp;</span></div>
+            <div class="voce"><span class="etichetta">Posta certificata</span><span class="valore">dama25@pec.it</span></div>
         </div>
+        <p class="societari">DAMA S.R.L. &middot; Via Crescenzio 58, 00193 Roma (RM) &middot; Partita IVA e codice fiscale 17947161000 &middot; REA RM-1751463 &middot; Capitale sociale &euro; 1.000,00 sottoscritto</p>
         <div class="pie-scuro"><span>WebGIS Censimento, depliant informativo. Edizione settembre 2026.</span><span class="numero">8</span></div>
     </div>
 </section>

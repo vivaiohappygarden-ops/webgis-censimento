@@ -15,10 +15,11 @@ gestionale del vivaio: quelli servono a noi, non a chi acquista.
 
 ## Prima di consegnarlo
 
-In fondo all'ultima pagina c'è il riquadro dei recapiti (telefono, email,
-sito): nella sorgente è segnato con il commento `RECAPITI`. Va compilato e il
-PDF va rigenerato; le voci lasciate vuote restano come righe da completare a
-mano. Il nome del programma, "WebGIS Censimento", compare nel titolo, nelle
+In fondo all'ultima pagina c'è la chiusura con i recapiti, segnata nella
+sorgente con il commento `RECAPITI`: i dati societari e la PEC sono quelli
+verificati di `config/sito.php` (DAMA S.R.L.); telefono ed email non ci sono e
+vanno scritti lì prima di rigenerare il PDF. Le voci lasciate vuote restano
+come righe da completare a mano. Il nome del programma, "WebGIS Censimento", compare nel titolo, nelle
 testate e nei piè di pagina: se cambia, si cerca e si sostituisce nella sorgente.
 
 ## Rigenerare il PDF
