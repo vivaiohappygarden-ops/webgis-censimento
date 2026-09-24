@@ -16,10 +16,9 @@ gestionale del vivaio: quelli servono a noi, non a chi acquista.
 ## Prima di consegnarlo
 
 In fondo all'ultima pagina c'è la chiusura con i recapiti, segnata nella
-sorgente con il commento `RECAPITI`: i dati societari e la PEC sono quelli
-verificati di `config/sito.php` (DAMA S.R.L.); telefono ed email non ci sono e
-vanno scritti lì prima di rigenerare il PDF. Le voci lasciate vuote restano
-come righe da completare a mano. Il nome del programma, "WebGIS Censimento", compare nel titolo, nelle
+sorgente con il commento `RECAPITI`: dati societari e PEC di `config/sito.php`
+(DAMA S.R.L., senza il capitale sociale), telefono ed email dati dal
+committente il 24/09/2026. Se cambiano, si correggono lì e si rigenera il PDF. Il nome del programma, "WebGIS Censimento", compare nel titolo, nelle
 testate e nei piè di pagina: se cambia, si cerca e si sostituisce nella sorgente.
 
 ## Rigenerare il PDF
