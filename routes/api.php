@@ -75,6 +75,19 @@ Route::prefix('v1')->group(function () {
         Route::get('portal/overview', [\App\Http\Controllers\Api\V1\PortalController::class, 'overview']);
         Route::get('portal/requests', [\App\Http\Controllers\Api\V1\PortalController::class, 'requests']);
         Route::post('portal/requests', [\App\Http\Controllers\Api\V1\PortalController::class, 'storeRequest'])->middleware('throttle:5,1');
+        // Il portale del Comune (dal 26/09/2026): mappa, elementi, lavori e
+        // documenti del proprio territorio, in sola lettura, col solo
+        // permesso portal.view. I riquadri hanno il tetto della mappa
+        Route::get('portal/tiles/{z}/{x}/{y}', [\App\Http\Controllers\Api\V1\PortaleComuneController::class, 'tile'])
+            ->whereNumber(['z', 'x', 'y'])->middleware('throttle:tiles');
+        Route::get('portal/elementi', [\App\Http\Controllers\Api\V1\PortaleComuneController::class, 'elementi']);
+        Route::get('portal/elementi/{id}', [\App\Http\Controllers\Api\V1\PortaleComuneController::class, 'elemento'])->whereUuid('id');
+        Route::get('portal/foto/{id}', [\App\Http\Controllers\Api\V1\PortaleComuneController::class, 'foto'])->whereUuid('id');
+        Route::get('portal/lavori', [\App\Http\Controllers\Api\V1\PortaleComuneController::class, 'lavori']);
+        Route::get('portal/lavori/{id}', [\App\Http\Controllers\Api\V1\PortaleComuneController::class, 'lavoro'])->whereUuid('id');
+        Route::get('portal/documenti', [\App\Http\Controllers\Api\V1\PortaleComuneController::class, 'documenti']);
+        Route::get('portal/documenti/perizie/{id}/pdf', [\App\Http\Controllers\Api\V1\PortaleComuneController::class, 'perizia'])->whereUuid('id');
+        Route::get('portal/documenti/verbali/{id}/pdf', [\App\Http\Controllers\Api\V1\PortaleComuneController::class, 'verbale'])->whereUuid('id');
         Route::apiResource('irrigation-systems', \App\Http\Controllers\Api\V1\IrrigationController::class)
             ->whereUuid('irrigation_system');
         Route::put('irrigation-systems/{id}/sectors', [\App\Http\Controllers\Api\V1\IrrigationController::class, 'syncSectors'])->whereUuid('id');

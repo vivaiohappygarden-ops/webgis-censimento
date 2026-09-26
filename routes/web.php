@@ -178,8 +178,23 @@ Route::middleware('auth')->group(function () {
     // La guida è per tutti gli utenti autenticati, senza permessi dedicati
     Route::get('/guida', fn () => Inertia::render('Guida'))->name('guida');
 
-    Route::get('/portale', fn () => Inertia::render('Portale'))
-        ->middleware('can:portal.view')->name('portale');
+    // Il portale del Comune: nella veste nuova (dal 26/09/2026) la pagina con
+    // mappa, patrimonio, lavori, segnalazioni e documenti; ?precedente=1 apre
+    // quella di prima. Gli sfondi della mappa sono quelli del portale
+    // pubblico piu' quelli propri del Comune (ortofoto, carta tecnica)
+    Route::get('/portale', function () {
+        $utente = \Illuminate\Support\Facades\Auth::user();
+        $nuova = \App\Support\Interfaccia::nuova($utente) && ! request()->boolean('precedente');
+        $committente = $utente->client_id ? \App\Models\Client::query()->find($utente->client_id) : null;
+
+        return Inertia::render($nuova ? 'Nuovo/Portale' : 'Portale', [
+            'sfondi' => array_merge(
+                \App\Services\Portale\PortalExtent::sfondi(),
+                \App\Services\Carto\SfondiCommittente::perMappa($committente),
+            ),
+            'navigazioneUrl' => config('portal.navigation_url'),
+        ]);
+    })->middleware('can:portal.view')->name('portale');
     // Il portale dell'impresa appaltatrice: i lavori affidati alle sue squadre
     Route::get('/impresa', fn () => Inertia::render('Impresa'))
         ->middleware('can:impresa.view')->name('impresa');

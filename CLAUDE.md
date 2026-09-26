@@ -130,6 +130,42 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   elemento generato porta in `notes` che e' dimostrativo. Prima serve `db:seed`, che crea
   l'organizzazione, il committente e il catalogo.
 
+## Portale del Comune, area riservata (rifatto il 26/09/2026)
+
+- `/portale` e' l'area riservata dell'ufficio tecnico del committente (ruolo `cliente`,
+  permesso `portal.view`, `users.client_id`). Il committente l'ha trovata "molto spoglia"
+  (quattro riquadri e un modulo): nella veste nuova apre `Pages/Nuovo/Portale.vue` con
+  **sei schede** (`?scheda=`): Panoramica (frase con i conteggi veri, mappa, prossimi
+  lavori, ultimi fatti, novita' degli ultimi 30 giorni, richieste aperte, ultimi documenti,
+  aree, recapiti dello studio), **Mappa** (aree ed elementi con lo stato a quattro voci,
+  ricerca a parole, scheda nel pannello), Patrimonio (elenco con filtri e anteprima),
+  Lavori (in programma, fatti, dettaglio con elementi e foto), Segnalazioni (richieste
+  proprie con il lavoro che ne e' nato, altre segnalazioni del territorio, modulo
+  `?nuova=1`) e Documenti (perizie emesse e verbali di ispezione chiusi, in PDF).
+  `?precedente=1` apre la pagina di prima (`Pages/Portale.vue`), che resta.
+- **Chi entra ha solo `portal.view`**: nessuna chiamata del gestionale gli risponde, quindi
+  ogni dato passa da `PortaleComuneController` (riquadri `portal/tiles`, `portal/elementi`,
+  `portal/foto`, `portal/lavori`, `portal/documenti` e i PDF) e dal riepilogo di
+  `PortalController`. Il perimetro sta **una volta sola** in
+  `App\Services\Portale\TerritorioCommittente` (aree del committente, regola degli ordini
+  "coerenti", regola delle segnalazioni): la mappa, l'elenco, i lavori e il riepilogo
+  devono mostrare lo stesso territorio. Mai un'area, un elemento, un lavoro o un
+  documento altrui; niente prezzi; niente `notes` interne della scheda; il nome dell'area
+  di un ordine esce solo se e' un'area del committente.
+- I **documenti** sono le perizie **emesse** (`report_issued_at`) dei suoi alberi e i verbali
+  delle ispezioni chiuse: una valutazione senza perizia emessa non e' un documento, e' lavoro
+  in corso del tecnico. I PDF sono gli stessi che stampa il tecnico (`PeriziaController::pdf`,
+  `PdfController::inspection` richiamati dopo il controllo di appartenenza).
+- Le fotografie escono ridotte da `PublicPhotoCache` sotto `portal/foto/{id}`, solo se
+  dell'elemento, di un lavoro coerente o di una richiesta del proprio portale.
+- La mappa (`Components/Portale/MappaTerritorio.vue`) usa gli sfondi del portale pubblico
+  piu' quelli propri del Comune (`SfondiCommittente`), riquadri MVT con due strati (`aree`,
+  `elementi`) e i colori di `PortalState`; la scheda e' `Components/Portale/SchedaElemento.vue`
+  (sola lettura; il modulo della richiesta e' `ModuloRichiesta.vue`). Prove:
+  `PortaleComuneTest`; collaudo nel browser in `scratchpad/verifica-portale/` (in locale il
+  server di sviluppo va lanciato con un instradatore che distingue file e cartelle,
+  perche' `public/portale/` oscura la rotta `/portale` sotto `artisan serve`).
+
 ## Nuova interfaccia del gestionale (dal 26/09/2026)
 
 - Il committente non era soddisfatto di come erano impostate le funzioni ("non mi piace come
