@@ -150,7 +150,8 @@ completo dei 387 tipi.
 | **Aggiornare l'applicazione** | da solo, entro cinque minuti da ogni pubblicazione, se l'aggiornamento automatico e' acceso (paragrafo 6.6); a mano: `bash /var/www/webgis/deploy/update.sh` (30 secondi di manutenzione) |
 | **Accendere il sito aziendale** | `bash /var/www/webgis/deploy/set-sito-domain.sh <dominio>` (paragrafo 6.2-bis) |
 | **Cambiare indirizzo / attivare HTTPS** | `bash /var/www/webgis/deploy/set-domain.sh nome.dominio.it` (vedi 6.2) |
-| **Backup** | automatico ogni notte alle 03:30 in `/var/backups/webgis` (14 giorni conservati); in più, dal pannello Aruba si può attivare lo **snapshot** del server |
+| **Salvataggi** | automatici ogni notte alle 03:30 in `/var/backups/webgis` (14 giorni conservati, vedi 6.7); `webgis-backup stato` dice quando e' stato fatto l'ultimo; consigliata la copia fuori dal server (6.7) |
+| **Ridurre le foto caricate intere in passato** | `cd /var/www/webgis && sudo -u www-data php artisan foto:riduci-archivio` mostra quanto spazio si recupera; con `--esegui` lo fa davvero (le foto delle perizie validate non si toccano) |
 | **Nuovi utenti** | dalla pagina **Utenti** dell'applicazione |
 | **Spegnere tutto** | eliminare il server dal pannello Aruba: l'addebito si ferma |
 
@@ -444,6 +445,54 @@ Il pacchetto di Ubuntu prevede cinque processi PHP: aprendo una pagina del
 gestionale ne partono di piu' insieme, e cinque non bastano. Lo script li
 calcola sulla memoria del server (da 8 a 48) e ricarica il servizio solo dopo
 aver verificato che la configurazione sia valida.
+
+### 6.7 Salvataggi
+
+Ogni notte alle 03:30 il server salva da solo, in `/var/backups/webgis`:
+
+- la **banca dati**, un file al giorno in `db/` (piccolo: con 30.000 alberi
+  circa un gigabyte), verificato subito dopo essere stato scritto;
+- i **file caricati** (fotografie e documenti) in `file/<data>/`, un'istantanea
+  al giorno. Le istantanee sono incrementali: i file gia' salvati la notte
+  prima non occupano spazio una seconda volta, quindi 14 notti costano una
+  copia delle foto piu' le sole novita'. Una foto cancellata per sbaglio resta
+  nelle istantanee dei 14 giorni precedenti. `file/ultima` punta sempre alla
+  piu' recente.
+
+Per sapere come stanno i salvataggi:
+
+```bash
+webgis-backup stato
+```
+
+(lo stesso riepilogo compare in `deploy/diagnostica.sh`). Il registro e' in
+`/var/log/webgis-backup.log`. Se sul disco restano meno di 2 GB il salvataggio
+non parte e lo scrive nel registro: un salvataggio che riempie il disco
+fermerebbe il sito.
+
+**Copia fuori dal server.** Un salvataggio sullo stesso disco non copre il
+disco che muore. Per specchiare i salvataggi altrove basta creare il file
+`/etc/webgis-backup.conf` con una riga:
+
+```bash
+# un altro server raggiungibile via SSH (chiave gia' scambiata, senza password)
+BACKUP_REMOTO=utente@altro-server:/percorso/salvataggi-webgis
+# oppure uno spazio a oggetti (Aruba, Hetzner, S3...) configurato con rclone
+BACKUP_RCLONE=nomeremoto:contenitore/webgis
+```
+
+Dalla notte seguente, alla fine del salvataggio, la copia viene aggiornata. In
+alternativa, dal pannello Aruba, si puo' attivare lo **snapshot** del server.
+
+**Ripristino** (da root, sul server):
+
+```bash
+# la banca dati, da un salvataggio scelto
+sudo -u postgres pg_restore --clean --if-exists -d webgis /var/backups/webgis/db/db-<data>.dump
+# i file, dall'istantanea dello stesso giorno
+rsync -a /var/backups/webgis/file/<data>/ /var/www/webgis/storage/app/
+chown -R www-data:www-data /var/www/webgis/storage
+```
 
 ---
 

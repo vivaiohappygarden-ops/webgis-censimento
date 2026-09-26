@@ -5,14 +5,20 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use App\Models\Photo;
+use App\Models\WorkOrder;
 use App\Services\Photos\ImageDerivative;
+use App\Services\Photos\PublicPhotoCache;
 use App\Support\Audit;
 use App\Support\Geometry;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -68,14 +74,32 @@ class PhotoController extends Controller implements HasMiddleware
 
         // L'ordine deve esistere nell'organizzazione: TenantScope filtra da sé
         $ordine = ! empty($data['work_order_id'])
-            ? \App\Models\WorkOrder::query()->findOrFail($data['work_order_id'])
+            ? WorkOrder::query()->findOrFail($data['work_order_id'])
             : null;
 
         $file = $data['photo'];
-        // Gli EXIF si leggono una volta sola: servono sia alla data di scatto
-        // sia alla posizione
+        // Gli EXIF si leggono una volta sola, e PRIMA della riduzione che li
+        // elimina: servono sia alla data di scatto sia alla posizione
         $exif = $this->exif($file->getRealPath());
-        $path = $file->store("photos/{$asset->tenant_id}/{$asset->id}");
+
+        // Le foto dal computer arrivano intere (anche 5-15 MB): in archivio
+        // entra la copia ridotta e raddrizzata (2000 px, JPEG). Quelle gia'
+        // piccole, come quelle ridotte dall'app di campo, restano come sono;
+        // se la riduzione non riesce resta l'originale: un caricamento non si
+        // perde mai. Peso e impronta sono quelli del file salvato davvero
+        $originale = (string) file_get_contents($file->getRealPath());
+        $ridotta = ImageDerivative::perArchivio($originale);
+        if ($ridotta !== null) {
+            $path = "photos/{$asset->tenant_id}/{$asset->id}/".Str::uuid7().'.jpg';
+            Storage::disk()->put($path, $ridotta);
+            $contenuto = $ridotta;
+            $mime = 'image/jpeg';
+        } else {
+            $path = $file->store("photos/{$asset->tenant_id}/{$asset->id}");
+            $contenuto = $originale;
+            $mime = $file->getMimeType() ?: 'image/jpeg';
+        }
+        unset($originale, $ridotta);
 
         $photo = new Photo([
             'tenant_id' => $asset->tenant_id,
@@ -85,15 +109,15 @@ class PhotoController extends Controller implements HasMiddleware
             'category' => $data['category'] ?? 'census',
             's3_key' => $path,
             'original_filename' => $file->getClientOriginalName(),
-            'mime_type' => $file->getMimeType() ?: 'image/jpeg',
-            'size_bytes' => $file->getSize(),
-            'hash_sha256' => hash_file('sha256', $file->getRealPath()),
+            'mime_type' => $mime,
+            'size_bytes' => strlen($contenuto),
+            'hash_sha256' => hash('sha256', $contenuto),
             // Normalizzata a UTC: il cast datetime salva il valore senza convertire il fuso.
             // Se il client non la manda si legge dagli EXIF: il momento del
             // caricamento non e' la data dello scatto, e nella perizia finisce
             // stampata sotto la fotografia
             'taken_at' => isset($data['taken_at'])
-                ? \Illuminate\Support\Carbon::parse($data['taken_at'])->utc()
+                ? Carbon::parse($data['taken_at'])->utc()
                 : ($this->dataScattoDagliExif($exif) ?? now()),
             'geom' => $this->geomFromExif($exif)
                 ?? (isset($data['lat'], $data['lon'])
@@ -107,7 +131,7 @@ class PhotoController extends Controller implements HasMiddleware
 
         try {
             $photo->save();
-        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+        } catch (UniqueConstraintViolationException) {
             // Due retry simultanei dello stesso upload: vince il primo, il file
             // appena scritto si elimina e si risponde con la foto già registrata
             Storage::disk()->delete($path);
@@ -128,7 +152,7 @@ class PhotoController extends Controller implements HasMiddleware
         // invece di doverle ricodificare tutte insieme (e rischiare di
         // superare il tempo massimo della richiesta)
         try {
-            \App\Services\Photos\PublicPhotoCache::jpeg($photo);
+            PublicPhotoCache::jpeg($photo);
         } catch (\Throwable) {
             // la derivata verrà preparata alla prima stampa o visita
         }
@@ -154,7 +178,7 @@ class PhotoController extends Controller implements HasMiddleware
         $photo->delete();
 
         // La copia pubblica ridimensionata non deve sopravvivere all'originale
-        \App\Services\Photos\PublicPhotoCache::dimentica($photo);
+        PublicPhotoCache::dimentica($photo);
 
         Audit::log('photo.deleted', $photo);
 
@@ -169,7 +193,7 @@ class PhotoController extends Controller implements HasMiddleware
      */
     private function nonOltreIlMassimoDiPixel(string $campo, mixed $valore, \Closure $errore): void
     {
-        if (! $valore instanceof \Illuminate\Http\UploadedFile) {
+        if (! $valore instanceof UploadedFile) {
             return;
         }
 
@@ -219,7 +243,7 @@ class PhotoController extends Controller implements HasMiddleware
      * quella in cui si lavora. Una data impossibile (azzerata, preistorica o
      * nel futuro) si scarta e resta la data di caricamento.
      */
-    private function dataScattoDagliExif(?array $exif): ?\Illuminate\Support\Carbon
+    private function dataScattoDagliExif(?array $exif): ?Carbon
     {
         if ($exif === null) {
             return null;
@@ -239,7 +263,7 @@ class PhotoController extends Controller implements HasMiddleware
                     continue;
                 }
 
-                $data = \Illuminate\Support\Carbon::instance($quando);
+                $data = Carbon::instance($quando);
                 if ($data->year < 1990 || $data->isFuture()) {
                     continue;
                 }

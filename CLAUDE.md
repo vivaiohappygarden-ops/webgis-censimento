@@ -430,6 +430,20 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - `PhotoController` ricava `taken_at` dagli EXIF quando il client non la manda:
   il momento del caricamento non è la data dello scatto, e quella data finisce
   stampata sotto la fotografia nella perizia.
+- **Copia d'archivio delle foto (dal 26/09/2026)**: le foto caricate dal computer
+  arrivavano intere (anche 5-15 MB) e cosi' restavano, dieci volte lo spazio di quelle
+  ridotte dall'app di campo. `ImageDerivative::perArchivio()` le riduce al caricamento
+  (`LATO_ARCHIVIO` 2000 px, JPEG `QUALITA_ARCHIVIO` 82); un JPEG gia' dritto, entro il
+  lato massimo e sotto `BYTE_ARCHIVIO` resta com'e' (le foto dell'app di campo non si
+  toccano); se la riduzione non riesce resta l'originale, un caricamento non si perde.
+  Gli EXIF si leggono **prima** della riduzione (data di scatto e posizione finiscono
+  nelle colonne), e `size_bytes`/`hash_sha256` sono quelli del file salvato davvero.
+  `ImageDerivative` applica l'**orientamento EXIF** prima di buttare gli EXIF: prima le
+  copie ricodificate (richieste del portale, derivate pubbliche) uscivano sdraiate.
+  Per l'archivio gia' pieno c'e' `php artisan foto:riduci-archivio` (anteprima di serie,
+  `--esegui` per scrivere): stessa regola, ma **non tocca le foto negli atti di una perizia
+  validata** (una perizia validata ristampata deve dare lo stesso foglio); scrive il file
+  nuovo, aggiorna la riga e solo dopo elimina il vecchio. Prove: `FotoRidotteTest`.
 - Nei test le stampe si controllano con `Tests\Support\RaccoglitorePdf`, che
   prende il posto di `PdfRenderer`, tiene i dati passati alla vista e compone
   davvero il Blade: si vede il testo del documento senza riaprire un PDF.
@@ -594,6 +608,16 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   minuti che lancia `update.sh` quando il ramo seguito avanza), quello che si spinge sul ramo
   di riferimento va in produzione da solo entro cinque minuti. Solo avanzamenti in linea
   retta: una storia divergente ferma l'aggiornamento e lo scrive nel registro.
+- **Salvataggi del server** (`deploy/backup.sh`, rifatto il 26/09/2026): banca dati con
+  `pg_dump` verificato da `pg_restore --list`, file in **istantanee incrementali** con
+  `rsync --link-dest` (una copia piu' le sole novita'; prima erano 14 archivi interi al
+  giorno, con 36 GB di foto 500 GB), 14 giorni conservati, istantanee giudicate dal nome
+  (rsync conserva le date dei file), controllo dello spazio prima di partire, copia fuori
+  dal server da `/etc/webgis-backup.conf` (`BACKUP_REMOTO` rsync via SSH, oppure
+  `BACKUP_RCLONE`). `webgis-backup stato` lo legge `diagnostica.sh`. Lo script vive in
+  `/usr/local/bin/webgis-backup`: **`update.sh` lo reinstalla** a ogni aggiornamento (e
+  installa rsync), altrimenti i server gia' in piedi terrebbero la versione vecchia.
+  Prove: `SalvataggiTest` (lancia davvero lo script su cartelle temporanee).
 - Verifica ogni blocco anche nel browser reale (Playwright/Chromium) oltre che con i test.
 - Il committente non è tecnico: i resoconti si scrivono in italiano semplice, senza tecnicismi
   non spiegati e senza emoji.

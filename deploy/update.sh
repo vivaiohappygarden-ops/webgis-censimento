@@ -40,6 +40,20 @@ echo "==> Processi PHP"
 # (cinque) accoda le richieste di una pagina appena aperta
 bash "${APP_DIR}/deploy/php-fpm-config.sh" || echo "  (dimensionamento non riuscito: si prosegue con la configurazione attuale)"
 
+echo "==> Salvataggi"
+# Il salvataggio notturno vive fuori dalla cartella del programma
+# (/usr/local/bin/webgis-backup): senza questo passo un miglioramento dello
+# script non arriverebbe mai ai server gia' installati. rsync serve alle
+# istantanee incrementali dei file
+if [ "$(id -u)" -eq 0 ]; then
+  command -v rsync >/dev/null 2>&1 || apt-get install -y -qq rsync >/dev/null 2>&1 \
+    || echo "  (rsync non installato: i file non verranno salvati finche' non si installa con apt-get install -y rsync)"
+  install -m 750 "${APP_DIR}/deploy/backup.sh" /usr/local/bin/webgis-backup
+  [ -f /etc/cron.d/webgis-backup ] || printf '30 3 * * * root /usr/local/bin/webgis-backup >> /var/log/webgis-backup.log 2>&1\n' > /etc/cron.d/webgis-backup
+else
+  echo "  (non root: lo script dei salvataggi non e' stato reinstallato)"
+fi
+
 echo "==> Permessi e servizi"
 chown -R www-data:www-data "${APP_DIR}"
 systemctl restart webgis-queue

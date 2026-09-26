@@ -100,6 +100,18 @@ sudo -u postgres psql -tAc "SELECT count(*) || ' collegamenti su ' || setting FR
 redis-cli info memory 2>/dev/null | grep -E '^(used_memory_human|maxmemory_human)' | sed 's/^/  Redis: /' \
   || echo "  Redis: non interrogabile"
 
+titolo "Salvataggi"
+if [ -x /usr/local/bin/webgis-backup ]; then
+  /usr/local/bin/webgis-backup stato 2>/dev/null || echo "  -> qualcosa non va nei salvataggi: guarda /var/log/webgis-backup.log"
+elif [ -f "${APP_DIR}/deploy/backup.sh" ]; then
+  echo "  lo script dei salvataggi non e' installato: bash ${APP_DIR}/deploy/update.sh lo installa"
+  bash "${APP_DIR}/deploy/backup.sh" stato 2>/dev/null || true
+else
+  echo "  script dei salvataggi non trovato"
+fi
+echo "  ultime righe del registro:"
+tail -n 4 /var/log/webgis-backup.log 2>/dev/null | sed 's/^/    /' || echo "    (registro vuoto)"
+
 titolo "Aggiornamento automatico"
 if systemctl list-timers --all 2>/dev/null | grep -q webgis-aggiornamento; then
   systemctl list-timers --all --no-pager 2>/dev/null | grep -E 'NEXT|webgis-aggiornamento' | sed 's/^/  /'

@@ -39,7 +39,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 log "Pacchetti di sistema"
 apt-get update -qq
-apt-get install -y -qq software-properties-common curl git unzip gnupg2 ca-certificates openssl
+apt-get install -y -qq software-properties-common curl git unzip gnupg2 ca-certificates openssl rsync
 
 log "PHP ${PHP_V} (PPA ondrej)"
 add-apt-repository -y ppa:ondrej/php >/dev/null
