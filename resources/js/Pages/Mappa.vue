@@ -5,6 +5,7 @@ import * as maplibregl from 'maplibre-gl';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import TestataPatrimonio from '@/Components/Nuovo/TestataPatrimonio.vue';
 import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import ScegliVoce from '@/Components/ScegliVoce.vue';
 import { usaCaricamento } from '@/caricamento';
@@ -13,6 +14,8 @@ import { statusLabel } from '@/assetStatus';
 import { contornoSiIncrocia } from '@/geometria';
 
 const page = usePage();
+// Nella veste nuova la pagina porta la testata di Patrimonio con le sue schede
+const nuova = computed(() => page.props.interfaccia?.modo === 'nuova');
 const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
 
 // Se aree, catalogo o committenti non arrivano, i filtri e i tipi da disegnare
@@ -1002,7 +1005,9 @@ onBeforeUnmount(() => {
     <Head title="Mappa" />
 
     <AppLayout>
-        <div class="relative h-full">
+        <div class="flex h-full flex-col">
+        <div v-if="nuova" class="border-b border-gray-200 bg-white px-4 py-2.5 md:px-6"><TestataPatrimonio attiva="mappa" /></div>
+        <div class="relative min-h-0 flex-1">
             <div v-if="avviso" class="absolute inset-x-3 top-3 z-20">
                 <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
             </div>
@@ -1314,6 +1319,7 @@ onBeforeUnmount(() => {
                     {{ redraw.message }}
                 </p>
             </div>
+        </div>
         </div>
     </AppLayout>
 </template>

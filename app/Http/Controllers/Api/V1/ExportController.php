@@ -3,10 +3,15 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Asset;
 use App\Models\Organization;
+use App\Models\Site;
+use App\Services\Export\CamDeliveryBuilder;
 use App\Services\Export\CamExporter;
+use App\Services\Export\FoglioXlsx;
+use App\Support\AssetStatus;
 use App\Support\Audit;
-use App\Support\RicercaTestuale;
+use App\Support\FiltriElementi;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
@@ -20,7 +25,7 @@ class ExportController extends Controller implements HasMiddleware
     }
 
     /** Pacchetto di consegna completo: tutti i layer, foto e manifest. */
-    public function camDelivery(Request $request, \App\Services\Export\CamDeliveryBuilder $builder)
+    public function camDelivery(Request $request, CamDeliveryBuilder $builder)
     {
         $data = $request->validate([
             'format' => ['sometimes', 'in:geojson,shapefile'],
@@ -30,7 +35,7 @@ class ExportController extends Controller implements HasMiddleware
 
         // Riferimento della consegna: il codice ISTAT quando il territorio è
         // di un solo comune, altrimenti l'identificativo dell'organizzazione
-        $istat = \App\Models\Site::query()->whereNotNull('istat_code')->distinct()->pluck('istat_code');
+        $istat = Site::query()->whereNotNull('istat_code')->distinct()->pluck('istat_code');
         $tag = $istat->count() === 1
             ? $istat->first()
             : (Organization::find($request->user()->tenant_id)?->slug ?? 'consegna');
@@ -72,7 +77,7 @@ class ExportController extends Controller implements HasMiddleware
         }
 
         return response()->streamDownload(
-            fn () => print(json_encode($collection, JSON_UNESCAPED_UNICODE)),
+            fn () => print (json_encode($collection, JSON_UNESCAPED_UNICODE)),
             "cam_{$layer}_".now()->format('Ymd').'.geojson',
             ['Content-Type' => 'application/geo+json'],
         );
@@ -91,9 +96,10 @@ class ExportController extends Controller implements HasMiddleware
 
     public function assetsCsv(Request $request)
     {
-        \App\Support\ListQuery::validateUuidFilters($request, ['area_id', 'object_type_id', 'client_id', 'locality_id']);
-
-        $query = \App\Models\Asset::query()
+        // Stessa scelta fatta a video: il file esporta quello che si sta
+        // guardando. I filtri sono quelli dell'elenco (FiltriElementi), non
+        // una copia: un filtro aggiunto all'elenco vale subito anche qui
+        $query = FiltriElementi::applica($request, Asset::query()
             ->with([
                 'objectType:id,code,name,sub_type_id',
                 'objectType.subType:id,name,main_type_id',
@@ -103,50 +109,11 @@ class ExportController extends Controller implements HasMiddleware
                 'area.locality.site:id,name,client_id',
                 'area.locality.site.client:id,name',
                 'tree:asset_id,genus,species,common_name,height_m,dbh_cm',
-            ]);
-
-        if ($request->filled('area_id')) {
-            $query->where('area_id', $request->string('area_id'));
-        }
-        if ($request->filled('locality_id')) {
-            $query->whereHas('area', fn ($w) => $w->where('locality_id', $request->string('locality_id')));
-        }
-        if ($request->filled('client_id')) {
-            $query->whereHas('area.locality.site', fn ($w) => $w->where('client_id', $request->string('client_id')));
-        }
-        if ($request->filled('object_type_id')) {
-            $query->where('object_type_id', $request->string('object_type_id'));
-        }
-        if ($request->filled('type_code')) {
-            $query->whereHas('objectType', fn ($w) => $w->where('code', $request->string('type_code')));
-        }
-        if ($request->filled('status')) {
-            $query->where('status', $request->string('status'));
-        }
-        // Stessa scelta fatta a video: il CSV esporta quello che si sta
-        // guardando. Il blocco è la copia esatta di AssetController::index —
-        // archivio=0 nasconde abbattuti e dismessi (salvo filtro di stato
-        // esplicito), archivio=1 esporta solo l'archivio, hide_removed resta
-        // col vecchio significato per compatibilità
-        if ($request->has('archivio')) {
-            if ($request->boolean('archivio')) {
-                $query->inArchivio();
-            } elseif (! $request->filled('status')) {
-                $query->fuoriArchivio();
-            }
-        } elseif ($request->boolean('hide_removed')) {
-            $query->where('status', '!=', 'removed');
-        }
-        if ($request->filled('q')) {
-            $request->validate(['q' => RicercaTestuale::regole()]);
-            $query->cercaTesto($request->string('q'));
-        }
+            ]));
 
         $formato = $request->string('formato')->lower()->toString() ?: 'csv';
 
-        Audit::log('export.assets_'.($formato === 'xlsx' ? 'xlsx' : 'csv'), null, ['filters' => $request->only([
-            'area_id', 'locality_id', 'client_id', 'object_type_id', 'type_code', 'status', 'hide_removed', 'archivio', 'q',
-        ])]);
+        Audit::log('export.assets_'.($formato === 'xlsx' ? 'xlsx' : 'csv'), null, ['filters' => $request->only(FiltriElementi::PARAMETRI)]);
 
         return $formato === 'xlsx'
             ? $this->assetsXlsx($query)
@@ -195,7 +162,7 @@ class ExportController extends Controller implements HasMiddleware
      *
      * @return list<mixed>
      */
-    private function rigaAsset(\App\Models\Asset $asset): array
+    private function rigaAsset(Asset $asset): array
     {
         return [
             $asset->census_code,
@@ -205,7 +172,7 @@ class ExportController extends Controller implements HasMiddleware
             $asset->area?->locality?->site?->client?->name,
             $asset->area?->name,
             $asset->area?->locality?->name,
-            \App\Support\AssetStatus::LABELS[$asset->status] ?? $asset->status,
+            AssetStatus::LABELS[$asset->status] ?? $asset->status,
             $asset->surveyed_at,
             // Il campo specie contiene gia' il binomio completo
             $asset->tree?->species ?: ($asset->tree?->genus ?? null),
@@ -271,7 +238,7 @@ class ExportController extends Controller implements HasMiddleware
     /** Il foglio Excel vero: intestazione bloccata, filtri, tipi giusti. */
     private function assetsXlsx($query)
     {
-        $foglio = new \App\Services\Export\FoglioXlsx('Censimento');
+        $foglio = new FoglioXlsx('Censimento');
         $foglio->intestazione($this->colonneAssets());
 
         $query->chunkById(500, function ($assets) use ($foglio) {
@@ -286,7 +253,7 @@ class ExportController extends Controller implements HasMiddleware
         return response()->download(
             $percorso,
             'censimento_'.now()->format('Ymd').'.xlsx',
-            ['Content-Type' => \App\Services\Export\FoglioXlsx::mime()],
+            ['Content-Type' => FoglioXlsx::mime()],
         )->deleteFileAfterSend(true);
     }
 }

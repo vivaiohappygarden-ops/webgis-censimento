@@ -84,8 +84,12 @@ const sezioni = computed(() =>
         { label: 'Oggi', href: '/oggi', show: can('assets.view') || can('works.view') },
         {
             label: 'Patrimonio',
+            // Le sue schede stanno nella testata della pagina (blocco 2):
+            // qui servono solo a capire quando la voce e' attiva
+            schede: true,
             voci: [
-                { label: 'Elenco', href: '/censimento', show: can('assets.view') },
+                { label: 'Elenco', href: '/patrimonio', show: can('assets.view') },
+                { label: 'Elenco precedente', href: '/censimento', show: can('assets.view') },
                 { label: 'Mappa', href: '/mappa', show: can('assets.view') },
                 { label: 'Alberi e VTA', href: '/vta', show: can('assets.view') },
                 { label: 'Irrigazione', href: '/irrigazione', show: can('areas.view') },
@@ -133,7 +137,7 @@ const sezioni = computed(() =>
             const href = s.href ?? voci[0]?.href;
             const attiva = s.href ? isActive(s.href) : voci.some((v) => isActive(v.href));
 
-            return { ...s, voci: voci.length > 1 ? voci : [], href, attiva, show: s.href ? s.show : voci.length > 0 };
+            return { ...s, voci: voci.length > 1 && ! s.schede ? voci : [], href, attiva, show: s.href ? s.show : voci.length > 0 };
         })
         .filter((s) => s.show)
 );

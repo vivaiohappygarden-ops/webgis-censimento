@@ -4,7 +4,12 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import ScegliCommittente from '@/Components/ScegliCommittente.vue';
+import TestataPatrimonio from '@/Components/Nuovo/TestataPatrimonio.vue';
 import { avvisoCaricamento } from '@/avvisi';
+
+const page = usePage();
+// Nella veste nuova la pagina porta la testata di Patrimonio con le sue schede
+const nuova = computed(() => page.props.interfaccia?.modo === 'nuova');
 
 const data = ref(null);
 const tutelati = ref([]);
@@ -481,6 +486,7 @@ onMounted(async () => {
 
     <AppLayout>
         <div class="p-6">
+            <div v-if="nuova" class="mb-4"><TestataPatrimonio attiva="alberi" /></div>
             <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold">Scadenzario VTA</h1>

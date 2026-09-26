@@ -4,9 +4,12 @@ import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import ScegliVoce from '@/Components/ScegliVoce.vue';
+import TestataPatrimonio from '@/Components/Nuovo/TestataPatrimonio.vue';
 import { avvisoCaricamento } from '@/avvisi';
 
 const page = usePage();
+// Nella veste nuova la pagina porta la testata di Patrimonio con le sue schede
+const nuova = computed(() => page.props.interfaccia?.modo === 'nuova');
 const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
 const canManage = computed(() => permissions.value.includes('areas.update'));
 const canWorks = computed(() => permissions.value.includes('works.manage'));
@@ -392,6 +395,7 @@ onMounted(load);
 
     <AppLayout>
         <div class="p-6">
+            <div v-if="nuova" class="mb-4"><TestataPatrimonio attiva="irrigazione" /></div>
             <div class="mb-4 flex items-center justify-between">
                 <div>
                     <h1 class="text-xl font-semibold">Impianti di irrigazione</h1>

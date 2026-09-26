@@ -586,7 +586,11 @@ watch(() => filters.clientId, loadAreas);
 
 watch(() => filters.page, () => carica(load));
 
-onMounted(() => carica(() => Promise.all([load(), loadClients(), loadAreas()])));
+onMounted(async () => {
+    await carica(() => Promise.all([load(), loadClients(), loadAreas()]));
+    // Da Patrimonio ("Importa da file") l'importatore si apre da solo
+    if (canCreate.value && new URLSearchParams(window.location.search).get('importa') === '1') await openImporter();
+});
 
 const measure = (row) => {
     if (row.computed_area_sqm) return `${Number(row.computed_area_sqm).toLocaleString('it-IT')} m²`;

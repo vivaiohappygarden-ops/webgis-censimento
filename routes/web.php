@@ -89,6 +89,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/censimento', fn () => Inertia::render('Censimento/Index'))
         ->middleware('can:assets.view')->name('censimento');
 
+    // Veste nuova: l'elenco del patrimonio con l'anteprima (blocco 2). Le altre
+    // schede di Patrimonio (mappa, alberi e VTA, irrigazione) sono ancora le
+    // pagine di prima, con la stessa testata
+    Route::get('/patrimonio', fn () => Inertia::render('Nuovo/Patrimonio'))
+        ->middleware('can:assets.view')->name('patrimonio');
+
     Route::get('/censimento/{asset}', fn (string $asset) => Inertia::render('Censimento/Show', ['assetId' => $asset]))
         ->whereUuid('asset')->middleware('can:assets.view')->name('censimento.show');
 

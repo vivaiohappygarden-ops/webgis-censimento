@@ -146,7 +146,8 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   di serie `nuova`); la risolve `App\Support\Interfaccia`, arriva in pagina come prop
   condivisa `interfaccia.modo`, si cambia con `POST /interfaccia` dal pulsante in fondo al
   menu ("Torna all'interfaccia precedente" / "Prova la nuova interfaccia"). Il punto di
-  partenza e' il tag git `interfaccia-precedente-2026-09`. Le pagine vecchie **non si
+  partenza e' il commit `71f3356` (tag locale `interfaccia-precedente-2026-09`: il proxy git
+  dell'ambiente rifiuta i tag con un 403, quindi sul remoto vale il numero del commit). Le pagine vecchie **non si
   cancellano** finche' il blocco nuovo non le sostituisce: nel menu nuovo ogni voce apre la
   prima delle sue pagine e, mentre ci si sta dentro, mostra le altre come sottovoci
   (`AppLayout.vue`, `sezioni`); le sottovoci spariranno man mano che i blocchi arrivano.
@@ -161,6 +162,26 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   elencate (tetto `CoseDaFare::LIMIT` per sezione). Ogni sezione segue i permessi: lavori,
   ispezioni, segnalazioni, non conformita' e patentini con `works.view`; VTA, campo e
   documenti con `assets.view`; irrigazione con `areas.view`; portali con `clients.view`.
+- **Patrimonio** (blocco 2): `/patrimonio` e' l'elenco con l'anteprima (`Pages/Nuovo/Patrimonio.vue`):
+  ricerca a parole, filtri (committente, area, tipo, stato con l'archivio dentro), le scorciatoie
+  "VTA scaduta", "Mai valutati", "Senza specie" con i loro numeri (`GET assets/riepilogo`),
+  tabella con selezione e azioni in blocco (prova a vuoto e conferma, come prima), esportazioni
+  in un menu, e a destra l'anteprima della riga scelta (foto, misure, cronologia, tre pulsanti).
+  L'elenco chiede `dettagli=1` (specie, ultima VTA, ultimo lavoro chiuso, numero di foto:
+  sottoquery per riga, solo se richieste) e `ordina=cartellino`. **I filtri stanno una volta
+  sola in `App\Support\FiltriElementi`**, usati da elenco, riepilogo ed esportazioni CSV/Excel:
+  prima l'esportazione teneva una copia del blocco dell'elenco. I filtri nuovi `vta`
+  (`scaduta`, `in_scadenza`, `mai`, `valutato`) e `senza_specie` usano la definizione dello
+  scadenzario (ultima valutazione per albero, alberi rimossi esclusi).
+  **Cronologia**: `GET assets/{id}/cronologia` (`App\Services\Assets\CronologiaElemento`) mette in
+  fila rilievo, modifiche della scheda, valutazioni VTA, lavori, segnalazioni, fotografie per
+  giorno e abbattimento, dal piu' recente: la leggono l'anteprima e la scheda nuova. Le altre
+  schede di Patrimonio (Mappa `/mappa`, Alberi e VTA `/vta`, Irrigazione `/irrigazione`) sono
+  ancora le pagine di prima con la testata `Components/Nuovo/TestataPatrimonio.vue` quando la
+  veste e' nuova; la voce di menu Patrimonio non ha sottovoci (`schede: true`). L'importazione
+  da file resta nella pagina precedente (`/censimento?importa=1`, dal menu "Altro") finche' non
+  trova posto in Documenti. `/lavori?nuovo=1&elementi=a,b` apre il nuovo ordine e collega gli
+  elementi appena creato. Prove: `PatrimonioTest`.
 - **Casa dopo l'accesso**: nella veste nuova `HomeRoute` porta su `oggi` chiunque veda il
   censimento o i lavori (nella precedente Oggi resta il cruscotto dei lavori e si atterra
   sulla mappa). L'operatore di campo atterra sempre sull'app di campo.

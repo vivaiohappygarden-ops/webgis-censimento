@@ -185,6 +185,10 @@ const areas = ref([]);
 const priceLists = ref([]);
 
 const creator = reactive({ open: false, busy: false, error: '', form: {} });
+// Gli elementi da collegare al nuovo ordine, passati da Patrimonio nell'indirizzo
+let elementiDaCollegare = (new URLSearchParams(window.location.search).get('elementi') ?? '')
+    .split(',').map((s) => s.trim()).filter((s) => /^[0-9a-f-]{36}$/i.test(s));
+const elementiDaCollegareN = ref(elementiDaCollegare.length);
 const detail = ref(null);
 const detailBusy = ref(false);
 const detailError = ref('');
@@ -306,11 +310,18 @@ async function createOrder() {
             Object.entries(creator.form).filter(([, v]) => v !== '' && v !== null),
         );
         const { data } = await axios.post('/api/v1/work-orders', payload);
+        // Arrivando da Patrimonio ("Crea un lavoro con i selezionati") gli
+        // elementi scelti si agganciano all'ordine appena creato, uno per uno
+        const agganci = await Promise.allSettled(elementiDaCollegare.map((assetId) =>
+            axios.post(`/api/v1/work-orders/${data.data.id}/assets`, { asset_id: assetId })));
+        const nonAgganciati = agganci.filter((a) => a.status === 'rejected').length;
+        elementiDaCollegare = [];
         creator.open = false;
         resetForm();
         await load();
         await agendaRef.value?.reload();
         await openDetail(data.data.id);
+        if (nonAgganciati) detailError.value = `${nonAgganciati} element${nonAgganciati === 1 ? 'o non è stato collegato' : 'i non sono stati collegati'} all'ordine (in archivio o già presenti).`;
     } catch (err) {
         creator.error = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
             ?? err.response?.data?.message ?? 'Errore nella creazione';
@@ -923,6 +934,9 @@ onMounted(async () => {
                             <h2 class="font-semibold">Nuovo ordine di lavoro</h2>
                             <button class="text-gray-400 hover:text-gray-600" @click="creator.open = false">✕</button>
                         </div>
+                        <p v-if="elementiDaCollegareN" class="mt-1 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-900" data-test="wo-elementi-da-collegare">
+                            {{ elementiDaCollegareN }} {{ elementiDaCollegareN === 1 ? 'elemento scelto in Patrimonio verrà collegato' : 'elementi scelti in Patrimonio verranno collegati' }} all'ordine appena creato.
+                        </p>
 
                         <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                             <label class="col-span-full block text-xs">

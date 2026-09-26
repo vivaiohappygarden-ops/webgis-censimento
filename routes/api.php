@@ -250,6 +250,12 @@ Route::prefix('v1')->group(function () {
         Route::get('assets/{id}/versioni', [\App\Http\Controllers\Api\V1\AssetController::class, 'versioni'])
             ->whereUuid('id');
 
+        // Veste nuova (blocco 2): i numeri dell'elenco con i filtri correnti e
+        // la linea del tempo di un elemento
+        Route::get('assets/riepilogo', [\App\Http\Controllers\Api\V1\AssetController::class, 'riepilogo']);
+        Route::get('assets/{id}/cronologia', [\App\Http\Controllers\Api\V1\AssetController::class, 'cronologia'])
+            ->whereUuid('id');
+
         // La misura che la geometria propone nell'unità chiesta (per i preventivi)
         Route::get('assets/{id}/quantita', [\App\Http\Controllers\Api\V1\AssetController::class, 'quantita'])
             ->whereUuid('id');

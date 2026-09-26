@@ -8,10 +8,20 @@ use App\Http\Requests\UpdateAssetRequest;
 use App\Models\Area;
 use App\Models\Asset;
 use App\Models\CatalogObjectType;
+use App\Models\PlantingSite;
+use App\Models\Tree;
+use App\Services\Assets\CronologiaElemento;
+use App\Services\Assets\StoriaScheda;
+use App\Services\Benefits\CarbonEstimate;
+use App\Services\Benefits\ServiziEcosistemici;
+use App\Services\Catalog\AttributeValidator;
+use App\Services\Works\QuantitaDaGeometria;
 use App\Support\Audit;
+use App\Support\FiltriElementi;
 use App\Support\Geometry;
 use App\Support\ListQuery;
-use App\Support\RicercaTestuale;
+use App\Support\PortalLabels;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -26,7 +36,7 @@ class AssetController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:assets.view', only: ['index', 'show', 'versioni', 'quantita']),
+            new Middleware('can:assets.view', only: ['index', 'show', 'versioni', 'quantita', 'riepilogo', 'cronologia']),
             new Middleware('can:assets.create', only: ['store']),
             new Middleware('can:assets.update', only: ['update', 'registerRemoval', 'cancelRemoval']),
             new Middleware('can:assets.delete', only: ['destroy']),
@@ -35,9 +45,9 @@ class AssetController extends Controller implements HasMiddleware
 
     public function index(Request $request): JsonResponse
     {
-        ListQuery::validateUuidFilters($request, ['area_id', 'object_type_id', 'client_id', 'locality_id']);
-
-        $query = Asset::query()
+        // I filtri stanno in FiltriElementi, condivisi con il riepilogo e con
+        // le esportazioni: l'elenco e il file devono contenere le stesse schede
+        $query = FiltriElementi::applica($request, Asset::query()
             ->with([
                 'objectType:id,code,name,allowed_geometry',
                 // Committente e area: servono a video per capire di chi è
@@ -48,55 +58,78 @@ class AssetController extends Controller implements HasMiddleware
                 'area.locality.site.client:id,name',
             ])
             ->selectRaw('assets.*, ST_AsGeoJSON(geom)::json AS geom_geojson')
-            ->withCasts(['geom_geojson' => 'array']);
+            ->withCasts(['geom_geojson' => 'array']));
 
-        if ($request->filled('area_id')) {
-            $query->where('area_id', $request->string('area_id'));
-        }
-        if ($request->filled('locality_id')) {
-            $query->whereHas('area', fn ($w) => $w->where('locality_id', $request->string('locality_id')));
-        }
-        // Committente: assets -> aree -> località -> sedi -> cliente
-        if ($request->filled('client_id')) {
-            $query->whereHas('area.locality.site', fn ($w) => $w->where('client_id', $request->string('client_id')));
-        }
-        if ($request->filled('object_type_id')) {
-            $query->where('object_type_id', $request->string('object_type_id'));
-        }
-        if ($request->filled('type_code')) {
-            $query->whereHas('objectType', fn ($w) => $w->where('code', $request->string('type_code')));
-        }
-        if ($request->filled('status')) {
-            $query->where('status', $request->string('status'));
-        }
-        // L'archivio (schede abbattute/rimosse e dismesse) sta fuori dal
-        // lavoro di tutti i giorni: archivio=0 lo nasconde, archivio=1 mostra
-        // SOLO quello (la vista "Archivio" della pagina Censimento). Il filtro
-        // di stato esplicito vince: chi chiede status=dismissed vuole vederli
-        // anche con la spunta dell'archivio spenta. Senza alcun parametro si
-        // vede tutto, così le altre pagine che usano questa API non cambiano;
-        // hide_removed resta con il vecchio significato (solo abbattuti) per
-        // le viste salvate e i client esistenti.
-        if ($request->has('archivio')) {
-            if ($request->boolean('archivio')) {
-                $query->inArchivio();
-            } elseif (! $request->filled('status')) {
-                $query->fuoriArchivio();
-            }
-        } elseif ($request->boolean('hide_removed')) {
-            $query->where('status', '!=', 'removed');
-        }
-        if ($request->filled('q')) {
-            $request->validate(['q' => RicercaTestuale::regole()]);
-            $query->cercaTesto($request->string('q'));
-        }
         if ($request->filled('bbox')) {
             $query->whereRaw('geom && ST_MakeEnvelope(?, ?, ?, ?, 4326)', ListQuery::bbox($request));
         }
+        // L'elenco della veste nuova chiede anche specie, ultima VTA, ultimo
+        // lavoro e numero di foto: sottoquery per riga, solo se richieste
+        if ($request->boolean('dettagli')) {
+            $this->conDettagli($query);
+        }
+        // Di serie i più recenti per primi (come sempre); l'elenco nuovo
+        // preferisce l'ordine dei cartellini
+        if ($request->string('ordina')->toString() === 'cartellino') {
+            $query->orderByRaw('assets.census_code ASC NULLS LAST')->orderBy('assets.created_at');
+        } else {
+            $query->orderByDesc('assets.created_at');
+        }
 
-        return response()->json(
-            $query->orderByDesc('created_at')->paginate(ListQuery::perPage($request, 50, 200))
-        );
+        return response()->json($query->paginate(ListQuery::perPage($request, 50, 200)));
+    }
+
+    /**
+     * I numeri dell'elenco con i filtri correnti: il totale, gli alberi e le
+     * scorciatoie della pagina (ricontrolli VTA scaduti, alberi mai valutati,
+     * schede senza specie). Stessi filtri dell'elenco, stesse definizioni
+     * dello scadenzario.
+     */
+    public function riepilogo(Request $request): JsonResponse
+    {
+        $base = FiltriElementi::applica($request, Asset::query());
+
+        return response()->json(['data' => [
+            'totale' => (clone $base)->count(),
+            'alberi' => (clone $base)->whereHas('tree', fn ($t) => $t->whereNull('removed_on'))->count(),
+            'vta_scadute' => FiltriElementi::conVta(clone $base, 'scaduta')->count(),
+            'vta_mai' => FiltriElementi::conVta(clone $base, 'mai')->count(),
+            'senza_specie' => FiltriElementi::senzaSpecie(clone $base)->count(),
+        ]]);
+    }
+
+    /** La linea del tempo dell'elemento: rilievo, modifiche, VTA, lavori, segnalazioni, foto. */
+    public function cronologia(string $id, CronologiaElemento $cronologia): JsonResponse
+    {
+        $asset = Asset::query()->with('tree')->findOrFail($id);
+
+        return response()->json(['data' => $cronologia->per($asset)]);
+    }
+
+    private function conDettagli(Builder $query): void
+    {
+        $ultimaVta = fn (string $colonna) => DB::table('tree_assessments as ta')
+            ->select('ta.'.$colonna)
+            ->whereColumn('ta.tree_id', 'assets.id')->whereNull('ta.deleted_at')
+            ->orderByDesc('ta.assessed_on')->orderByDesc('ta.created_at')->limit(1);
+        $ultimoLavoro = fn (string $colonna) => DB::table('work_order_assets as woa')
+            ->join('work_orders as wo', 'wo.id', '=', 'woa.work_order_id')
+            ->selectRaw($colonna)
+            ->whereColumn('woa.asset_id', 'assets.id')
+            ->whereNull('wo.deleted_at')->where('wo.status', 'completed')
+            ->orderByRaw('COALESCE(wo.completed_at, wo.planned_end::timestamptz, wo.planned_start::timestamptz) DESC')->limit(1);
+
+        $query->with('tree:asset_id,genus,species,common_name,height_m,dbh_cm,crown_diameter_m,removed_on')
+            ->addSelect([
+                'vta_classe' => $ultimaVta('failure_class'),
+                'vta_data' => $ultimaVta('assessed_on'),
+                'vta_scadenza' => $ultimaVta('next_check_due'),
+                'ultimo_lavoro_titolo' => $ultimoLavoro('wo.title'),
+                'ultimo_lavoro_codice' => $ultimoLavoro('wo.code'),
+                'ultimo_lavoro_data' => $ultimoLavoro('COALESCE(wo.completed_at::date, wo.planned_end, wo.planned_start)'),
+                'n_foto' => DB::table('photos')->selectRaw('COUNT(*)')
+                    ->whereColumn('photos.asset_id', 'assets.id')->whereNull('photos.deleted_at'),
+            ]);
     }
 
     public function store(StoreAssetRequest $request): JsonResponse
@@ -106,7 +139,7 @@ class AssetController extends Controller implements HasMiddleware
         $type = CatalogObjectType::findOrFail($data['object_type_id']);
         Area::findOrFail($data['area_id']);
         $this->assertGeometryMatchesType($data['geometry']['type'], $type);
-        $data['attributes'] = app(\App\Services\Catalog\AttributeValidator::class)
+        $data['attributes'] = app(AttributeValidator::class)
             ->validate($type, $data['attributes'] ?? []);
 
         $asset = DB::transaction(function () use ($data, $request, $type) {
@@ -121,17 +154,17 @@ class AssetController extends Controller implements HasMiddleware
             // un prefisso (MEN-0042): il lock è di transazione, quindi la
             // creazione dell'elemento deve stare qui dentro
             if (empty($asset->census_code)) {
-                $asset->census_code = \App\Support\PortalLabels::nextCode($data['area_id']);
+                $asset->census_code = PortalLabels::nextCode($data['area_id']);
             }
 
             $this->assertValidityDates($asset);
             $asset->save();
 
             if ($type->requires_tree_record) {
-                \App\Models\Tree::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id]);
+                Tree::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id]);
             }
             if ($type->is_planting_site) {
-                \App\Models\PlantingSite::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id]);
+                PlantingSite::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id]);
             }
 
             return $asset;
@@ -161,8 +194,8 @@ class AssetController extends Controller implements HasMiddleware
         return response()->json(['data' => array_merge($asset->toArray(), [
             // La stessa stima che uscirebbe sul portale pubblico: il tecnico
             // la vede qui prima di decidere se accenderla per il committente
-            'co2' => \App\Services\Benefits\CarbonEstimate::per($asset->tree),
-            'benefici' => \App\Services\Benefits\ServiziEcosistemici::per($asset->tree),
+            'co2' => CarbonEstimate::per($asset->tree),
+            'benefici' => ServiziEcosistemici::per($asset->tree),
         ])]);
     }
 
@@ -177,9 +210,9 @@ class AssetController extends Controller implements HasMiddleware
         $asset = Asset::query()->findOrFail($id);
 
         return response()->json(['data' => [
-            'quantity' => \App\Services\Works\QuantitaDaGeometria::perAsset($data['unit'], $asset),
+            'quantity' => QuantitaDaGeometria::perAsset($data['unit'], $asset),
             'unit' => $data['unit'],
-            'tipo_misura' => \App\Services\Works\QuantitaDaGeometria::tipoMisura($data['unit']),
+            'tipo_misura' => QuantitaDaGeometria::tipoMisura($data['unit']),
         ]]);
     }
 
@@ -193,7 +226,7 @@ class AssetController extends Controller implements HasMiddleware
         $storia = DB::transaction(function () use ($id) {
             $asset = Asset::query()->with(['tree', 'plantingSite'])->sharedLock()->findOrFail($id);
 
-            return \App\Services\Assets\StoriaScheda::per($asset);
+            return StoriaScheda::per($asset);
         });
 
         return response()->json(['data' => $storia]);
@@ -258,7 +291,7 @@ class AssetController extends Controller implements HasMiddleware
             }
 
             if (array_key_exists('attributes', $data)) {
-                $data['attributes'] = app(\App\Services\Catalog\AttributeValidator::class)
+                $data['attributes'] = app(AttributeValidator::class)
                     ->validate($type, $data['attributes'] ?? []);
             }
 
@@ -283,7 +316,7 @@ class AssetController extends Controller implements HasMiddleware
             if ($siteData !== null && $asset->plantingSite) {
                 if (! empty($siteData['previous_tree_id'])) {
                     // Deve essere un albero del tenant (404 se estraneo)
-                    \App\Models\Tree::query()->findOrFail($siteData['previous_tree_id']);
+                    Tree::query()->findOrFail($siteData['previous_tree_id']);
                 }
                 $asset->plantingSite->fill($siteData);
                 $siteDirty = $asset->plantingSite->isDirty();
@@ -530,7 +563,7 @@ class AssetController extends Controller implements HasMiddleware
         }
     }
 
-    private function assertTreeDates(\App\Models\Tree $tree): void
+    private function assertTreeDates(Tree $tree): void
     {
         if ($tree->removed_on && $tree->planted_on && $tree->removed_on->lt($tree->planted_on)) {
             throw ValidationException::withMessages([
