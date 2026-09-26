@@ -152,6 +152,17 @@ class SalvataggiTest extends TestCase
         $this->assertFileDoesNotExist($this->dest.'/db/db-20260926-030000.dump');
     }
 
+    public function test_senza_rsync_la_banca_dati_si_salva_lo_stesso_e_l_errore_si_vede(): void
+    {
+        [$esito, $uscita] = $this->esegui('20260926-030000', ['WEBGIS_BACKUP_RSYNC' => 'rsync-che-non-esiste']);
+
+        $this->assertNotSame(0, $esito);
+        $this->assertFileExists($this->dest.'/db/db-20260926-030000.dump');
+        $this->assertDirectoryDoesNotExist($this->dest.'/file/20260926-030000');
+        $this->assertStringContainsString('rsync non installato', $uscita);
+        $this->assertStringContainsString('la banca dati e\' salvata', $uscita);
+    }
+
     public function test_la_copia_fuori_dal_server_si_accende_dal_file_di_configurazione(): void
     {
         $remoto = $this->radice.'/altro-server';

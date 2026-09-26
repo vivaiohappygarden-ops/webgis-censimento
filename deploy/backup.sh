@@ -36,8 +36,8 @@
 #   rsync -a /var/backups/webgis/file/<data>/ /var/www/webgis/storage/app/ && chown -R www-data:www-data /var/www/webgis/storage
 #
 # Variabili per le prove: WEBGIS_BACKUP_APP_DIR, WEBGIS_BACKUP_DEST, WEBGIS_BACKUP_CONF,
-# WEBGIS_BACKUP_PG_DUMP, WEBGIS_BACKUP_PG_RESTORE, WEBGIS_BACKUP_GIORNI, WEBGIS_BACKUP_STAMP,
-# WEBGIS_BACKUP_MB_MINIMI.
+# WEBGIS_BACKUP_PG_DUMP, WEBGIS_BACKUP_PG_RESTORE, WEBGIS_BACKUP_RSYNC, WEBGIS_BACKUP_GIORNI,
+# WEBGIS_BACKUP_STAMP, WEBGIS_BACKUP_MB_MINIMI.
 set -euo pipefail
 umask 077
 
@@ -48,6 +48,7 @@ GIORNI="${WEBGIS_BACKUP_GIORNI:-14}"
 MB_MINIMI="${WEBGIS_BACKUP_MB_MINIMI:-2048}"
 PG_DUMP="${WEBGIS_BACKUP_PG_DUMP:-sudo -u postgres pg_dump --format=custom webgis}"
 PG_RESTORE="${WEBGIS_BACKUP_PG_RESTORE:-pg_restore}"
+RSYNC="${WEBGIS_BACKUP_RSYNC:-rsync}"
 STAMP="${WEBGIS_BACKUP_STAMP:-$(date +%Y%m%d-%H%M%S)}"
 SORGENTE="${APP_DIR}/storage/app"
 
@@ -92,9 +93,9 @@ fi
 
 # --- controlli preliminari --------------------------------------------------
 [ -d "${SORGENTE}" ] || errore "cartella dei file non trovata: ${SORGENTE}"
-command -v rsync >/dev/null 2>&1 || errore "rsync non installato (apt-get install -y rsync): senza, i file non si salvano"
 
 install -d -m 700 "${DEST}" "${DEST}/db" "${DEST}/file"
+esito=0
 
 liberi="$(mb_liberi "${DEST}")"
 if [ -n "${liberi}" ] && [ "${liberi}" -lt "${MB_MINIMI}" ]; then
@@ -114,17 +115,24 @@ mv "${dump}.tmp" "${dump}"
 log "banca dati: $(dimensione "${dump}")"
 
 # --- 2. file: istantanea incrementale ---------------------------------------
+# Senza rsync i file non si salvano, ma la banca dati e' gia' al sicuro: si
+# avvisa forte e si esce con errore alla fine, non si rinuncia a tutto
 nuova="${DEST}/file/${STAMP}"
 [ -e "${nuova}" ] && errore "istantanea ${STAMP} gia' esistente"
-collega=()
-if [ -L "${DEST}/file/ultima" ] && [ -d "${DEST}/file/ultima" ]; then
-  collega=(--link-dest="$(cd "${DEST}/file/ultima" && pwd -P)")
+if command -v "${RSYNC}" >/dev/null 2>&1; then
+  collega=()
+  if [ -L "${DEST}/file/ultima" ] && [ -d "${DEST}/file/ultima" ]; then
+    collega=(--link-dest="$(cd "${DEST}/file/ultima" && pwd -P)")
+  fi
+  "${RSYNC}" -a --delete "${collega[@]}" "${SORGENTE}/" "${nuova}.tmp/"
+  date '+%Y-%m-%d %H:%M:%S' > "${nuova}.tmp/.completata"
+  mv "${nuova}.tmp" "${nuova}"
+  ln -sfn "${STAMP}" "${DEST}/file/ultima"
+  log "file: istantanea ${STAMP} ($(dimensione "${nuova}") visibili, $(dimensione "${DEST}/file") occupati in tutto dalle istantanee)"
+else
+  echo "[$(adesso)] ERRORE: rsync non installato (apt-get install -y rsync): la banca dati e' salvata, le foto e i documenti NO" >&2
+  esito=1
 fi
-rsync -a --delete "${collega[@]}" "${SORGENTE}/" "${nuova}.tmp/"
-date '+%Y-%m-%d %H:%M:%S' > "${nuova}.tmp/.completata"
-mv "${nuova}.tmp" "${nuova}"
-ln -sfn "${STAMP}" "${DEST}/file/ultima"
-log "file: istantanea ${STAMP} ($(dimensione "${nuova}") visibili, $(dimensione "${DEST}/file") occupati in tutto dalle istantanee)"
 
 # --- 3. pulizia --------------------------------------------------------------
 # Dump piu' vecchi del limite, e i salvataggi nel formato di prima (archivi
@@ -149,7 +157,8 @@ rm -rf "${DEST}"/file/*.tmp 2>/dev/null || true
 if [ -n "${BACKUP_REMOTO}" ]; then
   # -H conserva i collegamenti fisici fra le istantanee: senza, sul server
   # remoto ogni istantanea occuperebbe lo spazio di una copia intera
-  if rsync -aH --delete -e "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new" "${DEST}/" "${BACKUP_REMOTO}/"; then
+  if command -v "${RSYNC}" >/dev/null 2>&1 \
+     && "${RSYNC}" -aH --delete -e "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new" "${DEST}/" "${BACKUP_REMOTO}/"; then
     log "copia fuori dal server aggiornata: ${BACKUP_REMOTO}"
   else
     echo "[$(adesso)] ATTENZIONE: copia fuori dal server NON riuscita verso ${BACKUP_REMOTO} (il salvataggio locale c'e')" >&2
@@ -157,7 +166,7 @@ if [ -n "${BACKUP_REMOTO}" ]; then
 elif [ -n "${BACKUP_RCLONE}" ]; then
   if command -v rclone >/dev/null 2>&1 \
      && rclone sync "${DEST}/db" "${BACKUP_RCLONE}/db" \
-     && rclone sync "${nuova}" "${BACKUP_RCLONE}/file"; then
+     && { [ ! -d "${nuova}" ] || rclone sync "${nuova}" "${BACKUP_RCLONE}/file"; }; then
     log "copia fuori dal server aggiornata: ${BACKUP_RCLONE}"
   else
     echo "[$(adesso)] ATTENZIONE: copia fuori dal server NON riuscita verso ${BACKUP_RCLONE} (rclone assente o errore; il salvataggio locale c'e')" >&2
@@ -172,3 +181,4 @@ log "completato: $(dimensione "${DEST}") occupati dai salvataggi, ${liberi:-?} M
 if [ -n "${liberi}" ] && [ "${liberi}" -lt $(( MB_MINIMI * 2 )) ]; then
   echo "[$(adesso)] ATTENZIONE: lo spazio libero si sta esaurendo (${liberi} MB): allargare il disco o spostare i salvataggi" >&2
 fi
+exit "${esito}"
