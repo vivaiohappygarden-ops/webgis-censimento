@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Organization;
+use App\Support\Interfaccia;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -25,6 +26,12 @@ class HandleInertiaRequests extends Middleware
                     'organization' => Organization::find($user->tenant_id)?->only(['name', 'slug']),
                     'permissions' => $user->getAllPermissions()->pluck('name')->values(),
                 ] : null,
+            ],
+            // La veste del gestionale scelta dall'utente (o quella predefinita):
+            // il layout monta il menu nuovo o quello precedente in base a questa
+            'interfaccia' => [
+                'modo' => Interfaccia::per($user),
+                'predefinita' => Interfaccia::predefinita(),
             ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

@@ -25,6 +25,16 @@ class WebAuthTest extends TestCase
     {
         [, $user] = $this->createTenantUser();
 
+        // Nella veste nuova (di serie dal 26/09/2026) dopo l'accesso si
+        // atterra su Oggi; la mappa resta la casa della veste precedente
+        $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ])->assertRedirect(route('oggi'));
+
+        $user->settings = ['interfaccia' => 'precedente'];
+        $user->save();
+        $this->post('/logout');
         $this->post('/login', [
             'email' => $user->email,
             'password' => 'password',

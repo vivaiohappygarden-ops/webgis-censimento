@@ -161,6 +161,9 @@ Route::prefix('v1')->group(function () {
         Route::get('reports/relazione-annuale/pdf', [\App\Http\Controllers\Api\V1\RelazioneAnnualeController::class, 'pdf']);
         Route::get('reports/relazione-annuale/primo-anno', [\App\Http\Controllers\Api\V1\RelazioneAnnualeController::class, 'primoAnno']);
         Route::get('dashboard/today', [\App\Http\Controllers\Api\V1\DashboardController::class, 'today']);
+        // La pagina Oggi della veste nuova: lista unica in ordine di urgenza (il
+        // controller decide le sezioni in base ai permessi: basta vedere il censimento)
+        Route::get('oggi', [\App\Http\Controllers\Api\V1\OggiController::class, 'riepilogo']);
         Route::get('stats/overview', [\App\Http\Controllers\Api\V1\StatsController::class, 'overview']);
 
         Route::apiResource('price-lists', \App\Http\Controllers\Api\V1\PriceListController::class)

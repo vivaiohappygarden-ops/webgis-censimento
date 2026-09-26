@@ -130,6 +130,54 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   elemento generato porta in `notes` che e' dimostrativo. Prima serve `db:seed`, che crea
   l'organizzazione, il committente e il catalogo.
 
+## Nuova interfaccia del gestionale (dal 26/09/2026)
+
+- Il committente non era soddisfatto di come erano impostate le funzioni ("non mi piace come
+  sono impostate le funzioni nel gestionale"). Su tre bozze ha scelto la **"A", per compiti**:
+  sei voci nel menu (**Oggi, Patrimonio, Lavori, Documenti, Committenti, Impostazioni**), la
+  mappa dentro Patrimonio, la scheda dell'albero che si legge prima di modificarla, i lavori
+  con la loro pagina. **Niente riquadri di numeri** ("sembrano molto AI", 26/09/2026): i
+  conteggi stanno in una frase e nei filtri della lista. Le bozze approvate stanno
+  nell'artefatto Design https://claude.ai/artifact/T6rVDJkUPCKeMVwCspXAAP (pagine
+  `tre-bozze` e `a-definitiva`, schermate AD-01...AD-11).
+- **La veste precedente non si butta** (richiesta esplicita: "se poi non mi piace ripristiniamo
+  quella vecchia"). La scelta e' **per utente**, `users.settings['interfaccia']` (`nuova` o
+  `precedente`), con la predefinita in `config/interfaccia.php` (`INTERFACCIA_PREDEFINITA`,
+  di serie `nuova`); la risolve `App\Support\Interfaccia`, arriva in pagina come prop
+  condivisa `interfaccia.modo`, si cambia con `POST /interfaccia` dal pulsante in fondo al
+  menu ("Torna all'interfaccia precedente" / "Prova la nuova interfaccia"). Il punto di
+  partenza e' il tag git `interfaccia-precedente-2026-09`. Le pagine vecchie **non si
+  cancellano** finche' il blocco nuovo non le sostituisce: nel menu nuovo ogni voce apre la
+  prima delle sue pagine e, mentre ci si sta dentro, mostra le altre come sottovoci
+  (`AppLayout.vue`, `sezioni`); le sottovoci spariranno man mano che i blocchi arrivano.
+- **Oggi** (blocco 1): `Pages/Nuovo/Oggi.vue` legge `GET /api/v1/oggi` (`OggiController`):
+  una sola lista in ordine di urgenza (ritardo, oggi, presto, programma; fra i ritardi prima
+  il piu' vecchio) con il pulsante giusto su ogni riga, e accanto "Arrivato dal campo oggi"
+  (da `sync_operations`), "Documenti da chiudere" (perizie emesse e non validate) e "Portali
+  pubblici" (conteggi con le regole di `PortalQuery`, non una copia). Le definizioni delle
+  scadenze stanno **una volta sola** in `App\Services\Oggi\CoseDaFare`, condiviso con il
+  cruscotto della veste precedente (`DashboardController`): i numeri delle due pagine devono
+  tornare (`OggiNuovoTest`). La frase in testa usa i **conteggi veri**, non le righe
+  elencate (tetto `CoseDaFare::LIMIT` per sezione). Ogni sezione segue i permessi: lavori,
+  ispezioni, segnalazioni, non conformita' e patentini con `works.view`; VTA, campo e
+  documenti con `assets.view`; irrigazione con `areas.view`; portali con `clients.view`.
+- **Casa dopo l'accesso**: nella veste nuova `HomeRoute` porta su `oggi` chiunque veda il
+  censimento o i lavori (nella precedente Oggi resta il cruscotto dei lavori e si atterra
+  sulla mappa). L'operatore di campo atterra sempre sull'app di campo.
+- Le classi ricorrenti della veste nuova stanno in `resources/js/nuovo/stile.js` (pulsanti,
+  etichette di stato, carte): bersagli da 44px sul telefono, 36-38px con il mouse, fuoco
+  visibile. Collegamenti che aprono un modulo: `/lavori?nuovo=1` (nuovo ordine),
+  `/segnalazioni?nuova=1` (nuova segnalazione), `/lavori?ordine=CODICE`,
+  `/censimento/{id}?vta=1`.
+- **Scaletta dei blocchi** (il committente ha chiesto di procedere da soli, 26/09/2026):
+  2 Patrimonio (elenco con anteprima, mappa, alberi e VTA, irrigazione); 3 Scheda
+  dell'elemento (lettura prima della modifica, sezioni, mappa vera, cronologia con foto);
+  4 Lavori con la pagina dell'ordine; 5 Documenti (registri, perizie, esportazioni; poi le
+  **marche temporali** dei registri con il servizio OpenAPI, 10 al giorno gratuite, per
+  fitosanitari, DPI, manutenzioni e tutto cio' che ha valore legale); 6 Committenti;
+  7 Impostazioni (con la pagina della scelta dell'interfaccia); 8 la veste sul telefono.
+  Ogni blocco si verifica sul Comune Demo in Chromium (1440 e 390) e si pubblica.
+
 ## Depliant commerciale (dal 17/09/2026)
 
 - In `docs/depliant/` c'e' il depliant del programma (otto pagine A4): sorgente

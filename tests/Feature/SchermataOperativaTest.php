@@ -39,8 +39,15 @@ class SchermataOperativaTest extends TestCase
 
     public function test_chi_programma_i_lavori_atterra_nel_gestionale(): void
     {
-        $this->assertSame('mappa', HomeRoute::for($this->utenteCon('tecnico')));
-        $this->assertSame('mappa', HomeRoute::for($this->utenteCon('amministratore')));
+        // Nella veste nuova (di serie dal 26/09/2026) la casa dell'ufficio e'
+        // Oggi; chi ha scelto la veste precedente atterra sulla mappa
+        $this->assertSame('oggi', HomeRoute::for($this->utenteCon('tecnico')));
+        $this->assertSame('oggi', HomeRoute::for($this->utenteCon('amministratore')));
+
+        $tecnico = $this->utenteCon('tecnico');
+        $tecnico->settings = ['interfaccia' => 'precedente'];
+        $tecnico->save();
+        $this->assertSame('mappa', HomeRoute::for($tecnico->fresh()));
     }
 
     public function test_i_portali_restano_dove_erano(): void
@@ -100,6 +107,6 @@ class SchermataOperativaTest extends TestCase
         app(PermissionRegistrar::class)->setPermissionsTeamId($organizzazione->id);
         $capo->assignRole('Capo squadra');
 
-        $this->assertSame('mappa', HomeRoute::for($capo->fresh()));
+        $this->assertSame('oggi', HomeRoute::for($capo->fresh()));
     }
 }

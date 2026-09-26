@@ -22,6 +22,9 @@ class HomeRoute
             $user->can('assets.create')
                 && ! $user->can('works.manage')
                 && ! $user->can('users.manage') => 'operatore',
+            // Nella veste nuova (dal 26/09/2026) la casa dell'ufficio e' Oggi:
+            // le cose da fare in ordine di urgenza. Nella precedente resta la mappa
+            Interfaccia::nuova($user) && ($user->can('assets.view') || $user->can('works.view')) => 'oggi',
             $user->can('assets.view') => 'mappa',
             $user->can('portal.view') => 'portale',
             $user->can('impresa.view') => 'impresa',

@@ -576,8 +576,11 @@ onMounted(async () => {
     await carica(() => Promise.all([load(), loadLookups()]));
     await caricaRichieste();
     // Arrivando dalla mappa ("Apri l'ordine") il dettaglio si apre da solo
-    const ordine = new URLSearchParams(window.location.search).get('ordine');
+    const parametri = new URLSearchParams(window.location.search);
+    const ordine = parametri.get('ordine');
     if (ordine) await openDetail(ordine);
+    // Da Oggi ("Nuovo lavoro") il modulo del nuovo ordine si apre da solo
+    if (parametri.get('nuovo') === '1' && canManage.value) creator.open = true;
 });
 </script>
 

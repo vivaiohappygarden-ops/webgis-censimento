@@ -42,6 +42,7 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'settings' => 'array',
             'mfa_enabled' => 'boolean',
             'notify_email' => 'boolean',
         ];

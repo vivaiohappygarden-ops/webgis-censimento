@@ -65,8 +65,23 @@ Route::get('/interno/tls', function (\Illuminate\Http\Request $request) {
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [WebAuthController::class, 'logout'])->name('logout');
 
-    Route::get('/oggi', fn () => Inertia::render('Oggi'))
-        ->middleware('can:works.view')->name('oggi');
+    // Oggi: nella veste nuova e' la pagina di casa di chiunque veda il
+    // censimento (mostra solo le sezioni che l'utente puo' vedere); in quella
+    // precedente resta il cruscotto dei lavori, per chi li vede
+    Route::get('/oggi', function () {
+        $utente = \Illuminate\Support\Facades\Auth::user();
+        if (\App\Support\Interfaccia::nuova($utente)) {
+            abort_unless($utente->can('assets.view') || $utente->can('works.view'), 403);
+
+            return Inertia::render('Nuovo/Oggi');
+        }
+        abort_unless($utente->can('works.view'), 403);
+
+        return Inertia::render('Oggi');
+    })->name('oggi');
+
+    // La scelta fra la nuova interfaccia e la precedente, per il proprio utente
+    Route::post('/interfaccia', [\App\Http\Controllers\Web\InterfacciaController::class, 'scegli'])->name('interfaccia');
 
     Route::get('/mappa', fn () => Inertia::render('Mappa'))
         ->middleware('can:assets.view')->name('mappa');

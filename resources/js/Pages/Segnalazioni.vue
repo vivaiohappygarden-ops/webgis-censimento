@@ -223,6 +223,8 @@ function slaPhaseText(phase) {
 
 onMounted(async () => {
     await carica(() => Promise.all([load(), loadAreas()]));
+    // Da Oggi ("Nuova segnalazione") il modulo si apre da solo
+    if (new URLSearchParams(window.location.search).get('nuova') === '1') openCreator();
 });
 </script>
 
