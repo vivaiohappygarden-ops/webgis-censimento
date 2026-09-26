@@ -11,6 +11,10 @@ const props = defineProps({
     canUpdate: { type: Boolean, default: false },
     // Arrivando dallo scadenzario VTA il modulo si apre già pronto
     apriValutazione: { type: Boolean, default: false },
+    // La scheda della veste nuova mostra i dati dell'albero a modo suo e qui
+    // vuole solo le valutazioni, senza la cornice (sta gia' dentro una carta)
+    soloVta: { type: Boolean, default: false },
+    nudo: { type: Boolean, default: false },
 });
 const emit = defineEmits(['saved']);
 
@@ -421,11 +425,12 @@ onMounted(async () => {
 </script>
 
 <template>
-    <div class="mt-6 rounded-xl border border-gray-200 bg-white p-6">
-        <h2 class="text-sm font-semibold">Scheda albero</h2>
+    <div :class="props.nudo ? '' : 'mt-6 rounded-xl border border-gray-200 bg-white p-6'">
+        <h2 v-if="! props.soloVta" class="text-sm font-semibold">Scheda albero</h2>
 
         <AvvisoErrore class="mt-3" :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
 
+        <template v-if="! props.soloVta">
         <div class="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
             <label class="block text-xs">
                 <span class="text-gray-500">Genere</span>
@@ -599,9 +604,10 @@ onMounted(async () => {
             :disabled="savingTree"
             @click="saveTree"
         >{{ savingTree ? 'Salvataggio…' : 'Salva dati albero' }}</button>
+        </template>
 
         <!-- VTA -->
-        <div class="mt-6 border-t border-gray-100 pt-4">
+        <div :class="props.soloVta ? '' : 'mt-6 border-t border-gray-100 pt-4'">
             <div class="flex items-center justify-between">
                 <h3 class="text-sm font-semibold">Valutazioni di stabilità (VTA)</h3>
                 <button

@@ -182,6 +182,22 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   da file resta nella pagina precedente (`/censimento?importa=1`, dal menu "Altro") finche' non
   trova posto in Documenti. `/lavori?nuovo=1&elementi=a,b` apre il nuovo ordine e collega gli
   elementi appena creato. Prove: `PatrimonioTest`.
+- **Scheda dell'elemento** (blocco 3): `/censimento/{id}` nella veste nuova apre
+  `Pages/Nuovo/Scheda.vue` (`?precedente=1` apre quella di prima): **si legge prima di
+  modificare**, una sezione per volta. Testata con cartellino, specie, etichette (stato, VTA,
+  nascosto dal portale, pagina pubblica, versione) e i pulsanti Nuovo lavoro, Valuta VTA,
+  Stampa, Altro; poi le carte Misure, Identita' e posizione (con vincoli e attributi del
+  tipo), Stabilita' (VTA), Lavori e segnalazioni (dalla cronologia, con i campi espliciti
+  `codice`, `stato_etichetta`, `periodo`, `squadra`, `origine`); a fianco fotografie (con
+  ingrandimento ed eliminazione), mappa e cronologia. Le scritture passano dagli stessi
+  moduli e dalle stesse chiamate di prima: `Components/Nuovo/ModuloAlbero.vue` (misure o
+  identita', stesso `PATCH assets/{id}` con il blocco `tree` completo e la versione),
+  `AssetEditPanel` per cartellino/stato/area/note/attributi, `TreeVtaPanel` con le prop
+  `soloVta` e `nudo` per le valutazioni, `PlantingSitePanel`, `GestionalePanel`,
+  abbattimento ed eliminazione da "Altro". **I dizionari di `config/agronomia.php` sono
+  elenchi di voci** (il valore e' l'etichetta), non mappe: le tendine iterano l'elenco.
+  Il dettaglio `GET assets/{id}` porta la catena area, localita', sede, committente per il
+  percorso in testa. Prove: `SchedaNuovaTest`.
 - **Casa dopo l'accesso**: nella veste nuova `HomeRoute` porta su `oggi` chiunque veda il
   censimento o i lavori (nella precedente Oggi resta il cruscotto dei lavori e si atterra
   sulla mappa). L'operatore di campo atterra sempre sull'app di campo.

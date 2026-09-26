@@ -102,12 +102,19 @@ class CronologiaElemento
             $lavori = WorkOrder::query()->with('team:id,name')->whereIn('id', $idLavori)->get();
             foreach ($lavori as $l) {
                 $data = $l->completed_at?->setTimezone(self::FUSO) ?? $l->planned_end ?? $l->planned_start ?? $l->created_at;
+                $periodo = $l->completed_at
+                    ? $l->completed_at->setTimezone(self::FUSO)->format('d/m/Y')
+                    : implode(' – ', array_unique(array_filter([$l->planned_start?->format('d/m/Y'), $l->planned_end?->format('d/m/Y')])));
                 $eventi[] = $this->evento(
                     $data?->toDateString(),
                     'lavoro',
                     $l->title,
                     [$l->code, mb_strtolower(WorkOrder::STATUS_LABELS[$l->status] ?? $l->status), $l->team?->name],
-                    ['href' => '/lavori?ordine='.$l->code, 'id' => $l->id, 'stato' => $l->status],
+                    // I campi espliciti servono alla tabella "Lavori e segnalazioni"
+                    // della scheda, che non deve rileggere il dettaglio
+                    ['href' => '/lavori?ordine='.$l->code, 'id' => $l->id, 'codice' => $l->code, 'stato' => $l->status,
+                        'stato_etichetta' => WorkOrder::STATUS_LABELS[$l->status] ?? $l->status, 'squadra' => $l->team?->name,
+                        'periodo' => $periodo ?: null, 'origine' => $l->origin],
                 );
             }
         }
@@ -124,7 +131,9 @@ class CronologiaElemento
                 'Segnalazione '.$s->code,
                 ['gravità '.(self::GRAVITA[$s->severity] ?? $s->severity), self::STATO_SEGNALAZIONE[$s->status] ?? $s->status,
                     mb_strimwidth((string) $s->description, 0, 80, '…')],
-                ['href' => '/segnalazioni', 'id' => $s->id],
+                ['href' => '/segnalazioni', 'id' => $s->id, 'codice' => $s->code, 'stato' => $s->status,
+                    'stato_etichetta' => ucfirst(self::STATO_SEGNALAZIONE[$s->status] ?? $s->status),
+                    'gravita' => self::GRAVITA[$s->severity] ?? $s->severity],
             );
         }
 

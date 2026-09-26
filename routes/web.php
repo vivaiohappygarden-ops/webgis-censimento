@@ -95,8 +95,16 @@ Route::middleware('auth')->group(function () {
     Route::get('/patrimonio', fn () => Inertia::render('Nuovo/Patrimonio'))
         ->middleware('can:assets.view')->name('patrimonio');
 
-    Route::get('/censimento/{asset}', fn (string $asset) => Inertia::render('Censimento/Show', ['assetId' => $asset]))
-        ->whereUuid('asset')->middleware('can:assets.view')->name('censimento.show');
+    // La scheda dell'elemento: nella veste nuova (blocco 3) si legge prima di
+    // modificarla, per sezioni; ?precedente=1 apre comunque quella di prima
+    Route::get('/censimento/{asset}', function (string $asset) {
+        $nuova = \App\Support\Interfaccia::nuova(\Illuminate\Support\Facades\Auth::user()) && ! request()->boolean('precedente');
+
+        return Inertia::render($nuova ? 'Nuovo/Scheda' : 'Censimento/Show', [
+            'assetId' => $asset,
+            'navigazioneUrl' => config('portal.navigation_url'),
+        ]);
+    })->whereUuid('asset')->middleware('can:assets.view')->name('censimento.show');
 
     Route::get('/vta', fn () => Inertia::render('Vta'))
         ->middleware('can:assets.view')->name('vta');

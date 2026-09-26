@@ -623,7 +623,7 @@ const TIPO_EVENTO = {
                                         <span class="w-44 shrink-0 text-gray-700">{{ c.etichetta }}</span>
                                         <select v-if="c.tipo === 'select'" v-model="scheda.valori[c.chiave]" class="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-1 text-sm" :disabled="! scheda.scelti[c.chiave]">
                                             <option value="">—</option>
-                                            <option v-for="(etichetta, valore) in (agronomia[c.voci] ?? {})" :key="valore" :value="valore">{{ etichetta }}</option>
+                                            <option v-for="v in (agronomia[c.voci] ?? [])" :key="v" :value="v">{{ v }}</option>
                                         </select>
                                         <input v-else v-model="scheda.valori[c.chiave]" :type="c.tipo" step="any" class="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-1 text-sm" :disabled="! scheda.scelti[c.chiave]">
                                     </label>

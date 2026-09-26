@@ -180,7 +180,10 @@ class AssetController extends Controller implements HasMiddleware
         $asset = Asset::query()
             ->with([
                 'objectType:id,code,name,allowed_geometry',
-                'area:id,name,code',
+                'area:id,name,code,locality_id',
+                'area.locality:id,name,site_id',
+                'area.locality.site:id,name,client_id',
+                'area.locality.site.client:id,name',
                 'tags' => fn ($q) => $q->whereIn('status', ['active', 'unassigned']),
                 'photos' => fn ($q) => $q->orderByDesc('created_at'),
                 'tree',
