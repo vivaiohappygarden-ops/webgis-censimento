@@ -109,7 +109,9 @@ const sezioni = computed(() =>
         },
         {
             label: 'Documenti',
+            schede: true,
             voci: [
+                { label: 'Documenti', href: '/documenti', show: can('works.view') || can('assets.view') },
                 { label: 'Fitosanitari', href: '/fitosanitari', show: can('works.view') },
                 { label: 'Patentini', href: '/patentini', show: can('works.view') },
                 { label: 'Statistiche', href: '/statistiche', show: can('works.view') },
@@ -117,7 +119,9 @@ const sezioni = computed(() =>
         },
         {
             label: 'Committenti',
+            schede: true,
             voci: [
+                { label: 'Committenti', href: '/committenti', show: can('clients.view') },
                 { label: 'Territorio e portali', href: '/territorio', show: can('clients.view') },
                 // Le viste dei portali esterni: per lo staff che le ha stanno
                 // qui dentro, per chi ha solo quelle sono voci a se' (sotto)
@@ -127,9 +131,12 @@ const sezioni = computed(() =>
         },
         {
             label: 'Impostazioni',
+            schede: true,
             voci: [
+                { label: 'Impostazioni', href: '/impostazioni', show: can('assets.view') || can('works.view') || can('clients.view') || can('users.manage') || can('catalog.view') },
                 { label: 'Catalogo', href: '/catalogo', show: can('catalog.view') },
                 { label: 'Utenti e studio', href: '/utenti', show: can('users.manage') },
+                { label: 'Listini', href: '/listini', show: can('works.view') },
             ],
         },
         { label: 'Portale', href: '/portale', show: can('portal.view') && ! can('clients.view') },

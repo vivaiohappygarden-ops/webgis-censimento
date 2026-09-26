@@ -4,6 +4,8 @@ import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import * as maplibregl from 'maplibre-gl';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import TestataSezione from '@/Components/Nuovo/TestataSezione.vue';
+import { SCHEDE_COMMITTENTI } from '@/nuovo/sezioni';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import { usaCaricamento } from '@/caricamento';
@@ -20,6 +22,8 @@ import { fetchPdf } from '@/pdf';
  */
 
 const page = usePage();
+// Nella veste nuova la pagina porta la testata della sua sezione
+const nuova = computed(() => page.props.interfaccia?.modo === 'nuova');
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('clients.manage'));
 const canDeleteAree = computed(() => (page.props.auth?.user?.permissions ?? []).includes('areas.delete'));
 
@@ -813,7 +817,19 @@ async function eliminaVincolo(vincolo) {
     }
 }
 
-onMounted(() => carica(loadClients));
+onMounted(async () => {
+    await carica(loadClients);
+    // Da Committenti (veste nuova): il committente si apre gia' selezionato,
+    // sulla scheda chiesta; ?nuovo=1 apre il modulo del nuovo committente
+    const parametri = new URLSearchParams(window.location.search);
+    const idCliente = parametri.get('cliente');
+    const cliente = idCliente ? clients.value.find((c) => c.id === idCliente) : null;
+    if (cliente) {
+        await selezionaCliente(cliente);
+        if (['sedi', 'portale', 'vincoli', 'carto'].includes(parametri.get('scheda'))) schedaCliente.value = parametri.get('scheda');
+    }
+    if (parametri.get('nuovo') === '1' && canManage.value) forms.client.open = true;
+});
 </script>
 
 <template>
@@ -821,6 +837,7 @@ onMounted(() => carica(loadClients));
 
     <AppLayout>
         <div class="p-6">
+            <div v-if="nuova" class="mb-4"><TestataSezione titolo="Committenti" attiva="territorio" :schede="SCHEDE_COMMITTENTI" /></div>
             <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold">Territorio</h1>

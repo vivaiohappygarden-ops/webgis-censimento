@@ -3,10 +3,14 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import TestataSezione from '@/Components/Nuovo/TestataSezione.vue';
+import { SCHEDE_IMPOSTAZIONI } from '@/nuovo/sezioni';
 import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import { avvisoCaricamento } from '@/avvisi';
 
 const page = usePage();
+// Nella veste nuova la pagina porta la testata della sua sezione
+const nuova = computed(() => page.props.interfaccia?.modo === 'nuova');
 const myId = computed(() => page.props.auth?.user?.id);
 
 const ROLE_LABELS = {
@@ -529,6 +533,7 @@ onMounted(() => {
 
     <AppLayout>
         <div class="p-6">
+            <div v-if="nuova" class="mb-4"><TestataSezione titolo="Impostazioni" attiva="utenti" :schede="SCHEDE_IMPOSTAZIONI" /></div>
             <div class="mb-4 flex items-center justify-between">
                 <div>
                     <h1 class="text-xl font-semibold">Utenti</h1>
@@ -600,7 +605,7 @@ onMounted(() => {
             </div>
 
             <!-- Ruoli e permessi -->
-            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" data-test="ruoli">
+            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" id="ruoli" data-test="ruoli">
                 <div class="flex flex-wrap items-start justify-between gap-2">
                     <div>
                         <h2 class="text-sm font-semibold">Ruoli e permessi</h2>
@@ -725,7 +730,7 @@ onMounted(() => {
             </section>
 
             <!-- Intestazione e firma dei documenti stampati -->
-            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" data-test="perizia-settings">
+            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" id="firma" data-test="perizia-settings">
                 <h2 class="text-sm font-semibold">Intestazione e firma dei documenti</h2>
                 <p class="mt-1 text-xs text-gray-500">
                     Chi firma: nome, titolo professionale, iscrizione all'albo e recapiti. Compaiono in
@@ -769,7 +774,7 @@ onMounted(() => {
             </section>
 
             <!-- Intervalli di ricontrollo VTA per classe di propensione al cedimento -->
-            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" data-test="vta-intervalli">
+            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" id="vta-intervalli" data-test="vta-intervalli">
                 <h2 class="text-sm font-semibold">Intervalli di ricontrollo VTA</h2>
                 <p class="mt-1 text-xs text-gray-500">
                     Quando una valutazione si salva senza data di prossimo controllo, il programma la
@@ -806,7 +811,7 @@ onMounted(() => {
             </section>
 
             <!-- Squadre e imprese esterne -->
-            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" data-test="squadre">
+            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" id="squadre" data-test="squadre">
                 <h2 class="text-sm font-semibold">Squadre e imprese esterne</h2>
                 <p class="mt-1 text-xs text-gray-500">
                     Le squadre raggruppano chi lavora insieme e ricevono gli ordini di lavoro.
@@ -893,7 +898,7 @@ onMounted(() => {
             </section>
 
             <!-- Collegamento al gestionale WordPress -->
-            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" data-test="gest-settings">
+            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" id="gestionale" data-test="gest-settings">
                 <h2 class="text-sm font-semibold">Collegamento al gestionale giardini (WordPress)</h2>
                 <p class="mt-1 text-xs text-gray-500">
                     Dalla scheda di un elemento si può inviare al gestionale un intervento da fare o da

@@ -3,10 +3,14 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import TestataSezione from '@/Components/Nuovo/TestataSezione.vue';
+import { SCHEDE_IMPOSTAZIONI } from '@/nuovo/sezioni';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import { usaCaricamento } from '@/caricamento';
 
 const page = usePage();
+// Nella veste nuova la pagina porta la testata della sua sezione
+const nuova = computed(() => page.props.interfaccia?.modo === 'nuova');
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('works.manage'));
 
 const lists = ref([]);
@@ -180,6 +184,7 @@ onMounted(() => carica(load));
 
     <AppLayout>
         <div class="p-6">
+            <div v-if="nuova" class="mb-4"><TestataSezione titolo="Impostazioni" attiva="listini" :schede="SCHEDE_IMPOSTAZIONI" /></div>
             <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
 
             <div class="mb-4 flex items-center justify-between">

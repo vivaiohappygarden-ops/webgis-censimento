@@ -3,11 +3,15 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import TestataSezione from '@/Components/Nuovo/TestataSezione.vue';
+import { SCHEDE_DOCUMENTI } from '@/nuovo/sezioni';
 import ScegliVoce from '@/Components/ScegliVoce.vue';
 import { avvisoCaricamento } from '@/avvisi';
 import { fetchPdf } from '@/pdf';
 
 const page = usePage();
+// Nella veste nuova la pagina porta la testata della sua sezione
+const nuova = computed(() => page.props.interfaccia?.modo === 'nuova');
 const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
 const canManage = computed(() => permissions.value.includes('works.manage'));
 
@@ -298,6 +302,7 @@ onMounted(() => {
     <Head title="Fitosanitari" />
     <AppLayout>
         <div class="mx-auto max-w-7xl px-4 py-6">
+            <div v-if="nuova" class="mb-4"><TestataSezione titolo="Documenti" attiva="fitosanitari" :schede="SCHEDE_DOCUMENTI" /></div>
             <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold">Registro dei trattamenti fitosanitari</h1>

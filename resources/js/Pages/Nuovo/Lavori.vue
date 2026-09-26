@@ -80,7 +80,8 @@ const meta = reactive({ total: 0, current_page: 1, last_page: 1, from: 0, to: 0 
 const caricamento = ref(false);
 const inRitardo = ref(null);
 const filtri = reactive({
-    q: parametri.get('q') ?? '', stato: 'aperti', clientId: '', teamId: '', da: '', a: '', soloRitardo: parametri.get('ritardo') === '1', page: 1,
+    q: parametri.get('q') ?? '', stato: 'aperti', clientId: /^[0-9a-f-]{36}$/i.test(parametri.get('client_id') ?? '') ? parametri.get('client_id') : '',
+    teamId: '', da: '', a: '', soloRitardo: parametri.get('ritardo') === '1', page: 1,
 });
 const STATI = [['aperti', 'Stato: aperti'], ['tutti', 'Stato: tutti'], ...Object.entries(WORK_STATUS_LABELS).map(([v, l]) => [v, `Stato: ${l.toLowerCase()}`])];
 

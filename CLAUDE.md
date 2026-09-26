@@ -219,6 +219,27 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   ordini sono `/lavori/{id}`; il vecchio `?ordine=CODICE` viene risolto dalla pagina nuova.
   `Components/Nuovo/NuovoOrdine.vue` e' il modulo di creazione (`?nuovo=1&elementi=a,b`).
   Prove: `LavoriNuoviTest`.
+- **Documenti, Committenti, Impostazioni** (blocchi 5, 6 e 7): tre sezioni che riuniscono le
+  pagine di prima senza riscriverle. `/documenti` (`Pages/Nuovo/Documenti.vue`, `GET
+  /api/v1/documenti` in `DocumentiController`) mette in un elenco solo perizie emesse, verbali
+  di ispezione chiusi, preventivi, SAL ed esportazioni gia' fatte (dal registro `audit_logs`,
+  azioni `export.*`), con schede per tipo, ricerca a parole, committente, anno e la
+  scorciatoia "da validare"; a fianco "Da produrre" (bilancio arboreo, relazione annuale,
+  registro fitosanitari: PDF a richiesta con i parametri dei loro endpoint) e una nota onesta:
+  le marche temporali **non sono ancora attive** e la pagina lo dice. Ogni sorgente esce solo
+  a chi ha il permesso della sua pagina (perizie ed esportazioni con `assets.view`; verbali,
+  preventivi e SAL con `works.view`). `/committenti` (`Pages/Nuovo/Committenti.vue`, `GET
+  committenti/riepilogo` in `CommittentiController`) e' l'anagrafica con elementi, aree,
+  lavori aperti e stato del portale per committente, con la scheda del committente scelto e le
+  sue aree; le scritture restano in Territorio, che ora accetta `?cliente=ID`, `?scheda=`
+  (sedi, portale, vincoli, carto) e `?nuovo=1`. `/impostazioni` (`Pages/Nuovo/Impostazioni.vue`)
+  e' la casa delle regolazioni: voci che portano alle pagine che gia' fanno quel lavoro (le
+  sezioni di Utenti hanno le ancore `#ruoli`, `#firma`, `#vta-intervalli`, `#squadre`,
+  `#gestionale`) e la scelta dell'interfaccia. Le schede di ogni sezione stanno **una volta
+  sola** in `resources/js/nuovo/sezioni.js` e le monta `Components/Nuovo/TestataSezione.vue`,
+  anche sulle pagine di prima (Fitosanitari, Patentini, Statistiche, Territorio, Utenti,
+  Catalogo, Listini) quando la veste e' nuova. Patrimonio accetta `?client_id=` e `?area_id=`,
+  Lavori `?client_id=`. Prove: `SezioniNuoveTest`.
 - **Casa dopo l'accesso**: nella veste nuova `HomeRoute` porta su `oggi` chiunque veda il
   censimento o i lavori (nella precedente Oggi resta il cruscotto dei lavori e si atterra
   sulla mappa). L'operatore di campo atterra sempre sull'app di campo.
@@ -227,14 +248,17 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   visibile. Collegamenti che aprono un modulo: `/lavori?nuovo=1` (nuovo ordine),
   `/segnalazioni?nuova=1` (nuova segnalazione), `/lavori?ordine=CODICE`,
   `/censimento/{id}?vta=1`.
-- **Scaletta dei blocchi** (il committente ha chiesto di procedere da soli, 26/09/2026):
-  2 Patrimonio (elenco con anteprima, mappa, alberi e VTA, irrigazione); 3 Scheda
-  dell'elemento (lettura prima della modifica, sezioni, mappa vera, cronologia con foto);
-  4 Lavori con la pagina dell'ordine; 5 Documenti (registri, perizie, esportazioni; poi le
-  **marche temporali** dei registri con il servizio OpenAPI, 10 al giorno gratuite, per
-  fitosanitari, DPI, manutenzioni e tutto cio' che ha valore legale); 6 Committenti;
-  7 Impostazioni (con la pagina della scelta dell'interfaccia); 8 la veste sul telefono.
-  Ogni blocco si verifica sul Comune Demo in Chromium (1440 e 390) e si pubblica.
+- **Stato della veste nuova (26/09/2026)**: gli otto blocchi della scaletta sono fatti e
+  pubblicati (Oggi; Patrimonio; Scheda; Lavori e Ordine; Documenti; Committenti; Impostazioni;
+  telefono). Restano pagine di prima, montate dentro le sezioni nuove con la loro testata:
+  Mappa, scadenzario VTA, Irrigazione, Segnalazioni, Ispezioni, Fitosanitari, Patentini,
+  Statistiche, Territorio, Utenti, Catalogo, Listini, e i componenti di Agenda, Gantt,
+  qualita', preventivi, SAL, rendiconto e piani. Si rifanno se e quando il committente lo
+  chiede: la veste nuova e' un ordine diverso delle stesse funzioni, non una riscrittura.
+  **Da fare dopo**: le marche temporali dei registri con il servizio OpenAPI (10 al giorno
+  gratuite) per fitosanitari, DPI, manutenzioni e tutto cio' che ha valore legale; la pagina
+  Documenti gia' dichiara che non sono attive. Ogni pagina nuova si verifica sul Comune Demo in
+  Chromium a 390, 768, 1024 e 1440 (copioni in `scratchpad/verifica-blocco*` della sessione).
 
 ## Depliant commerciale (dal 17/09/2026)
 

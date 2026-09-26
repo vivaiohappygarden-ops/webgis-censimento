@@ -164,6 +164,9 @@ Route::prefix('v1')->group(function () {
         // La pagina Oggi della veste nuova: lista unica in ordine di urgenza (il
         // controller decide le sezioni in base ai permessi: basta vedere il censimento)
         Route::get('oggi', [\App\Http\Controllers\Api\V1\OggiController::class, 'riepilogo']);
+        // Veste nuova (blocchi 5 e 6): i documenti in un elenco solo e i committenti con i loro numeri
+        Route::get('documenti', [\App\Http\Controllers\Api\V1\DocumentiController::class, 'index']);
+        Route::get('committenti/riepilogo', [\App\Http\Controllers\Api\V1\CommittentiController::class, 'riepilogo'])->middleware('can:clients.view');
         Route::get('stats/overview', [\App\Http\Controllers\Api\V1\StatsController::class, 'overview']);
 
         Route::apiResource('price-lists', \App\Http\Controllers\Api\V1\PriceListController::class)

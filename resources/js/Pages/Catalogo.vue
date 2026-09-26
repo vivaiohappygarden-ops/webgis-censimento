@@ -3,11 +3,15 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import TestataSezione from '@/Components/Nuovo/TestataSezione.vue';
+import { SCHEDE_IMPOSTAZIONI } from '@/nuovo/sezioni';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import { usaCaricamento } from '@/caricamento';
 import { corrisponde } from '@/ricerca';
 
 const page = usePage();
+// Nella veste nuova la pagina porta la testata della sua sezione
+const nuova = computed(() => page.props.interfaccia?.modo === 'nuova');
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('catalog.manage'));
 
 const mainTypes = ref([]);
@@ -105,6 +109,7 @@ const countTypes = (m) => m.sub_types.reduce((acc, s) => acc + s.object_types.le
 
     <AppLayout>
         <div class="p-6">
+            <div v-if="nuova" class="mb-4"><TestataSezione titolo="Impostazioni" attiva="catalogo" :schede="SCHEDE_IMPOSTAZIONI" /></div>
             <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
 
             <div class="mb-4">

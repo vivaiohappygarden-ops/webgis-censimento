@@ -1,9 +1,15 @@
 <script setup>
-import { onMounted, ref } from 'vue';
-import { Head } from '@inertiajs/vue3';
+import { computed, onMounted, ref } from 'vue';
+import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import TestataSezione from '@/Components/Nuovo/TestataSezione.vue';
+import { SCHEDE_DOCUMENTI } from '@/nuovo/sezioni';
 import { avvisoCaricamento } from '@/avvisi';
+
+const page = usePage();
+// Nella veste nuova la pagina porta la testata della sua sezione
+const nuova = computed(() => page.props.interfaccia?.modo === 'nuova');
 
 const data = ref(null);
 const loading = ref(false);
@@ -81,6 +87,7 @@ onMounted(load);
     <Head title="Statistiche" />
     <AppLayout>
         <div class="mx-auto max-w-6xl px-4 py-6">
+            <div v-if="nuova" class="mb-4"><TestataSezione titolo="Documenti" attiva="statistiche" :schede="SCHEDE_DOCUMENTI" /></div>
             <div class="mb-4">
                 <h1 class="text-xl font-semibold">Statistiche</h1>
                 <p class="text-sm text-gray-500">I numeri d'insieme del patrimonio e dell'attività; il dettaglio resta nelle pagine dedicate</p>

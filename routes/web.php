@@ -132,6 +132,19 @@ Route::middleware('auth')->group(function () {
     Route::get('/lavori/{ordine}', fn (string $ordine) => Inertia::render('Nuovo/Ordine', ['ordineId' => $ordine]))
         ->whereUuid('ordine')->middleware('can:works.view')->name('lavori.ordine');
 
+    // Veste nuova (blocchi 5, 6 e 7): le sezioni che riuniscono le pagine di prima
+    Route::get('/documenti', function () {
+        $utente = \Illuminate\Support\Facades\Auth::user();
+        abort_unless($utente->can('assets.view') || $utente->can('works.view'), 403);
+
+        return Inertia::render('Nuovo/Documenti');
+    })->name('documenti');
+    Route::get('/committenti', fn () => Inertia::render('Nuovo/Committenti'))
+        ->middleware('can:clients.view')->name('committenti');
+    Route::get('/impostazioni', fn () => Inertia::render('Nuovo/Impostazioni', [
+        'dominioPortali' => (string) config('portal.base_host', ''),
+    ]))->name('impostazioni');
+
     Route::get('/listini', fn () => Inertia::render('Listini'))
         ->middleware('can:works.view')->name('listini');
 

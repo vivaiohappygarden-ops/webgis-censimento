@@ -37,8 +37,8 @@ const riepilogo = ref(null);
 const VTA_AMMESSI = ['scaduta', 'in_scadenza', 'mai', 'valutato'];
 const filtri = reactive({
     q: parametri.get('q') ?? '',
-    clientId: '',
-    areaId: '',
+    clientId: /^[0-9a-f-]{36}$/i.test(parametri.get('client_id') ?? '') ? parametri.get('client_id') : '',
+    areaId: /^[0-9a-f-]{36}$/i.test(parametri.get('area_id') ?? '') ? parametri.get('area_id') : '',
     tipoId: '',
     status: '',
     vista: 'censimento',
