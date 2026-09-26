@@ -112,7 +112,7 @@ class CronologiaElemento
                     [$l->code, mb_strtolower(WorkOrder::STATUS_LABELS[$l->status] ?? $l->status), $l->team?->name],
                     // I campi espliciti servono alla tabella "Lavori e segnalazioni"
                     // della scheda, che non deve rileggere il dettaglio
-                    ['href' => '/lavori?ordine='.$l->code, 'id' => $l->id, 'codice' => $l->code, 'stato' => $l->status,
+                    ['href' => '/lavori/'.$l->id, 'id' => $l->id, 'codice' => $l->code, 'stato' => $l->status,
                         'stato_etichetta' => WorkOrder::STATUS_LABELS[$l->status] ?? $l->status, 'squadra' => $l->team?->name,
                         'periodo' => $periodo ?: null, 'origine' => $l->origin],
                 );

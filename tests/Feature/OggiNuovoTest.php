@@ -104,7 +104,7 @@ class OggiNuovoTest extends TestCase
         $this->assertStringContainsString($vecchio->code, $oggi['voci'][0]['titolo']);
         $this->assertSame('vta', $oggi['voci'][1]['tipo']);
         $this->assertStringContainsString($recente->code, $oggi['voci'][2]['titolo']);
-        $this->assertSame('/lavori?ordine='.$vecchio->code, $oggi['voci'][0]['azioni'][0]['href']);
+        $this->assertSame('/lavori/'.$vecchio->id, $oggi['voci'][0]['azioni'][0]['href']);
         $this->assertSame(['Valuta', 'Scheda'], array_column($oggi['voci'][1]['azioni'], 'label'));
         $this->assertSame("/censimento/{$albero}?vta=1", $oggi['voci'][1]['azioni'][0]['href']);
         $this->assertStringContainsString('doveva chiudersi il', $oggi['voci'][0]['dettaglio']);

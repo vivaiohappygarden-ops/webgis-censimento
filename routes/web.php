@@ -120,8 +120,17 @@ Route::middleware('auth')->group(function () {
         'statiVegetativi' => config('agronomia.stato_vegetativo'),
     ]))->middleware('can:assets.create')->name('operatore');
 
-    Route::get('/lavori', fn () => Inertia::render('Lavori'))
-        ->middleware('can:works.view')->name('lavori');
+    // Lavori: nella veste nuova (blocco 4) l'elenco con l'anteprima e le schede
+    // Agenda/Gantt; ?precedente=1 apre la pagina di prima. La pagina
+    // dell'ordine e' nuova e non ha un doppione nella veste precedente
+    Route::get('/lavori', function () {
+        $nuova = \App\Support\Interfaccia::nuova(\Illuminate\Support\Facades\Auth::user()) && ! request()->boolean('precedente');
+
+        return Inertia::render($nuova ? 'Nuovo/Lavori' : 'Lavori');
+    })->middleware('can:works.view')->name('lavori');
+
+    Route::get('/lavori/{ordine}', fn (string $ordine) => Inertia::render('Nuovo/Ordine', ['ordineId' => $ordine]))
+        ->whereUuid('ordine')->middleware('can:works.view')->name('lavori.ordine');
 
     Route::get('/listini', fn () => Inertia::render('Listini'))
         ->middleware('can:works.view')->name('listini');

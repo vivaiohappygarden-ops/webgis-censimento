@@ -3,12 +3,15 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import TestataLavori from '@/Components/Nuovo/TestataLavori.vue';
 import ScegliVoce from '@/Components/ScegliVoce.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import VisteSalvate from '@/Components/VisteSalvate.vue';
 import { usaCaricamento } from '@/caricamento';
 
 const page = usePage();
+// Nella veste nuova la pagina porta la testata di Lavori con le sue schede
+const nuova = computed(() => page.props.interfaccia?.modo === 'nuova');
 // Un errore di caricamento va detto, non lasciato indovinare da un elenco vuoto
 const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('works.manage'));
@@ -233,6 +236,7 @@ onMounted(async () => {
 
     <AppLayout>
         <div class="p-6">
+            <div v-if="nuova" class="mb-4"><TestataLavori attiva="segnalazioni" /></div>
             <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
 
             <div class="mb-4 flex items-center justify-between">

@@ -195,6 +195,8 @@ Route::prefix('v1')->group(function () {
             ->whereUuid('work_order');
         Route::post('work-orders/{id}/transition', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'transition'])->whereUuid('id');
         Route::post('work-orders/{id}/day', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'toggleDay'])->whereUuid('id');
+        // Veste nuova (blocco 4): la linea del tempo dell'ordine con i documenti collegati
+        Route::get('work-orders/{id}/cronologia', [\App\Http\Controllers\Api\V1\WorkOrderController::class, 'cronologia'])->whereUuid('id');
 
         // Piani di manutenzione pluriennali e generazione degli ordini dovuti
         Route::get('piani-manutenzione', [\App\Http\Controllers\Api\V1\MaintenancePlanController::class, 'index']);

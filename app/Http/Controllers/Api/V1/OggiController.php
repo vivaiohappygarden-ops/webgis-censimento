@@ -69,7 +69,7 @@ class OggiController extends Controller
                 $voci[] = $this->voce('lavoro', 'lavori', $o['id'], $o['code'].' · '.$o['title'],
                     [$o['area'], $o['team'], self::STATO_LAVORO[$o['status']] ?? $o['status'], 'doveva chiudersi il '.$this->data($o['planned_end'])],
                     'ritardo', $this->giorniDa($o['planned_end'], $today),
-                    [['label' => 'Apri', 'href' => '/lavori?ordine='.$o['code']]]);
+                    [['label' => 'Apri', 'href' => '/lavori/'.$o['id']]]);
             }
             foreach ($lavori['week'] as $o) {
                 $iniziato = $o['planned_start'] <= $today->toDateString();
@@ -77,7 +77,7 @@ class OggiController extends Controller
                     [$o['area'], $o['team'], self::STATO_LAVORO[$o['status']] ?? $o['status'],
                         $iniziato ? 'in programma dal '.$this->data($o['planned_start']) : 'inizia il '.$this->data($o['planned_start'])],
                     $iniziato ? 'oggi' : 'programma', $this->giorniA($o['planned_start'], $today),
-                    [['label' => 'Apri', 'href' => '/lavori?ordine='.$o['code']]]);
+                    [['label' => 'Apri', 'href' => '/lavori/'.$o['id']]]);
             }
 
             $ispezioni = $cose->inspections();

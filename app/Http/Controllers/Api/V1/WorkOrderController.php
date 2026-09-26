@@ -3,18 +3,31 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Area;
 use App\Models\Asset;
+use App\Models\Client;
+use App\Models\PriceList;
+use App\Models\Team;
+use App\Models\User;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderAsset;
+use App\Models\WorkType;
+use App\Services\Oggi\CoseDaFare;
+use App\Services\Works\CronologiaLavoro;
+use App\Services\Works\ImpresaDelCommittente;
 use App\Services\Works\QuantitaDaGeometria;
-use App\Support\RicercaTestuale;
+use App\Services\Works\WorkOrderEconomics;
+use App\Support\AssetStatus;
 use App\Support\Audit;
 use App\Support\ListQuery;
+use App\Support\RicercaTestuale;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -24,7 +37,7 @@ class WorkOrderController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:works.view', only: ['index', 'show']),
+            new Middleware('can:works.view', only: ['index', 'show', 'cronologia']),
             new Middleware('can:works.manage', only: ['store', 'update', 'destroy', 'transition', 'toggleDay', 'attachAsset', 'updateAsset', 'detachAsset']),
         ];
     }
@@ -58,6 +71,18 @@ class WorkOrderController extends Controller implements HasMiddleware
         if ($request->filled('q')) {
             $request->validate(['q' => RicercaTestuale::regole()]);
             RicercaTestuale::applica($query, $request->string('q'), ['code', 'title', 'description']);
+        }
+
+        // Veste nuova: "aperti" (non chiusi ne' annullati) e "in ritardo"
+        // (fine prevista superata, ancora in lavorazione), con le date del
+        // cruscotto Oggi
+        if ($request->boolean('aperti')) {
+            $query->whereNotIn('status', ['completed', 'cancelled']);
+        }
+        if ($request->boolean('in_ritardo')) {
+            $query->whereIn('status', WorkOrder::FIELD_STATUSES)
+                ->whereNotNull('planned_end')
+                ->whereDate('planned_end', '<', now(CoseDaFare::TIMEZONE)->toDateString());
         }
 
         // Finestra dell'agenda: ordini il cui periodo previsto interseca [from, to]
@@ -155,7 +180,9 @@ class WorkOrderController extends Controller implements HasMiddleware
                 'area:id,name,code', 'client:id,name',
                 'priceList:id,code,name,currency',
                 'assets.asset' => fn ($q) => $q->select('assets.id', 'census_code', 'object_type_id', 'status', 'computed_area_sqm', 'computed_length_m')
-                    ->with('objectType:id,code,name'),
+                    ->selectRaw('ST_AsGeoJSON(assets.geom)::json AS geom_geojson')
+                    ->withCasts(['geom_geojson' => 'array'])
+                    ->with(['objectType:id,code,name', 'tree:asset_id,species,common_name']),
                 'assets.workType:id,code,name,unit',
                 'logs' => fn ($q) => $q->with('operator:id,name')->orderByDesc('started_at'),
                 'checks' => fn ($q) => $q->with('checker:id,name')->orderByDesc('checked_at'),
@@ -176,7 +203,7 @@ class WorkOrderController extends Controller implements HasMiddleware
             $payload['assets'][$i]['unita_geometrica'] = $unit;
         }
 
-        $economics = app(\App\Services\Works\WorkOrderEconomics::class);
+        $economics = app(WorkOrderEconomics::class);
 
         return response()->json([
             'data' => [
@@ -186,6 +213,12 @@ class WorkOrderController extends Controller implements HasMiddleware
                 'previsto' => $economics->previsto($workOrder),
             ],
         ]);
+    }
+
+    /** La linea del tempo dell'ordine, i documenti collegati e i conteggi per elemento. */
+    public function cronologia(string $id, CronologiaLavoro $cronologia): JsonResponse
+    {
+        return response()->json(['data' => $cronologia->per(WorkOrder::query()->findOrFail($id))]);
     }
 
     public function update(Request $request, string $id): JsonResponse
@@ -336,8 +369,8 @@ class WorkOrderController extends Controller implements HasMiddleware
 
     private function plannedDaysCount(string $start, string $end): int
     {
-        return \Illuminate\Support\Carbon::parse($start)
-            ->diffInDays(\Illuminate\Support\Carbon::parse($end)) + 1;
+        return Carbon::parse($start)
+            ->diffInDays(Carbon::parse($end)) + 1;
     }
 
     public function attachAsset(Request $request, string $id): JsonResponse
@@ -358,14 +391,14 @@ class WorkOrderController extends Controller implements HasMiddleware
         // una scheda in archivio (abbattuta o dismessa) non è più patrimonio
         // su cui si lavora. Senza questa guardia l'aggancio singolo sarebbe
         // la porta di servizio che scavalca la regola
-        if (\App\Support\AssetStatus::inArchivio($asset->status)) {
+        if (AssetStatus::inArchivio($asset->status)) {
             throw ValidationException::withMessages([
-                'asset_id' => 'Elemento in archivio ('.\App\Support\AssetStatus::label($asset->status).'): '.
+                'asset_id' => 'Elemento in archivio ('.AssetStatus::label($asset->status).'): '.
                     'non si collega a un ordine di lavoro. Se serve, prima ripristina la scheda.',
             ]);
         }
         $rowType = ! empty($data['work_type_id'])
-            ? \App\Models\WorkType::query()->findOrFail($data['work_type_id'])
+            ? WorkType::query()->findOrFail($data['work_type_id'])
             : null;
 
         $duplicateMessage = ValidationException::withMessages([
@@ -395,7 +428,7 @@ class WorkOrderController extends Controller implements HasMiddleware
                 'unit' => $unita,
                 'notes' => $data['notes'] ?? null,
             ]);
-        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+        } catch (UniqueConstraintViolationException) {
             throw $duplicateMessage;
         }
 
@@ -409,7 +442,7 @@ class WorkOrderController extends Controller implements HasMiddleware
      *
      * @return array{0: ?float, 1: ?string}
      */
-    private function quantitaProposta(WorkOrder $workOrder, Asset $asset, array $data, ?\App\Models\WorkType $rowType): array
+    private function quantitaProposta(WorkOrder $workOrder, Asset $asset, array $data, ?WorkType $rowType): array
     {
         if (isset($data['planned_quantity'])) {
             return [$data['planned_quantity'], $data['unit'] ?? null];
@@ -514,7 +547,7 @@ class WorkOrderController extends Controller implements HasMiddleware
      */
     private function assertImpresaDelCommittente(?string $teamId, ?string $clientId): void
     {
-        \App\Services\Works\ImpresaDelCommittente::verifica($teamId, $clientId);
+        ImpresaDelCommittente::verifica($teamId, $clientId);
     }
 
     private function validated(Request $request, bool $required = true): array
@@ -544,20 +577,20 @@ class WorkOrderController extends Controller implements HasMiddleware
 
         // I riferimenti devono appartenere al tenant (404 se estranei)
         foreach ([
-            'client_id' => \App\Models\Client::class,
-            'area_id' => \App\Models\Area::class,
-            'work_type_id' => \App\Models\WorkType::class,
-            'team_id' => \App\Models\Team::class,
+            'client_id' => Client::class,
+            'area_id' => Area::class,
+            'work_type_id' => WorkType::class,
+            'team_id' => Team::class,
         ] as $key => $model) {
             if (! empty($data[$key])) {
                 $model::query()->findOrFail($data[$key]);
             }
         }
         if (! empty($data['assigned_to'])) {
-            \App\Models\User::query()->findOrFail($data['assigned_to']);
+            User::query()->findOrFail($data['assigned_to']);
         }
         if (! empty($data['price_list_id'])) {
-            $priceList = \App\Models\PriceList::query()->findOrFail($data['price_list_id']);
+            $priceList = PriceList::query()->findOrFail($data['price_list_id']);
             // Gli ordini esistenti continuano a valorizzare col loro listino,
             // ma un listino disattivato non si applica a ordini nuovi o in corso
             if (! $priceList->is_active) {

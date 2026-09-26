@@ -155,7 +155,7 @@ class PatrimonioTest extends TestCase
         $this->assertSame('Potatura di contenimento', $lavoro['titolo']);
         $this->assertStringContainsString($ordine->code, $lavoro['dettaglio']);
         $this->assertStringContainsString('completato', $lavoro['dettaglio']);
-        $this->assertSame('/lavori?ordine='.$ordine->code, $lavoro['href']);
+        $this->assertSame('/lavori/'.$ordine->id, $lavoro['href']);
 
         $vta = $eventi->firstWhere('tipo', 'valutazione');
         $this->assertSame('Valutazione VTA · classe C', $vta['titolo']);

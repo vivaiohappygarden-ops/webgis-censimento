@@ -97,8 +97,11 @@ const sezioni = computed(() =>
         },
         {
             label: 'Lavori',
+            // Le schede (ordini, agenda, gantt, segnalazioni, ispezioni) stanno
+            // nella testata della pagina (blocco 4)
+            schede: true,
             voci: [
-                { label: 'Ordini e agenda', href: '/lavori', show: can('works.view') },
+                { label: 'Ordini', href: '/lavori', show: can('works.view') },
                 { label: 'Segnalazioni', href: '/segnalazioni', show: can('works.view') },
                 { label: 'Ispezioni', href: '/ispezioni', show: can('works.view') },
                 { label: 'Listini', href: '/listini', show: can('works.view') },

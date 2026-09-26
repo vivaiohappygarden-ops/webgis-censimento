@@ -198,6 +198,27 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   elenchi di voci** (il valore e' l'etichetta), non mappe: le tendine iterano l'elenco.
   Il dettaglio `GET assets/{id}` porta la catena area, localita', sede, committente per il
   percorso in testa. Prove: `SchedaNuovaTest`.
+- **Lavori** (blocco 4): `/lavori` nella veste nuova apre `Pages/Nuovo/Lavori.vue` (`?precedente=1`
+  apre la pagina di prima): l'elenco degli ordini con ricerca, filtri (stato con "aperti" di
+  serie, committente, squadra, periodo), la scorciatoia "In ritardo" con il numero, la chiusura
+  in blocco con prova a vuoto, le richieste delle imprese e a destra l'anteprima dell'ordine.
+  Agenda, Gantt, qualita', preventivi, SAL, rendiconto e piani sono **gli stessi componenti di
+  prima** montati dalla pagina nuova (`?vista=`); Segnalazioni e Ispezioni restano le pagine di
+  prima con la testata `Components/Nuovo/TestataLavori.vue`. **Ogni ordine ha la sua pagina**
+  `/lavori/{id}` (`Pages/Nuovo/Ordine.vue`, prima era un cassetto sopra l'elenco): testata con
+  stato e passaggi ammessi (il passaggio "in avanti" e' il pulsante principale, annullamento e
+  bozza in "Altro"), carte "Che cosa si fa" (con la modifica), "Elementi" (quantita' previste,
+  riprendi dalla mappa, fatto/da fare e foto per elemento), "Consuntivo" (listino, economia),
+  "Controlli qualita'"; a fianco la mappa degli elementi (verde fatto, arancione da fare), i
+  documenti collegati e la cronologia. `GET work-orders/{id}/cronologia`
+  (`App\Services\Works\CronologiaLavoro`) mette in fila creazione, cambi di stato **dal registro
+  `audit_logs`**, consuntivi, foto, controlli, non conformita', richieste delle imprese e la
+  fine prevista superata (fatto di oggi); porta `documenti` (preventivo d'origine, SAL,
+  rendiconto) e `per_elemento` (fatti, ultimo, foto). L'elenco accetta `aperti=1` e
+  `in_ritardo=1`; il dettaglio porta `geom_geojson` e `tree` degli elementi. I collegamenti agli
+  ordini sono `/lavori/{id}`; il vecchio `?ordine=CODICE` viene risolto dalla pagina nuova.
+  `Components/Nuovo/NuovoOrdine.vue` e' il modulo di creazione (`?nuovo=1&elementi=a,b`).
+  Prove: `LavoriNuoviTest`.
 - **Casa dopo l'accesso**: nella veste nuova `HomeRoute` porta su `oggi` chiunque veda il
   censimento o i lavori (nella precedente Oggi resta il cruscotto dei lavori e si atterra
   sulla mappa). L'operatore di campo atterra sempre sull'app di campo.
