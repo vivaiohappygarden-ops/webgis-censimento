@@ -43,8 +43,9 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   GENERATED; logica critica (versioning, audit, coerenza geometria/tipo) nei trigger DB.
 - Multi-tenant per riga: `tenant_id` ovunque, `TenantScope` (con guardia `Auth::hasUser()`,
   non rimuoverla: evita la ricorsione con SessionGuard) + trait `BelongsToTenant`.
-- RBAC spatie/laravel-permission v8 con teams (`tenant_id`); ruoli: amministratore,
-  tecnico, operatore, cliente.
+- RBAC spatie/laravel-permission v8 con teams (`tenant_id`); ruoli di serie: amministratore,
+  tecnico, operatore, cliente (portale), impresa (portale delle imprese), esecutore (campo,
+  solo i lavori affidati).
 - Aggiornamenti asset con optimistic locking (campo `version`, 409 in conflitto) dentro
   transazione con `lockForUpdate`.
 - Catalogo Modello Dati v2.1: 387 codici in `database/seeders/data/catalogo_md_v21.csv`,
@@ -519,6 +520,26 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   lavori ne' utenti - guarda i permessi, non il nome del ruolo, perche' i ruoli ora si
   inventano). La VTA si compila nel gestionale: senza rete l'app lo dice e apre la
   scheda dell'albero, dove misure e foto vanno offline.
+- **Ruolo esecutore (dal 27/09/2026)**: chi lavora per una ditta esterna (caso "il Comune
+  affida il giardinaggio a una ditta") rendiconta dal campo i soli lavori affidati alla sua
+  squadra, senza poter toccare il censimento. Permesso `works.execute` (gruppo Lavori), ruolo
+  di serie `esecutore` = `['works.execute']`, creato anche nelle organizzazioni esistenti dalla
+  migrazione `ruolo_esecutore` (l'amministratore riceve il permesso). Le porte di campo sono i
+  gate `app-campo` (`assets.create` o `works.execute`, rotta `/operatore`) e `sync-campo`
+  (`assets.view` o `works.execute`, `SyncController`); `HomeRoute` lo manda sull'app di campo.
+  **Il perimetro sta una volta sola in `App\Support\Esecuzione`**: ordini visibili dal campo
+  (`visibleInField`: assegnati a lui o alla sua squadra), loro elementi, loro aree. Senza
+  `assets.view` la sincronizzazione entra in "modo esecutore": lo scarico porta solo quel
+  perimetro (elementi senza `notes`, niente modelli di ispezione ne' committenti) e il delta
+  rimanda ogni volta tutto il perimetro cancellando dal telefono cio' che ne e' uscito (un
+  ordine appena affidato porta elementi e aree che nel registro dei cambiamenti non compaiono).
+  I comandi `work_order.transition`, `work_log.add` e `issue.create` accettano `works.view` o
+  `works.execute`; `inspection.complete` resta a `works.view`. Le foto: `PhotoController` le
+  accetta da chi ha `works.execute` solo su un elemento di un suo ordine e con `work_order_id`
+  (l'app di campo lo manda gia' per le foto del lavoro), e gli fa rivedere solo quelle degli
+  elementi dei suoi ordini. Nell'app di campo `canCensire` (`assets.create`) accende rilievo,
+  scansione e schede; l'esecutore vede "I miei lavori", la mappa dei loro elementi e la
+  sincronizzazione. Prove: `EsecutoreTest`.
 - **Rilievo completo dal campo (dal 23/09/2026)**: il modulo "Nuovo rilievo" porta specie e
   misure dentro `asset.create` (blocco `tree`, stesse regole di `asset.update_measures`, stato
   vegetativo dal dizionario `config/agronomia.php`): una sola revisione, niente storico "da

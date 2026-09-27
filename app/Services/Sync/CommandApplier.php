@@ -73,16 +73,19 @@ class CommandApplier
             return $this->rejected($command, 'UNKNOWN_TYPE', "Tipo di comando sconosciuto: {$type}.");
         }
 
-        $permission = match ($type) {
-            'asset.create' => 'assets.create',
+        $permessi = match ($type) {
+            'asset.create' => ['assets.create'],
             // Il committente nuovo chiede in piu' clients.manage: lo controlla l'applier
-            'area.create' => 'areas.create',
-            // La regola fine (proprio ordine/squadra) è dentro l'applier
-            'work_order.transition', 'work_log.add', 'issue.create', 'inspection.complete' => 'works.view',
-            default => 'assets.update',
+            'area.create' => ['areas.create'],
+            // La regola fine (proprio ordine/squadra) è dentro l'applier. Chi
+            // esegue soltanto (works.execute) rendiconta e segnala, ma non
+            // compila ispezioni
+            'work_order.transition', 'work_log.add', 'issue.create' => ['works.view', 'works.execute'],
+            'inspection.complete' => ['works.view'],
+            default => ['assets.update'],
         };
-        if (! $user->can($permission)) {
-            return $this->rejected($command, 'FORBIDDEN', "Permesso mancante: {$permission}.");
+        if (! collect($permessi)->contains(fn (string $p) => $user->can($p))) {
+            return $this->rejected($command, 'FORBIDDEN', 'Permesso mancante: '.$permessi[0].'.');
         }
 
         try {

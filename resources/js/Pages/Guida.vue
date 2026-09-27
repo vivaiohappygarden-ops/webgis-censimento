@@ -71,6 +71,9 @@ function goTo(id) {
                             <strong>Tecnico</strong>: gestisce censimento, lavori, ispezioni e segnalazioni.
                             <strong>Operatore</strong>: lavora dal telefono con l'app di campo; vede i lavori assegnati
                             alla sua squadra e registra rilievi, foto, consuntivi, ispezioni e segnalazioni.
+                            <strong>Esecutore</strong>: chi lavora per una ditta esterna. Dall'app di campo vede
+                            solo i lavori affidati alla sua squadra e i loro elementi, li avvia, li chiude con il
+                            consuntivo e le foto, segnala un problema; non censisce e non vede il resto.
                             <strong>Cliente</strong>: dal suo portale l'ufficio del Comune vede solo il proprio
                             territorio — la mappa con aree ed elementi, la scheda di ogni elemento con foto, misure
                             e stabilità, i lavori in programma e fatti, le perizie emesse e i verbali in PDF, senza

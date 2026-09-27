@@ -12,7 +12,22 @@ import { uuidv7 } from '@/field/uuidv7';
 const page = usePage();
 const user = page.props.auth.user;
 const canAssociate = computed(() => (user.permissions ?? []).includes('assets.update'));
-const canWorks = computed(() => (user.permissions ?? []).includes('works.view'));
+// Chi censisce vede rilievo, scansione e schede; chi esegue soltanto i lavori
+// affidati (ruolo esecutore, ditte esterne, dal 27/09/2026) vede i suoi
+// lavori, la mappa dei loro elementi e la sincronizzazione
+const canCensire = computed(() => (user.permissions ?? []).includes('assets.create'));
+const canWorks = computed(() => (user.permissions ?? []).includes('works.view') || (user.permissions ?? []).includes('works.execute'));
+// Il collegamento al gestionale ha senso solo per chi ci puo' entrare: a un
+// esecutore aprirebbe una pagina vietata
+const puoGestire = computed(() => (user.permissions ?? []).some((p) => ['assets.view', 'works.view', 'clients.view', 'users.manage'].includes(p)));
+const tabsCampo = computed(() => [
+    { key: 'home', label: 'Home' },
+    ...(canCensire.value ? [{ key: 'rilievo', label: 'Rilievo' }] : []),
+    { key: 'mappa', label: 'Mappa' },
+    ...(canWorks.value ? [{ key: 'lavori', label: 'Lavori' }] : []),
+    ...(canCensire.value ? [{ key: 'scansiona', label: 'Scansiona' }] : []),
+    { key: 'sync', label: 'Sync' },
+]);
 // Aprire un'area dal campo e' un permesso a parte, come registrare un committente nuovo
 const canCreateAreas = computed(() => (user.permissions ?? []).includes('areas.create'));
 const canCreateClients = computed(() => (user.permissions ?? []).includes('clients.manage'));
@@ -1641,7 +1656,7 @@ onBeforeUnmount(() => {
                     </span>
                     <!-- Ritorno al programma completo: in campo si passa
                          continuamente dall'app alle pagine di gestione -->
-                    <a
+                    <a v-if="puoGestire"
                         href="/oggi"
                         class="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700"
                         data-test="torna-gestione"
@@ -1673,6 +1688,7 @@ onBeforeUnmount(() => {
 
                 <div class="mt-3 grid grid-cols-2 gap-3">
                     <button
+                        v-if="canCensire"
                         class="flex min-h-32 flex-col justify-between rounded-2xl bg-green-700 p-4 text-left text-white active:bg-green-800"
                         data-test="op-home-albero"
                         @click="vaiA('albero')"
@@ -1682,6 +1698,7 @@ onBeforeUnmount(() => {
                     </button>
 
                     <button
+                        v-if="canCensire"
                         class="flex min-h-32 flex-col justify-between rounded-2xl border-2 border-green-700 bg-white p-4 text-left text-green-900 active:bg-green-50"
                         data-test="op-home-vta"
                         @click="vaiA('vta')"
@@ -1693,6 +1710,7 @@ onBeforeUnmount(() => {
                     </button>
 
                     <button
+                        v-if="canCensire"
                         class="flex min-h-32 flex-col justify-between rounded-2xl border-2 border-green-700 bg-white p-4 text-left text-green-900 active:bg-green-50"
                         data-test="op-home-variazione"
                         @click="vaiA('variazione')"
@@ -1703,17 +1721,27 @@ onBeforeUnmount(() => {
 
                     <button
                         v-if="canWorks"
-                        class="flex min-h-32 flex-col justify-between rounded-2xl border-2 border-green-700 bg-white p-4 text-left text-green-900 active:bg-green-50"
+                        class="flex min-h-32 flex-col justify-between rounded-2xl p-4 text-left"
+                        :class="canCensire ? 'border-2 border-green-700 bg-white text-green-900 active:bg-green-50' : 'bg-green-700 text-white active:bg-green-800'"
                         data-test="op-home-lavori"
                         @click="vaiA('lavori')"
                     >
                         <span class="text-base font-semibold leading-tight">I miei lavori</span>
-                        <span class="text-xs text-gray-600">
+                        <span class="text-xs" :class="canCensire ? 'text-gray-600' : 'opacity-90'">
                             {{ lavoriDiOggi }} da fare oggi · giro e consuntivi
                         </span>
                     </button>
                     <button
-                        v-else
+                        v-if="canWorks && ! canCensire"
+                        class="flex min-h-32 flex-col justify-between rounded-2xl border-2 border-green-700 bg-white p-4 text-left text-green-900 active:bg-green-50"
+                        data-test="op-home-mappa"
+                        @click="vaiA('mappa')"
+                    >
+                        <span class="text-base font-semibold leading-tight">Mappa</span>
+                        <span class="text-xs text-gray-600">Gli elementi dei lavori affidati</span>
+                    </button>
+                    <button
+                        v-else-if="! canWorks"
                         class="flex min-h-32 flex-col justify-between rounded-2xl border-2 border-green-700 bg-white p-4 text-left text-green-900 active:bg-green-50"
                         data-test="op-home-mappa"
                         @click="vaiA('mappa')"
@@ -1725,13 +1753,13 @@ onBeforeUnmount(() => {
 
                 <!-- La seconda fila: cose che si fanno spesso ma non sono il lavoro -->
                 <div class="mt-3 grid grid-cols-2 gap-2 text-sm">
-                    <button class="rounded-xl border border-gray-300 bg-white px-3 py-3 font-medium active:bg-gray-50" data-test="op-home-scansiona" @click="vaiA('scansiona')">
+                    <button v-if="canCensire" class="rounded-xl border border-gray-300 bg-white px-3 py-3 font-medium active:bg-gray-50" data-test="op-home-scansiona" @click="vaiA('scansiona')">
                         Scansiona cartellino
                     </button>
-                    <button class="rounded-xl border border-gray-300 bg-white px-3 py-3 font-medium active:bg-gray-50" data-test="op-home-elemento" @click="vaiA('elemento')">
+                    <button v-if="canCensire" class="rounded-xl border border-gray-300 bg-white px-3 py-3 font-medium active:bg-gray-50" data-test="op-home-elemento" @click="vaiA('elemento')">
                         Censisci altro (siepe, prato…)
                     </button>
-                    <button v-if="canWorks" class="rounded-xl border border-gray-300 bg-white px-3 py-3 font-medium active:bg-gray-50" @click="vaiA('mappa')">
+                    <button v-if="canWorks && canCensire" class="rounded-xl border border-gray-300 bg-white px-3 py-3 font-medium active:bg-gray-50" @click="vaiA('mappa')">
                         Mappa
                     </button>
                     <button class="rounded-xl border border-gray-300 bg-white px-3 py-3 font-medium active:bg-gray-50" data-test="op-home-sync" @click="vaiA('sync')">
@@ -2815,17 +2843,10 @@ onBeforeUnmount(() => {
         <!-- Barra di navigazione inferiore (uso a una mano in campo) -->
         <nav
             class="fixed inset-x-0 bottom-0 z-30 grid h-14 border-t border-gray-200 bg-white"
-            :class="canWorks ? 'grid-cols-6' : 'grid-cols-5'"
+            :style="{ gridTemplateColumns: `repeat(${tabsCampo.length}, minmax(0, 1fr))` }"
         >
             <button
-                v-for="item in [
-                    { key: 'home', label: 'Home' },
-                    { key: 'rilievo', label: 'Rilievo' },
-                    { key: 'mappa', label: 'Mappa' },
-                    ...(canWorks ? [{ key: 'lavori', label: 'Lavori' }] : []),
-                    { key: 'scansiona', label: 'Scansiona' },
-                    { key: 'sync', label: 'Sync' },
-                ]"
+                v-for="item in tabsCampo"
                 :key="item.key"
                 class="py-3.5 text-xs font-medium sm:text-sm"
                 :class="tab === item.key ? 'border-t-2 border-green-700 text-green-800' : 'text-gray-500'"

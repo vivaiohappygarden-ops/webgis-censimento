@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -22,6 +23,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // L'app di campo e la sua sincronizzazione: le apre chi censisce e,
+        // dal 27/09/2026, anche chi esegue soltanto i lavori affidati
+        // (ruolo "esecutore", ditte esterne). I permessi restano quelli:
+        // qui si dice solo chi puo' entrare nella porta di campo
+        Gate::define('app-campo', fn ($user) => $user->can('assets.create') || $user->can('works.execute'));
+        Gate::define('sync-campo', fn ($user) => $user->can('assets.view') || $user->can('works.execute'));
+
         /*
          * Limite generale delle API, contato per utente.
          *

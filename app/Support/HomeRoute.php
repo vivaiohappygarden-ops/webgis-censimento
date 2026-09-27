@@ -19,7 +19,9 @@ class HomeRoute
     public static function for(User $user): string
     {
         return match (true) {
-            $user->can('assets.create')
+            // Censisce, oppure esegue soltanto i lavori affidati (esecutore
+            // di una ditta esterna): il suo posto e' l'app di campo
+            ($user->can('assets.create') || $user->can('works.execute'))
                 && ! $user->can('works.manage')
                 && ! $user->can('users.manage') => 'operatore',
             // Nella veste nuova (dal 26/09/2026) la casa dell'ufficio e' Oggi:

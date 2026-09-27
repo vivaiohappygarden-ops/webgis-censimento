@@ -16,10 +16,12 @@ use App\Models\User;
 use App\Models\WorkOrder;
 use App\Services\Sync\CommandApplier;
 use App\Support\AssetStatus;
+use App\Support\Esecuzione;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -36,7 +38,15 @@ class SyncController extends Controller implements HasMiddleware
 
     public static function middleware(): array
     {
-        return [new Middleware('can:assets.view')];
+        // Chi censisce e, dal 27/09/2026, chi esegue soltanto i lavori affidati
+        // (ruolo esecutore): per lui il perimetro e' quello di App\Support\Esecuzione
+        return [new Middleware('can:sync-campo')];
+    }
+
+    /** Chi non vede il censimento riceve solo gli elementi dei suoi lavori. */
+    private function modoEsecutore(User $user): bool
+    {
+        return ! $user->can('assets.view');
     }
 
     /** Download iniziale del working set, delimitato per aree. */
@@ -60,14 +70,23 @@ class SyncController extends Controller implements HasMiddleware
             [$tenantId],
         )->c);
 
-        $areas = $this->areaRows()
-            ->when($areaIds !== [], fn ($q) => $q->whereIn('areas.id', $areaIds))
-            ->orderBy('areas.name')
-            ->get();
+        if ($this->modoEsecutore($user)) {
+            // La ditta esterna riceve le sole aree e i soli elementi dei
+            // lavori affidati alla sua squadra, senza le note interne delle
+            // schede: il resto del censimento non e' affar suo
+            $perimetro = Esecuzione::perimetro($user);
+            $areas = $this->areaRows()->whereIn('areas.id', $perimetro['aree'])->orderBy('areas.name')->get();
+            $assets = $this->assetRows([], $perimetro['elementi']->all())->each(fn ($a) => $a->makeHidden('notes'));
+        } else {
+            $areas = $this->areaRows()
+                ->when($areaIds !== [], fn ($q) => $q->whereIn('areas.id', $areaIds))
+                ->orderBy('areas.name')
+                ->get();
 
-        // In campo si lavora solo sul patrimonio in gestione: l'archivio
-        // (abbattuti e dismessi) non si scarica sul telefono
-        $assets = $this->assetRows($areaIds, soloFuoriArchivio: true);
+            // In campo si lavora solo sul patrimonio in gestione: l'archivio
+            // (abbattuti e dismessi) non si scarica sul telefono
+            $assets = $this->assetRows($areaIds, soloFuoriArchivio: true);
+        }
 
         return response()->json([
             'cursor' => $cursor,
@@ -76,7 +95,7 @@ class SyncController extends Controller implements HasMiddleware
             'catalog_version' => $this->catalogVersion($tenantId),
             'areas' => $areas,
             'assets' => $assets,
-            'work_orders' => $user->can('works.view') ? $this->workOrderRows($user) : [],
+            'work_orders' => $user->can('works.view') || $user->can('works.execute') ? $this->workOrderRows($user) : [],
             'inspection_templates' => $user->can('works.view') ? $this->inspectionTemplateRows() : [],
             // Chi puo' aprire un'area dal campo sceglie il committente anche fra
             // quelli senza aree sul telefono, altrimenti ne creerebbe un doppione
@@ -127,6 +146,16 @@ class SyncController extends Controller implements HasMiddleware
         $newCursor = $logRows === [] ? (int) $data['cursor'] : (int) end($logRows)->last_id;
 
         $byTable = collect($logRows)->groupBy('table_name')->map(fn ($g) => $g->pluck('row_id')->all());
+
+        if ($this->modoEsecutore($user)) {
+            return response()->json([
+                'cursor' => $newCursor,
+                'server_time' => now()->toIso8601String(),
+                'catalog_version' => $this->catalogVersion($tenantId),
+                'changes' => $this->changesEsecutore($user, $byTable, $request->input('ids', [])),
+                'has_more' => $hasMore,
+            ]);
+        }
 
         $changes = [];
 
@@ -315,6 +344,44 @@ class SyncController extends Controller implements HasMiddleware
                 'message' => 'Errore interno nell\'applicazione del comando: verrà ritentato.',
             ];
         }
+    }
+
+    /**
+     * Il delta di chi esegue soltanto: il perimetro (ordini affidati, loro
+     * elementi e aree) e' piccolo e cambia con le assegnazioni, non solo con
+     * le modifiche delle righe. Un ordine appena affidato porta con se'
+     * elementi e aree che nel registro dei cambiamenti non compaiono, quindi
+     * a ogni scarico si rimanda tutto il perimetro e si cancella dal telefono
+     * cio' che ne e' uscito (ordine riassegnato, elemento tolto dall'ordine).
+     */
+    private function changesEsecutore(User $user, $byTable, array $richiesti): array
+    {
+        $perimetro = Esecuzione::perimetro($user);
+        $changes = [];
+
+        foreach ($this->areaRows()->whereIn('areas.id', $perimetro['aree'])->orderBy('areas.name')->get() as $area) {
+            $changes[] = ['op' => 'upsert', 'table' => 'areas', 'row' => $area];
+        }
+        foreach ($this->assetRows([], $perimetro['elementi']->all()) as $asset) {
+            $changes[] = ['op' => 'upsert', 'table' => 'assets', 'row' => $asset->makeHidden('notes')];
+        }
+        foreach ($this->workOrderRows($user) as $ordine) {
+            $changes[] = ['op' => 'upsert', 'table' => 'work_orders', 'row' => $ordine];
+        }
+
+        // Fuori dal perimetro: cio' che e' cambiato o che il telefono chiede
+        // per id e non gli spetta (piu') esce come cancellazione
+        $fuori = fn (string $tabella, Collection $dentro) => collect($byTable->get($tabella, []))
+            ->merge($richiesti)->unique()
+            ->reject(fn ($id) => $dentro->contains($id))
+            ->values();
+        foreach (['areas' => 'aree', 'assets' => 'elementi', 'work_orders' => 'ordini'] as $tabella => $chiave) {
+            foreach ($fuori($tabella, $perimetro[$chiave]) as $id) {
+                $changes[] = ['op' => 'delete', 'table' => $tabella, 'id' => $id];
+            }
+        }
+
+        return $changes;
     }
 
     /**

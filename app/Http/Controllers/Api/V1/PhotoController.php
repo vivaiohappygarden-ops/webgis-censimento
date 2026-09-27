@@ -9,6 +9,7 @@ use App\Models\WorkOrder;
 use App\Services\Photos\ImageDerivative;
 use App\Services\Photos\PublicPhotoCache;
 use App\Support\Audit;
+use App\Support\Esecuzione;
 use App\Support\Geometry;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -27,14 +28,17 @@ class PhotoController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:assets.view', only: ['file']),
-            new Middleware('can:assets.update', only: ['store', 'destroy']),
+            // Caricamento e lettura si autorizzano dentro il metodo: chi esegue
+            // soltanto i lavori affidati (works.execute) puo' fotografare e
+            // rivedere gli elementi dei suoi ordini, non il resto del censimento
+            new Middleware('can:assets.update', only: ['destroy']),
         ];
     }
 
     public function store(Request $request, string $assetId): JsonResponse
     {
         $asset = Asset::findOrFail($assetId);
+        $this->autorizzaCaricamento($request, $asset);
 
         $data = $request->validate([
             // Il tetto in pixel e' lo stesso di ImageDerivative: una foto che
@@ -160,9 +164,13 @@ class PhotoController extends Controller implements HasMiddleware
         return response()->json(['data' => $photo->fresh()], 201);
     }
 
-    public function file(string $id): StreamedResponse|Response
+    public function file(Request $request, string $id): StreamedResponse|Response
     {
         $photo = Photo::findOrFail($id);
+        if (! $request->user()->can('assets.view')) {
+            abort_unless($request->user()->can('works.execute') && $photo->asset_id !== null
+                && Esecuzione::elementoNeiLavoriDi($request->user(), $photo->asset_id), 403);
+        }
         $disk = Storage::disk();
 
         abort_unless($disk->exists($photo->s3_key), 404);
@@ -183,6 +191,24 @@ class PhotoController extends Controller implements HasMiddleware
         Audit::log('photo.deleted', $photo);
 
         return response()->noContent();
+    }
+
+    /**
+     * Chi modifica le schede carica foto ovunque; chi esegue soltanto i
+     * lavori affidati (ditte esterne) solo su un elemento di un suo ordine,
+     * indicando l'ordine: la foto documenta il lavoro, non il censimento.
+     */
+    private function autorizzaCaricamento(Request $request, Asset $asset): void
+    {
+        $user = $request->user();
+        if ($user->can('assets.update')) {
+            return;
+        }
+        abort_unless($user->can('works.execute'), 403);
+
+        $ordineId = (string) $request->input('work_order_id', '');
+        abort_unless($ordineId !== '' && Esecuzione::elementoNelLavoroDi($user, $ordineId, $asset->id), 403,
+            'Puoi fotografare solo gli elementi dei lavori affidati alla tua squadra, indicando il lavoro.');
     }
 
     /**

@@ -18,7 +18,7 @@ class TenantProvisioner
         'areas.view', 'areas.create', 'areas.update', 'areas.delete',
         'assets.view', 'assets.create', 'assets.update', 'assets.delete',
         'clients.view', 'clients.manage',
-        'works.view', 'works.manage',
+        'works.view', 'works.manage', 'works.execute',
         'users.manage',
         'portal.view',
         'impresa.view',
@@ -39,6 +39,12 @@ class TenantProvisioner
         // di cui fa parte, dal portale dedicato: niente censimento, niente
         // altri lavori, niente dati degli altri committenti
         'impresa' => ['impresa.view'],
+        // Chi esegue i lavori per una ditta esterna (dal 27/09/2026): dall'app
+        // di campo rendiconta i soli lavori affidati alla sua squadra (fatto,
+        // quantita', foto, segnalazioni) e riceve sul telefono solo gli
+        // elementi di quei lavori. Niente censimento, niente elenco dei lavori
+        // altrui: e' la differenza con l'operatore, che censisce
+        'esecutore' => ['works.execute'],
     ];
 
     public function ensurePermissions(): void

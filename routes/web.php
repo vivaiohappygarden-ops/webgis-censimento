@@ -118,7 +118,7 @@ Route::middleware('auth')->group(function () {
         // si scrive a mano: la pagina lo porta con se' (e resta nella cache
         // del service worker, quindi vale anche senza rete)
         'statiVegetativi' => config('agronomia.stato_vegetativo'),
-    ]))->middleware('can:assets.create')->name('operatore');
+    ]))->middleware('can:app-campo')->name('operatore');
 
     // Lavori: nella veste nuova (blocco 4) l'elenco con l'anteprima e le schede
     // Agenda/Gantt; ?precedente=1 apre la pagina di prima. La pagina

@@ -21,7 +21,7 @@ final class Permessi
         'Territorio' => ['areas.view', 'areas.create', 'areas.update', 'areas.delete'],
         'Catalogo' => ['catalog.view', 'catalog.manage'],
         'Committenti' => ['clients.view', 'clients.manage'],
-        'Lavori' => ['works.view', 'works.manage'],
+        'Lavori' => ['works.view', 'works.manage', 'works.execute'],
         'Amministrazione' => ['users.manage'],
         'Portali esterni' => ['portal.view', 'impresa.view'],
     ];
@@ -42,6 +42,7 @@ final class Permessi
         'clients.manage' => ['Gestire i committenti', 'Creare e modificare anagrafiche, contratti e portali'],
         'works.view' => ['Vedere i lavori', 'Ordini di lavoro, agenda, ispezioni e segnalazioni'],
         'works.manage' => ['Gestire i lavori', 'Creare e chiudere ordini, squadre, preventivi, SAL'],
+        'works.execute' => ['Eseguire i lavori affidati', "Dall'app di campo: avanzamento, quantita', foto e segnalazioni dei soli lavori della propria squadra, senza il censimento"],
         'users.manage' => ['Gestire utenti e ruoli', 'Creare utenti, assegnare ruoli, impostazioni dello studio'],
         'portal.view' => ['Portale del committente', 'Accesso riservato al proprio Comune o cliente'],
         'impresa.view' => ['Portale delle imprese', 'Accesso riservato ai lavori affidati alla propria squadra'],

@@ -126,7 +126,7 @@ sudo -u www-data php artisan tenant:create "Happy Garden" happy-garden latuaemai
 
 Il comando stampa **email e password** dell'amministratore: conservarle e
 cambiare la password al primo accesso. Vengono installati automaticamente i
-ruoli (amministratore, tecnico, operatore, cliente) e il catalogo ministeriale
+ruoli (amministratore, tecnico, operatore, cliente, impresa, esecutore) e il catalogo ministeriale
 completo dei 387 tipi.
 
 ---
