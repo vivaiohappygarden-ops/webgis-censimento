@@ -192,11 +192,14 @@ class PatrimonioTest extends TestCase
 
         $eventi = collect($this->getJson("/api/v1/assets/{$a}/cronologia")->assertOk()->json('data.eventi'));
 
-        // Il giorno dello scatto resta nella cronologia, senza anteprima
-        // (il file non c'e' piu'), e dice che la foto e' stata eliminata
+        // La riga sta nel giorno del caricamento (non dello scatto, che e' un
+        // dato della foto e resta nel dettaglio), senza anteprima (il file non
+        // c'e' piu'), e dice che la foto e' stata eliminata
+        $oggi = now()->setTimezone('Europe/Rome')->toDateString();
         $giorno = $eventi->firstWhere('tipo', 'foto');
-        $this->assertSame('2026-05-27', $giorno['data']);
+        $this->assertSame($oggi, $giorno['data']);
         $this->assertSame('1 fotografia', $giorno['titolo']);
+        $this->assertStringContainsString('scattata il 27/05/2026', $giorno['dettaglio']);
         $this->assertStringContainsString('eliminata in seguito', $giorno['dettaglio']);
         $this->assertSame([], $giorno['foto']);
 
@@ -206,7 +209,24 @@ class PatrimonioTest extends TestCase
         $this->assertSame(now()->setTimezone('Europe/Rome')->toDateString(), $eliminazione['data']);
         $this->assertSame('Fotografia eliminata', $eliminazione['titolo']);
         $this->assertStringContainsString($this->utente->name, $eliminazione['dettaglio']);
-        $this->assertStringContainsString('scattata il 27/05/2026', $eliminazione['dettaglio']);
+        $this->assertStringContainsString('caricata il '.now()->setTimezone('Europe/Rome')->format('d/m/Y'), $eliminazione['dettaglio']);
         $this->assertSame(['foto_eliminata', 'foto'], $eventi->whereIn('tipo', ['foto', 'foto_eliminata'])->pluck('tipo')->values()->all());
+    }
+
+    public function test_la_foto_scattata_settimane_prima_sta_nel_giorno_in_cui_e_stata_caricata(): void
+    {
+        $a = $this->albero();
+        // Dall'iPhone arrivano foto con la data dello scatto nei metadati
+        $this->postJson("/api/v1/assets/{$a}/photos", ['photo' => UploadedFile::fake()->image('a.jpg', 640, 480), 'taken_at' => '2026-05-27T10:00:00+02:00'])->assertCreated();
+        $this->postJson("/api/v1/assets/{$a}/photos", ['photo' => UploadedFile::fake()->image('b.jpg', 640, 481), 'taken_at' => '2026-06-03T10:00:00+02:00'])->assertCreated();
+        $this->postJson("/api/v1/assets/{$a}/photos", ['photo' => UploadedFile::fake()->image('c.jpg', 640, 482)])->assertCreated();
+
+        $eventi = collect($this->getJson("/api/v1/assets/{$a}/cronologia")->assertOk()->json('data.eventi'));
+        $foto = $eventi->where('tipo', 'foto')->values();
+        $this->assertCount(1, $foto, 'Tutte caricate oggi: una sola riga');
+        $this->assertSame(now()->setTimezone('Europe/Rome')->toDateString(), $foto[0]['data']);
+        $this->assertSame('3 fotografie', $foto[0]['titolo']);
+        $this->assertStringContainsString('scattate fra il 27/05/2026 e il 03/06/2026', $foto[0]['dettaglio']);
+        $this->assertCount(3, $foto[0]['foto']);
     }
 }

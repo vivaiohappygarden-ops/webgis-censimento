@@ -606,7 +606,9 @@ class PortaleComuneController extends Controller implements HasMiddleware
                 'id' => $l->id];
         }
 
-        foreach ($foto->groupBy(fn (Photo $f) => ($f->taken_at ?? $f->created_at)?->setTimezone(self::FUSO)->toDateString()) as $giorno => $gruppo) {
+        // Per giorno di caricamento, come nel gestionale: lo stesso fatto ha
+        // la stessa data ovunque; lo scatto e' un dato della foto
+        foreach ($foto->groupBy(fn (Photo $f) => $f->created_at->setTimezone(self::FUSO)->toDateString()) as $giorno => $gruppo) {
             $n = $gruppo->count();
             $eventi[] = ['data' => $giorno, 'tipo' => 'foto',
                 'titolo' => $n === 1 ? 'Una fotografia' : "{$n} fotografie", 'dettaglio' => null];

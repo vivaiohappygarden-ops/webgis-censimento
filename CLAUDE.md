@@ -212,7 +212,12 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   scadenzario (ultima valutazione per albero, alberi rimossi esclusi).
   **Cronologia**: `GET assets/{id}/cronologia` (`App\Services\Assets\CronologiaElemento`) mette in
   fila rilievo, modifiche della scheda, valutazioni VTA, lavori, segnalazioni, fotografie per
-  giorno e abbattimento, dal piu' recente: la leggono l'anteprima e la scheda nuova. Le altre
+  **giorno di caricamento** (decisione committente 27/09/2026: dall'iPhone arrivano foto scattate
+  settimane prima e la riga finiva nel giorno dello scatto; lo scatto, se e' un altro giorno,
+  resta nel dettaglio "scattata il"), le foto eliminate (nel loro giorno, piu' la riga
+  `foto_eliminata` nel giorno dell'eliminazione con l'autore dal registro `photo.deleted`) e
+  abbattimento, dal piu' recente: la leggono l'anteprima e la scheda nuova. Il portale del
+  Comune data le foto allo stesso modo. Le altre
   schede di Patrimonio (Mappa `/mappa`, Alberi e VTA `/vta`, Irrigazione `/irrigazione`) sono
   ancora le pagine di prima con la testata `Components/Nuovo/TestataPatrimonio.vue` quando la
   veste e' nuova; la voce di menu Patrimonio non ha sottovoci (`schede: true`). L'importazione

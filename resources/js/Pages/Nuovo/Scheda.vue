@@ -777,7 +777,7 @@ onBeforeUnmount(() => map?.remove());
                                 <div v-else class="flex h-full items-center justify-center text-sm text-gray-500">Nessuna fotografia</div>
                             </div>
                             <div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-[13px] text-gray-500">
-                                <span v-if="asset.photos?.length">Foto del {{ formatData(asset.photos[0].taken_at ?? asset.photos[0].created_at) }} · {{ asset.photos.length }} {{ plurale(asset.photos.length, 'foto', 'foto') }}</span>
+                                <span v-if="asset.photos?.length">{{ asset.photos.length }} {{ plurale(asset.photos.length, 'foto', 'foto') }} · ultima caricata il {{ formatData(asset.photos[0].created_at) }}</span>
                                 <span v-else>Ancora nessuna fotografia caricata.</span>
                                 <label v-if="canUpdate" :class="BOTTONE_PICCOLO" class="cursor-pointer">
                                     {{ foto.caricamento ? 'Caricamento…' : 'Aggiungi foto' }}
@@ -832,7 +832,7 @@ onBeforeUnmount(() => map?.remove());
         <Teleport to="body">
             <div v-if="foto.aperta" class="fixed inset-0 z-50 flex flex-col bg-black/90 p-3" data-test="foto-aperta" @click.self="foto.aperta = null">
                 <div class="flex items-center justify-between gap-2 text-sm text-white">
-                    <span>Foto del {{ formatData(foto.aperta.taken_at ?? foto.aperta.created_at) }}<template v-if="foto.aperta.category"> · {{ foto.aperta.category }}</template></span>
+                    <span>Caricata il {{ formatData(foto.aperta.created_at) }}<template v-if="foto.aperta.taken_at && formatData(foto.aperta.taken_at) !== formatData(foto.aperta.created_at)"> · scattata il {{ formatData(foto.aperta.taken_at) }}</template><template v-if="foto.aperta.category"> · {{ foto.aperta.category }}</template></span>
                     <div class="flex gap-2">
                         <a :href="foto.aperta.url" target="_blank" rel="noopener" class="min-h-11 rounded-lg border border-white/40 px-3 py-2">Apri l'originale</a>
                         <button v-if="canUpdate && foto.aperta.id" type="button" class="min-h-11 rounded-lg border border-red-300 px-3 py-2 text-red-200" data-test="elimina-foto" @click="eliminaFoto(foto.aperta)">Elimina</button>

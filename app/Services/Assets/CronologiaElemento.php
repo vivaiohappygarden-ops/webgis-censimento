@@ -12,8 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * La cronologia di un elemento censito: rilievo, modifiche della scheda,
- * valutazioni di stabilita', lavori, segnalazioni, fotografie (anche quelle
- * eliminate, con la loro eliminazione), abbattimento,
+ * valutazioni di stabilita', lavori, segnalazioni, fotografie per giorno di
+ * caricamento (anche quelle eliminate, con la loro eliminazione), abbattimento,
  * in un'unica linea del tempo dal piu' recente. La leggono l'anteprima
  * dell'elenco e la scheda della veste nuova: la definizione degli eventi e'
  * una sola. Nessun dato nuovo: sono le righe delle tabelle esistenti, lette
@@ -138,23 +138,42 @@ class CronologiaElemento
             );
         }
 
-        // Fotografie, raggruppate per giorno dello scatto. Le foto eliminate
-        // restano nel conteggio del loro giorno (senza anteprima: il file non
-        // c'e' piu') e l'eliminazione e' un fatto a se', nel giorno in cui e'
-        // avvenuta e con chi l'ha fatta: la cronologia racconta quello che e'
-        // successo, non riscrive il passato
+        // Fotografie, raggruppate per giorno di caricamento: la cronologia
+        // racconta quando la foto e' entrata nella scheda (decisione committente
+        // 27/09/2026: dall'iPhone arrivano foto scattate settimane prima, e la
+        // riga finiva nel giorno dello scatto). La data dello scatto, quando e'
+        // un altro giorno, resta nel dettaglio: e' un dato della foto, non del
+        // fatto. Le foto eliminate restano nel conteggio del loro giorno (senza
+        // anteprima: il file non c'e' piu') e l'eliminazione e' un fatto a se',
+        // nel giorno in cui e' avvenuta e con chi l'ha fatta: la cronologia non
+        // riscrive il passato
         $foto = Photo::withTrashed()->where('asset_id', $asset->id)
-            ->orderByDesc('taken_at')->orderByDesc('created_at')
+            ->orderByDesc('created_at')->orderByDesc('taken_at')
             ->get(['id', 'taken_at', 'created_at', 'taken_by', 'deleted_at']);
-        $scatto = fn (Photo $f) => ($f->taken_at ?? $f->created_at)->setTimezone(self::FUSO);
-        foreach ($foto->groupBy(fn (Photo $f) => $scatto($f)->toDateString()) as $giorno => $gruppo) {
+        $caricamento = fn (Photo $f) => $f->created_at->setTimezone(self::FUSO);
+        $scatti = function ($gruppo) use ($caricamento): ?string {
+            // Solo gli scatti di un giorno diverso dal caricamento
+            $giorni = $gruppo
+                ->filter(fn (Photo $f) => $f->taken_at && $f->taken_at->setTimezone(self::FUSO)->toDateString() !== $caricamento($f)->toDateString())
+                ->map(fn (Photo $f) => $f->taken_at->setTimezone(self::FUSO)->startOfDay())
+                ->unique(fn ($d) => $d->toDateString())->sort()->values();
+            if ($giorni->isEmpty()) {
+                return null;
+            }
+            if ($giorni->count() === 1) {
+                return ($gruppo->count() === 1 ? 'scattata il ' : 'scattate il ').$giorni->first()->format('d/m/Y');
+            }
+
+            return 'scattate fra il '.$giorni->first()->format('d/m/Y').' e il '.$giorni->last()->format('d/m/Y');
+        };
+        foreach ($foto->groupBy(fn (Photo $f) => $caricamento($f)->toDateString()) as $giorno => $gruppo) {
             $vive = $gruppo->whereNull('deleted_at');
             $eliminate = count($gruppo) - count($vive);
             $eventi[] = $this->evento(
                 $giorno,
                 'foto',
                 count($gruppo) === 1 ? '1 fotografia' : count($gruppo).' fotografie',
-                [$nome($gruppo->first()->taken_by), match (true) {
+                [$nome($gruppo->first()->taken_by), $scatti($gruppo), match (true) {
                     $eliminate === 0 => null,
                     count($gruppo) === 1 => 'eliminata in seguito',
                     $eliminate === count($gruppo) => 'tutte eliminate in seguito',
@@ -175,13 +194,13 @@ class CronologiaElemento
             $perGiornoEAutore = $eliminate->groupBy(fn (Photo $f) => $f->deleted_at->setTimezone(self::FUSO)->toDateString().'|'.($autori[$f->id] ?? ''));
             foreach ($perGiornoEAutore as $chiave => $gruppo) {
                 [$giorno, $autore] = explode('|', $chiave, 2);
-                $scatti = $gruppo->map(fn (Photo $f) => $scatto($f)->format('d/m/Y'))->unique()->values();
+                $caricate = $gruppo->map(fn (Photo $f) => $caricamento($f)->format('d/m/Y'))->unique()->values();
                 $eventi[] = $this->evento(
                     $giorno,
                     'foto_eliminata',
                     count($gruppo) === 1 ? 'Fotografia eliminata' : count($gruppo).' fotografie eliminate',
                     [$nome($autore !== '' ? $autore : null),
-                        (count($gruppo) === 1 ? 'scattata il ' : 'scattate il ').$scatti->implode(', ')],
+                        (count($gruppo) === 1 ? 'caricata il ' : 'caricate il ').$caricate->implode(', ')],
                 );
             }
         }
