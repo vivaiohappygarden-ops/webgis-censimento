@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\User;
+use App\Services\Sicurezza\DueFattori;
 use App\Services\Tenancy\TenantProvisioner;
 use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
@@ -47,6 +48,7 @@ class UserAdminController extends Controller implements HasMiddleware
                 'client' => $user->client?->only(['id', 'name']),
                 'last_login_at' => $user->last_login_at,
                 'notify_email' => $user->notify_email,
+                'mfa_enabled' => (bool) $user->mfa_enabled,
             ]);
 
         return response()->json(['data' => $users]);
@@ -184,6 +186,24 @@ class UserAdminController extends Controller implements HasMiddleware
         Audit::log('user.password_reset', $user, ['email' => $user->email]);
 
         return response()->json(['temporary_password' => $temporaryPassword]);
+    }
+
+    /**
+     * Telefono perso: l'amministratore azzera la verifica in due passaggi.
+     * L'utente rientra con la sola password e, se la regola lo obbliga, la
+     * riattiva subito con il telefono nuovo. Gettoni e "ricordami" decadono:
+     * se il telefono e' finito in mani sbagliate, non devono restare aperti.
+     */
+    public function resetDueFattori(string $id): JsonResponse
+    {
+        $user = User::query()->findOrFail($id);
+        DueFattori::spegni($user);
+        $user->forceFill(['remember_token' => Str::random(60)])->save();
+        $user->tokens()->delete();
+
+        Audit::log('user.mfa_reset', $user, ['email' => $user->email]);
+
+        return response()->json(['data' => ['mfa_enabled' => false]]);
     }
 
     /** L'ultimo amministratore attivo non si tocca: nessuno resterebbe al timone. */

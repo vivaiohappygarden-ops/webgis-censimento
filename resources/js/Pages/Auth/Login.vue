@@ -1,5 +1,6 @@
 <script setup>
-import { Head, useForm } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
 
 const form = useForm({
     email: '',
@@ -9,6 +10,11 @@ const form = useForm({
 });
 
 const submit = () => form.post('/login', { onFinish: () => form.reset('password') });
+
+// L'errore puo' arrivare con un rinvio da un'altra pagina (secondo passaggio
+// dell'accesso scaduto o bloccato): il modulo da solo non lo vedrebbe
+const page = usePage();
+const erroreEmail = computed(() => form.errors.email || page.props.errors?.email || '');
 </script>
 
 <template>
@@ -33,7 +39,7 @@ const submit = () => form.post('/login', { onFinish: () => form.reset('password'
                         autocomplete="username"
                         class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
                     >
-                    <p v-if="form.errors.email" class="mt-1 text-sm text-red-600">{{ form.errors.email }}</p>
+                    <p v-if="erroreEmail" class="mt-1 text-sm text-red-600" data-test="errore-email">{{ erroreEmail }}</p>
                 </div>
 
                 <div>

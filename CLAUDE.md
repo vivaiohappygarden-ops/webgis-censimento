@@ -555,6 +555,39 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   le toglie e conta gli elementi orfani); lo scarico porta anche l'elenco dei committenti a
   chi puo' aprire aree. Prove: `CampoAreeTest`, `tests/js/geometria.test.mjs`.
 
+## Sicurezza dell'accesso (dal 27/09/2026)
+
+- **Verifica in due passaggi** (TOTP, RFC 6238 su SHA1, sei cifre ogni 30 s): codici delle
+  app di autenticazione comuni, senza dipendenze (`App\Support\Totp`, con i vettori della RFC
+  in `DueFattoriTest`). La logica sta **una volta sola** in `App\Services\Sicurezza\DueFattori`:
+  `avvia` (segreto cifrato in `users.mfa_secret`, cast `encrypted`), `conferma` (primo codice,
+  otto codici di recupero conservati solo come impronta HMAC della chiave dell'app, gettoni API
+  precedenti eliminati), `verifica` (finestra di un passo; `mfa_last_step` rifiuta un codice gia'
+  speso; il codice di recupero si consuma), `spegni`. Il segreto e i codici sono `hidden`.
+- **Accesso web**: `WebAuthController::login` con la verifica accesa non autentica: mette in
+  sessione `due_fattori` (utente, ricordami, scadenza 10 min, tentativi, pagina di ritorno) e
+  rimanda a `/login/codice` (`Auth/Codice.vue`); cinque codici sbagliati o la scadenza fanno
+  ricominciare dalla password. Chi entra con un codice di recupero atterra su
+  `/sicurezza?recupero=1`. Registro: `auth.mfa_failed`, `auth.mfa_locked`, `auth.login` con
+  `payload.due_fattori`, `mfa.enabled/disabled/recovery_codes/recovery_used`, `user.mfa_reset`,
+  `sicurezza.due_fattori`, `auth.password_changed` (`Audit::logPer` scrive a nome di chi non e'
+  ancora autenticato). L'**accesso con gettone** (`auth/login`) vuole il campo `codice`.
+- **Regola dell'organizzazione** `organizations.settings['sicurezza']['due_fattori']`
+  (`nessuno`, `amministratori`, `tutti`; `SicurezzaController`, permesso `users.manage`,
+  scrittura sotto `lockForUpdate` come le altre impostazioni). Chi e' obbligato e non l'ha
+  accesa trova aperte solo `/sicurezza`, l'uscita e le chiamate `profilo/*`, `sicurezza/*`,
+  `auth/*` (`RichiediDueFattori`, in coda ai gruppi `web` e `api`, dopo `SetPermissionsTeam`);
+  il ruolo si legge dalle tabelle (`DueFattori::eAmministratore`) perche' al login il contesto
+  del pacchetto dei permessi non e' impostato. Con la regola accesa la verifica non si spegne
+  da soli; l'amministratore la **azzera** a chi ha perso il telefono
+  (`POST users/{id}/reset-due-fattori`, gettoni e "ricordami" decadono).
+- **Pagina "Il mio accesso"** (`/sicurezza`, `Pages/Sicurezza.vue`, in fondo al menu e fra le
+  Impostazioni): attivazione con QR (`bacon-qr-code`, SVG in data URI) e chiave a mano, codici
+  di recupero mostrati una volta, nuovi codici, disattivazione, **cambio della propria password**
+  (min 10 caratteri; le altre sessioni decadono, quella corrente aggiorna `password_hash_web`) e,
+  per chi gestisce gli utenti, la regola con il conteggio degli utenti scoperti. Ogni operazione
+  delicata richiede la password (`ProfiloController`, `throttle:10,1`). Prove: `DueFattoriTest`.
+
 ## Sito aziendale (dal 13/09/2026, ridisegnato il 19/09/2026)
 
 - Tre indirizzi sullo stesso dominio: il **sito che parla ai Comuni** sul dominio nudo

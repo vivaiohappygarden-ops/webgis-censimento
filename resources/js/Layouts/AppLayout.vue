@@ -282,6 +282,12 @@ const logout = async () => {
                     <div class="truncate text-sm font-medium">{{ user?.name }}</div>
                     <div class="truncate text-xs text-gray-500">{{ user?.email }}</div>
                 </div>
+                <Link
+                    href="/sicurezza"
+                    class="block w-full rounded-lg px-3 py-2 text-left text-sm transition hover:bg-gray-50 hover:text-gray-900"
+                    :class="isActive('/sicurezza') ? 'font-semibold text-gray-900' : 'text-gray-600'"
+                    data-test="il-mio-accesso"
+                >Il mio accesso</Link>
                 <button
                     type="button"
                     class="w-full rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"

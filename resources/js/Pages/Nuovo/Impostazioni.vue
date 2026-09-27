@@ -33,6 +33,7 @@ onMounted(async () => {
 
 const voci = computed(() => [
     { titolo: 'Utenti e ruoli', testo: 'Chi entra nel programma e che cosa può fare. I cinque ruoli di serie restano; se ne creano di nuovi su misura.', href: '/utenti', show: can('users.manage'), numero: numeri.value.utenti !== null ? `${numeri.value.utenti} utenti · ${numeri.value.ruoli} ruoli` : null },
+    { titolo: 'Il mio accesso', testo: 'La tua password e la verifica in due passaggi con il codice dal telefono. Chi gestisce gli utenti decide anche chi deve averla.', href: '/sicurezza', show: true },
     { titolo: 'Azienda e firma dei documenti', testo: 'Intestazione, professionista firmatario e luogo della riga "Luogo, data" sopra la firma di perizie, bilanci e registri.', href: '/utenti#firma', show: can('users.manage') },
     { titolo: 'Intervalli di ricontrollo VTA', testo: 'I mesi di ricontrollo per classe di propensione al cedimento, usati dallo scadenzario e dalla pagina Oggi.', href: '/utenti#vta-intervalli', show: can('users.manage') },
     { titolo: 'Squadre e imprese esterne', testo: "Le squadre interne e le imprese dei committenti, con l'accesso al portale delle imprese.", href: '/utenti#squadre', show: can('users.manage'), numero: numeri.value.squadre !== null ? `${numeri.value.squadre} squadre` : null },

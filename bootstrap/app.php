@@ -39,11 +39,13 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\InvalidateStaleSessions::class,
             \App\Http\Middleware\EnsureUserIsActive::class,
             \App\Http\Middleware\SetPermissionsTeam::class,
+            \App\Http\Middleware\RichiediDueFattori::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
         ]);
         $middleware->api(append: [
             \App\Http\Middleware\EnsureUserIsActive::class,
             \App\Http\Middleware\SetPermissionsTeam::class,
+            \App\Http\Middleware\RichiediDueFattori::class,
         ]);
         // Gruppo del portale pubblico: niente sessione, niente cookie,
         // niente Inertia. Solo il riconoscimento del committente e il tetto

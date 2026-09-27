@@ -19,6 +19,7 @@ const ROLE_LABELS = {
     operatore: 'Operatore',
     cliente: 'Cliente (portale)',
     impresa: 'Impresa esterna (portale)',
+    esecutore: 'Esecutore (app di campo)',
 };
 
 const users = ref([]);
@@ -229,6 +230,19 @@ async function toggleActive(user) {
         await load();
     } catch (err) {
         pageError.value = firstError(err, 'Aggiornamento non riuscito');
+    }
+}
+
+// Telefono perso: la verifica in due passaggi si azzera e l'utente rientra
+// con la sola password (se la regola lo obbliga, la riattiva subito)
+async function azzeraDueFattori(user) {
+    if (! window.confirm(`Azzerare la verifica in due passaggi di ${user.name}? Entrerà con la sola password e, se la regola lo obbliga, dovrà riattivarla con il telefono nuovo.`)) return;
+    pageError.value = '';
+    try {
+        await axios.post(`/api/v1/users/${user.id}/reset-due-fattori`);
+        await load();
+    } catch (err) {
+        pageError.value = firstError(err, 'Azzeramento non riuscito');
     }
 }
 
@@ -584,10 +598,12 @@ onMounted(() => {
                                 <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="u.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-500'">
                                     {{ u.is_active ? 'Attivo' : 'Disattivato' }}
                                 </span>
+                                <span v-if="u.mfa_enabled" class="ml-1 whitespace-nowrap rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-800" data-test="usr-due-fattori">verifica in due passaggi</span>
                             </td>
                             <td class="px-4 py-2 text-right text-xs">
                                 <button class="font-medium text-gray-700 hover:underline" data-test="usr-edit" @click="openEditor(u)">Modifica</button>
                                 <button class="ml-3 font-medium text-gray-700 hover:underline" data-test="usr-reset" @click="resetPassword(u)">Nuova password</button>
+                                <button v-if="u.mfa_enabled" class="ml-3 font-medium text-gray-700 hover:underline" data-test="usr-azzera-due-fattori" @click="azzeraDueFattori(u)">Azzera verifica</button>
                                 <button
                                     v-if="u.id !== myId"
                                     class="ml-3 font-medium hover:underline"

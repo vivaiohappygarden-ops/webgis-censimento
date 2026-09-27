@@ -1125,6 +1125,20 @@ function goTo(id) {
                             (la sua storia resta); "Nuova password" rimedia a una password dimenticata.
                             Non è possibile disattivare sé stessi né l'ultimo amministratore attivo.
                         </p>
+                        <h3>Verifica in due passaggi</h3>
+                        <p>
+                            Dalla pagina <strong>Il mio accesso</strong> (in fondo al menu) ognuno può accendere la
+                            <strong>verifica in due passaggi</strong>: oltre alla password, all'accesso si inserisce un
+                            codice a sei cifre generato da un'app gratuita sul telefono (Google Authenticator,
+                            Microsoft Authenticator, FreeOTP o simili). Si inquadra un codice QR, si conferma con il
+                            primo codice e si salvano gli <strong>otto codici di recupero</strong>, che servono se si
+                            perde il telefono (ognuno vale una volta sola). L'amministratore può renderla
+                            <strong>obbligatoria</strong> per gli amministratori o per tutti: chi ne è obbligato, al
+                            prossimo accesso trova solo quella pagina finché non la attiva. Se qualcuno perde il
+                            telefono e i codici, l'amministratore gli <strong>azzera la verifica</strong> dalla pagina
+                            Utenti ("Azzera verifica"). Dalla stessa pagina "Il mio accesso" si cambia la propria
+                            password.
+                        </p>
                         <h3>Ruoli e permessi su misura</h3>
                         <p>
                             Il riquadro <strong>"Ruoli e permessi"</strong> mostra chi può fare cosa. I

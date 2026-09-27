@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
 use App\Models\User;
+use App\Services\Sicurezza\DueFattori;
 use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,6 +29,8 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
             'organization' => ['nullable', 'string'],
             'device_name' => ['nullable', 'string', 'max:100'],
+            // Il codice della verifica in due passaggi, se l'utente l'ha accesa
+            'codice' => ['nullable', 'string', 'max:40'],
         ]);
 
         $query = User::query()
@@ -62,6 +65,28 @@ class AuthController extends Controller
 
         /** @var User $user */
         $user = $candidates->first();
+
+        // Il gettone vale quanto la sessione: chi ha la verifica in due
+        // passaggi la supera anche qui, e chi e' obbligato ad averla senza
+        // averla accesa non riceve gettoni finche' non la attiva
+        if (DueFattori::attiva($user)) {
+            $codice = trim((string) ($data['codice'] ?? ''));
+            if ($codice === '') {
+                throw ValidationException::withMessages([
+                    'codice' => 'Serve anche il codice della verifica in due passaggi (campo codice).',
+                ]);
+            }
+            if (DueFattori::verifica($user, $codice) === null) {
+                Audit::logPer($user, 'auth.mfa_failed');
+
+                throw ValidationException::withMessages(['codice' => 'Codice non valido.']);
+            }
+        } elseif (DueFattori::obbligatoriaPer($user)) {
+            throw ValidationException::withMessages([
+                'codice' => 'La tua organizzazione richiede la verifica in due passaggi: attivala dal gestionale (Impostazioni, Il mio accesso) e poi accedi di nuovo.',
+            ]);
+        }
+
         $user->forceFill(['last_login_at' => now()])->save();
 
         $token = $user->createToken($data['device_name'] ?? 'api');

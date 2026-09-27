@@ -100,6 +100,19 @@ sudo -u postgres psql -tAc "SELECT count(*) || ' collegamenti su ' || setting FR
 redis-cli info memory 2>/dev/null | grep -E '^(used_memory_human|maxmemory_human)' | sed 's/^/  Redis: /' \
   || echo "  Redis: non interrogabile"
 
+titolo "Ora del server"
+# I codici della verifica in due passaggi si calcolano dall'ora: se il server
+# e' fuori di piu' di trenta secondi, i codici giusti vengono rifiutati
+echo "  adesso: $(date '+%d/%m/%Y %H:%M:%S %Z')"
+if command -v timedatectl >/dev/null 2>&1; then
+  sincronizzata=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo "")
+  case "$sincronizzata" in
+    yes) echo "  sincronizzazione automatica: attiva" ;;
+    no) echo "  sincronizzazione automatica: NON attiva -> timedatectl set-ntp true" ;;
+    *) echo "  sincronizzazione automatica: non verificabile" ;;
+  esac
+fi
+
 titolo "Salvataggi"
 if [ -x /usr/local/bin/webgis-backup ]; then
   /usr/local/bin/webgis-backup stato 2>/dev/null || echo "  -> qualcosa non va nei salvataggi: guarda /var/log/webgis-backup.log"

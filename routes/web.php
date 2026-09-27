@@ -17,6 +17,10 @@ Route::middleware('guest')->group(function () {
     // La porta d'ingresso delle imprese appaltatrici: stessa serratura
     // (il POST resta /login), parole pensate per la ditta
     Route::get('/impresa/login', [WebAuthController::class, 'showImpresa'])->name('impresa.login');
+    // Il secondo passaggio dell'accesso: il codice dell'app di autenticazione
+    // (o un codice di recupero) per chi ha la verifica in due passaggi accesa
+    Route::get('/login/codice', [WebAuthController::class, 'showCodice'])->name('login.codice');
+    Route::post('/login/codice', [WebAuthController::class, 'codice'])->middleware('throttle:10,1');
 });
 
 // Pagina pubblica dell'elemento (QR sul cartellino): nessun accesso richiesto.
@@ -82,6 +86,9 @@ Route::middleware('auth')->group(function () {
 
     // La scelta fra la nuova interfaccia e la precedente, per il proprio utente
     Route::post('/interfaccia', [\App\Http\Controllers\Web\InterfacciaController::class, 'scegli'])->name('interfaccia');
+
+    // Il proprio accesso: password e verifica in due passaggi, per chiunque
+    Route::get('/sicurezza', fn () => Inertia::render('Sicurezza'))->name('sicurezza');
 
     Route::get('/mappa', fn () => Inertia::render('Mappa'))
         ->middleware('can:assets.view')->name('mappa');

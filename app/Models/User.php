@@ -32,7 +32,7 @@ class User extends Authenticatable
         // calendar_token è nascosto perché gli elenchi utenti (pagina Utenti)
         // serializzano il modello: il gettone dà accesso all'agenda personale
         // e lo deve vedere solo il proprietario, dal pannello del calendario
-        'password', 'remember_token', 'mfa_secret', 'calendar_token',
+        'password', 'remember_token', 'mfa_secret', 'mfa_recovery_codes', 'mfa_last_step', 'calendar_token',
     ];
 
     protected function casts(): array
@@ -44,6 +44,10 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'settings' => 'array',
             'mfa_enabled' => 'boolean',
+            // Il segreto della verifica in due passaggi vive cifrato con la chiave dell'applicazione
+            'mfa_secret' => 'encrypted',
+            'mfa_confirmed_at' => 'datetime',
+            'mfa_recovery_codes' => 'array',
             'notify_email' => 'boolean',
         ];
     }

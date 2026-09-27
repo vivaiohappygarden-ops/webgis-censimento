@@ -22,6 +22,20 @@ Route::prefix('v1')->group(function () {
         Route::get('auth/me', [AuthController::class, 'me']);
         Route::post('auth/logout', [AuthController::class, 'logout']);
 
+        // Il proprio accesso: verifica in due passaggi e password. Le chiamate
+        // che controllano la password hanno il loro tetto: una sessione
+        // rubata non deve poterla indovinare a raffica
+        Route::get('profilo/sicurezza', [\App\Http\Controllers\Api\V1\ProfiloController::class, 'sicurezza']);
+        Route::middleware('throttle:10,1')->group(function () {
+            Route::post('profilo/due-fattori/avvia', [\App\Http\Controllers\Api\V1\ProfiloController::class, 'avviaDueFattori']);
+            Route::post('profilo/due-fattori/conferma', [\App\Http\Controllers\Api\V1\ProfiloController::class, 'confermaDueFattori']);
+            Route::post('profilo/due-fattori/codici', [\App\Http\Controllers\Api\V1\ProfiloController::class, 'nuoviCodiciRecupero']);
+            Route::delete('profilo/due-fattori', [\App\Http\Controllers\Api\V1\ProfiloController::class, 'disattivaDueFattori']);
+            Route::put('profilo/password', [\App\Http\Controllers\Api\V1\ProfiloController::class, 'cambiaPassword']);
+        });
+        Route::get('sicurezza/regola', [\App\Http\Controllers\Api\V1\SicurezzaController::class, 'regola']);
+        Route::put('sicurezza/regola', [\App\Http\Controllers\Api\V1\SicurezzaController::class, 'aggiornaRegola']);
+
         Route::get('catalog', [CatalogController::class, 'index'])->middleware('can:catalog.view');
         Route::post('catalog/object-types', [CatalogAdminController::class, 'storeObjectType']);
         Route::patch('catalog/object-types/{id}', [CatalogAdminController::class, 'updateObjectType'])->whereUuid('id');
@@ -128,6 +142,7 @@ Route::prefix('v1')->group(function () {
         Route::post('users', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'store']);
         Route::patch('users/{id}', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'update'])->whereUuid('id');
         Route::post('users/{id}/reset-password', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'resetPassword'])->whereUuid('id');
+        Route::post('users/{id}/reset-due-fattori', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'resetDueFattori'])->whereUuid('id');
         Route::get('roles', [\App\Http\Controllers\Api\V1\RoleAdminController::class, 'index']);
         Route::post('roles', [\App\Http\Controllers\Api\V1\RoleAdminController::class, 'store']);
         Route::patch('roles/{id}', [\App\Http\Controllers\Api\V1\RoleAdminController::class, 'update'])->whereUuid('id');

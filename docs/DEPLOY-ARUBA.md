@@ -503,6 +503,24 @@ rsync -a /var/backups/webgis/file/<data>/ /var/www/webgis/storage/app/
 chown -R www-data:www-data /var/www/webgis/storage
 ```
 
+### 6.8 Verifica in due passaggi
+
+Ogni utente puo' accendere dalla pagina **Il mio accesso** (in fondo al menu) la
+**verifica in due passaggi**: oltre alla password, all'accesso si inserisce il codice a
+sei cifre di un'app gratuita sul telefono (Google Authenticator, Microsoft Authenticator,
+FreeOTP e simili). Si inquadra il codice QR, si conferma con il primo codice e si
+conservano gli otto **codici di recupero**, che servono se si perde il telefono.
+
+L'amministratore, dalla stessa pagina, decide la **regola dell'organizzazione**: nessun
+obbligo, obbligo per gli amministratori (il minimo consigliato) o per tutti. Chi e'
+obbligato e non l'ha ancora accesa, al prossimo accesso trova solo quella pagina finche'
+non la attiva. A chi ha perso telefono e codici l'amministratore **azzera la verifica**
+dalla pagina Utenti ("Azzera verifica"): rientra con la sola password e la riattiva.
+
+Non serve niente sul server e non ci sono SMS ne' servizi esterni: i codici si calcolano
+dall'ora. Il server deve avere l'ora giusta: su Ubuntu la sincronizzazione di sistema e'
+accesa di serie e `diagnostica.sh` lo controlla (riga "Ora del server").
+
 ---
 
 *Questa guida accompagna gli script in `deploy/`: `provision.sh`
