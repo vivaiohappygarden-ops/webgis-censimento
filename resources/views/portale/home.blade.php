@@ -53,10 +53,15 @@
 }
 
 /* Il campo del cartellino: una scatola vera, con il suo bordo. La versione
-   precedente era un filo sotto il testo e da sola sembrava una riga vuota. */
+   precedente era un filo sotto il testo e da sola sembrava una riga vuota.
+   Dal 27/09/2026 la scatola e' piu' stretta (440 px, era 640) e dai 600 px il
+   campo non si allarga piu' di 16 caratteri: un numero di cartellino ne ha
+   quattro o otto, e un campo largo mezzo schermo faceva sembrare la scatola
+   un modulo (osservazione del committente). Sul telefono il campo resta a
+   tutta riga, con il pulsante sotto. */
 .cerca {
     margin-top: var(--s-4);
-    max-width: 640px;
+    max-width: 440px;
 }
 .cerca-etichetta {
     display: block;
@@ -85,6 +90,9 @@
 }
 .cerca-campo::placeholder { color: var(--inchiostro-2); opacity: 0.7; }
 .cerca-invio { flex: 0 0 auto; }
+/* Dai 600 px il campo non si allarga oltre i 16 caratteri (vedi sopra); la
+   regola sta dopo .cerca-campo perche' deve vincere sul suo flex. */
+@media (min-width: 600px) { .cerca-campo { flex: 0 1 16ch; } }
 .cerca-nota {
     margin: var(--s-1) 0 0;
     font-size: var(--t-etichetta);
