@@ -613,13 +613,17 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - **Assistenza**: il gestore entra in un'altra organizzazione **come utente proprio**
   "Assistenza piattaforma" (`assistenza+<slug>@piattaforma.invalid`, dominio riservato RFC 2606,
   password casuale mai comunicata), amministratore, acceso per `ORE_ASSISTENZA` (8) e poi scaduto
-  da solo (`assistenzaScaduta`, controllata da `EnsureUserIsActive`). Non e' un travestimento: nel
-  registro dell'organizzazione ogni azione porta quel nome, e l'utente compare nella sua pagina
-  Utenti. La sessione ricorda il gestore (`session('assistenza')`), il layout mostra la fascia con
-  "Termina e torna alla console" (`AssistenzaController`, `InvalidateStaleSessions::ricorda`
-  allinea l'hash quando la sessione cambia utente). Registro: `piattaforma.organizzazione_creata`,
-  `piattaforma.sospesa/riattivata`, `piattaforma.assistenza_inizio/fine` (nei registri di tutte e
-  due le parti). Prove: `PiattaformaTest`.
+  da solo (`assistenzaScaduta`, controllata da `EnsureUserIsActive`). **Non lascia traccia
+  nell'organizzazione assistita** (decisione committente 27/09/2026): niente righe nel suo
+  registro (inizio, fine, ne' `auth.logout` se si esce con "Esci", che chiude l'assistenza),
+  l'utente non compare nella sua pagina Utenti (`UserAdminController::index`) e non conta come
+  amministratore (`guardLastAdministrator`), ne' nelle regole della verifica in due passaggi.
+  Le modifiche fatte durante l'assistenza restano a nome "Assistenza piattaforma", come ogni
+  modifica resta a nome di chi la fa: lo storico non mente. La sessione ricorda il gestore
+  (`session('assistenza')`), il layout mostra la fascia con "Termina e torna alla console"
+  (`AssistenzaController`, `InvalidateStaleSessions::ricorda` allinea l'hash quando la sessione
+  cambia utente). Registro, **solo nel tenant del gestore**: `piattaforma.organizzazione_creata`,
+  `piattaforma.sospesa/riattivata`, `piattaforma.assistenza_inizio/fine`. Prove: `PiattaformaTest`.
 
 ## Sito aziendale (dal 13/09/2026, ridisegnato il 19/09/2026)
 

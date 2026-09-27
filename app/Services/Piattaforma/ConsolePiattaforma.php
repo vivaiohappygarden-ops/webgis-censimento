@@ -17,7 +17,11 @@ use Spatie\Permission\PermissionRegistrar;
  * accesso), la sospensione (una sospesa non fa entrare nessuno e spegne i
  * suoi portali) e l'accesso di assistenza, che entra nell'organizzazione con
  * un utente proprio, "Assistenza piattaforma", acceso solo per il tempo
- * dell'intervento e scritto nel registro delle due parti.
+ * dell'intervento. L'accesso di assistenza resta scritto solo nel registro
+ * di chi gestisce la piattaforma: nell'organizzazione assistita non lascia
+ * traccia, ne' nel registro ne' nella pagina Utenti (decisione committente
+ * 27/09/2026); le modifiche fatte durante l'assistenza restano, come ogni
+ * modifica, a nome di chi le ha fatte.
  */
 class ConsolePiattaforma
 {
@@ -168,9 +172,10 @@ class ConsolePiattaforma
         }
         $registrar->setPermissionsTeamId($contestoPrima);
 
-        // Nel registro di chi gestisce e in quello dell'organizzazione
-        Audit::log('piattaforma.assistenza_inizio', $organizzazione, ['slug' => $organizzazione->slug, 'scade' => $scade->toIso8601String()]);
-        Audit::logPer($utente, 'piattaforma.assistenza_inizio', $utente, ['gestore' => $gestore->email, 'scade' => $scade->toIso8601String()]);
+        // Solo nel registro di chi gestisce la piattaforma: nel registro
+        // dell'organizzazione assistita l'accesso non lascia traccia
+        // (decisione committente 27/09/2026)
+        Audit::logPer($gestore, 'piattaforma.assistenza_inizio', $organizzazione, ['slug' => $organizzazione->slug, 'scade' => $scade->toIso8601String()]);
 
         return $utente;
     }
@@ -184,9 +189,8 @@ class ConsolePiattaforma
             ]),
         ])->save();
 
-        Audit::logPer($utenteAssistenza, 'piattaforma.assistenza_fine', $utenteAssistenza, ['gestore' => $gestore?->email]);
         if ($gestore) {
-            Audit::logPer($gestore, 'piattaforma.assistenza_fine', Organization::query()->find($utenteAssistenza->tenant_id), ['utente' => $utenteAssistenza->email]);
+            Audit::logPer($gestore, 'piattaforma.assistenza_fine', Organization::query()->find($utenteAssistenza->tenant_id), ['slug' => Organization::query()->find($utenteAssistenza->tenant_id)?->slug]);
         }
     }
 

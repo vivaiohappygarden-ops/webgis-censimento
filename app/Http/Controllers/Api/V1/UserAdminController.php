@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\User;
+use App\Services\Piattaforma\ConsolePiattaforma;
 use App\Services\Sicurezza\DueFattori;
 use App\Services\Tenancy\TenantProvisioner;
 use App\Support\Audit;
@@ -36,6 +37,9 @@ class UserAdminController extends Controller implements HasMiddleware
             // withTrashed: un cliente eliminato deve restare visibile come
             // collegamento storico, non sparire in un trattino
             ->with(['client' => fn ($q) => $q->withTrashed()->select('id', 'name')])
+            // L'utente di assistenza della piattaforma non e' un utente
+            // dell'organizzazione: non compare
+            ->where('email', 'not like', '%@'.ConsolePiattaforma::DOMINIO_ASSISTENZA)
             ->orderBy('name')
             ->get()
             ->map(fn (User $user) => [
@@ -217,6 +221,8 @@ class UserAdminController extends Controller implements HasMiddleware
         $otherActiveAdmins = User::query()
             ->where('id', '!=', $user->id)
             ->where('is_active', true)
+            // L'assistenza della piattaforma non tiene il timone al posto di nessuno
+            ->where('email', 'not like', '%@'.ConsolePiattaforma::DOMINIO_ASSISTENZA)
             ->get()
             ->filter(fn (User $candidate) => $candidate->hasRole('amministratore'))
             ->count();

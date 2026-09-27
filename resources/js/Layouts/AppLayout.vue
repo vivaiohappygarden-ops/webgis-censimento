@@ -331,7 +331,7 @@ const logout = async () => {
             >
                 <span>
                     Assistenza in corso in <strong>{{ assistenza.organizzazione }}</strong><template v-if="oraAssistenza"> dalle {{ oraAssistenza }}</template>:
-                    ogni azione resta nel registro con il nome "Assistenza piattaforma".
+                    le modifiche che fai restano a nome "Assistenza piattaforma".
                 </span>
                 <button
                     type="button"

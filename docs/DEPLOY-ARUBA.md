@@ -529,7 +529,8 @@ elementi, fotografie e spazio, ultimo accesso), da cui crea una nuova organizzaz
 pronta all'uso (come `tenant:create`, con la password provvisoria dell'amministratore
 mostrata una volta), la **sospende** (nessuno entra piu', i suoi portali si spengono) o la
 riattiva, e **entra in assistenza** con l'utente "Assistenza piattaforma", che dura otto
-ore e resta nel registro dell'organizzazione.
+ore. L'accesso resta annotato solo nel registro di chi gestisce la piattaforma:
+l'organizzazione assistita non lo vede ne' nel suo registro ne' fra i suoi utenti.
 
 La qualifica si da' solo dal terminale, e la console si apre solo con la verifica in due
 passaggi attiva:

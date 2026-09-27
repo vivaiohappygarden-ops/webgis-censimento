@@ -222,16 +222,20 @@ class PiattaformaTest extends TestCase
         app(PermissionRegistrar::class)->setPermissionsTeamId($altra->id);
         $this->assertTrue($assistenza->hasRole('amministratore'));
         $this->assertSame($gestore->email, $assistenza->settings['assistenza']['gestore']);
+        // La nota sta solo nel registro di chi gestisce la piattaforma:
+        // nell'organizzazione assistita non resta traccia (decisione 27/09/2026)
         $this->assertDatabaseHas('audit_logs', ['action' => 'piattaforma.assistenza_inizio', 'tenant_id' => $mia->id, 'user_id' => $gestore->id]);
-        $this->assertDatabaseHas('audit_logs', ['action' => 'piattaforma.assistenza_inizio', 'tenant_id' => $altra->id, 'user_id' => $assistenza->id]);
+        $this->assertDatabaseMissing('audit_logs', ['tenant_id' => $altra->id, 'action' => 'piattaforma.assistenza_inizio']);
+        $this->assertDatabaseMissing('audit_logs', ['tenant_id' => $altra->id, 'user_id' => $assistenza->id]);
 
         // Si lavora nell'altra organizzazione, con la fascia che lo ricorda
         Auth::forgetGuards();
         $this->get('/oggi')->assertOk()->assertInertia(fn (Assert $p) => $p
             ->where('assistenza.organizzazione', $altra->name)
             ->where('auth.user.tenant_id', $altra->id));
+        // ... e l'utente di assistenza non compare nella pagina Utenti dell'organizzazione
         Auth::forgetGuards();
-        $this->getJson('/api/v1/users')->assertOk()->assertJsonFragment(['email' => $assistenza->email]);
+        $this->getJson('/api/v1/users')->assertOk()->assertJsonMissing(['email' => $assistenza->email]);
         // Nella console figura l'assistenza in corso
         $this->assertNotNull(collect(app(ConsolePiattaforma::class)->organizzazioni())->firstWhere('id', $altra->id)['assistenza']);
 
@@ -244,13 +248,31 @@ class PiattaformaTest extends TestCase
         Auth::forgetGuards();
         $this->assertAuthenticatedAs($gestore);
         $this->assertFalse($assistenza->refresh()->is_active);
-        $this->assertDatabaseHas('audit_logs', ['action' => 'piattaforma.assistenza_fine', 'tenant_id' => $altra->id]);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'piattaforma.assistenza_fine', 'tenant_id' => $mia->id, 'user_id' => $gestore->id]);
+        $this->assertSame(0, \App\Models\AuditLog::query()->withoutGlobalScopes()->where('tenant_id', $altra->id)->count(), 'Nel registro dell\'organizzazione assistita non deve restare niente');
         Auth::forgetGuards();
         $this->get('/piattaforma')->assertOk()->assertInertia(fn (Assert $p) => $p->where('assistenza', null));
 
         // Senza assistenza in corso il pulsante non fa niente di strano
         Auth::forgetGuards();
         $this->post('/piattaforma/assistenza/termina')->assertForbidden();
+    }
+
+    public function test_esci_durante_l_assistenza_la_chiude_senza_lasciare_traccia(): void
+    {
+        [$mia, $gestore] = $this->gestore();
+        [$altra] = $this->createTenantUser(role: 'tecnico');
+        $this->actingAs($gestore);
+        $this->post("/piattaforma/assistenza/{$altra->id}")->assertRedirect(route('oggi'));
+        $assistenza = User::query()->withoutGlobalScopes()->where('tenant_id', $altra->id)
+            ->where('email', ConsolePiattaforma::emailAssistenza($altra))->firstOrFail();
+
+        Auth::forgetGuards();
+        $this->post('/logout')->assertRedirect(route('login'));
+        $this->assertGuest();
+        $this->assertFalse($assistenza->refresh()->is_active);
+        $this->assertSame(0, \App\Models\AuditLog::query()->withoutGlobalScopes()->where('tenant_id', $altra->id)->count());
+        $this->assertDatabaseHas('audit_logs', ['action' => 'piattaforma.assistenza_fine', 'tenant_id' => $mia->id, 'user_id' => $gestore->id]);
     }
 
     public function test_l_assistenza_scade_da_sola_e_non_entra_in_un_organizzazione_sospesa(): void

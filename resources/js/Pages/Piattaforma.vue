@@ -123,7 +123,7 @@ const salvaNote = () => conAzione(async () => {
     azione.noteSalvate = true;
 }, 'Salvataggio non riuscito');
 function entraInAssistenza() {
-    if (! window.confirm(`Entrare in "${scelta.value.name}" come Assistenza piattaforma? L'accesso resta nel registro dell'organizzazione e dura al massimo otto ore.`)) return;
+    if (! window.confirm(`Entrare in "${scelta.value.name}" come Assistenza piattaforma? L'accesso dura al massimo otto ore e resta annotato solo nel tuo registro.`)) return;
     router.post(`/piattaforma/assistenza/${scelta.value.id}`, {}, { onError: (e) => { azione.errore = Object.values(e)[0] ?? 'Accesso non riuscito'; } });
 }
 

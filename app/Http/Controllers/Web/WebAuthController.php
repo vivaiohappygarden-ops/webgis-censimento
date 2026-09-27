@@ -163,7 +163,17 @@ class WebAuthController extends Controller
 
     public function logout(Request $request): RedirectResponse
     {
-        Audit::log('auth.logout', $request->user());
+        $user = $request->user();
+        if ($user && ConsolePiattaforma::eUtenteAssistenza($user)) {
+            // "Esci" durante l'assistenza vale come "Termina": l'utente di
+            // assistenza si spegne e nel registro dell'organizzazione non
+            // resta niente; la nota va solo nel registro della piattaforma
+            $marker = $request->session()->get('assistenza');
+            $gestore = is_array($marker) ? User::query()->withoutGlobalScopes()->find($marker['gestore'] ?? '') : null;
+            app(ConsolePiattaforma::class)->terminaAssistenza($user, $gestore);
+        } else {
+            Audit::log('auth.logout', $user);
+        }
 
         Auth::logout();
         $request->session()->invalidate();
