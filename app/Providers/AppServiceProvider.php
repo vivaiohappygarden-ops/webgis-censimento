@@ -29,6 +29,9 @@ class AppServiceProvider extends ServiceProvider
         // qui si dice solo chi puo' entrare nella porta di campo
         Gate::define('app-campo', fn ($user) => $user->can('assets.create') || $user->can('works.execute'));
         Gate::define('sync-campo', fn ($user) => $user->can('assets.view') || $user->can('works.execute'));
+        // La console della piattaforma: qualifica data solo dal terminale
+        // (php artisan piattaforma:gestore), non un permesso dei ruoli
+        Gate::define('piattaforma', fn ($user) => (bool) $user->is_platform_manager);
 
         /*
          * Limite generale delle API, contato per utente.

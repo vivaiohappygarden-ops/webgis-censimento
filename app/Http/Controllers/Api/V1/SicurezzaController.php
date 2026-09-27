@@ -30,7 +30,8 @@ class SicurezzaController extends Controller implements HasMiddleware
     public function regola(Request $request): JsonResponse
     {
         $tenantId = $request->user()->tenant_id;
-        $attivi = User::query()->where('is_active', true);
+        $attivi = User::query()->where('is_active', true)
+            ->where('email', 'not like', '%@'.\App\Services\Piattaforma\ConsolePiattaforma::DOMINIO_ASSISTENZA);
 
         return response()->json(['data' => [
             'regola' => DueFattori::regola($tenantId),

@@ -36,6 +36,13 @@ Route::prefix('v1')->group(function () {
         Route::get('sicurezza/regola', [\App\Http\Controllers\Api\V1\SicurezzaController::class, 'regola']);
         Route::put('sicurezza/regola', [\App\Http\Controllers\Api\V1\SicurezzaController::class, 'aggiornaRegola']);
 
+        // Console della piattaforma (gestori con verifica in due passaggi attiva)
+        Route::get('piattaforma/organizzazioni', [\App\Http\Controllers\Api\V1\PiattaformaController::class, 'index']);
+        Route::post('piattaforma/organizzazioni', [\App\Http\Controllers\Api\V1\PiattaformaController::class, 'store']);
+        Route::patch('piattaforma/organizzazioni/{id}', [\App\Http\Controllers\Api\V1\PiattaformaController::class, 'update'])->whereUuid('id');
+        Route::post('piattaforma/organizzazioni/{id}/sospendi', [\App\Http\Controllers\Api\V1\PiattaformaController::class, 'sospendi'])->whereUuid('id');
+        Route::post('piattaforma/organizzazioni/{id}/riattiva', [\App\Http\Controllers\Api\V1\PiattaformaController::class, 'riattiva'])->whereUuid('id');
+
         Route::get('catalog', [CatalogController::class, 'index'])->middleware('can:catalog.view');
         Route::post('catalog/object-types', [CatalogAdminController::class, 'storeObjectType']);
         Route::patch('catalog/object-types/{id}', [CatalogAdminController::class, 'updateObjectType'])->whereUuid('id');

@@ -2,18 +2,14 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Organization;
-use App\Models\User;
-use App\Services\Catalog\CatalogInstaller;
-use App\Services\Tenancy\TenantProvisioner;
+use App\Services\Tenancy\CreatoreOrganizzazione;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use Spatie\Permission\PermissionRegistrar;
+use InvalidArgumentException;
 
 /**
  * Crea una nuova organizzazione pronta all'uso: ruoli, catalogo MD v2.1
- * e amministratore con password generata. È il comando del go-live.
+ * e amministratore con password generata. È il comando del go-live; la
+ * stessa procedura si lancia dalla console della piattaforma.
  *
  *   php artisan tenant:create "Happy Garden" happy-garden admin@happygarden.it
  */
@@ -27,63 +23,32 @@ class CreateTenant extends Command
 
     protected $description = 'Crea un\'organizzazione con ruoli, catalogo Modello Dati v2.1 e utente amministratore';
 
-    public function handle(): int
+    public function handle(CreatoreOrganizzazione $creatore): int
     {
-        $slug = Str::slug($this->argument('slug'));
-        $email = strtolower(trim($this->argument('email')));
-
-        if ($slug === '') {
-            $this->error('Slug non valido.');
-
-            return self::FAILURE;
-        }
-        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $this->error("Email non valida: {$email}");
-
-            return self::FAILURE;
-        }
-        if (Organization::query()->where('slug', $slug)->exists()) {
-            $this->error("Esiste già un'organizzazione con slug '{$slug}'.");
+        try {
+            $esito = $creatore->crea(
+                $this->argument('name'),
+                $this->argument('slug'),
+                $this->argument('email'),
+                $this->option('admin-name') ?: null,
+            );
+        } catch (InvalidArgumentException $e) {
+            $this->error($e->getMessage());
 
             return self::FAILURE;
         }
 
-        $password = Str::password(16, symbols: false);
+        $organization = $esito['organizzazione'];
+        $counts = $esito['catalogo'];
 
-        [$organization, $counts] = DB::transaction(function () use ($slug, $email, $password) {
-            $organization = Organization::create([
-                'name' => $this->argument('name'),
-                'slug' => $slug,
-                'metric_srid' => 7791,
-            ]);
-
-            app(TenantProvisioner::class)->provisionRoles($organization);
-
-            $admin = User::query()->newModelInstance([
-                'name' => $this->option('admin-name') ?: 'Amministratore',
-                'email' => $email,
-                'password' => $password,
-                'user_type' => 'internal',
-            ]);
-            $admin->tenant_id = $organization->id;
-            $admin->save();
-
-            app(PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
-            $admin->assignRole('amministratore');
-
-            $counts = app(CatalogInstaller::class)->install($organization);
-
-            return [$organization, $counts];
-        });
-
-        $this->info("Organizzazione '{$organization->name}' creata (slug: {$slug}).");
+        $this->info("Organizzazione '{$organization->name}' creata (slug: {$organization->slug}).");
         $this->info(sprintf(
             'Catalogo MD v2.1 installato: %d macro-categorie, %d tipi secondari, %d tipi oggetto.',
             $counts['main_types'], $counts['sub_types'], $counts['object_types'],
         ));
         $this->newLine();
         $this->line('Credenziali amministratore (comunicarle in modo sicuro e cambiare la password al primo accesso):');
-        $this->table(['Email', 'Password'], [[$email, $password]]);
+        $this->table(['Email', 'Password'], [[$esito['amministratore']->email, $esito['password']]]);
 
         return self::SUCCESS;
     }

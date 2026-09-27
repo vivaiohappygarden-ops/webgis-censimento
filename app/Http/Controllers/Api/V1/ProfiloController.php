@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\InvalidateStaleSessions;
 use App\Models\User;
 use App\Services\Sicurezza\DueFattori;
 use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -118,11 +118,7 @@ class ProfiloController extends Controller
         $user->tokens()
             ->when($attuale instanceof PersonalAccessToken, fn ($q) => $q->where('id', '!=', $attuale->id))
             ->delete();
-        if ($request->hasSession()) {
-            $guard = Auth::guard('web');
-            $hash = (string) $user->getAuthPassword();
-            $request->session()->put('password_hash_web', method_exists($guard, 'hashPasswordForCookie') ? $guard->hashPasswordForCookie($hash) : $hash);
-        }
+        InvalidateStaleSessions::ricorda($request, $user);
         Audit::log('auth.password_changed', $user);
 
         return response()->json(['data' => ['ok' => true]]);

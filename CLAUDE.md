@@ -588,6 +588,39 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   per chi gestisce gli utenti, la regola con il conteggio degli utenti scoperti. Ogni operazione
   delicata richiede la password (`ProfiloController`, `throttle:10,1`). Prove: `DueFattoriTest`.
 
+## Console della piattaforma (dal 27/09/2026)
+
+- `/piattaforma` (`Pages/Piattaforma.vue`, `PiattaformaController`, servizio
+  `App\Services\Piattaforma\ConsolePiattaforma`) e' la console di chi affitta il programma:
+  tutte le organizzazioni con i numeri per fatturare (utenti attivi, elementi, alberi, foto e
+  spazio, aree, committenti, portali accesi, lavori, ultimo accesso), la creazione di una nuova
+  organizzazione, la sospensione, le note della piattaforma e l'accesso di assistenza.
+- La qualifica e' `users.is_platform_manager`, data **solo dal terminale**
+  (`php artisan piattaforma:gestore <email> [--organizzazione=slug] [--togli]`): gate
+  `piattaforma`, non un permesso dei ruoli. La console vuole la **verifica in due passaggi
+  attiva** (la pagina lo spiega, le chiamate rispondono 403). Il gestore vede la voce
+  "Piattaforma" nel menu (prop condivisa `auth.user.piattaforma`).
+- **Creare un'organizzazione** passa da `App\Services\Tenancy\CreatoreOrganizzazione`, la stessa
+  procedura di `tenant:create` (ruoli, catalogo MD v2.1, amministratore con password
+  provvisoria mostrata una volta): il contesto dei permessi si sposta sulla nuova organizzazione
+  solo per assegnare il ruolo e poi torna com'era, perche' il gestore sta in un'altra.
+- **Sospensione** = `organizations.is_active = false` piu' `settings['piattaforma']['sospensione']`
+  (dal, motivo, da): il login dice "organizzazione sospesa" solo a chi ha la password giusta
+  (`ConsolePiattaforma::organizzazioneSospesaPer`), i gettoni API vengono eliminati,
+  `EnsureUserIsActive` chiude le sessioni aperte alla richiesta successiva, i portali pubblici e
+  i feed del calendario erano gia' spenti dal controllo su `is_active`. Non si sospende la propria
+  organizzazione.
+- **Assistenza**: il gestore entra in un'altra organizzazione **come utente proprio**
+  "Assistenza piattaforma" (`assistenza+<slug>@piattaforma.invalid`, dominio riservato RFC 2606,
+  password casuale mai comunicata), amministratore, acceso per `ORE_ASSISTENZA` (8) e poi scaduto
+  da solo (`assistenzaScaduta`, controllata da `EnsureUserIsActive`). Non e' un travestimento: nel
+  registro dell'organizzazione ogni azione porta quel nome, e l'utente compare nella sua pagina
+  Utenti. La sessione ricorda il gestore (`session('assistenza')`), il layout mostra la fascia con
+  "Termina e torna alla console" (`AssistenzaController`, `InvalidateStaleSessions::ricorda`
+  allinea l'hash quando la sessione cambia utente). Registro: `piattaforma.organizzazione_creata`,
+  `piattaforma.sospesa/riattivata`, `piattaforma.assistenza_inizio/fine` (nei registri di tutte e
+  due le parti). Prove: `PiattaformaTest`.
+
 ## Sito aziendale (dal 13/09/2026, ridisegnato il 19/09/2026)
 
 - Tre indirizzi sullo stesso dominio: il **sito che parla ai Comuni** sul dominio nudo

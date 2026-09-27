@@ -22,6 +22,22 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class InvalidateStaleSessions
 {
+    /**
+     * Quando la sessione cambia utente senza passare dal login (accesso di
+     * assistenza) o l'utente cambia password, l'hash ricordato va allineato
+     * subito, o la richiesta successiva butterebbe fuori.
+     */
+    public static function ricorda(Request $request, \App\Models\User $user): void
+    {
+        if (! $request->hasSession()) {
+            return;
+        }
+        $guard = Auth::guard('web');
+        $hash = (string) $user->getAuthPassword();
+        $request->session()->put('password_hash_web', method_exists($guard, 'hashPasswordForCookie')
+            ? $guard->hashPasswordForCookie($hash) : $hash);
+    }
+
     public function handle(Request $request, Closure $next): Response
     {
         $guard = Auth::guard('web');

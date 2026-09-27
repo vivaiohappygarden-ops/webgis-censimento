@@ -4,6 +4,7 @@ namespace App\Services\Sicurezza;
 
 use App\Models\Organization;
 use App\Models\User;
+use App\Services\Piattaforma\ConsolePiattaforma;
 use App\Support\Totp;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
@@ -41,6 +42,13 @@ class DueFattori
     /** Se la regola della sua organizzazione obbliga questo utente ad avere la verifica accesa. */
     public static function obbligatoriaPer(User $user, ?string $regola = null): bool
     {
+        // L'utente di assistenza della piattaforma non ha un telefono suo: ci
+        // entra il gestore, che la verifica l'ha gia' superata per aprire la
+        // console, e non puo' accedere in altro modo (password casuale)
+        if (ConsolePiattaforma::eUtenteAssistenza($user)) {
+            return false;
+        }
+
         return match ($regola ?? self::regola($user->tenant_id)) {
             'tutti' => true,
             'amministratori' => self::eAmministratore($user),
@@ -73,7 +81,8 @@ class DueFattori
 
         $utenti = User::query()->withoutGlobalScopes()
             ->where('tenant_id', $tenantId)->whereNull('deleted_at')
-            ->where('is_active', true)->where('mfa_enabled', false);
+            ->where('is_active', true)->where('mfa_enabled', false)
+            ->where('email', 'not like', '%@'.ConsolePiattaforma::DOMINIO_ASSISTENZA);
 
         if ($regola === 'amministratori') {
             $utenti->whereExists(fn ($q) => $q->selectRaw('1')->from('model_has_roles')

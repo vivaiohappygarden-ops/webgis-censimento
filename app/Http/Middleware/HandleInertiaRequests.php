@@ -25,8 +25,15 @@ class HandleInertiaRequests extends Middleware
                     'email' => $user->email,
                     'organization' => Organization::find($user->tenant_id)?->only(['name', 'slug']),
                     'permissions' => $user->getAllPermissions()->pluck('name')->values(),
+                    // Chi gestisce la piattaforma vede la console nel menu
+                    'piattaforma' => (bool) $user->is_platform_manager,
                 ] : null,
             ],
+            // L'accesso di assistenza in corso: il layout mostra la fascia
+            // con l'organizzazione e il pulsante per terminarlo
+            'assistenza' => fn () => ($a = $request->session()->get('assistenza')) && is_array($a)
+                ? ['organizzazione' => $a['organizzazione'] ?? '', 'inizio' => $a['inizio'] ?? null]
+                : null,
             // La veste del gestionale scelta dall'utente (o quella predefinita):
             // il layout monta il menu nuovo o quello precedente in base a questa
             'interfaccia' => [

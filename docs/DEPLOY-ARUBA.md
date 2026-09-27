@@ -521,6 +521,27 @@ Non serve niente sul server e non ci sono SMS ne' servizi esterni: i codici si c
 dall'ora. Il server deve avere l'ora giusta: su Ubuntu la sincronizzazione di sistema e'
 accesa di serie e `diagnostica.sh` lo controlla (riga "Ora del server").
 
+### 6.9 Console della piattaforma (piu' organizzazioni sullo stesso server)
+
+Quando lo stesso server ospita piu' organizzazioni (Comuni, studi, imprese), chi gestisce
+la piattaforma ha una **console** con tutte le organizzazioni e i loro numeri (utenti,
+elementi, fotografie e spazio, ultimo accesso), da cui crea una nuova organizzazione
+pronta all'uso (come `tenant:create`, con la password provvisoria dell'amministratore
+mostrata una volta), la **sospende** (nessuno entra piu', i suoi portali si spengono) o la
+riattiva, e **entra in assistenza** con l'utente "Assistenza piattaforma", che dura otto
+ore e resta nel registro dell'organizzazione.
+
+La qualifica si da' solo dal terminale, e la console si apre solo con la verifica in due
+passaggi attiva:
+
+```bash
+cd /var/www/webgis
+sudo -u www-data php artisan piattaforma:gestore titolare@happygarden.it
+# per toglierla: ... --togli
+```
+
+Poi nel menu compare la voce **Piattaforma**.
+
 ---
 
 *Questa guida accompagna gli script in `deploy/`: `provision.sh`

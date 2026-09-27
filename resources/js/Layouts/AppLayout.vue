@@ -68,6 +68,13 @@ const gruppi = computed(() =>
                 { label: 'I lavori affidati', href: '/impresa', show: can('impresa.view') },
             ],
         },
+        {
+            // Solo per chi gestisce la piattaforma (qualifica data dal terminale)
+            titolo: 'Piattaforma',
+            voci: [
+                { label: 'Console', href: '/piattaforma', show: !! user.value?.piattaforma },
+            ],
+        },
     ]
         .map((g) => ({ ...g, voci: g.voci.filter((v) => v.show) }))
         .filter((g) => g.voci.length > 0)
@@ -139,6 +146,8 @@ const sezioni = computed(() =>
                 { label: 'Listini', href: '/listini', show: can('works.view') },
             ],
         },
+        // La console di chi gestisce la piattaforma: tutte le organizzazioni
+        { label: 'Piattaforma', href: '/piattaforma', show: !! user.value?.piattaforma },
         { label: 'Portale', href: '/portale', show: can('portal.view') && ! can('clients.view') },
         { label: 'I lavori affidati', href: '/impresa', show: can('impresa.view') && ! can('clients.view') },
     ]
@@ -155,6 +164,16 @@ const sezioni = computed(() =>
 const cambiaInterfaccia = () => {
     router.post('/interfaccia', { modo: nuova.value ? 'precedente' : 'nuova' });
 };
+
+// L'accesso di assistenza in corso (console della piattaforma): la fascia
+// lo ricorda e riporta alla console con il proprio utente
+const assistenza = computed(() => page.props.assistenza ?? null);
+const oraAssistenza = computed(() => {
+    if (! assistenza.value?.inizio) return '';
+    const d = new Date(assistenza.value.inizio);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+});
+const terminaAssistenza = () => router.post('/piattaforma/assistenza/termina');
 
 const logout = async () => {
     // Dispositivo condiviso: la shell offline in cache contiene i dati di sessione
@@ -305,6 +324,22 @@ const logout = async () => {
 
         <!-- pt-14 sul telefono: lo spazio della barra superiore fissa -->
         <main class="flex-1 overflow-x-hidden overflow-y-auto pt-14 md:pt-0">
+            <div
+                v-if="assistenza"
+                class="flex flex-wrap items-center justify-between gap-2 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900"
+                data-test="fascia-assistenza"
+            >
+                <span>
+                    Assistenza in corso in <strong>{{ assistenza.organizzazione }}</strong><template v-if="oraAssistenza"> dalle {{ oraAssistenza }}</template>:
+                    ogni azione resta nel registro con il nome "Assistenza piattaforma".
+                </span>
+                <button
+                    type="button"
+                    class="inline-flex min-h-11 items-center rounded-lg border border-amber-700 bg-white px-3 text-sm font-semibold text-amber-900 hover:bg-amber-100 md:min-h-[34px]"
+                    data-test="termina-assistenza"
+                    @click="terminaAssistenza"
+                >Termina e torna alla console</button>
+            </div>
             <slot />
         </main>
 

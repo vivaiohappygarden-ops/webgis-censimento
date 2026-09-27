@@ -90,6 +90,16 @@ Route::middleware('auth')->group(function () {
     // Il proprio accesso: password e verifica in due passaggi, per chiunque
     Route::get('/sicurezza', fn () => Inertia::render('Sicurezza'))->name('sicurezza');
 
+    // Console della piattaforma: chi la gestisce (qualifica data dal
+    // terminale) vede tutte le organizzazioni; l'assistenza entra in
+    // un'altra organizzazione e torna indietro
+    Route::get('/piattaforma', fn () => Inertia::render('Piattaforma', [
+        'dueFattoriAttiva' => \App\Services\Sicurezza\DueFattori::attiva(\Illuminate\Support\Facades\Auth::user()),
+    ]))->middleware('can:piattaforma')->name('piattaforma');
+    Route::post('/piattaforma/assistenza/termina', [\App\Http\Controllers\Web\AssistenzaController::class, 'termina'])->name('assistenza.termina');
+    Route::post('/piattaforma/assistenza/{organization}', [\App\Http\Controllers\Web\AssistenzaController::class, 'inizia'])
+        ->middleware('can:piattaforma')->whereUuid('organization')->name('assistenza.inizia');
+
     Route::get('/mappa', fn () => Inertia::render('Mappa'))
         ->middleware('can:assets.view')->name('mappa');
 

@@ -44,6 +44,7 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'settings' => 'array',
             'mfa_enabled' => 'boolean',
+            'is_platform_manager' => 'boolean',
             // Il segreto della verifica in due passaggi vive cifrato con la chiave dell'applicazione
             'mfa_secret' => 'encrypted',
             'mfa_confirmed_at' => 'datetime',

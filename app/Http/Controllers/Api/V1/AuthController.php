@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
 use App\Models\User;
+use App\Services\Piattaforma\ConsolePiattaforma;
 use App\Services\Sicurezza\DueFattori;
 use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
@@ -52,6 +53,11 @@ class AuthController extends Controller
         );
 
         if ($candidates->isEmpty()) {
+            // Password giusta ma organizzazione sospesa dalla piattaforma:
+            // si dice, altrimenti sembrerebbe una password sbagliata
+            if (ConsolePiattaforma::organizzazioneSospesaPer($data['email'], $data['password'])) {
+                throw ValidationException::withMessages(['email' => ConsolePiattaforma::MESSAGGIO_SOSPESA]);
+            }
             Hash::check($data['password'], self::DUMMY_HASH);
 
             throw ValidationException::withMessages(['email' => 'Credenziali non valide.']);
