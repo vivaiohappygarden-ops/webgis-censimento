@@ -452,7 +452,7 @@ const misure = computed(() => {
 });
 const TIPO_EVENTO = {
     rilievo: 'Rilievo', modifica: 'Modifica', valutazione: 'VTA', lavoro: 'Lavoro', segnalazione: 'Segnalazione',
-    foto: 'Foto', abbattimento: 'Abbattimento',
+    foto: 'Foto', foto_eliminata: 'Foto', abbattimento: 'Abbattimento',
 };
 </script>
 

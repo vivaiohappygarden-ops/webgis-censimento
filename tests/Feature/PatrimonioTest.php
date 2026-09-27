@@ -180,4 +180,33 @@ class PatrimonioTest extends TestCase
         $this->actingAsTenantUser($altro);
         $this->getJson("/api/v1/assets/{$a}/cronologia")->assertNotFound();
     }
+
+    public function test_una_foto_eliminata_resta_nel_suo_giorno_e_l_eliminazione_e_una_riga_a_se(): void
+    {
+        $a = $this->albero();
+        $foto = $this->postJson("/api/v1/assets/{$a}/photos", [
+            'photo' => UploadedFile::fake()->image('tiglio.jpg', 640, 480),
+            'taken_at' => '2026-05-27T10:00:00+02:00',
+        ])->assertCreated()->json('data.id');
+        $this->deleteJson("/api/v1/photos/{$foto}")->assertNoContent();
+
+        $eventi = collect($this->getJson("/api/v1/assets/{$a}/cronologia")->assertOk()->json('data.eventi'));
+
+        // Il giorno dello scatto resta nella cronologia, senza anteprima
+        // (il file non c'e' piu'), e dice che la foto e' stata eliminata
+        $giorno = $eventi->firstWhere('tipo', 'foto');
+        $this->assertSame('2026-05-27', $giorno['data']);
+        $this->assertSame('1 fotografia', $giorno['titolo']);
+        $this->assertStringContainsString('eliminata in seguito', $giorno['dettaglio']);
+        $this->assertSame([], $giorno['foto']);
+
+        // L'eliminazione e' un fatto del giorno in cui e' avvenuta, con chi l'ha fatta
+        $eliminazione = $eventi->firstWhere('tipo', 'foto_eliminata');
+        $this->assertNotNull($eliminazione, 'Manca la riga dell\'eliminazione');
+        $this->assertSame(now()->setTimezone('Europe/Rome')->toDateString(), $eliminazione['data']);
+        $this->assertSame('Fotografia eliminata', $eliminazione['titolo']);
+        $this->assertStringContainsString($this->utente->name, $eliminazione['dettaglio']);
+        $this->assertStringContainsString('scattata il 27/05/2026', $eliminazione['dettaglio']);
+        $this->assertSame(['foto_eliminata', 'foto'], $eventi->whereIn('tipo', ['foto', 'foto_eliminata'])->pluck('tipo')->values()->all());
+    }
 }

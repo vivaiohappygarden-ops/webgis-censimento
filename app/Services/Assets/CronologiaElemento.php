@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * La cronologia di un elemento censito: rilievo, modifiche della scheda,
- * valutazioni di stabilita', lavori, segnalazioni, fotografie, abbattimento,
+ * valutazioni di stabilita', lavori, segnalazioni, fotografie (anche quelle
+ * eliminate, con la loro eliminazione), abbattimento,
  * in un'unica linea del tempo dal piu' recente. La leggono l'anteprima
  * dell'elenco e la scheda della veste nuova: la definizione degli eventi e'
  * una sola. Nessun dato nuovo: sono le righe delle tabelle esistenti, lette
@@ -137,17 +138,52 @@ class CronologiaElemento
             );
         }
 
-        // Fotografie, raggruppate per giorno dello scatto
-        $foto = Photo::query()->where('asset_id', $asset->id)
-            ->orderByDesc('taken_at')->orderByDesc('created_at')->get(['id', 'taken_at', 'created_at', 'taken_by']);
-        foreach ($foto->groupBy(fn (Photo $f) => ($f->taken_at ?? $f->created_at)->setTimezone(self::FUSO)->toDateString()) as $giorno => $gruppo) {
+        // Fotografie, raggruppate per giorno dello scatto. Le foto eliminate
+        // restano nel conteggio del loro giorno (senza anteprima: il file non
+        // c'e' piu') e l'eliminazione e' un fatto a se', nel giorno in cui e'
+        // avvenuta e con chi l'ha fatta: la cronologia racconta quello che e'
+        // successo, non riscrive il passato
+        $foto = Photo::withTrashed()->where('asset_id', $asset->id)
+            ->orderByDesc('taken_at')->orderByDesc('created_at')
+            ->get(['id', 'taken_at', 'created_at', 'taken_by', 'deleted_at']);
+        $scatto = fn (Photo $f) => ($f->taken_at ?? $f->created_at)->setTimezone(self::FUSO);
+        foreach ($foto->groupBy(fn (Photo $f) => $scatto($f)->toDateString()) as $giorno => $gruppo) {
+            $vive = $gruppo->whereNull('deleted_at');
+            $eliminate = count($gruppo) - count($vive);
             $eventi[] = $this->evento(
                 $giorno,
                 'foto',
                 count($gruppo) === 1 ? '1 fotografia' : count($gruppo).' fotografie',
-                [$nome($gruppo->first()->taken_by)],
-                ['foto' => $gruppo->take(4)->map(fn (Photo $f) => ['id' => $f->id, 'url' => $f->url])->values()->all()],
+                [$nome($gruppo->first()->taken_by), match (true) {
+                    $eliminate === 0 => null,
+                    count($gruppo) === 1 => 'eliminata in seguito',
+                    $eliminate === count($gruppo) => 'tutte eliminate in seguito',
+                    default => $eliminate.' eliminate in seguito',
+                }],
+                ['foto' => $vive->take(4)->map(fn (Photo $f) => ['id' => $f->id, 'url' => $f->url])->values()->all()],
             );
+        }
+
+        $eliminate = $foto->whereNotNull('deleted_at');
+        if ($eliminate->isNotEmpty()) {
+            // Chi ha eliminato lo dice il registro: la riga della foto non lo porta
+            $autori = DB::table('audit_logs')
+                ->where('tenant_id', $asset->tenant_id)->where('action', 'photo.deleted')
+                ->whereIn('subject_id', $eliminate->pluck('id'))
+                ->orderBy('created_at')
+                ->pluck('user_id', 'subject_id');
+            $perGiornoEAutore = $eliminate->groupBy(fn (Photo $f) => $f->deleted_at->setTimezone(self::FUSO)->toDateString().'|'.($autori[$f->id] ?? ''));
+            foreach ($perGiornoEAutore as $chiave => $gruppo) {
+                [$giorno, $autore] = explode('|', $chiave, 2);
+                $scatti = $gruppo->map(fn (Photo $f) => $scatto($f)->format('d/m/Y'))->unique()->values();
+                $eventi[] = $this->evento(
+                    $giorno,
+                    'foto_eliminata',
+                    count($gruppo) === 1 ? 'Fotografia eliminata' : count($gruppo).' fotografie eliminate',
+                    [$nome($autore !== '' ? $autore : null),
+                        (count($gruppo) === 1 ? 'scattata il ' : 'scattate il ').$scatti->implode(', ')],
+                );
+            }
         }
 
         // I nomi degli utenti, letti in una volta sola
@@ -160,7 +196,7 @@ class CronologiaElemento
 
         // Dal piu' recente; a parita' di giorno prima quello che e' successo
         // dopo nella logica del lavoro (foto e lavori dopo il rilievo)
-        $ordine = ['rilievo' => 0, 'modifica' => 1, 'valutazione' => 2, 'segnalazione' => 3, 'lavoro' => 4, 'foto' => 5, 'abbattimento' => 6];
+        $ordine = ['rilievo' => 0, 'modifica' => 1, 'valutazione' => 2, 'segnalazione' => 3, 'lavoro' => 4, 'foto' => 5, 'foto_eliminata' => 6, 'abbattimento' => 7];
         usort($eventi, function ($a, $b) use ($ordine) {
             return [$b['data'] ?? '', $ordine[$b['tipo']]] <=> [$a['data'] ?? '', $ordine[$a['tipo']]];
         });
