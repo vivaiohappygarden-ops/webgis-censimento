@@ -30,8 +30,24 @@ case "${ARGOMENTO}" in
   --stato)
     systemctl status webgis-aggiornamento.timer --no-pager || true
     echo
+    # L'esito dell'ultimo controllo, in chiaro: il timer puo' essere acceso e
+    # il controllo fallire a ogni giro (e' successo: nel registro non
+    # compariva niente e il server restava vecchio)
+    if systemctl is-failed --quiet webgis-aggiornamento.service 2>/dev/null; then
+      echo "ATTENZIONE: l'ultimo controllo automatico e' FALLITO. Ultime righe del suo diario:"
+      journalctl -u webgis-aggiornamento.service -n 15 --no-pager 2>/dev/null | sed 's/^/  /' || true
+      echo "  Rimedio: bash ${APP_DIR}/deploy/update.sh (rinfresca anche le unita' di sistema), poi ricontrolla qui."
+    else
+      ultimo="$(systemctl show webgis-aggiornamento.service -p ExecMainExitTimestamp --value 2>/dev/null || true)"
+      echo "Ultimo controllo automatico riuscito: ${ultimo:-non ancora eseguito}"
+    fi
+    echo
     echo "Ultime righe del registro (${REGISTRO}):"
-    tail -n 20 "${REGISTRO}" 2>/dev/null || echo "  (nessun aggiornamento automatico ancora eseguito)"
+    if [[ -s "${REGISTRO}" ]]; then
+      tail -n 20 "${REGISTRO}"
+    else
+      echo "  (vuoto: nessuna versione nuova trovata finora, oppure il controllo non e' mai arrivato in fondo)"
+    fi
     exit 0
     ;;
   --disabilita)
@@ -63,6 +79,10 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=${APP_DIR}
+# systemd non imposta HOME: senza, git non trova la configurazione di root
+# e il controllo fallisce in silenzio a ogni giro
+Environment=HOME=/root
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/usr/bin/env bash ${APP_DIR}/deploy/aggiornamento-automatico.sh
 UNITA
 

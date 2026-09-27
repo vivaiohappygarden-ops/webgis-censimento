@@ -24,8 +24,20 @@ REGISTRO="${WEBGIS_REGISTRO:-/var/log/webgis-aggiornamento.log}"
 LUCCHETTO="${WEBGIS_LUCCHETTO:-/run/lock/webgis-aggiornamento.lock}"
 AGGIORNA="${WEBGIS_COMANDO_AGGIORNAMENTO:-bash ${APP_DIR}/deploy/update.sh}"
 
+# Sotto systemd HOME non e' impostata: senza, git non trova la configurazione
+# di root (safe.directory, credenziali) e si rifiuta di leggere una cartella
+# di www-data ("dubious ownership"). Il controllo falliva in silenzio a ogni
+# giro, e nel registro non compariva niente. La cartella si dichiara sicura
+# anche per variabile d'ambiente, cosi' vale per update.sh e per ogni git
+# lanciato da qui, con o senza configurazione globale
+export HOME="${HOME:-/root}"
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="${APP_DIR}"
+
 cd "${APP_DIR}"
 git config --global --add safe.directory "${APP_DIR}" 2>/dev/null || true
+
+adesso() { date '+%Y-%m-%d %H:%M:%S'; }
+registra() { echo "==== $(adesso) $*" | tee -a "${REGISTRO}" >&2; }
 
 exec 9>"${LUCCHETTO}"
 if ! flock -n 9; then
@@ -33,16 +45,23 @@ if ! flock -n 9; then
   exit 0
 fi
 
-RAMO="$(git rev-parse --abbrev-ref HEAD)"
-git fetch -q origin "${RAMO}"
+# Ogni passo che puo' fallire prima dell'aggiornamento lo scrive nel registro:
+# un controllo che muore in silenzio lascia il server vecchio senza che
+# nessuno se ne accorga
+if ! RAMO="$(git rev-parse --abbrev-ref HEAD 2>&1)"; then
+  registra "controllo non riuscito: git non legge ${APP_DIR} (${RAMO}). Serve una mano: bash ${APP_DIR}/deploy/update.sh"
+  exit 1
+fi
+if ! esito_fetch="$(git fetch -q origin "${RAMO}" 2>&1)"; then
+  registra "controllo non riuscito: impossibile leggere il ramo ${RAMO} da GitHub (${esito_fetch:-nessun dettaglio}). Si riprova al prossimo giro"
+  exit 1
+fi
 LOCALE="$(git rev-parse HEAD)"
 REMOTO="$(git rev-parse "origin/${RAMO}")"
 
 if [[ "${LOCALE}" == "${REMOTO}" ]]; then
   exit 0
 fi
-
-adesso() { date '+%Y-%m-%d %H:%M:%S'; }
 
 if ! git merge-base --is-ancestor "${LOCALE}" "${REMOTO}"; then
   echo "==== $(adesso) storia divergente sul ramo ${RAMO} (locale ${LOCALE:0:7}, remoto ${REMOTO:0:7}): l'aggiornamento automatico non tocca niente. Serve una mano: bash ${APP_DIR}/deploy/update.sh" | tee -a "${REGISTRO}" >&2

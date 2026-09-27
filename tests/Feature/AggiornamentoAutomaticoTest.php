@@ -94,6 +94,33 @@ class AggiornamentoAutomaticoTest extends TestCase
         $this->assertStringContainsString('AGGIORNAMENTO FALLITO (codice 3)', $registro);
     }
 
+    public function test_se_github_non_risponde_il_registro_lo_dice_e_si_riprova_al_giro_dopo(): void
+    {
+        // Il "remoto" sparisce: il controllo deve fallire con una riga nel
+        // registro, non in silenzio (prima moriva senza scrivere niente)
+        $this->git('-C server remote set-url origin '.escapeshellarg($this->cartella.'/non-esiste.git'));
+
+        [$esito, $uscita] = $this->lancia();
+
+        $this->assertNotSame(0, $esito);
+        $this->assertStringContainsString('controllo non riuscito', $uscita);
+        $this->assertStringContainsString('impossibile leggere il ramo', file_get_contents($this->cartella.'/registro.log'));
+        $this->assertFileDoesNotExist($this->cartella.'/traccia');
+    }
+
+    public function test_funziona_anche_senza_home_come_sotto_systemd(): void
+    {
+        file_put_contents($this->cartella.'/autore/versione.txt', "2\n");
+        $this->git('-C autore commit -q -am "Seconda versione"');
+        $this->git('-C autore push -q origin HEAD');
+
+        [$esito, $uscita] = $this->lancia(senzaHome: true);
+
+        $this->assertSame(0, $esito, $uscita);
+        $this->assertFileExists($this->cartella.'/traccia');
+        $this->assertStringContainsString('aggiornamento riuscito', file_get_contents($this->cartella.'/registro.log'));
+    }
+
     public function test_lo_script_di_abilitazione_scrive_il_timer_di_sistema(): void
     {
         $unita = $this->cartella.'/systemd';
@@ -109,6 +136,9 @@ class AggiornamentoAutomaticoTest extends TestCase
         $timer = file_get_contents($unita.'/webgis-aggiornamento.timer');
         $this->assertStringContainsString('ExecStart=/usr/bin/env bash '.base_path().'/deploy/aggiornamento-automatico.sh', $servizio);
         $this->assertStringContainsString('Type=oneshot', $servizio);
+        // Sotto systemd HOME manca: senza, git non trova la configurazione di
+        // root e il controllo falliva a ogni giro
+        $this->assertStringContainsString('Environment=HOME=/root', $servizio);
         $this->assertStringContainsString('OnUnitActiveSec=5min', $timer);
         $this->assertStringContainsString('Persistent=true', $timer);
         $this->assertStringContainsString('WantedBy=timers.target', $timer);
@@ -118,10 +148,10 @@ class AggiornamentoAutomaticoTest extends TestCase
     }
 
     /** @return array{0: int, 1: string} */
-    private function lancia(): array
+    private function lancia(bool $senzaHome = false): array
     {
         $comando = sprintf(
-            'WEBGIS_APP_DIR=%s WEBGIS_REGISTRO=%s WEBGIS_LUCCHETTO=%s WEBGIS_COMANDO_AGGIORNAMENTO=%s bash %s 2>&1',
+            ($senzaHome ? 'env -u HOME ' : '').'WEBGIS_APP_DIR=%s WEBGIS_REGISTRO=%s WEBGIS_LUCCHETTO=%s WEBGIS_COMANDO_AGGIORNAMENTO=%s bash %s 2>&1',
             escapeshellarg($this->cartella.'/server'),
             escapeshellarg($this->cartella.'/registro.log'),
             escapeshellarg($this->cartella.'/lucchetto'),

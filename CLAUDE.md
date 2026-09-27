@@ -608,6 +608,13 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   minuti che lancia `update.sh` quando il ramo seguito avanza), quello che si spinge sul ramo
   di riferimento va in produzione da solo entro cinque minuti. Solo avanzamenti in linea
   retta: una storia divergente ferma l'aggiornamento e lo scrive nel registro.
+  **Sotto systemd HOME manca** (scoperto il 27/09/2026: il timer era acceso da giorni, il
+  registro vuoto e il server vecchio): senza HOME git non trova la configurazione di root e
+  rifiuta la cartella di www-data. L'unita' imposta `HOME=/root`, gli script esportano HOME
+  e dichiarano `safe.directory` per variabile d'ambiente, ogni controllo che fallisce prima
+  dell'aggiornamento (git, fetch) finisce nel registro, `--stato` dice se l'ultimo controllo
+  e' fallito e mostra il diario, e `update.sh` rinfresca le unita' del timer quando esistono.
+  Prove: `AggiornamentoAutomaticoTest` (compreso il lancio senza HOME).
 - **Salvataggi del server** (`deploy/backup.sh`, rifatto il 26/09/2026): banca dati con
   `pg_dump` verificato da `pg_restore --list`, file in **istantanee incrementali** con
   `rsync --link-dest` (una copia piu' le sole novita'; prima erano 14 archivi interi al

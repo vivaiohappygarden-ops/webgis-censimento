@@ -392,6 +392,15 @@ Per vedere che cosa ha fatto (stato del timer e ultime righe del registro
 bash /var/www/webgis/deploy/abilita-aggiornamento-automatico.sh --stato
 ```
 
+Lo stato dice anche com'e' andato l'**ultimo controllo**: "riuscito" con la
+sua ora, oppure "FALLITO" con le righe del suo diario. Un timer acceso con il
+registro vuoto e il server che resta vecchio vuol dire proprio questo: il
+controllo parte ma muore prima di arrivare in fondo (e' successo quando il
+servizio di sistema partiva senza la variabile HOME e git rifiutava la
+cartella). In quel caso basta un aggiornamento a mano, `bash
+/var/www/webgis/deploy/update.sh`, che rinfresca anche le unita' del timer;
+al giro successivo lo stato deve tornare "riuscito".
+
 Per spegnerlo: lo stesso comando con `--disabilita`. Anche `diagnostica.sh`
 riporta lo stato dell'aggiornamento automatico.
 

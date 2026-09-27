@@ -8,6 +8,10 @@ set -euo pipefail
 APP_DIR=/var/www/webgis
 cd "${APP_DIR}"
 
+# Lanciato dal timer di sistema HOME manca: git non troverebbe la
+# configurazione di root e rifiuterebbe la cartella di www-data
+export HOME="${HOME:-/root}"
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="${APP_DIR}"
 git config --global --add safe.directory "${APP_DIR}" 2>/dev/null || true
 
 echo "==> Codice"
@@ -52,6 +56,19 @@ if [ "$(id -u)" -eq 0 ]; then
   [ -f /etc/cron.d/webgis-backup ] || printf '30 3 * * * root /usr/local/bin/webgis-backup >> /var/log/webgis-backup.log 2>&1\n' > /etc/cron.d/webgis-backup
 else
   echo "  (non root: lo script dei salvataggi non e' stato reinstallato)"
+fi
+
+echo "==> Aggiornamento automatico"
+# Le unita' di sistema le scrive abilita-aggiornamento-automatico.sh: quando
+# lo script migliora (per esempio quando ha imparato a impostare HOME), i
+# server che hanno gia' il timer devono riceverle senza che qualcuno lo
+# rilanci a mano. Lo script e' idempotente e non riavvia il timer
+if [ "$(id -u)" -eq 0 ] && [ -f /etc/systemd/system/webgis-aggiornamento.timer ]; then
+  bash "${APP_DIR}/deploy/abilita-aggiornamento-automatico.sh" >/dev/null 2>&1 \
+    && echo "  unita' del timer rinfrescate" \
+    || echo "  (unita' del timer non rinfrescate: bash ${APP_DIR}/deploy/abilita-aggiornamento-automatico.sh)"
+else
+  echo "  (timer non installato o non root: niente da rinfrescare)"
 fi
 
 echo "==> Permessi e servizi"
