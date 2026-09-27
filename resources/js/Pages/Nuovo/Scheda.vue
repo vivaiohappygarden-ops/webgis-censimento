@@ -812,10 +812,22 @@ onBeforeUnmount(() => map?.remove());
                                             <template v-else>{{ e.titolo }}</template>
                                         </div>
                                         <div class="text-[13px] text-gray-500">{{ TIPO_EVENTO[e.tipo] ?? e.tipo }}{{ e.dettaglio ? ` · ${e.dettaglio}` : '' }}</div>
-                                        <div v-if="e.foto?.length" class="mt-1 flex gap-1">
-                                            <button v-for="f in e.foto" :key="f.id" type="button" class="h-11 w-11 overflow-hidden rounded bg-gray-100" aria-label="Apri la fotografia" @click="foto.aperta = asset.photos?.find((p) => p.id === f.id) ?? f">
+                                        <div v-if="e.foto?.length" class="mt-1 flex flex-wrap items-center gap-1">
+                                            <!-- Le foto eliminate restano visionabili da qui (bordo rosso), non dalla scheda -->
+                                            <button
+                                                v-for="f in e.foto"
+                                                :key="f.id"
+                                                type="button"
+                                                class="h-11 w-11 overflow-hidden rounded bg-gray-100"
+                                                :class="f.eliminata ? 'opacity-70 ring-2 ring-red-400' : ''"
+                                                :aria-label="f.eliminata ? 'Apri la fotografia eliminata' : 'Apri la fotografia'"
+                                                :title="f.eliminata ? `Eliminata il ${formatData(f.eliminata_il)}` : ''"
+                                                :data-test="f.eliminata ? 'foto-eliminata' : 'foto-cronologia'"
+                                                @click="foto.aperta = asset.photos?.find((p) => p.id === f.id) ?? f"
+                                            >
                                                 <img :src="f.url" alt="" class="h-full w-full object-cover" loading="lazy">
                                             </button>
+                                            <span v-if="e.foto.some((f) => f.eliminata)" class="text-[11px] text-gray-500">bordo rosso: eliminata, si apre solo da qui</span>
                                         </div>
                                     </div>
                                 </li>
@@ -832,10 +844,10 @@ onBeforeUnmount(() => map?.remove());
         <Teleport to="body">
             <div v-if="foto.aperta" class="fixed inset-0 z-50 flex flex-col bg-black/90 p-3" data-test="foto-aperta" @click.self="foto.aperta = null">
                 <div class="flex items-center justify-between gap-2 text-sm text-white">
-                    <span>Caricata il {{ formatData(foto.aperta.created_at) }}<template v-if="foto.aperta.taken_at && formatData(foto.aperta.taken_at) !== formatData(foto.aperta.created_at)"> · scattata il {{ formatData(foto.aperta.taken_at) }}</template><template v-if="foto.aperta.category"> · {{ foto.aperta.category }}</template></span>
+                    <span>Caricata il {{ formatData(foto.aperta.created_at) }}<template v-if="foto.aperta.taken_at && formatData(foto.aperta.taken_at) !== formatData(foto.aperta.created_at)"> · scattata il {{ formatData(foto.aperta.taken_at) }}</template><template v-if="foto.aperta.category"> · {{ foto.aperta.category }}</template><template v-if="foto.aperta.eliminata"> · <span class="text-red-200" data-test="foto-aperta-eliminata">eliminata il {{ formatData(foto.aperta.eliminata_il) }}</span></template></span>
                     <div class="flex gap-2">
                         <a :href="foto.aperta.url" target="_blank" rel="noopener" class="min-h-11 rounded-lg border border-white/40 px-3 py-2">Apri l'originale</a>
-                        <button v-if="canUpdate && foto.aperta.id" type="button" class="min-h-11 rounded-lg border border-red-300 px-3 py-2 text-red-200" data-test="elimina-foto" @click="eliminaFoto(foto.aperta)">Elimina</button>
+                        <button v-if="canUpdate && foto.aperta.id && ! foto.aperta.eliminata" type="button" class="min-h-11 rounded-lg border border-red-300 px-3 py-2 text-red-200" data-test="elimina-foto" @click="eliminaFoto(foto.aperta)">Elimina</button>
                         <button type="button" class="min-h-11 rounded-lg border border-white/40 px-3 py-2" @click="foto.aperta = null">✕ Chiudi</button>
                     </div>
                 </div>

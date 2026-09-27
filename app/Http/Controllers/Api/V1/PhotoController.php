@@ -166,7 +166,9 @@ class PhotoController extends Controller implements HasMiddleware
 
     public function file(Request $request, string $id): StreamedResponse|Response
     {
-        $photo = Photo::findOrFail($id);
+        // Anche una foto eliminata: dalla scheda e' sparita, ma la cronologia
+        // la mostra ancora e il file e' rimasto (eliminazione morbida)
+        $photo = Photo::withTrashed()->findOrFail($id);
         if (! $request->user()->can('assets.view')) {
             abort_unless($request->user()->can('works.execute') && $photo->asset_id !== null
                 && Esecuzione::elementoNeiLavoriDi($request->user(), $photo->asset_id), 403);

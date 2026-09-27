@@ -272,6 +272,20 @@ class FotoPeriziaTest extends TestCase
         $this->assertSame(2, $this->quanteFoto($this->stampe->html['pdf.perizia']));
     }
 
+    public function test_finche_e_bozza_una_foto_cancellata_sparisce_subito_dalla_perizia(): void
+    {
+        $this->carica('buona.jpg');
+        $sbagliata = $this->carica('sbagliata.jpg');
+        $perizia = $this->creaPerizia();
+        $this->get("/api/v1/assessments/{$perizia}/perizia-pdf")->assertOk();
+        $this->assertSame(2, $this->quanteFoto($this->stampe->html['pdf.perizia']));
+
+        // Eliminata dalla scheda: la bozza non e' un atto chiuso e la lascia andare
+        $this->deleteJson("/api/v1/photos/{$sbagliata}")->assertNoContent();
+        $this->get("/api/v1/assessments/{$perizia}/perizia-pdf")->assertOk();
+        $this->assertSame(1, $this->quanteFoto($this->stampe->html['pdf.perizia']));
+    }
+
     public function test_una_foto_cancellata_prima_della_validazione_non_torna(): void
     {
         $this->carica('buona.jpg');

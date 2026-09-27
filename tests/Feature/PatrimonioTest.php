@@ -201,7 +201,13 @@ class PatrimonioTest extends TestCase
         $this->assertSame('1 fotografia', $giorno['titolo']);
         $this->assertStringContainsString('scattata il 27/05/2026', $giorno['dettaglio']);
         $this->assertStringContainsString('eliminata in seguito', $giorno['dettaglio']);
-        $this->assertSame([], $giorno['foto']);
+        // ... ma resta visionabile da qui, con il contrassegno; dalla scheda e' sparita
+        $this->assertCount(1, $giorno['foto']);
+        $this->assertTrue($giorno['foto'][0]['eliminata']);
+        $this->assertNotNull($giorno['foto'][0]['eliminata_il']);
+        $this->assertSame([], $this->getJson("/api/v1/assets/{$a}")->assertOk()->json('data.photos'));
+        $this->get($giorno['foto'][0]['url'])->assertOk();
+        $this->deleteJson("/api/v1/photos/{$foto}")->assertNotFound();
 
         // L'eliminazione e' un fatto del giorno in cui e' avvenuta, con chi l'ha fatta
         $eliminazione = $eventi->firstWhere('tipo', 'foto_eliminata');
@@ -210,6 +216,7 @@ class PatrimonioTest extends TestCase
         $this->assertSame('Fotografia eliminata', $eliminazione['titolo']);
         $this->assertStringContainsString($this->utente->name, $eliminazione['dettaglio']);
         $this->assertStringContainsString('caricata il '.now()->setTimezone('Europe/Rome')->format('d/m/Y'), $eliminazione['dettaglio']);
+        $this->assertSame($foto, $eliminazione['foto'][0]['id'], 'anche la riga dell\'eliminazione apre la foto');
         $this->assertSame(['foto_eliminata', 'foto'], $eventi->whereIn('tipo', ['foto', 'foto_eliminata'])->pluck('tipo')->values()->all());
     }
 

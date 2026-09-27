@@ -217,7 +217,13 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   resta nel dettaglio "scattata il"), le foto eliminate (nel loro giorno, piu' la riga
   `foto_eliminata` nel giorno dell'eliminazione con l'autore dal registro `photo.deleted`) e
   abbattimento, dal piu' recente: la leggono l'anteprima e la scheda nuova. Il portale del
-  Comune data le foto allo stesso modo. Le altre
+  Comune data le foto allo stesso modo. **Una foto eliminata resta visionabile solo dalla
+  cronologia** (decisione committente 27/09/2026): l'eliminazione e' morbida e il file resta,
+  le anteprime delle righe `foto` e `foto_eliminata` la portano con `eliminata`/`eliminata_il`
+  (nella scheda bordo rosso, ingrandimento senza "Elimina"), `PhotoController::file` la serve
+  con `withTrashed`; dalla scheda (`GET assets/{id}`), dal portale e dalle perizie **non
+  validate** sparisce (scope di default), mentre una perizia **validata** la tiene
+  (`PeriziaController::photos`, `withTrashed`): l'atto chiuso non cambia. Le altre
   schede di Patrimonio (Mappa `/mappa`, Alberi e VTA `/vta`, Irrigazione `/irrigazione`) sono
   ancora le pagine di prima con la testata `Components/Nuovo/TestataPatrimonio.vue` quando la
   veste e' nuova; la voce di menu Patrimonio non ha sottovoci (`schede: true`). L'importazione

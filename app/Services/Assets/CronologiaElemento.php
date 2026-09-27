@@ -146,11 +146,22 @@ class CronologiaElemento
         // fatto. Le foto eliminate restano nel conteggio del loro giorno (senza
         // anteprima: il file non c'e' piu') e l'eliminazione e' un fatto a se',
         // nel giorno in cui e' avvenuta e con chi l'ha fatta: la cronologia non
-        // riscrive il passato
+        // riscrive il passato. Una foto eliminata sparisce dalla scheda e
+        // dalle perizie non ancora validate, ma da qui si apre ancora: il
+        // file resta e l'eliminazione e' morbida (decisione committente
+        // 27/09/2026)
         $foto = Photo::withTrashed()->where('asset_id', $asset->id)
             ->orderByDesc('created_at')->orderByDesc('taken_at')
             ->get(['id', 'taken_at', 'created_at', 'taken_by', 'deleted_at']);
         $caricamento = fn (Photo $f) => $f->created_at->setTimezone(self::FUSO);
+        $anteprima = fn (Photo $f) => [
+            'id' => $f->id,
+            'url' => $f->url,
+            'created_at' => $f->created_at?->toIso8601String(),
+            'taken_at' => $f->taken_at?->toIso8601String(),
+            'eliminata' => $f->deleted_at !== null,
+            'eliminata_il' => $f->deleted_at?->toIso8601String(),
+        ];
         $scatti = function ($gruppo) use ($caricamento): ?string {
             // Solo gli scatti di un giorno diverso dal caricamento
             $giorni = $gruppo
@@ -179,7 +190,8 @@ class CronologiaElemento
                     $eliminate === count($gruppo) => 'tutte eliminate in seguito',
                     default => $eliminate.' eliminate in seguito',
                 }],
-                ['foto' => $vive->take(4)->map(fn (Photo $f) => ['id' => $f->id, 'url' => $f->url])->values()->all()],
+                // Prima quelle ancora nella scheda, poi le eliminate
+                ['foto' => $vive->concat($gruppo->whereNotNull('deleted_at'))->take(4)->map($anteprima)->values()->all()],
             );
         }
 
@@ -201,6 +213,7 @@ class CronologiaElemento
                     count($gruppo) === 1 ? 'Fotografia eliminata' : count($gruppo).' fotografie eliminate',
                     [$nome($autore !== '' ? $autore : null),
                         (count($gruppo) === 1 ? 'caricata il ' : 'caricate il ').$caricate->implode(', ')],
+                    ['foto' => $gruppo->take(4)->map($anteprima)->values()->all()],
                 );
             }
         }
