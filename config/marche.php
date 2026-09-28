@@ -17,24 +17,21 @@ return [
     | credenziali stanno qui (decisione committente 28/09/2026). Un cliente con
     | un proprio account puo' comunque inserirlo da Documenti.
     |
-    | Senza credenziali le marche restano spente e la pagina Documenti lo
-    | dice. Queste sono le credenziali della piattaforma, valide per tutte le
-    | organizzazioni; ogni organizzazione puo' inserire le proprie da
-    | Documenti (chi gestisce gli utenti), e quelle vincono su queste.
+    | Ai clienti le marche le vende DAMA S.R.L. a pacchetti, insieme al
+    | programma (decisione committente 28/09/2026: "da noi si comprano"). Le
+    | credenziali stanno SOLO nell'organizzazione (cifrate nelle sue
+    | impostazioni, inserite da Documenti o dalla console della piattaforma):
+    | chi affitta la piattaforma a un'altra azienda non deve vedersi consumare
+    | il proprio lotto, quindi non c'e' un account comune in questo file. Qui
+    | restano solo i valori di serie e le regolazioni del server.
     |
     */
 
-    // Indirizzo del servizio: quello di Aruba di serie
+    // Indirizzo del servizio proposto di serie nel modulo: quello di Aruba
     'url' => env('MARCHE_URL', 'https://servizi.arubapec.it/tsa/ngrequest.php'),
 
-    'utente' => env('MARCHE_UTENTE'),
-    'password' => env('MARCHE_PASSWORD'),
-
-    // Identificativo (OID) della politica di marcatura, se il fornitore lo chiede
-    'policy' => env('MARCHE_POLICY'),
-
-    // Marche al giorno per account, contate su tutte le organizzazioni che lo
-    // usano: 0 = senza tetto. Serve a non svuotare un lotto per errore.
+    // Marche al giorno per account, se l'organizzazione non indica un proprio
+    // tetto: 0 = senza tetto. Serve a non svuotare un lotto per errore.
     'quota_giorno' => (int) env('MARCHE_QUOTA_GIORNO', 10),
 
     'timeout' => (int) env('MARCHE_TIMEOUT', 25),

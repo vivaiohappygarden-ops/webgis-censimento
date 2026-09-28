@@ -50,11 +50,14 @@ class ConsolePiattaforma
         $committenti = $perTenant(DB::table('clients')->selectRaw('tenant_id, count(*) AS n')->whereNull('deleted_at'));
         $portali = $perTenant(DB::table('clients')->selectRaw('tenant_id, count(*) AS n')->whereNull('deleted_at')->where('public_enabled', true));
         $lavori = $perTenant(DB::table('work_orders')->selectRaw('tenant_id, count(*) AS n')->whereNull('deleted_at'));
+        // Le marche temporali sono per organizzazione, con il suo account: qui
+        // si vede chi ne ha uno e quante ne ha apposte (per fatturare o per accorgersi che manca)
+        $marche = $perTenant(DB::table('marche_temporali')->selectRaw('tenant_id, count(*) AS n'));
         $assistenza = User::query()->withoutGlobalScopes()->whereNull('deleted_at')
             ->where('email', 'like', 'assistenza+%@'.self::DOMINIO_ASSISTENZA)->get()->keyBy('tenant_id');
 
         return Organization::query()->orderBy('name')->get()->map(function (Organization $o) use (
-            $utenti, $ultimoAccesso, $elementi, $alberi, $foto, $aree, $committenti, $portali, $lavori, $assistenza
+            $utenti, $ultimoAccesso, $elementi, $alberi, $foto, $aree, $committenti, $portali, $lavori, $marche, $assistenza
         ) {
             $piattaforma = $o->settings['piattaforma'] ?? [];
             $utenteAssistenza = $assistenza[$o->id] ?? null;
@@ -79,7 +82,9 @@ class ConsolePiattaforma
                     'committenti' => (int) ($committenti[$o->id] ?? 0),
                     'portali' => (int) ($portali[$o->id] ?? 0),
                     'lavori' => (int) ($lavori[$o->id] ?? 0),
+                    'marche' => (int) ($marche[$o->id] ?? 0),
                 ],
+                'marche_configurate' => ! empty($o->settings['marche']['utente']) && ! empty($o->settings['marche']['password_cifrata']),
                 'assistenza' => $utenteAssistenza && $utenteAssistenza->is_active && ! self::assistenzaScaduta($utenteAssistenza) ? [
                     'scade' => $utenteAssistenza->settings['assistenza']['scade'] ?? null,
                     'gestore' => $utenteAssistenza->settings['assistenza']['gestore'] ?? null,

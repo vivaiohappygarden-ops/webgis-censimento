@@ -314,13 +314,16 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   (`App\Support\Rfc3161`: richiesta e risposta scritte e lette **a mano in DER**, senza
   librerie; il gettone e' un CMS SignedData con dentro il TSTInfo). Nessun fornitore e' cablato:
   l'indirizzo di serie e' quello di Aruba (`config/marche.php`).
-- **Credenziali a due livelli**: quelle della piattaforma nel `.env` (`MARCHE_URL`,
-  `MARCHE_UTENTE`, `MARCHE_PASSWORD`, `MARCHE_POLICY`, `MARCHE_QUOTA_GIORNO`, `MARCHE_CATENA`)
-  valgono per tutte le organizzazioni; ogni organizzazione puo' inserire le proprie da Documenti
-  (permesso `users.manage`, `organizations.settings['marche']`, password cifrata con `Crypt`,
-  scrittura sotto `lockForUpdate` come le altre impostazioni) e **vincono** su quelle della
-  piattaforma. Senza ne' l'una ne' l'altra le marche sono spente e la pagina lo dice, senza
-  fingere. Solo indirizzi https (tranne il proprio computer).
+- **Credenziali solo per organizzazione** (decisione committente 28/09/2026: chi affitta la
+  piattaforma a un'altra azienda, per esempio una ditta del verde, non deve vedersi consumare
+  il proprio lotto, e ogni organizzazione compra e usa le sue marche). Si inseriscono da
+  Documenti (permesso `users.manage`, `organizations.settings['marche']`, password cifrata con
+  `Crypt`, scrittura sotto `lockForUpdate` come le altre impostazioni); **non esiste un ripiego
+  su un account comune** nel `.env` (li' restano solo `MARCHE_URL` proposto nel modulo,
+  `MARCHE_QUOTA_GIORNO` di serie, `MARCHE_CATENA` e `MARCHE_OPENSSL` per la verifica). Senza
+  credenziali le marche di quell'organizzazione sono spente e la pagina lo dice, senza fingere.
+  Solo indirizzi https (tranne il proprio computer). La console della piattaforma mostra per
+  ogni organizzazione quante marche ha apposto e se ha un account suo (`marche_configurate`).
 - **La logica sta una volta sola in `App\Services\Marche\MarcheTemporali`**: `configurazione`,
   `stato`, `applica`, `verifica`. `applica` produce il PDF **con lo stesso codice della stampa**
   (richiama i controller delle stampe con una richiesta interna e l'utente che chiede: perizia

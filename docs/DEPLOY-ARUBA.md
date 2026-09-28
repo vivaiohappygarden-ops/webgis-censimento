@@ -557,25 +557,16 @@ dei servizi di firma; all'attivazione si ricevono il nome utente e la password d
 di marcatura). Il programma parla il protocollo standard RFC 3161: servono tre cose,
 l'indirizzo del servizio, il nome utente e la password.
 
-Ci sono due posti dove metterle:
-
-- **per tutte le organizzazioni del server**, nel file `.env` (poi `sudo -u www-data php
-  artisan config:clear` se la configurazione e' in cache, oppure un aggiornamento):
-
-  ```
-  MARCHE_URL=https://servizi.arubapec.it/tsa/ngrequest.php
-  MARCHE_UTENTE=nome-utente-dell-account
-  MARCHE_PASSWORD=la-password
-  MARCHE_QUOTA_GIORNO=10
-  ```
-
-- **per una sola organizzazione**, da Documenti > Marche temporali > "Credenziali di questa
-  organizzazione" (chi gestisce gli utenti). Queste vincono su quelle del file `.env`: un
-  Comune con il proprio lotto usa il suo.
-
-`MARCHE_QUOTA_GIORNO` e' il tetto di marche al giorno per account (0 = nessun tetto): serve a
-non svuotare un lotto per errore. Se il fornitore chiede una "politica" (un identificativo a
-punti), va in `MARCHE_POLICY` o nel campo apposito.
+**Ogni organizzazione usa solo il proprio account.** Le credenziali si inseriscono da
+Documenti > Marche temporali > "Credenziali di questa organizzazione" (chi gestisce gli
+utenti di quell'organizzazione), e le marche di un'organizzazione non si consumano mai per
+un'altra: se la piattaforma e' affittata a piu' aziende, ognuna compra il suo lotto. Nel
+file `.env` del server non ci sono credenziali, solo le regolazioni comuni: l'indirizzo
+proposto di serie nel modulo (`MARCHE_URL`, quello di Aruba) e il tetto di marche al giorno
+se l'organizzazione non ne indica uno (`MARCHE_QUOTA_GIORNO`, 10 di serie, 0 = nessun tetto;
+serve a non svuotare un lotto per errore). Se il fornitore chiede una "politica" (un
+identificativo a punti), va nel campo apposito del modulo. La console della piattaforma
+mostra, per ogni organizzazione, quante marche ha apposto e se ha un account suo.
 
 Per far controllare al programma anche la **firma** della marca, si scaricano dal sito del
 fornitore i certificati della sua autorita' di marcatura (la catena, in formato PEM), si

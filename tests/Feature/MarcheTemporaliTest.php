@@ -46,14 +46,17 @@ class MarcheTemporaliTest extends TestCase
         $this->area = $this->createArea($this->organizzazione);
         $this->actingAsTenantUser($this->utente);
         $this->app->instance(PdfRenderer::class, new RaccoglitorePdf);
-        config(['marche.utente' => null, 'marche.password' => null, 'marche.catena' => null, 'marche.quota_giorno' => 10,
-            'marche.url' => 'https://tsa.prova.test/tsr', 'services.osm.tiles_enabled' => false]);
+        config(['marche.catena' => null, 'marche.quota_giorno' => 10, 'marche.url' => 'https://tsa.prova.test/tsr', 'services.osm.tiles_enabled' => false]);
     }
 
-    /** Credenziali della piattaforma (come dal file .env). */
-    private function accendi(int $quota = 10): void
+    /** Le credenziali dell'organizzazione, come le salva il modulo di Documenti. */
+    private function accendi(int $quota = 10, ?Organization $organizzazione = null): void
     {
-        config(['marche.utente' => 'studio-verde', 'marche.password' => 'segreta', 'marche.quota_giorno' => $quota]);
+        $organizzazione ??= Organization::query()->findOrFail($this->organizzazione->id);
+        $settings = $organizzazione->settings ?? [];
+        $settings['marche'] = ['url' => 'https://tsa.prova.test/tsr', 'utente' => 'studio-verde',
+            'password_cifrata' => \Illuminate\Support\Facades\Crypt::encryptString('segreta'), 'policy' => null, 'quota_giorno' => $quota];
+        $organizzazione->forceFill(['settings' => $settings])->save();
     }
 
     /**
@@ -113,8 +116,8 @@ class MarcheTemporaliTest extends TestCase
     {
         $stato = $this->getJson('/api/v1/documenti/marche')->assertOk()->json('stato');
         $this->assertFalse($stato['attiva']);
-        $this->assertNull($stato['origine']);
-        $this->assertFalse($stato['piattaforma_configurata']);
+        $this->assertNull($stato['servizio']);
+        $this->assertSame(0, $stato['totale']);
 
         [, $valutazione] = $this->periziaValidata();
         $this->postJson('/api/v1/documenti/marche', ['tipo' => 'perizia', 'id' => $valutazione])
@@ -241,8 +244,8 @@ class MarcheTemporaliTest extends TestCase
         // L'elenco delle marche e lo stato
         $elenco = $this->getJson('/api/v1/documenti/marche')->assertOk()->json();
         $this->assertSame([$marca['id']], collect($elenco['data'])->pluck('id')->all());
-        $this->assertSame(['attiva' => true, 'origine' => 'piattaforma', 'servizio' => 'tsa.prova.test', 'quota_giorno' => 10, 'usate_oggi' => 1],
-            collect($elenco['stato'])->only(['attiva', 'origine', 'servizio', 'quota_giorno', 'usate_oggi'])->all());
+        $this->assertSame(['attiva' => true, 'servizio' => 'tsa.prova.test', 'quota_giorno' => 10, 'usate_oggi' => 1, 'totale' => 1],
+            collect($elenco['stato'])->only(['attiva', 'servizio', 'quota_giorno', 'usate_oggi', 'totale'])->all());
         $this->assertSame('st********de', $elenco['stato']['utente']);
     }
 
@@ -284,11 +287,19 @@ class MarcheTemporaliTest extends TestCase
             ->assertUnprocessable()->assertJsonPath('errors.marca.0', fn ($m) => str_contains($m, 'Per oggi le marche sono finite (1 al giorno'));
         $this->assertSame(1, MarcaTemporale::query()->count());
 
-        // La quota e' dell'account: un'altra organizzazione con le stesse credenziali della piattaforma la condivide
-        [, $altro] = $this->createTenantUser();
+        // Un'altra organizzazione non eredita niente: ne' le credenziali, ne' il conto, ne' le marche
+        [$altraOrganizzazione, $altro] = $this->createTenantUser();
         $this->actingAsTenantUser($altro);
-        $this->assertSame(1, $this->getJson('/api/v1/documenti/marche')->json('stato.usate_oggi'));
+        $stato = $this->getJson('/api/v1/documenti/marche')->assertOk()->json('stato');
+        $this->assertSame([false, 0, 0], [$stato['attiva'], $stato['usate_oggi'], $stato['totale']]);
         $this->assertSame([], $this->getJson('/api/v1/documenti/marche')->json('data'));
+        $this->postJson('/api/v1/documenti/marche', ['tipo' => 'registro_fitosanitari', 'parametri' => ['anno' => 2026]])
+            ->assertUnprocessable()->assertJsonPath('errors.marca.0', fn ($m) => str_contains($m, 'di questa organizzazione non sono ancora attive'));
+        // Con un proprio account (e un proprio lotto) marca per conto suo, anche se l'altra ha finito la quota
+        $this->accendi(quota: 5, organizzazione: $altraOrganizzazione);
+        $this->postJson('/api/v1/documenti/marche', ['tipo' => 'registro_fitosanitari', 'parametri' => ['anno' => 2026]])->assertCreated();
+        $this->assertSame(1, MarcaTemporale::query()->count());
+        $this->assertSame(2, MarcaTemporale::withoutGlobalScopes()->count());
     }
 
     public function test_una_risposta_rifiutata_o_incoerente_non_lascia_niente(): void
@@ -363,9 +374,8 @@ class MarcheTemporaliTest extends TestCase
         $this->get($marca['pdf'])->assertNotFound();
     }
 
-    public function test_le_credenziali_dell_organizzazione_vincono_su_quelle_della_piattaforma(): void
+    public function test_le_credenziali_si_impostano_per_organizzazione_da_chi_gestisce_gli_utenti(): void
     {
-        $this->accendi();
         $this->tsaVera('tsa.esempio.it');
 
         // Solo https, a meno che non sia il proprio computer
@@ -381,7 +391,7 @@ class MarcheTemporaliTest extends TestCase
         ])->assertOk()->json('data');
         $this->assertSame(['url' => 'https://tsa.esempio.it/tsr', 'utente' => 'comune-verde', 'ha_password' => true, 'policy' => '1.3.76.36.1.1.1', 'quota_giorno' => 3],
             collect($configurazione)->only(['url', 'utente', 'ha_password', 'policy', 'quota_giorno'])->all());
-        $this->assertSame('organizzazione', $configurazione['stato']['origine']);
+        $this->assertTrue($configurazione['stato']['attiva']);
         $this->assertSame('tsa.esempio.it', $configurazione['stato']['servizio']);
         $this->assertSame(3, $configurazione['stato']['quota_giorno']);
         $this->assertArrayNotHasKey('password', $configurazione);
@@ -414,10 +424,12 @@ class MarcheTemporaliTest extends TestCase
         $this->actingAsTenantUser($this->utenteCon(['assets.view', 'works.view'], 'Tecnico senza utenti'));
         $this->getJson('/api/v1/documenti/marche/configurazione')->assertForbidden();
         $this->putJson('/api/v1/documenti/marche/configurazione', ['url' => 'https://x.it', 'utente' => 'a', 'password' => 'b'])->assertForbidden();
-        $this->assertSame('organizzazione', $this->getJson('/api/v1/documenti/marche')->assertOk()->json('stato.origine'));
+        $this->assertTrue($this->getJson('/api/v1/documenti/marche')->assertOk()->json('stato.attiva'));
 
-        // Tolte le proprie, si torna a quelle della piattaforma
+        // Tolte le credenziali le marche si spengono, ma quelle apposte restano
         $this->actingAsTenantUser($this->utente);
-        $this->deleteJson('/api/v1/documenti/marche/configurazione')->assertOk()->assertJsonPath('data.ha_password', false)->assertJsonPath('data.stato.origine', 'piattaforma');
+        $this->deleteJson('/api/v1/documenti/marche/configurazione')->assertOk()->assertJsonPath('data.ha_password', false)->assertJsonPath('data.stato.attiva', false);
+        $this->assertSame(1, $this->getJson('/api/v1/documenti/marche')->json('stato.totale'));
+        $this->get($marca['pdf'])->assertOk();
     }
 }

@@ -273,6 +273,7 @@ onMounted(() => { if (props.dueFattoriAttiva) carica(caricaElenco); });
                                 <div><dt :class="ETICHETTA">Lavori</dt><dd class="font-semibold text-gray-900">{{ n(scelta.numeri.lavori) }}</dd></div>
                                 <div><dt :class="ETICHETTA">Committenti</dt><dd class="font-semibold text-gray-900">{{ n(scelta.numeri.committenti) }}</dd></div>
                                 <div><dt :class="ETICHETTA">Portali pubblici accesi</dt><dd class="font-semibold text-gray-900">{{ n(scelta.numeri.portali) }}</dd></div>
+                                <div class="col-span-2" data-test="dettaglio-marche"><dt :class="ETICHETTA">Marche temporali</dt><dd class="font-semibold text-gray-900">{{ n(scelta.numeri.marche) }} apposte <span class="font-normal text-gray-500">· {{ scelta.marche_configurate ? 'con un account proprio' : 'nessun account: le inserisce la sua amministrazione da Documenti' }}</span></dd></div>
                             </dl>
 
                             <div v-if="! scelta.is_active && scelta.sospensione" class="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" data-test="dettaglio-sospensione">

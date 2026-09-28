@@ -177,7 +177,7 @@ async function salvaCredenziali() {
         });
         credenziali.password = '';
         credenziali.haPassword = data.data.ha_password;
-        credenziali.esito = 'Credenziali salvate: da ora le marche partono con l\'account di questa organizzazione.';
+        credenziali.esito = 'Credenziali salvate: le marche di questa organizzazione partono con questo account.';
         marche.stato = data.data.stato;
     } catch (err) {
         credenziali.errore = messaggioErrore(err, 'Salvataggio delle credenziali');
@@ -186,7 +186,7 @@ async function salvaCredenziali() {
     }
 }
 async function togliCredenziali() {
-    if (! window.confirm('Togliere le credenziali di questa organizzazione? Se la piattaforma ne ha di proprie si useranno quelle, altrimenti le marche restano spente.')) return;
+    if (! window.confirm('Togliere le credenziali di questa organizzazione? Le marche restano spente finché non se ne inseriscono di nuove; quelle già apposte restano.')) return;
     credenziali.busy = true;
     credenziali.errore = '';
     try {
@@ -388,12 +388,12 @@ const anniProducibili = computed(() => Array.from({ length: 6 }, (_, i) => annoC
                         <p class="mt-1 text-sm text-gray-700">La marca temporale certifica che un documento esisteva, così com'è, a un istante certo: la rilascia un servizio accreditato (TSA) e vale come prova. Si appone alle perizie validate, ai verbali di ispezione chiusi e ai registri; il programma conserva il PDF esatto e il gettone della marca.</p>
                         <template v-if="marche.stato">
                             <dl v-if="marche.stato.attiva" class="mt-3 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]" data-test="marche-stato">
-                                <dt class="text-gray-500">Servizio</dt><dd class="text-gray-900">{{ marche.stato.servizio }} · account {{ marche.stato.utente }} <span class="text-gray-500">({{ marche.stato.origine === 'organizzazione' ? 'credenziali di questa organizzazione' : 'credenziali della piattaforma' }})</span></dd>
+                                <dt class="text-gray-500">Servizio</dt><dd class="text-gray-900">{{ marche.stato.servizio }} · account {{ marche.stato.utente }} <span class="text-gray-500">(credenziali di questa organizzazione)</span></dd>
                                 <dt class="text-gray-500">Oggi</dt><dd class="text-gray-900">{{ marche.stato.usate_oggi }} {{ plurale(marche.stato.usate_oggi, 'marca apposta', 'marche apposte') }}<template v-if="marche.stato.quota_giorno > 0"> su {{ marche.stato.quota_giorno }} al giorno</template></dd>
                                 <dt class="text-gray-500">Apposte in tutto</dt><dd class="text-gray-900">{{ marche.righe.length }}<template v-if="marche.righe.length"> · l'ultima il {{ marche.righe[0].generato_il_locale }}</template></dd>
                                 <dt class="text-gray-500">Firma</dt><dd class="text-gray-900">{{ marche.stato.verifica_firma ? 'la verifica controlla anche la firma della TSA (certificati presenti sul server)' : 'la verifica controlla impronta e gettone; la firma si controlla fuori dal programma con il file .tsr' }}</dd>
                             </dl>
-                            <p v-else class="mt-3 text-sm text-amber-900" data-test="marche-spente">Le marche temporali non sono ancora attive. Per attivarle serve un pacchetto di marche, che potete richiedere alla nostra assistenza.<template v-if="can('users.manage')"> Se avete già un vostro account di marcatura temporale, potete inserire qui le credenziali.</template><template v-else> Le credenziali le inserisce chi gestisce gli utenti.</template></p>
+                            <p v-else class="mt-3 text-sm text-amber-900" data-test="marche-spente">Le marche temporali di questa organizzazione non sono ancora attive. Per attivarle serve un pacchetto di marche, che potete richiedere alla nostra assistenza: ogni organizzazione ha il suo, e le marche di una non si consumano per un'altra.<template v-if="can('users.manage')"> Se avete già un vostro account di marcatura temporale, potete inserire qui le credenziali.</template><template v-else> Le credenziali le inserisce chi gestisce gli utenti.</template></p>
                         </template>
                         <div v-if="can('users.manage')" class="mt-3">
                             <button type="button" :class="BOTTONE_SECONDARIO" data-test="marche-credenziali" @click="apriCredenziali">{{ credenziali.aperte ? 'Chiudi le credenziali' : 'Credenziali di questa organizzazione' }}</button>
@@ -407,12 +407,12 @@ const anniProducibili = computed(() => Array.from({ length: 6 }, (_, i) => annoC
                                     <label class="block text-sm"><span :class="ETICHETTA">Politica (OID, facoltativa)</span><input v-model="credenziali.policy" type="text" :class="CAMPO" class="mt-1" placeholder="es. 1.3.76.36.1.1.1"></label>
                                     <label class="block text-sm"><span :class="ETICHETTA">Marche al giorno (0 = senza tetto)</span><input v-model="credenziali.quota" type="number" min="0" max="10000" :class="CAMPO" class="mt-1" :placeholder="`di serie ${credenziali.quotaPredefinita}`"></label>
                                 </div>
-                                <p class="text-[13px] text-gray-500">La password si conserva cifrata e non si rilegge; queste credenziali vincono su quelle della piattaforma (file .env del server) per questa organizzazione.</p>
+                                <p class="text-[13px] text-gray-500">La password si conserva cifrata e non si rilegge. Le credenziali valgono solo per questa organizzazione: le sue marche non si consumano per nessun'altra.</p>
                                 <p v-if="credenziali.errore" class="text-sm text-red-700" data-test="marche-credenziali-errore">{{ credenziali.errore }}</p>
                                 <p v-if="credenziali.esito" class="text-sm text-green-800" data-test="marche-credenziali-esito">{{ credenziali.esito }}</p>
                                 <div class="flex flex-wrap gap-2">
                                     <button type="submit" :class="BOTTONE" :disabled="credenziali.busy" data-test="marche-salva">Salva</button>
-                                    <button v-if="credenziali.haPassword" type="button" :class="BOTTONE_SECONDARIO" :disabled="credenziali.busy" data-test="marche-togli" @click="togliCredenziali">Togli e usa quelle della piattaforma</button>
+                                    <button v-if="credenziali.haPassword" type="button" :class="BOTTONE_SECONDARIO" :disabled="credenziali.busy" data-test="marche-togli" @click="togliCredenziali">Togli le credenziali</button>
                                 </div>
                             </form>
                         </div>

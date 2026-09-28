@@ -103,6 +103,9 @@ class PiattaformaTest extends TestCase
         $this->assertSame(1, $riga['numeri']['aree']);
         $this->assertSame(1, $riga['numeri']['committenti']);
         $this->assertSame(0, $riga['numeri']['portali']);
+        // Le marche temporali sono per organizzazione: la console dice quante ne ha apposte e se ha un account suo
+        $this->assertSame(0, $riga['numeri']['marche']);
+        $this->assertFalse($riga['marche_configurate']);
         $this->assertNull($riga['ultimo_accesso']);
         $this->assertNull($riga['assistenza']);
 

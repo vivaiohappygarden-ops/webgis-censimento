@@ -62,52 +62,38 @@ class MarcheTemporali
     // ---- Configurazione ------------------------------------------------------
 
     /**
-     * Le credenziali in uso per un'organizzazione: le sue, se le ha inserite,
-     * altrimenti quelle della piattaforma (.env). Senza ne' l'una ne' l'altra le
-     * marche sono spente.
+     * Le credenziali dell'organizzazione, e solo le sue: chi affitta la
+     * piattaforma a un'altra azienda non deve vedersi consumare il proprio
+     * lotto, quindi non esiste un ripiego su un account comune. Senza
+     * credenziali le marche sono spente.
      *
-     * @return array{attiva:bool, origine:?string, url:?string, utente:?string, password:?string, policy:?string, quota_giorno:int, timeout:int, account:?string}
+     * @return array{attiva:bool, url:?string, utente:?string, password:?string, policy:?string, quota_giorno:int, timeout:int, account:?string}
      */
     public function configurazione(string $tenantId): array
     {
         $base = config('marche');
         $propria = Organization::query()->find($tenantId)?->settings['marche'] ?? [];
-        $spenta = ['attiva' => false, 'origine' => null, 'url' => null, 'utente' => null, 'password' => null,
-            'policy' => null, 'quota_giorno' => (int) $base['quota_giorno'], 'timeout' => (int) $base['timeout'], 'account' => null];
-
-        if (! empty($propria['utente']) && ! empty($propria['password_cifrata'])) {
-            try {
-                $password = Crypt::decryptString($propria['password_cifrata']);
-            } catch (DecryptException) {
-                throw new MarcaTemporaleException("La password del servizio di marcatura non si legge più (è cambiata la chiave dell'applicazione): va reinserita da Documenti.");
-            }
-            $configurazione = [
-                'origine' => 'organizzazione',
-                'url' => $propria['url'] ?: $base['url'],
-                'utente' => $propria['utente'],
-                'password' => $password,
-                'policy' => $propria['policy'] ?: null,
-                'quota_giorno' => isset($propria['quota_giorno']) && $propria['quota_giorno'] !== null && $propria['quota_giorno'] !== ''
-                    ? (int) $propria['quota_giorno'] : (int) $base['quota_giorno'],
-            ];
-        } elseif (! empty($base['utente']) && ! empty($base['password']) && ! empty($base['url'])) {
-            $configurazione = [
-                'origine' => 'piattaforma',
-                'url' => $base['url'],
-                'utente' => $base['utente'],
-                'password' => $base['password'],
-                'policy' => $base['policy'] ?: null,
-                'quota_giorno' => (int) $base['quota_giorno'],
-            ];
-        } else {
-            return $spenta;
+        if (empty($propria['utente']) || empty($propria['password_cifrata'])) {
+            return ['attiva' => false, 'url' => null, 'utente' => null, 'password' => null,
+                'policy' => null, 'quota_giorno' => (int) $base['quota_giorno'], 'timeout' => (int) $base['timeout'], 'account' => null];
         }
+        try {
+            $password = Crypt::decryptString($propria['password_cifrata']);
+        } catch (DecryptException) {
+            throw new MarcaTemporaleException("La password del servizio di marcatura non si legge più (è cambiata la chiave dell'applicazione): va reinserita da Documenti.");
+        }
+        $url = $propria['url'] ?: $base['url'];
 
         return [
-            ...$configurazione,
             'attiva' => true,
+            'url' => $url,
+            'utente' => $propria['utente'],
+            'password' => $password,
+            'policy' => $propria['policy'] ?: null,
+            'quota_giorno' => isset($propria['quota_giorno']) && $propria['quota_giorno'] !== null && $propria['quota_giorno'] !== ''
+                ? (int) $propria['quota_giorno'] : (int) $base['quota_giorno'],
             'timeout' => (int) $base['timeout'],
-            'account' => self::account($configurazione['url'], $configurazione['utente']),
+            'account' => self::account($url, $propria['utente']),
         ];
     }
 
@@ -125,12 +111,11 @@ class MarcheTemporali
 
         return [
             'attiva' => $configurazione['attiva'],
-            'origine' => $configurazione['origine'],
             'servizio' => $configurazione['url'] ? (parse_url($configurazione['url'], PHP_URL_HOST) ?: $configurazione['url']) : null,
             'utente' => $configurazione['utente'] ? self::mascherato($configurazione['utente']) : null,
             'quota_giorno' => $configurazione['quota_giorno'],
             'usate_oggi' => $configurazione['account'] ? $this->usateOggi($configurazione['account']) : 0,
-            'piattaforma_configurata' => ! empty(config('marche.utente')) && ! empty(config('marche.password')),
+            'totale' => MarcaTemporale::query()->where('tenant_id', $tenantId)->count(),
             'verifica_firma' => is_string($catena) && $catena !== '' && is_file($catena),
         ];
     }
@@ -145,7 +130,7 @@ class MarcheTemporali
         return mb_substr($utente, 0, 2).str_repeat('*', min($lunghezza - 4, 8)).mb_substr($utente, -2);
     }
 
-    /** Marche apposte oggi (giorno italiano) con questo account, in tutte le organizzazioni. */
+    /** Marche apposte oggi (giorno italiano) con questo account (se due organizzazioni usassero lo stesso, il lotto e' uno). */
     public function usateOggi(string $account): int
     {
         return MarcaTemporale::withoutGlobalScopes()
@@ -172,7 +157,9 @@ class MarcheTemporali
 
         $configurazione = $this->configurazione($utente->tenant_id);
         if (! $configurazione['attiva']) {
-            throw new MarcaTemporaleException("Le marche temporali non sono ancora attive. Per attivarle serve un pacchetto di marche, che potete richiedere alla nostra assistenza; se avete gia' un vostro account di marcatura temporale, le credenziali si inseriscono in Documenti.");
+        if (! $configurazione['attiva']) {
+            throw new MarcaTemporaleException("Le marche temporali di questa organizzazione non sono ancora attive. Per attivarle serve un pacchetto di marche, che potete richiedere alla nostra assistenza; se avete gia' un vostro account di marcatura temporale, le credenziali si inseriscono in Documenti da chi gestisce gli utenti.");
+        }
         }
         if ($configurazione['quota_giorno'] > 0 && $this->usateOggi($configurazione['account']) >= $configurazione['quota_giorno']) {
             throw new MarcaTemporaleException("Per oggi le marche sono finite ({$configurazione['quota_giorno']} al giorno con questo account): la prossima si può apporre domani.");
