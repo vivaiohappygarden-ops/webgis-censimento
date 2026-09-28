@@ -81,6 +81,38 @@ class PiattaformaController extends Controller implements HasMiddleware
         return response()->json(['data' => ['ok' => true]]);
     }
 
+    /**
+     * Il pacchetto di marche venduto all'organizzazione e, se serve, l'account
+     * di marcatura con cui le appone: e' cosi' che DAMA consegna le marche a un
+     * cliente senza toccare le sue pagine. Il registro resta nel tenant del gestore.
+     */
+    public function marche(Request $request, string $id, \App\Services\Marche\MarcheTemporali $marche): JsonResponse
+    {
+        $regole = ['pacchetto' => ['nullable', 'integer', 'between:0,100000']];
+        if ($request->filled('utente') || $request->filled('password')) {
+            $regole = [...$regole, ...MarcheController::regoleCredenziali()];
+            // Dalla console l'indirizzo puo' mancare: vale quello di serie (Aruba)
+            $regole['url'] = array_map(fn ($r) => $r === 'required' ? 'nullable' : $r, $regole['url']);
+        }
+        $data = $request->validate($regole, [
+            'policy.regex' => 'La politica di marcatura è un identificativo numerico a punti (OID), per esempio 1.3.76.36.1.1.1.',
+        ]);
+        $organizzazione = Organization::query()->findOrFail($id);
+        $dati = ['pacchetto' => $data['pacchetto'] ?? null];
+        if (array_key_exists('utente', $data)) {
+            $dati = [...$dati, ...collect($data)->only(['url', 'utente', 'password', 'policy', 'quota_giorno'])->all()];
+        }
+        $organizzazione = $marche->salva($organizzazione, $dati, 'piattaforma.marche');
+        $stato = $marche->stato($organizzazione->id);
+
+        return response()->json(['data' => [
+            'marche_pacchetto' => $stato['pacchetto'],
+            'marche_configurate' => $stato['attiva'],
+            'totale' => $stato['totale'],
+            'restanti' => $stato['restanti'],
+        ]]);
+    }
+
     public function sospendi(Request $request, string $id, ConsolePiattaforma $console): JsonResponse
     {
         $data = $request->validate(['motivo' => ['nullable', 'string', 'max:300']]);

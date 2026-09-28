@@ -322,8 +322,18 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   su un account comune** nel `.env` (li' restano solo `MARCHE_URL` proposto nel modulo,
   `MARCHE_QUOTA_GIORNO` di serie, `MARCHE_CATENA` e `MARCHE_OPENSSL` per la verifica). Senza
   credenziali le marche di quell'organizzazione sono spente e la pagina lo dice, senza fingere.
-  Solo indirizzi https (tranne il proprio computer). La console della piattaforma mostra per
-  ogni organizzazione quante marche ha apposto e se ha un account suo (`marche_configurate`).
+  Solo indirizzi https (tranne il proprio computer).
+- **Pacchetti dalla console** (stessa decisione): DAMA vende le marche a pacchetti, quindi la
+  console della piattaforma assegna a ogni organizzazione il suo pacchetto
+  (`settings['marche']['pacchetto']`, quante marche comprende; vuoto = nessun tetto) e, se
+  serve, l'account con cui appone (`PUT piattaforma/organizzazioni/{id}/marche`, registro
+  `piattaforma.marche` solo nel tenant del gestore). L'organizzazione **legge** il pacchetto
+  ma non lo cambia (`MarcheController` ignora il campo); consumato il pacchetto la pagina
+  Documenti rimanda all'assistenza e il servizio rifiuta ("esaurito (N su N)"). Il tetto
+  giornaliero e il conteggio sono per organizzazione (`usateOggi`, `totale`), non per account.
+  Tutte le scritture passano da `MarcheTemporali::salva` / `togliCredenziali` (lock, audit);
+  togliere le credenziali non tocca il pacchetto. La console mostra marche apposte, pacchetto
+  e account mascherato (`marche_pacchetto`, `marche_configurate`, `marche_utente`).
 - **La logica sta una volta sola in `App\Services\Marche\MarcheTemporali`**: `configurazione`,
   `stato`, `applica`, `verifica`. `applica` produce il PDF **con lo stesso codice della stampa**
   (richiama i controller delle stampe con una richiesta interna e l'utente che chiede: perizia

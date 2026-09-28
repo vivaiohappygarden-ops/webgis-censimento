@@ -99,6 +99,28 @@ function scegli(o) {
     azione.chiediMotivo = false;
     azione.note = o.note ?? '';
     azione.noteSalvate = false;
+    Object.assign(pacchetto, { valore: o.marche_pacchetto ?? '', utente: '', password: '', url: '', policy: '', apriAccount: false, salvato: false, errore: '' });
+}
+
+// Le marche temporali si vendono a pacchetti: qui si assegna il pacchetto a
+// un'organizzazione e, se serve, l'account con cui le appone
+const pacchetto = reactive({ valore: '', utente: '', password: '', url: '', policy: '', apriAccount: false, salvato: false, errore: '' });
+async function salvaPacchetto() {
+    pacchetto.errore = '';
+    pacchetto.salvato = false;
+    const corpo = { pacchetto: pacchetto.valore === '' ? null : Number(pacchetto.valore) };
+    if (pacchetto.apriAccount && pacchetto.utente) {
+        Object.assign(corpo, { utente: pacchetto.utente, password: pacchetto.password || undefined, url: pacchetto.url || 'https://servizi.arubapec.it/tsa/ngrequest.php', policy: pacchetto.policy || null });
+    }
+    await conAzione(async () => {
+        await axios.put(`/api/v1/piattaforma/organizzazioni/${scelta.value.id}/marche`, corpo);
+        pacchetto.password = '';
+        pacchetto.salvato = true;
+    }, 'Salvataggio del pacchetto non riuscito');
+    if (azione.errore) {
+        pacchetto.errore = azione.errore;
+        azione.errore = '';
+    }
 }
 async function conAzione(fn, predefinito) {
     azione.busy = true;
@@ -273,8 +295,28 @@ onMounted(() => { if (props.dueFattoriAttiva) carica(caricaElenco); });
                                 <div><dt :class="ETICHETTA">Lavori</dt><dd class="font-semibold text-gray-900">{{ n(scelta.numeri.lavori) }}</dd></div>
                                 <div><dt :class="ETICHETTA">Committenti</dt><dd class="font-semibold text-gray-900">{{ n(scelta.numeri.committenti) }}</dd></div>
                                 <div><dt :class="ETICHETTA">Portali pubblici accesi</dt><dd class="font-semibold text-gray-900">{{ n(scelta.numeri.portali) }}</dd></div>
-                                <div class="col-span-2" data-test="dettaglio-marche"><dt :class="ETICHETTA">Marche temporali</dt><dd class="font-semibold text-gray-900">{{ n(scelta.numeri.marche) }} apposte <span class="font-normal text-gray-500">· {{ scelta.marche_configurate ? 'con un account proprio' : 'nessun account: le inserisce la sua amministrazione da Documenti' }}</span></dd></div>
+                                <div class="col-span-2" data-test="dettaglio-marche"><dt :class="ETICHETTA">Marche temporali</dt><dd class="font-semibold text-gray-900">{{ n(scelta.numeri.marche) }} apposte<template v-if="scelta.marche_pacchetto !== null"> su un pacchetto di {{ n(scelta.marche_pacchetto) }}</template> <span class="font-normal text-gray-500">· {{ scelta.marche_configurate ? `account ${scelta.marche_utente}` : 'nessun account di marcatura' }}</span></dd></div>
                             </dl>
+
+                            <form class="mt-4 space-y-2" data-test="modulo-pacchetto" @submit.prevent="salvaPacchetto">
+                                <label class="block text-sm font-medium" for="pacchetto-marche">Pacchetto di marche temporali</label>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <input id="pacchetto-marche" v-model="pacchetto.valore" type="number" min="0" max="100000" :class="CAMPO" class="!w-32" placeholder="nessuno" data-test="pacchetto-marche" @input="pacchetto.salvato = false">
+                                    <button type="button" :class="BOTTONE_PICCOLO" data-test="apri-account-marche" @click="pacchetto.apriAccount = ! pacchetto.apriAccount">{{ pacchetto.apriAccount ? 'Nascondi l\'account' : (scelta.marche_configurate ? 'Cambia l\'account' : 'Imposta l\'account') }}</button>
+                                </div>
+                                <p class="text-[13px] text-gray-600">Quante marche comprende il pacchetto venduto a questa organizzazione: le consuma solo lei, e a pacchetto finito la sua pagina Documenti rimanda all'assistenza. Vuoto: nessun tetto.</p>
+                                <div v-if="pacchetto.apriAccount" class="grid gap-2 sm:grid-cols-2" data-test="account-marche">
+                                    <input v-model="pacchetto.utente" type="text" :class="CAMPO" placeholder="Nome utente dell'account" autocomplete="off" data-test="account-marche-utente">
+                                    <input v-model="pacchetto.password" type="password" :class="CAMPO" :placeholder="scelta.marche_configurate ? 'Password (vuota: resta quella salvata)' : 'Password'" autocomplete="new-password" data-test="account-marche-password">
+                                    <input v-model="pacchetto.url" type="url" :class="CAMPO" placeholder="Indirizzo del servizio (vuoto: Aruba)">
+                                    <input v-model="pacchetto.policy" type="text" :class="CAMPO" placeholder="Politica OID (facoltativa)">
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button type="submit" :class="BOTTONE_PICCOLO" :disabled="azione.busy" data-test="salva-pacchetto">Salva il pacchetto</button>
+                                    <span v-if="pacchetto.salvato" class="text-[13px] text-green-800" data-test="pacchetto-salvato">Salvato.</span>
+                                    <span v-if="pacchetto.errore" class="text-[13px] text-red-700" data-test="pacchetto-errore">{{ pacchetto.errore }}</span>
+                                </div>
+                            </form>
 
                             <div v-if="! scelta.is_active && scelta.sospensione" class="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" data-test="dettaglio-sospensione">
                                 Sospesa dal {{ ora(scelta.sospensione.dal) }}<template v-if="scelta.sospensione.da"> da {{ scelta.sospensione.da }}</template><template v-if="scelta.sospensione.motivo">: {{ scelta.sospensione.motivo }}</template>.

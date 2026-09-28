@@ -22,9 +22,11 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Process\Process;
@@ -35,8 +37,12 @@ use Symfony\Component\Process\Process;
  * Il programma produce il PDF con lo stesso codice della stampa, ne calcola
  * l'impronta SHA-256, la manda alla TSA (RFC 3161) e conserva insieme il PDF
  * esatto e il gettone ricevuto: la marca vale per quei byte, e una ristampa
- * potrebbe non essere identica. La quota giornaliera si conta per account
- * del fornitore, perche' e' il lotto che si consuma.
+ * potrebbe non essere identica.
+ *
+ * Le marche le vende DAMA ai clienti a pacchetti: il pacchetto (quante marche
+ * comprende) lo assegna la console della piattaforma a ogni organizzazione,
+ * e ogni organizzazione consuma solo il suo. Le credenziali dell'account e
+ * il tetto giornaliero stanno anch'essi nell'organizzazione.
  */
 class MarcheTemporali
 {
@@ -67,15 +73,16 @@ class MarcheTemporali
      * lotto, quindi non esiste un ripiego su un account comune. Senza
      * credenziali le marche sono spente.
      *
-     * @return array{attiva:bool, url:?string, utente:?string, password:?string, policy:?string, quota_giorno:int, timeout:int, account:?string}
+     * @return array{attiva:bool, url:?string, utente:?string, password:?string, policy:?string, quota_giorno:int, pacchetto:?int, timeout:int, account:?string}
      */
     public function configurazione(string $tenantId): array
     {
         $base = config('marche');
         $propria = Organization::query()->find($tenantId)?->settings['marche'] ?? [];
+        $pacchetto = isset($propria['pacchetto']) && $propria['pacchetto'] !== '' ? (int) $propria['pacchetto'] : null;
         if (empty($propria['utente']) || empty($propria['password_cifrata'])) {
-            return ['attiva' => false, 'url' => null, 'utente' => null, 'password' => null,
-                'policy' => null, 'quota_giorno' => (int) $base['quota_giorno'], 'timeout' => (int) $base['timeout'], 'account' => null];
+            return ['attiva' => false, 'url' => null, 'utente' => null, 'password' => null, 'policy' => null,
+                'quota_giorno' => (int) $base['quota_giorno'], 'pacchetto' => $pacchetto, 'timeout' => (int) $base['timeout'], 'account' => null];
         }
         try {
             $password = Crypt::decryptString($propria['password_cifrata']);
@@ -92,9 +99,69 @@ class MarcheTemporali
             'policy' => $propria['policy'] ?: null,
             'quota_giorno' => isset($propria['quota_giorno']) && $propria['quota_giorno'] !== null && $propria['quota_giorno'] !== ''
                 ? (int) $propria['quota_giorno'] : (int) $base['quota_giorno'],
+            'pacchetto' => $pacchetto,
             'timeout' => (int) $base['timeout'],
             'account' => self::account($url, $propria['utente']),
         ];
+    }
+
+    /**
+     * Salva credenziali e regolazioni nelle impostazioni dell'organizzazione,
+     * sotto lock come le altre impostazioni (nella stessa colonna vive il
+     * contatore dei protocolli). Il pacchetto lo tocca solo chi lo passa
+     * esplicitamente: la console della piattaforma, non l'organizzazione.
+     *
+     * @param  array{url?:?string, utente?:?string, password?:?string, policy?:?string, quota_giorno?:?int, pacchetto?:?int}  $dati
+     */
+    public function salva(Organization $organizzazione, array $dati, string $azione = 'marche.configurazione'): Organization
+    {
+        return DB::transaction(function () use ($organizzazione, $dati, $azione) {
+            $organizzazione = Organization::query()->lockForUpdate()->findOrFail($organizzazione->id);
+            $settings = $organizzazione->settings ?? [];
+            $prima = $settings['marche'] ?? [];
+            $marche = $prima;
+            if (array_key_exists('utente', $dati)) {
+                if (($dati['password'] ?? '') === '' && empty($prima['password_cifrata'])) {
+                    throw ValidationException::withMessages(['password' => "Indicare la password dell'account di marcatura."]);
+                }
+                $marche['url'] = trim((string) (($dati['url'] ?? null) ?: config('marche.url')));
+                $marche['utente'] = trim((string) $dati['utente']);
+                $marche['password_cifrata'] = ($dati['password'] ?? '') !== '' ? Crypt::encryptString($dati['password']) : $prima['password_cifrata'];
+                $marche['policy'] = ($dati['policy'] ?? '') !== '' ? trim((string) $dati['policy']) : null;
+                $marche['quota_giorno'] = $dati['quota_giorno'] ?? null;
+            }
+            if (array_key_exists('pacchetto', $dati)) {
+                $marche['pacchetto'] = $dati['pacchetto'];
+            }
+            $settings['marche'] = $marche;
+            $organizzazione->forceFill(['settings' => $settings])->save();
+            Audit::log($azione, $organizzazione, array_filter([
+                'servizio' => isset($marche['url']) ? parse_url($marche['url'], PHP_URL_HOST) : null,
+                'utente' => isset($marche['utente']) ? self::mascherato($marche['utente']) : null,
+                'password_cambiata' => array_key_exists('utente', $dati) && ($dati['password'] ?? '') !== '',
+                'pacchetto' => array_key_exists('pacchetto', $dati) ? ($dati['pacchetto'] ?? 'nessuno') : null,
+            ], fn ($v) => $v !== null && $v !== false));
+
+            return $organizzazione;
+        });
+    }
+
+    /** Toglie le credenziali; il pacchetto assegnato dalla piattaforma resta. */
+    public function togliCredenziali(Organization $organizzazione): Organization
+    {
+        return DB::transaction(function () use ($organizzazione) {
+            $organizzazione = Organization::query()->lockForUpdate()->findOrFail($organizzazione->id);
+            $settings = $organizzazione->settings ?? [];
+            $pacchetto = $settings['marche']['pacchetto'] ?? null;
+            $settings['marche'] = $pacchetto !== null ? ['pacchetto' => $pacchetto] : [];
+            if ($settings['marche'] === []) {
+                unset($settings['marche']);
+            }
+            $organizzazione->forceFill(['settings' => $settings])->save();
+            Audit::log('marche.configurazione', $organizzazione, ['tolta' => true]);
+
+            return $organizzazione;
+        });
     }
 
     /** La stessa impronta per lo stesso account, qualunque organizzazione lo usi. */
@@ -109,13 +176,20 @@ class MarcheTemporali
         $configurazione = $this->configurazione($tenantId);
         $catena = config('marche.catena');
 
+        $totale = $this->totale($tenantId);
+        $pacchetto = $configurazione['pacchetto'];
+
         return [
             'attiva' => $configurazione['attiva'],
             'servizio' => $configurazione['url'] ? (parse_url($configurazione['url'], PHP_URL_HOST) ?: $configurazione['url']) : null,
             'utente' => $configurazione['utente'] ? self::mascherato($configurazione['utente']) : null,
             'quota_giorno' => $configurazione['quota_giorno'],
-            'usate_oggi' => $configurazione['account'] ? $this->usateOggi($configurazione['account']) : 0,
-            'totale' => MarcaTemporale::query()->where('tenant_id', $tenantId)->count(),
+            'usate_oggi' => $this->usateOggi($tenantId),
+            'totale' => $totale,
+            // Il pacchetto venduto dalla piattaforma: quante ne comprende e quante ne restano
+            'pacchetto' => $pacchetto,
+            'restanti' => $pacchetto !== null ? max($pacchetto - $totale, 0) : null,
+            'esaurito' => $pacchetto !== null && $totale >= $pacchetto,
             'verifica_firma' => is_string($catena) && $catena !== '' && is_file($catena),
         ];
     }
@@ -130,13 +204,19 @@ class MarcheTemporali
         return mb_substr($utente, 0, 2).str_repeat('*', min($lunghezza - 4, 8)).mb_substr($utente, -2);
     }
 
-    /** Marche apposte oggi (giorno italiano) con questo account (se due organizzazioni usassero lo stesso, il lotto e' uno). */
-    public function usateOggi(string $account): int
+    /** Marche apposte oggi (giorno italiano) dall'organizzazione. */
+    public function usateOggi(string $tenantId): int
     {
         return MarcaTemporale::withoutGlobalScopes()
-            ->where('account', $account)
+            ->where('tenant_id', $tenantId)
             ->where('created_at', '>=', Carbon::now('Europe/Rome')->startOfDay()->utc())
             ->count();
+    }
+
+    /** Tutte le marche apposte dall'organizzazione: e' quello che consuma il pacchetto. */
+    public function totale(string $tenantId): int
+    {
+        return MarcaTemporale::withoutGlobalScopes()->where('tenant_id', $tenantId)->count();
     }
 
     // ---- Apposizione ---------------------------------------------------------
@@ -161,8 +241,11 @@ class MarcheTemporali
             throw new MarcaTemporaleException("Le marche temporali di questa organizzazione non sono ancora attive. Per attivarle serve un pacchetto di marche, che potete richiedere alla nostra assistenza; se avete gia' un vostro account di marcatura temporale, le credenziali si inseriscono in Documenti da chi gestisce gli utenti.");
         }
         }
-        if ($configurazione['quota_giorno'] > 0 && $this->usateOggi($configurazione['account']) >= $configurazione['quota_giorno']) {
-            throw new MarcaTemporaleException("Per oggi le marche sono finite ({$configurazione['quota_giorno']} al giorno con questo account): la prossima si può apporre domani.");
+        if ($configurazione['pacchetto'] !== null && $this->totale($utente->tenant_id) >= $configurazione['pacchetto']) {
+            throw new MarcaTemporaleException("Il pacchetto di marche di questa organizzazione è esaurito ({$configurazione['pacchetto']} su {$configurazione['pacchetto']}): per rinnovarlo potete rivolgervi alla nostra assistenza.");
+        }
+        if ($configurazione['quota_giorno'] > 0 && $this->usateOggi($utente->tenant_id) >= $configurazione['quota_giorno']) {
+            throw new MarcaTemporaleException("Per oggi le marche sono finite ({$configurazione['quota_giorno']} al giorno per questa organizzazione): la prossima si può apporre domani.");
         }
 
         $documento = $this->documento($utente, $tipo, $soggettoId, $parametri);

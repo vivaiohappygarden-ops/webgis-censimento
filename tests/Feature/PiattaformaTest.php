@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\Concerns\InteractsWithTenant;
+use Tests\Support\RaccoglitorePdf;
+use Tests\Support\TsaDiProva;
 use Tests\TestCase;
 
 /**
@@ -106,6 +108,7 @@ class PiattaformaTest extends TestCase
         // Le marche temporali sono per organizzazione: la console dice quante ne ha apposte e se ha un account suo
         $this->assertSame(0, $riga['numeri']['marche']);
         $this->assertFalse($riga['marche_configurate']);
+        $this->assertNull($riga['marche_pacchetto']);
         $this->assertNull($riga['ultimo_accesso']);
         $this->assertNull($riga['assistenza']);
 
@@ -314,6 +317,56 @@ class PiattaformaTest extends TestCase
         $this->get('/oggi')->assertOk();
         Auth::forgetGuards();
         $this->withHeader('Referer', 'http://localhost/oggi')->getJson('/api/v1/users')->assertOk();
+    }
+
+    public function test_il_pacchetto_di_marche_si_assegna_dalla_console_e_si_esaurisce_da_solo(): void
+    {
+        if (! TsaDiProva::disponibile()) {
+            $this->markTestSkipped('openssl non disponibile.');
+        }
+        Storage::fake('local');
+        $this->app->instance(\App\Services\Pdf\PdfRenderer::class, new RaccoglitorePdf);
+        config(['marche.url' => 'https://tsa.prova.test/tsr']);
+        \Illuminate\Support\Facades\Http::fake([
+            'tsa.prova.test/*' => fn ($r) => \Illuminate\Support\Facades\Http::response(TsaDiProva::rispondi($r->body()), 200),
+            '*' => \Illuminate\Support\Facades\Http::response('', 404),
+        ]);
+        [$miaOrganizzazione, $gestore] = $this->gestore();
+        [$cliente, $amministratoreCliente] = $this->createTenantUser();
+
+        // DAMA vende un pacchetto di una marca e imposta il proprio account per il cliente, dalla console
+        $this->actingAsTenantUser($gestore);
+        $this->putJson("/api/v1/piattaforma/organizzazioni/{$cliente->id}/marche", ['pacchetto' => 1, 'utente' => 'dama-marche', 'password' => 'segreta'])
+            ->assertOk()->assertJsonPath('data.marche_pacchetto', 1)->assertJsonPath('data.marche_configurate', true)->assertJsonPath('data.restanti', 1);
+        $riga = collect($this->getJson('/api/v1/piattaforma/organizzazioni')->json('data'))->firstWhere('id', $cliente->id);
+        $this->assertSame([1, true, 'da*******he'], [$riga['marche_pacchetto'], $riga['marche_configurate'], $riga['marche_utente']]);
+        // Il registro resta nel tenant del gestore, non in quello del cliente
+        $this->assertDatabaseHas('audit_logs', ['action' => 'piattaforma.marche', 'tenant_id' => $miaOrganizzazione->id, 'subject_id' => $cliente->id]);
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'piattaforma.marche', 'tenant_id' => $cliente->id]);
+
+        // Il cliente vede il pacchetto, non lo cambia, lo consuma e poi la pagina rimanda all'assistenza
+        $this->actingAsTenantUser($amministratoreCliente);
+        $stato = $this->getJson('/api/v1/documenti/marche')->assertOk()->json('stato');
+        $this->assertSame(['attiva' => true, 'totale' => 0, 'pacchetto' => 1, 'restanti' => 1, 'esaurito' => false],
+            collect($stato)->only(['attiva', 'totale', 'pacchetto', 'restanti', 'esaurito'])->all());
+        $this->putJson('/api/v1/documenti/marche/configurazione', ['url' => 'https://tsa.prova.test/tsr', 'utente' => 'dama-marche', 'pacchetto' => 500])
+            ->assertOk()->assertJsonPath('data.pacchetto', 1);
+        $this->postJson('/api/v1/documenti/marche', ['tipo' => 'registro_fitosanitari', 'parametri' => ['anno' => 2026]])->assertCreated();
+        $messaggio = $this->postJson('/api/v1/documenti/marche', ['tipo' => 'registro_fitosanitari', 'parametri' => ['anno' => 2026]])
+            ->assertUnprocessable()->json('errors.marca.0');
+        $this->assertStringContainsString('esaurito (1 su 1)', $messaggio);
+        $this->assertStringContainsString('assistenza', $messaggio);
+        $stato = $this->getJson('/api/v1/documenti/marche')->json('stato');
+        $this->assertSame([1, 0, true], [$stato['totale'], $stato['restanti'], $stato['esaurito']]);
+
+        // Tolte le credenziali, il pacchetto assegnato resta; la console lo rinnova
+        $this->deleteJson('/api/v1/documenti/marche/configurazione')->assertOk()->assertJsonPath('data.pacchetto', 1);
+        $this->actingAsTenantUser($gestore);
+        $this->putJson("/api/v1/piattaforma/organizzazioni/{$cliente->id}/marche", ['pacchetto' => 3])->assertOk()->assertJsonPath('data.restanti', 2);
+        $this->assertSame(1, collect($this->getJson('/api/v1/piattaforma/organizzazioni')->json('data'))->firstWhere('id', $cliente->id)['numeri']['marche']);
+        // Un pacchetto senza numero e' "nessun tetto"; un valore fuori misura si rifiuta
+        $this->putJson("/api/v1/piattaforma/organizzazioni/{$cliente->id}/marche", ['pacchetto' => null])->assertOk()->assertJsonPath('data.marche_pacchetto', null);
+        $this->putJson("/api/v1/piattaforma/organizzazioni/{$cliente->id}/marche", ['pacchetto' => -1])->assertUnprocessable();
     }
 
     public function test_le_note_della_piattaforma_restano_solo_nella_console(): void

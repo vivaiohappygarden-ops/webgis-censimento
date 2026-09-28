@@ -85,6 +85,8 @@ class ConsolePiattaforma
                     'marche' => (int) ($marche[$o->id] ?? 0),
                 ],
                 'marche_configurate' => ! empty($o->settings['marche']['utente']) && ! empty($o->settings['marche']['password_cifrata']),
+                'marche_pacchetto' => isset($o->settings['marche']['pacchetto']) && $o->settings['marche']['pacchetto'] !== '' ? (int) $o->settings['marche']['pacchetto'] : null,
+                'marche_utente' => isset($o->settings['marche']['utente']) ? \App\Services\Marche\MarcheTemporali::mascherato($o->settings['marche']['utente']) : null,
                 'assistenza' => $utenteAssistenza && $utenteAssistenza->is_active && ! self::assistenzaScaduta($utenteAssistenza) ? [
                     'scade' => $utenteAssistenza->settings['assistenza']['scade'] ?? null,
                     'gestore' => $utenteAssistenza->settings['assistenza']['gestore'] ?? null,

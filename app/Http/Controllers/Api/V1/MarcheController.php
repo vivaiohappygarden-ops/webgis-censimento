@@ -7,11 +7,8 @@ use App\Models\MarcaTemporale;
 use App\Models\Organization;
 use App\Services\Marche\MarcaTemporaleException;
 use App\Services\Marche\MarcheTemporali;
-use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -117,13 +114,35 @@ class MarcheController extends Controller
             'policy' => $propria['policy'] ?? null,
             'quota_giorno' => $propria['quota_giorno'] ?? null,
             'quota_predefinita' => (int) config('marche.quota_giorno'),
+            // Il pacchetto lo assegna la piattaforma: qui si legge soltanto
+            'pacchetto' => isset($propria['pacchetto']) && $propria['pacchetto'] !== '' ? (int) $propria['pacchetto'] : null,
             'stato' => $marche->stato($request->user()->tenant_id),
         ]]);
     }
 
     public function aggiornaConfigurazione(Request $request, MarcheTemporali $marche): JsonResponse
     {
-        $data = $request->validate([
+        $data = $request->validate(self::regoleCredenziali(), [
+            'policy.regex' => 'La politica di marcatura è un identificativo numerico a punti (OID), per esempio 1.3.76.36.1.1.1.',
+        ]);
+
+        // Il pacchetto non passa da qui: lo assegna la console della piattaforma
+        $marche->salva(Organization::query()->findOrFail($request->user()->tenant_id), collect($data)->only(['url', 'utente', 'password', 'policy', 'quota_giorno'])->all());
+
+        return $this->configurazione($request, $marche);
+    }
+
+    public function eliminaConfigurazione(Request $request, MarcheTemporali $marche): JsonResponse
+    {
+        $marche->togliCredenziali(Organization::query()->findOrFail($request->user()->tenant_id));
+
+        return $this->configurazione($request, $marche);
+    }
+
+    /** Le regole dei campi delle credenziali, uguali per Documenti e per la console. */
+    public static function regoleCredenziali(): array
+    {
+        return [
             'url' => ['required', 'url:http,https', 'max:300', function ($attributo, $valore, $fallisci) {
                 $host = parse_url((string) $valore, PHP_URL_HOST);
                 $locale = in_array($host, ['localhost', '127.0.0.1', '::1'], true);
@@ -135,48 +154,7 @@ class MarcheController extends Controller
             'password' => ['nullable', 'string', 'max:200'],
             'policy' => ['nullable', 'string', 'max:100', 'regex:/^\d+(\.\d+)+$/'],
             'quota_giorno' => ['nullable', 'integer', 'between:0,10000'],
-        ], [
-            'policy.regex' => 'La politica di marcatura è un identificativo numerico a punti (OID), per esempio 1.3.76.36.1.1.1.',
-        ]);
-
-        $organizzazione = DB::transaction(function () use ($request, $data) {
-            $organizzazione = Organization::query()->lockForUpdate()->findOrFail($request->user()->tenant_id);
-            $settings = $organizzazione->settings ?? [];
-            $prima = $settings['marche'] ?? [];
-            if (($data['password'] ?? '') === '' && empty($prima['password_cifrata'])) {
-                throw ValidationException::withMessages(['password' => "Indicare la password dell'account di marcatura."]);
-            }
-            $settings['marche'] = [
-                'url' => trim($data['url']),
-                'utente' => trim($data['utente']),
-                'password_cifrata' => ($data['password'] ?? '') !== '' ? Crypt::encryptString($data['password']) : $prima['password_cifrata'],
-                'policy' => ($data['policy'] ?? '') !== '' ? trim($data['policy']) : null,
-                'quota_giorno' => $data['quota_giorno'] ?? null,
-            ];
-            $organizzazione->forceFill(['settings' => $settings])->save();
-            Audit::log('marche.configurazione', $organizzazione, [
-                'servizio' => parse_url($settings['marche']['url'], PHP_URL_HOST),
-                'utente' => MarcheTemporali::mascherato($settings['marche']['utente']),
-                'password_cambiata' => ($data['password'] ?? '') !== '',
-            ]);
-
-            return $organizzazione;
-        });
-
-        return $this->configurazione($request, $marche);
-    }
-
-    public function eliminaConfigurazione(Request $request, MarcheTemporali $marche): JsonResponse
-    {
-        DB::transaction(function () use ($request) {
-            $organizzazione = Organization::query()->lockForUpdate()->findOrFail($request->user()->tenant_id);
-            $settings = $organizzazione->settings ?? [];
-            unset($settings['marche']);
-            $organizzazione->forceFill(['settings' => $settings])->save();
-            Audit::log('marche.configurazione', $organizzazione, ['tolta' => true]);
-        });
-
-        return $this->configurazione($request, $marche);
+        ];
     }
 
     // ---- Comuni ------------------------------------------------------------------

@@ -83,6 +83,8 @@ onMounted(() => carica(() => Promise.all([caricaDocumenti(), caricaCommittenti()
 
 // --- Marche temporali ---------------------------------------------------------
 const marche = reactive({ stato: null, righe: [], busy: '', errore: '', esito: '', verifica: null, verificaBusy: false });
+// Si puo' apporre una marca: servono le credenziali e un pacchetto non esaurito
+const marcheDisponibili = computed(() => Boolean(marche.stato?.attiva) && ! marche.stato?.esaurito);
 async function caricaMarche() {
     const { data } = await axios.get('/api/v1/documenti/marche');
     marche.stato = data.stato;
@@ -325,7 +327,7 @@ const anniProducibili = computed(() => Array.from({ length: 6 }, (_, i) => annoC
                                             <button type="button" :class="BOTTONE_PICCOLO" class="ml-1" data-test="marca-tsr" @click="scaricaFile(r.marca.tsr, nomeGettone(r.marca))">Gettone .tsr</button>
                                             <button type="button" :class="BOTTONE_PICCOLO" class="ml-1" :disabled="marche.verificaBusy" data-test="marca-verifica" @click="verificaMarca(r.marca)">Verifica</button>
                                         </template>
-                                        <button v-else-if="r.marcabile && marche.stato?.attiva" type="button" :class="BOTTONE_PICCOLO" class="ml-1" :disabled="marche.busy === `${r.tipo}-${r.id}`" data-test="marca-applica" @click="applicaMarca(`${r.tipo}-${r.id}`, r.tipo, r.id, null, r.titolo)">Marca temporale</button>
+                                        <button v-else-if="r.marcabile && marcheDisponibili" type="button" :class="BOTTONE_PICCOLO" class="ml-1" :disabled="marche.busy === `${r.tipo}-${r.id}`" data-test="marca-applica" @click="applicaMarca(`${r.tipo}-${r.id}`, r.tipo, r.id, null, r.titolo)">Marca temporale</button>
                                     </td>
                                 </tr>
                                 <tr v-if="! righe.length && ! caricamento"><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500" data-test="documenti-vuoto">Nessun documento con questi filtri.</td></tr>
@@ -360,7 +362,7 @@ const anniProducibili = computed(() => Array.from({ length: 6 }, (_, i) => annoC
                                 <select v-model="produci.bilancioClient" class="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm" aria-label="Committente del bilancio"><option value="">Tutti i committenti</option><option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option></select>
                                 <select v-model="produci.bilancioAnno" class="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm" aria-label="Anno del bilancio"><option v-for="a in anniProducibili" :key="a" :value="a">{{ a }}</option></select>
                                 <button type="button" :class="BOTTONE_PICCOLO" :disabled="stampa.busy === 'bilancio'" data-test="genera-bilancio" @click="scarica('bilancio', urlBilancio)">Genera</button>
-                                <button v-if="marche.stato?.attiva" type="button" :class="BOTTONE_PICCOLO" :disabled="marche.busy === 'bilancio'" data-test="marca-bilancio" @click="applicaMarca('bilancio', 'bilancio_arboreo', null, { anno: produci.bilancioAnno, client_id: produci.bilancioClient || null }, `Bilancio arboreo ${produci.bilancioAnno}`)">Genera e marca</button>
+                                <button v-if="marcheDisponibili" type="button" :class="BOTTONE_PICCOLO" :disabled="marche.busy === 'bilancio'" data-test="marca-bilancio" @click="applicaMarca('bilancio', 'bilancio_arboreo', null, { anno: produci.bilancioAnno, client_id: produci.bilancioClient || null }, `Bilancio arboreo ${produci.bilancioAnno}`)">Genera e marca</button>
                             </div>
                         </div>
                         <div v-if="can('works.view') && clients.length" class="mt-3">
@@ -369,7 +371,7 @@ const anniProducibili = computed(() => Array.from({ length: 6 }, (_, i) => annoC
                                 <select v-model="produci.relazioneClient" class="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm" aria-label="Committente della relazione"><option value="">Committente…</option><option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option></select>
                                 <select v-model="produci.relazioneAnno" class="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm" aria-label="Anno della relazione"><option v-for="a in anniProducibili" :key="a" :value="a">{{ a }}</option></select>
                                 <button type="button" :class="BOTTONE_PICCOLO" :disabled="! urlRelazione || stampa.busy === 'relazione'" @click="scarica('relazione', urlRelazione)">Genera</button>
-                                <button v-if="marche.stato?.attiva" type="button" :class="BOTTONE_PICCOLO" :disabled="! urlRelazione || marche.busy === 'relazione'" data-test="marca-relazione" @click="applicaMarca('relazione', 'relazione_annuale', null, { anno: produci.relazioneAnno, client_id: produci.relazioneClient }, `Relazione annuale ${produci.relazioneAnno}`)">Genera e marca</button>
+                                <button v-if="marcheDisponibili" type="button" :class="BOTTONE_PICCOLO" :disabled="! urlRelazione || marche.busy === 'relazione'" data-test="marca-relazione" @click="applicaMarca('relazione', 'relazione_annuale', null, { anno: produci.relazioneAnno, client_id: produci.relazioneClient }, `Relazione annuale ${produci.relazioneAnno}`)">Genera e marca</button>
                             </div>
                         </div>
                         <div v-if="can('works.view')" class="mt-3">
@@ -377,7 +379,7 @@ const anniProducibili = computed(() => Array.from({ length: 6 }, (_, i) => annoC
                             <div class="mt-1 flex flex-wrap items-center gap-2">
                                 <select v-model="produci.fitoAnno" class="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm" aria-label="Anno del registro"><option v-for="a in anniProducibili" :key="a" :value="a">{{ a }}</option></select>
                                 <button type="button" :class="BOTTONE_PICCOLO" :disabled="stampa.busy === 'fito'" @click="scarica('fito', urlFito)">Stampa</button>
-                                <button v-if="marche.stato?.attiva" type="button" :class="BOTTONE_PICCOLO" :disabled="marche.busy === 'fito'" data-test="marca-fito" @click="applicaMarca('fito', 'registro_fitosanitari', null, { anno: produci.fitoAnno }, `Registro dei trattamenti fitosanitari ${produci.fitoAnno}`)">Stampa e marca</button>
+                                <button v-if="marcheDisponibili" type="button" :class="BOTTONE_PICCOLO" :disabled="marche.busy === 'fito'" data-test="marca-fito" @click="applicaMarca('fito', 'registro_fitosanitari', null, { anno: produci.fitoAnno }, `Registro dei trattamenti fitosanitari ${produci.fitoAnno}`)">Stampa e marca</button>
                             </div>
                         </div>
                         <p class="mt-3 text-[13px] text-gray-500">Sopra la firma di ogni documento c'è la riga "Luogo, data": il luogo si imposta una volta sola in Impostazioni.</p>
@@ -390,7 +392,11 @@ const anniProducibili = computed(() => Array.from({ length: 6 }, (_, i) => annoC
                             <dl v-if="marche.stato.attiva" class="mt-3 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]" data-test="marche-stato">
                                 <dt class="text-gray-500">Servizio</dt><dd class="text-gray-900">{{ marche.stato.servizio }} · account {{ marche.stato.utente }} <span class="text-gray-500">(credenziali di questa organizzazione)</span></dd>
                                 <dt class="text-gray-500">Oggi</dt><dd class="text-gray-900">{{ marche.stato.usate_oggi }} {{ plurale(marche.stato.usate_oggi, 'marca apposta', 'marche apposte') }}<template v-if="marche.stato.quota_giorno > 0"> su {{ marche.stato.quota_giorno }} al giorno</template></dd>
-                                <dt class="text-gray-500">Apposte in tutto</dt><dd class="text-gray-900">{{ marche.righe.length }}<template v-if="marche.righe.length"> · l'ultima il {{ marche.righe[0].generato_il_locale }}</template></dd>
+                                <dt class="text-gray-500">Pacchetto</dt>
+                                <dd class="text-gray-900" data-test="marche-pacchetto">
+                                    <template v-if="marche.stato.pacchetto !== null">{{ marche.stato.totale }} {{ plurale(marche.stato.totale, 'usata', 'usate') }} su {{ marche.stato.pacchetto }}<template v-if="! marche.stato.esaurito">, ne {{ marche.stato.restanti === 1 ? 'resta 1' : `restano ${marche.stato.restanti}` }}</template><span v-else class="text-amber-900">: esaurito, per rinnovarlo rivolgetevi alla nostra assistenza</span></template>
+                                    <template v-else>{{ marche.stato.totale }} {{ plurale(marche.stato.totale, 'marca apposta', 'marche apposte') }} in tutto<template v-if="marche.righe.length"> · l'ultima il {{ marche.righe[0].generato_il_locale }}</template></template>
+                                </dd>
                                 <dt class="text-gray-500">Firma</dt><dd class="text-gray-900">{{ marche.stato.verifica_firma ? 'la verifica controlla anche la firma della TSA (certificati presenti sul server)' : 'la verifica controlla impronta e gettone; la firma si controlla fuori dal programma con il file .tsr' }}</dd>
                             </dl>
                             <p v-else class="mt-3 text-sm text-amber-900" data-test="marche-spente">Le marche temporali di questa organizzazione non sono ancora attive. Per attivarle serve un pacchetto di marche, che potete richiedere alla nostra assistenza: ogni organizzazione ha il suo, e le marche di una non si consumano per un'altra.<template v-if="can('users.manage')"> Se avete già un vostro account di marcatura temporale, potete inserire qui le credenziali.</template><template v-else> Le credenziali le inserisce chi gestisce gli utenti.</template></p>

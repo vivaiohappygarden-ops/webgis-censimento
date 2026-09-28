@@ -565,8 +565,17 @@ file `.env` del server non ci sono credenziali, solo le regolazioni comuni: l'in
 proposto di serie nel modulo (`MARCHE_URL`, quello di Aruba) e il tetto di marche al giorno
 se l'organizzazione non ne indica uno (`MARCHE_QUOTA_GIORNO`, 10 di serie, 0 = nessun tetto;
 serve a non svuotare un lotto per errore). Se il fornitore chiede una "politica" (un
-identificativo a punti), va nel campo apposito del modulo. La console della piattaforma
-mostra, per ogni organizzazione, quante marche ha apposto e se ha un account suo.
+identificativo a punti), va nel campo apposito del modulo.
+
+**Vendere un pacchetto a un cliente.** Dalla console della piattaforma, nella scheda
+dell'organizzazione, "Pacchetto di marche temporali": si scrive quante marche comprende e,
+con "Imposta l'account", l'account di marcatura con cui le appone (per esempio il vostro
+account Aruba, se il cliente non ne ha uno). Da quel momento il cliente vede in Documenti
+"N usate su M, ne restano R"; a pacchetto finito la pagina gli dice di rivolgersi
+all'assistenza, e dalla console si rinnova alzando il numero. Le marche di un cliente non
+si consumano mai per un altro, anche se l'account e' lo stesso: il conto e' per
+organizzazione. La console mostra, per ogni organizzazione, quante marche ha apposto, il
+pacchetto e l'account in uso.
 
 Per far controllare al programma anche la **firma** della marca, si scaricano dal sito del
 fornitore i certificati della sua autorita' di marcatura (la catena, in formato PEM), si
