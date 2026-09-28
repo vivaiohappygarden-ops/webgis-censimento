@@ -1,137 +1,53 @@
 /**
- * Schermate del programma per il depliant, prese dal Comune dimostrativo.
+ * Schermate del programma per il depliant, prese dal Comune dimostrativo con
+ * la nuova interfaccia. Il nome "WebGIS Censimento" scritto nel menu viene
+ * sostituito al volo con "ArborLab" solo nella schermata (nome commerciale dal
+ * 28/09/2026): il codice del programma non cambia.
  *
- * Presupposti: il server risponde su BASE (php artisan serve), il database
- * ha db:seed + demo:patrimonio, e il portale del Comune Demo e' acceso con
- * indirizzo "demo". Le immagini finiscono in docs/depliant/img.
+ * Presupposti: server su BASE, db:seed + demo:patrimonio, portale del Comune
+ * Demo acceso con indirizzo "demo". Sotto `php artisan serve` l'area riservata
+ * (/portale) risponde 404 per la cartella public/portale: serve un server
+ * vero o il server integrato con un instradatore che distingue file e cartelle.
  *
- *   node docs/depliant/schermate.mjs
+ *   ALBERO_ID=<uuid ALB-0002> ORDINE_ID=<uuid ODS-DEMO-0001> node docs/depliant/schermate.mjs
  *
- * Variabili facoltative: BASE (http://127.0.0.1:8000), CHROME_PATH (eseguibile
- * di Chromium, se non si vuole quello scaricato da Playwright), ALBERO (codice
- * dell'elemento da mostrare nel portale, di serie ALB-0002), ALBERO_ID (il suo
- * identificativo, per la scheda del gestionale), SEZIONI (quali gruppi
- * rifare, separati da virgola: gestionale, campo, committente, portale).
- *
- * Nota per "php artisan serve": il server integrato di PHP risponde 404 da
- * solo su /portale, perche' in public/ esiste la cartella portale/ dei
- * caratteri. Per l'area del committente serve un server vero (Caddy) o il
- * server integrato con un router che passi al file server solo i file.
+ * SEZ sceglie i gruppi: g (gestionale), c (app di campo), p (area riservata),
+ * t (portale pubblico dal telefono). CHROME_PATH come per genera-pdf.mjs.
  */
 import { chromium } from 'playwright';
-import { mkdirSync } from 'node:fs';
-
 const BASE = process.env.BASE ?? 'http://127.0.0.1:8000';
-const OUT = new URL('./img/', import.meta.url).pathname;
-const ALBERO = process.env.ALBERO ?? 'ALB-0002';
 const ALBERO_ID = process.env.ALBERO_ID ?? '';
-mkdirSync(OUT, { recursive: true });
-
-const launch = { args: ['--no-sandbox'] };
-if (process.env.CHROME_PATH) launch.executablePath = process.env.CHROME_PATH;
-if (process.env.HTTPS_PROXY) launch.proxy = { server: process.env.HTTPS_PROXY, bypass: 'localhost,127.0.0.1' };
-
-const browser = await chromium.launch(launch);
-
-const attesa = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function apri(page, url, ms = 1500) {
-    await page.goto(BASE + url, { waitUntil: 'load' });
-    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
-    await attesa(ms);
+const ORDINE_ID = process.env.ORDINE_ID ?? '';
+const OUT = new URL('./img/', import.meta.url).pathname;
+import { mkdirSync } from 'node:fs'; mkdirSync(OUT, { recursive: true });
+const lancio = { args: ['--no-sandbox'] };
+if (process.env.CHROME_PATH) lancio.executablePath = process.env.CHROME_PATH;
+const b = await chromium.launch(lancio);
+const att = (ms) => new Promise((r) => setTimeout(r, ms));
+async function apri(p, u, ms = 2500) { await p.goto(BASE + u, { waitUntil: 'load' }); await p.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {}); await att(ms); await nome(p); }
+async function nome(p) { await p.evaluate(() => { const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) { if (n.nodeValue.includes('WebGIS Censimento')) n.nodeValue = n.nodeValue.replace('WebGIS Censimento', 'ArborLab'); if (n.nodeValue.includes('WebGIS Operatore')) n.nodeValue = n.nodeValue.replace('WebGIS Operatore', 'ArborLab Campo'); } }); }
+async function accedi(p, email) { await p.goto(BASE + '/login'); await p.fill('#email', email); await p.fill('#password', 'password'); await Promise.all([p.waitForURL((u) => !u.pathname.endsWith('/login'), { timeout: 20000 }), p.click('button[type=submit]')]); await p.waitForLoadState('networkidle').catch(() => {}); }
+const opz = { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, locale: 'it-IT', timezoneId: 'Europe/Rome', geolocation: { latitude: 45.4663, longitude: 9.1926 }, permissions: ['geolocation'] };
+const CLIP = { oggi: [0, 780], patrimonio: [0, 640], scheda: [0, 900], ordine: [0, 760], documenti: [0, 640], mappa: [0, 900], 'area-riservata': [0, 900], vta: [0, 760], gantt: [0, 620] };
+const clip = (n) => CLIP[n] ? { x: 240, y: CLIP[n][0], width: 1200, height: CLIP[n][1] } : undefined;
+const tel = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'it-IT', timezoneId: 'Europe/Rome' };
+const sez = (process.env.SEZ ?? 'g,c,p,t').split(',');
+if (sez.includes('g')) {
+  const c = await b.newContext(opz); const p = await c.newPage(); await accedi(p, 'admin@demo.local');
+  for (const [n, u, ms] of [['oggi','/oggi'],['patrimonio','/patrimonio',3500],['scheda','/censimento/' + ALBERO_ID,4000],['ordine','/lavori/' + ORDINE_ID,5000],['documenti','/documenti'],['mappa','/mappa',12000]]) { await apri(p, u, ms); await p.screenshot({ path: OUT + n + '.png', clip: clip(n) }); console.log(n); }
+  await c.close();
 }
-
-async function accedi(page, email) {
-    await page.goto(BASE + '/login', { waitUntil: 'load' });
-    await page.fill('#email', email);
-    await page.fill('#password', 'password');
-    await Promise.all([
-        page.waitForURL((u) => !u.pathname.endsWith('/login'), { timeout: 20000 }),
-        page.click('button[type=submit]'),
-    ]);
-    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+if (sez.includes('c')) {
+  const c = await b.newContext({ ...tel, geolocation: { latitude: 45.4663, longitude: 9.1926 }, permissions: ['geolocation'] }); const p = await c.newPage();
+  await accedi(p, 'operatore@demo.local'); await apri(p, '/operatore', 4000); await p.screenshot({ path: OUT + 'operatore.png' });
+  for (const [scheda, file] of [['Rilievo', 'operatore-rilievo'], ['Lavori', 'operatore-lavori']]) {
+    await p.locator('nav button, nav a, button').filter({ hasText: new RegExp('^\\s*' + scheda + '\\s*$') }).last().click();
+    await att(3000); await nome(p); await p.screenshot({ path: OUT + file + '.png' });
+  }
+  console.log('campo'); await c.close();
 }
-
-const SEZIONI = (process.env.SEZIONI ?? 'gestionale,campo,committente,portale').split(',').map((s) => s.trim());
-
-async function sezione(nome, fn) {
-    if (! SEZIONI.includes(nome)) return;
-    try { await fn(); } catch (err) { console.error('sezione ' + nome + ' non riuscita:', err.message.split('\n')[0]); }
+if (sez.includes('p')) { const c = await b.newContext(opz); const p = await c.newPage(); await accedi(p, 'cliente@demo.local'); await apri(p, '/portale', 4000); await p.screenshot({ path: OUT + 'area-riservata.png', clip: clip('area-riservata') }); console.log('area'); await c.close(); }
+if (sez.includes('t')) {
+    const t = await b.newContext(tel); const q = await t.newPage(); await apri(q, '/comune/demo', 5000); await q.screenshot({ path: OUT + 'portale-home-telefono.png' }); await apri(q, '/comune/demo/elemento/ALB-0002', 4000); await q.screenshot({ path: OUT + 'portale-elemento-telefono.png' }); console.log('portale'); await t.close();
 }
-
-// Ritagli in pixel CSS (finestra 1440x900, barra laterale larga 224): nel
-// depliant alcune schermate stanno accanto al testo e la barra laterale,
-// uguale in tutte, sarebbe solo spazio sprecato.
-const RITAGLI = {
-    mappa: { x: 224, y: 0, width: 1216, height: 900 },
-    vta: { x: 224, y: 0, width: 1216, height: 760 },
-    gantt: { x: 224, y: 95, width: 1216, height: 520 },
-};
-
-async function scatta(page, nome) {
-    await page.screenshot({ path: OUT + nome + '.png', clip: RITAGLI[nome] });
-    console.log('scattata', nome);
-}
-
-// ---- Gestionale, dal computer -------------------------------------------
-await sezione('gestionale', async () => {
-    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, ignoreHTTPSErrors: true, locale: 'it-IT', timezoneId: 'Europe/Rome' });
-    const page = await ctx.newPage();
-    await accedi(page, 'admin@demo.local');
-
-    await apri(page, '/oggi'); await scatta(page, 'oggi');
-    await apri(page, '/mappa', 6000); await scatta(page, 'mappa');
-    await apri(page, '/censimento', 2500); await scatta(page, 'censimento');
-    if (ALBERO_ID) { await apri(page, '/censimento/' + ALBERO_ID, 4000); await scatta(page, 'scheda'); }
-    await apri(page, '/vta', 2500); await scatta(page, 'vta');
-    await apri(page, '/lavori', 2500); await scatta(page, 'lavori');
-    for (const scheda of ['Agenda', 'Gantt', 'Rendiconto']) {
-        const tab = page.locator('button, a').filter({ hasText: new RegExp('^\\s*' + scheda + '\\s*$') }).first();
-        if (await tab.count()) { await tab.click(); await attesa(2500); await scatta(page, scheda.toLowerCase()); }
-    }
-    await apri(page, '/ispezioni', 2000); await scatta(page, 'ispezioni');
-    await apri(page, '/segnalazioni', 2000); await scatta(page, 'segnalazioni');
-    await apri(page, '/statistiche', 3500); await scatta(page, 'statistiche');
-    await apri(page, '/territorio', 2500); await scatta(page, 'territorio');
-    await apri(page, '/irrigazione', 2000); await scatta(page, 'irrigazione');
-    await apri(page, '/fitosanitari', 2000); await scatta(page, 'fitosanitari');
-    await apri(page, '/utenti', 2000); await scatta(page, 'utenti');
-    await ctx.close();
-});
-
-// ---- App di campo, dal telefono -----------------------------------------
-await sezione('campo', async () => {
-    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, ignoreHTTPSErrors: true, locale: 'it-IT', timezoneId: 'Europe/Rome' });
-    const page = await ctx.newPage();
-    await accedi(page, 'operatore@demo.local');
-    await apri(page, '/operatore', 4000); await scatta(page, 'operatore');
-    await ctx.close();
-});
-
-// ---- Area riservata del committente --------------------------------------
-await sezione('committente', async () => {
-    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, ignoreHTTPSErrors: true, locale: 'it-IT', timezoneId: 'Europe/Rome' });
-    const page = await ctx.newPage();
-    await accedi(page, 'cliente@demo.local');
-    await apri(page, '/portale', 3000); await scatta(page, 'portale-committente');
-    await ctx.close();
-});
-
-// ---- Portale pubblico del Comune -----------------------------------------
-await sezione('portale', async () => {
-    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, ignoreHTTPSErrors: true, locale: 'it-IT', timezoneId: 'Europe/Rome' });
-    const page = await ctx.newPage();
-    await apri(page, '/comune/demo', 6000); await scatta(page, 'portale-home');
-    await apri(page, '/comune/demo/mappa', 6000); await scatta(page, 'portale-mappa');
-    await apri(page, '/comune/demo/elemento/' + ALBERO, 4000); await scatta(page, 'portale-elemento');
-    await ctx.close();
-
-    const tel = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, ignoreHTTPSErrors: true, locale: 'it-IT', timezoneId: 'Europe/Rome' });
-    const p = await tel.newPage();
-    await apri(p, '/comune/demo', 6000); await scatta(p, 'portale-home-telefono');
-    await apri(p, '/comune/demo/elemento/' + ALBERO, 4000); await scatta(p, 'portale-elemento-telefono');
-    await tel.close();
-});
-
-await browser.close();
-console.log('fatto');
+await b.close();

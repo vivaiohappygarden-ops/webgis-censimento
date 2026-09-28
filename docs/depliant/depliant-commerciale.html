@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WebGIS Censimento - depliant</title>
-<meta name="description" content="Depliant commerciale del programma WebGIS Censimento: censimento del verde, catasto alberi e stabilità, lavori, registri e portale pubblico.">
+<title>ArborLab - depliant</title>
+<meta name="description" content="Depliant commerciale del programma ArborLab di DAMA S.R.L.: censimento del verde, catasto alberi e stabilità, lavori, registri e portale pubblico.">
 <style>
 /* ==========================================================================
-   DEPLIANT COMMERCIALE — WebGIS Censimento
+   DEPLIANT COMMERCIALE — ArborLab (DAMA S.R.L.)
    ==========================================================================
 
    Otto pagine A4, pensate per la stampa e per il PDF da allegare a una
@@ -25,8 +25,10 @@
    (php artisan demo:patrimonio) e si rifanno con docs/depliant/schermate.mjs;
    il PDF si rifa' con docs/depliant/genera-pdf.mjs.
 
-   Il blocco dei recapiti sta in fondo all'ultima pagina, segnato con il
-   commento "RECAPITI": si compila prima di stampare.
+   Dal 28/09/2026 il programma si presenta con il nome ArborLab, venduto da
+   DAMA S.R.L. (decisione committente). I dati della societa' stanno in
+   copertina e nella chiusura dell'ultima pagina (commento "RECAPITI"): sono
+   quelli di config/sito.php, senza il capitale sociale.
    ========================================================================== */
 
 @font-face { font-family: 'Inter'; font-style: normal; font-weight: 300 700; src: url('../../public/portale/font/inter-tondo-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
@@ -267,7 +269,8 @@ em { font-style: italic; }
 }
 .indice h3 { font-size: var(--t-corpo); }
 .indice p { font-size: var(--t-piccolo); color: var(--inchiostro-tenue); line-height: 1.4; }
-.cop-indice .edizione { margin-top: var(--s3); font-size: var(--t-piccolo); color: var(--inchiostro-tenue); }
+.cop-indice .edizione { margin-top: var(--s3); font-size: var(--t-piccolo); color: var(--inchiostro-tenue); display: flex; justify-content: space-between; gap: var(--s4); }
+.cop-verde .venditore { font-size: var(--t-piccolo); color: rgba(255,255,255,.72); margin-top: var(--s2); }
 
 /* ---------- Chiusura sull'ultima pagina --------------------------------- */
 
@@ -303,14 +306,15 @@ em { font-style: italic; }
 <section class="pagina copertina">
     <div class="cop-verde">
         <span class="marchio-grande">Programma per la gestione del verde</span>
-        <h1>WebGIS Censimento</h1>
+        <h1>ArborLab</h1>
+        <p class="venditore">Un programma di DAMA S.R.L.</p>
         <div class="apertura">
             <p class="guida">
                 Il registro del verde di un territorio in un solo programma: dove sta ogni
                 albero, che cosa è, come sta, che cosa gli è stato fatto e quando. Da quel
                 registro escono le consegne nei formati richiesti dai Capitolati Ambientali
-                Minimi, le valutazioni di stabilità, i lavori con la loro contabilità e il
-                portale che i cittadini vedono.
+                Minimi, le perizie di stabilità, i lavori con la loro contabilità, i registri
+                e il portale che i cittadini vedono.
             </p>
             <aside class="serve" aria-label="A chi serve">
                 <h3>A chi serve</h3>
@@ -335,7 +339,7 @@ em { font-style: italic; }
             <div class="faccia">
                 <div class="cifra-piccola">01</div>
                 <h3>Il gestionale, in ufficio</h3>
-                <p>Censimento, mappa, valutazioni di stabilità, lavori, registri e consegne. Dal computer e dal telefono.</p>
+                <p>Sei voci: Oggi, Patrimonio, Lavori, Documenti, Committenti, Impostazioni. Dal computer e dal telefono.</p>
             </div>
             <div class="faccia">
                 <div class="cifra-piccola">02</div>
@@ -345,7 +349,7 @@ em { font-style: italic; }
             <div class="faccia">
                 <div class="cifra-piccola">03</div>
                 <h3>I portali, per chi sta fuori</h3>
-                <p>Il portale pubblico di ogni Comune, l'area riservata del committente, il portale delle imprese a cui si affidano lavori.</p>
+                <p>Il portale pubblico di ogni Comune, l'area riservata dell'ufficio tecnico, il portale delle imprese appaltatrici.</p>
             </div>
         </div>
     </div>
@@ -353,77 +357,75 @@ em { font-style: italic; }
     <div class="cop-indice">
         <span class="occhiello">In queste pagine</span>
         <ol class="indice">
-            <li><span class="n">2</span><div><h3>Censimento e territorio</h3><p>Catalogo ministeriale, mappa, schede, cartellini, importazioni ed esportazioni CAM.</p></div></li>
+            <li><span class="n">2</span><div><h3>Patrimonio e mappa</h3><p>Elenco con anteprima, mappa a livelli, catalogo ministeriale, importazioni ed esportazioni CAM.</p></div></li>
             <li><span class="n">3</span><div><h3>Catasto alberi e stabilità</h3><p>Scheda dell'albero, VTA, perizie validate, scadenzario, bilancio arboreo, benefici ambientali.</p></div></li>
-            <li><span class="n">4</span><div><h3>L'app di campo</h3><p>Rilievo con GPS e fotografie, cartellini, consuntivi, ispezioni: anche senza rete.</p></div></li>
-            <li><span class="n">5</span><div><h3>Lavori ed economia</h3><p>Ordini, agenda, Gantt, listini, preventivi, SAL, piani pluriennali, imprese esterne.</p></div></li>
-            <li><span class="n">6</span><div><h3>Controlli e registri</h3><p>Ispezioni, non conformità, segnalazioni, fitosanitari, patentini, irrigazione, le dieci stampe.</p></div></li>
-            <li><span class="n">7</span><div><h3>I portali</h3><p>Il portale pubblico del Comune, l'area riservata del committente, il portale delle imprese.</p></div></li>
-            <li><span class="n">8</span><div><h3>Sicurezza, dati e avvio</h3><p>Ruoli, storico, formati aperti, server in Italia, come si parte e come si prova.</p></div></li>
+            <li><span class="n">4</span><div><h3>L'app di campo</h3><p>Rilievo completo, aree create sul posto, lavori e consuntivi, ditte esterne: anche senza rete.</p></div></li>
+            <li><span class="n">5</span><div><h3>Oggi e lavori</h3><p>Le cose da fare in ordine di urgenza, ordini, agenda, Gantt, preventivi, SAL, piani.</p></div></li>
+            <li><span class="n">6</span><div><h3>Controlli, registri e documenti</h3><p>Ispezioni, segnalazioni, fitosanitari, patentini, irrigazione, dieci stampe, marche temporali.</p></div></li>
+            <li><span class="n">7</span><div><h3>I portali</h3><p>Il portale pubblico del Comune, l'area riservata dell'ufficio tecnico, il portale delle imprese.</p></div></li>
+            <li><span class="n">8</span><div><h3>Sicurezza, dati e avvio</h3><p>Ruoli, verifica in due passaggi, storico, formati aperti, server in Italia, come si parte.</p></div></li>
         </ol>
-        <p class="edizione">Depliant informativo, edizione settembre 2026.</p>
+        <p class="edizione"><span>Depliant informativo, edizione settembre 2026.</span><span>DAMA S.R.L. · Roma · info@damagroup.it</span></p>
     </div>
 </section>
 
-<!-- ============================================ 2. CENSIMENTO E TERRITORIO -->
+<!-- ============================================== 2. PATRIMONIO E MAPPA -->
 <section class="pagina">
-    <header class="testata"><span class="marchio">WebGIS Censimento</span><span>Censimento e territorio</span></header>
+    <header class="testata"><span class="marchio">ArborLab</span><span>Patrimonio e mappa</span></header>
 
     <div class="titolo">
         <div class="grande">02</div>
         <div>
-            <span class="occhiello">Censimento</span>
+            <span class="occhiello">Patrimonio</span>
             <h2>Che cosa c'è, e dove</h2>
             <p class="guida">
                 Ogni elemento del verde, dall'albero alla panchina, ha una posizione, un tipo del
-                catalogo ministeriale, le sue misure, le fotografie e la storia delle modifiche.
+                catalogo ministeriale, le sue misure, le fotografie e la sua cronologia.
             </p>
         </div>
     </div>
 
     <div class="griglia griglia-2 spazio-4">
         <div class="blocco">
+            <h3>L'elenco con l'anteprima</h3>
+            <p>Ricerca a parole che ignora gli accenti, filtri per committente, area, tipo e stato, scorciatoie "VTA scaduta", "mai valutati", "senza specie". Si sceglie una riga e a fianco compaiono fotografia, misure e cronologia, senza aprire la scheda. Viste salvate, azioni su più schede con anteprima.</p>
+        </div>
+        <div class="blocco">
+            <h3>La mappa a livelli</h3>
+            <p>Albero dei livelli con i tipi presenti e i loro numeri; chiome in scala reale; siepi, recinzioni e percorsi disegnati per famiglia; etichette con il numero del cartellino; lavori e segnalazioni aperti in evidenza; misura di distanze e superfici; stampa con scala e legenda; coordinate nel sistema nazionale.</p>
+        </div>
+        <div class="blocco">
             <h3>Il territorio in ordine</h3>
-            <p>Committenti, sedi con codice ISTAT, località e aree disegnate sulla mappa, con superficie e perimetro calcolati da soli. Vincoli con il documento allegato, che la scheda dell'albero mostra da sé. Contratti con CIG, CUP, importo e durata.</p>
+            <p>Committenti, sedi con codice ISTAT, località e aree disegnate sulla mappa con superfici calcolate da sole; vincoli con il documento allegato; contratti con CIG, CUP, importo e durata. Sfondi propri dell'ente, come l'ortofoto comunale, via WMS.</p>
         </div>
         <div class="blocco">
             <h3>Il catalogo ministeriale</h3>
-            <p>I 387 tipi del Modello Dati per il censimento del verde urbano, richiesti dalle consegne CAM, già installati e non modificabili. A ogni tipo si aggiungono campi propri, per esempio la larghezza delle siepi, e se serve tipi personalizzati fuori dal tracciato.</p>
-        </div>
-        <div class="blocco">
-            <h3>La scheda di ogni elemento</h3>
-            <p>Tipo, misure, attributi, fotografie con la data dello scatto, cartellini collegati, vincoli, note. La storia delle modifiche dice chi ha cambiato che cosa e quando. Un albero abbattuto si registra con data e motivo: esce dagli elenchi, resta nel registro.</p>
-        </div>
-        <div class="blocco">
-            <h3>La mappa</h3>
-            <p>Tutto il patrimonio sulla carta, con le chiome disegnate in scala reale. Sfondi propri per ogni committente, come l'ortofoto comunale o la carta tecnica regionale, via WMS o a riquadri. Le aree si disegnano direttamente qui.</p>
-        </div>
-        <div class="blocco">
-            <h3>Elenchi che ricordano i filtri</h3>
-            <p>Filtri per committente, area, tipo, specie, stato e data di rilievo, salvabili come viste con un nome, personali o condivise. Ricerca a parole che ignora gli accenti e ricerca rapida da tastiera. Le azioni su più schede dicono prima quante ne cambierebbero.</p>
-        </div>
-        <div class="blocco">
-            <h3>Cartellino e pagina pubblica</h3>
-            <p>Da ogni scheda si stampa il cartellino A6 con codice e QR: chi lo inquadra vede una pagina con foto e dati essenziali, senza accesso, che si accende e si spegne elemento per elemento. La scheda si stampa in PDF scegliendo le sezioni.</p>
+            <p>I 387 tipi del Modello Dati per il censimento del verde urbano, richiesti dalle consegne CAM, già installati. A ogni tipo si aggiungono campi propri, e se serve tipi personalizzati fuori dal tracciato. Cartellino A6 con QR per ogni elemento.</p>
         </div>
     </div>
 
     <div class="fascia sangue spazio-3">
-        <div class="accanto" style="grid-template-columns: 86mm 1fr;">
+        <div class="accanto" style="grid-template-columns: 1fr 1fr;">
             <figure class="figura">
-                <div class="schermo"><div class="barra"><span></span></div><img src="img/mappa.png" alt="La mappa del gestionale con gli elementi censiti del Comune dimostrativo"></div>
-                <figcaption>La mappa del gestionale sul Comune dimostrativo: elementi, chiome in scala, livelli e aree disegnate.</figcaption>
+                <div class="schermo"><div class="barra"><span></span></div><img src="img/mappa.png" alt="La mappa del gestionale con livelli, chiome ed etichette dei cartellini"></div>
+                <figcaption>La mappa da vicino: livelli, chiome in scala, numeri dei cartellini, coordinate e scala.</figcaption>
             </figure>
             <div class="pila">
-                <p class="richiamo">Il dato resta di chi lo ha pagato: formati aperti, nessun archivio chiuso.</p>
-                <div class="riquadro">
-                    <h3>Dentro: le importazioni</h3>
-                    <p>Excel o CSV di un censimento esistente, con l'abbinamento delle colonne che si salva per la volta dopo; GeoJSON; consegne CAM di altri fornitori. Ogni importazione fa prima una prova a vuoto e mostra l'anteprima.</p>
-                </div>
-                <div class="riquadro">
-                    <h3>Fuori: le esportazioni</h3>
-                    <p>CSV ed Excel dell'elenco così come si vede; GeoJSON e Shapefile per il sistema cartografico dell'ente; consegna CAM completa: tutti i livelli con le codifiche ministeriali, sistema di riferimento RDN2008, fotografie e riepilogo dei conteggi.</p>
-                </div>
+                <figure class="figura">
+                    <div class="schermo"><div class="barra"><span></span></div><img src="img/patrimonio.png" alt="L'elenco del patrimonio con filtri e scorciatoie"></div>
+                    <figcaption>L'elenco del patrimonio con filtri, scorciatoie e anteprima.</figcaption>
+                </figure>
+                <p class="richiamo spazio-1">Il dato resta di chi lo ha pagato: formati aperti, nessun archivio chiuso.</p>
+            </div>
+        </div>
+        <div class="griglia griglia-2 spazio-3">
+            <div class="riquadro">
+                <h3>Dentro: le importazioni</h3>
+                <p>Excel o CSV di un censimento esistente, con l'abbinamento delle colonne che si salva per la volta dopo; GeoJSON; consegne CAM di altri fornitori. Prima la prova a vuoto con l'anteprima.</p>
+            </div>
+            <div class="riquadro">
+                <h3>Fuori: le esportazioni</h3>
+                <p>CSV ed Excel dell'elenco così come si vede; GeoJSON e Shapefile; consegna CAM completa con codifiche ministeriali, sistema RDN2008, fotografie e riepilogo dei conteggi.</p>
             </div>
         </div>
     </div>
@@ -433,7 +435,7 @@ em { font-style: italic; }
 
 <!-- ============================================= 3. ALBERI E STABILITÀ -->
 <section class="pagina">
-    <header class="testata"><span class="marchio">WebGIS Censimento</span><span>Catasto alberi e stabilità</span></header>
+    <header class="testata"><span class="marchio">ArborLab</span><span>Catasto alberi e stabilità</span></header>
 
     <div class="titolo">
         <div class="grande">03</div>
@@ -441,9 +443,8 @@ em { font-style: italic; }
             <span class="occhiello">Catasto alberi</span>
             <h2>Ogni albero ha una storia, non una riga</h2>
             <p class="guida">
-                La scheda dell'albero, le valutazioni di stabilità, le perizie e il bilancio arboreo
-                stanno nello stesso posto del censimento: nessun dato si ricopia da un programma
-                all'altro.
+                La scheda si legge prima di modificarla: misure, identità, stabilità, lavori,
+                fotografie e cronologia, una sezione per volta.
             </p>
         </div>
     </div>
@@ -451,47 +452,42 @@ em { font-style: italic; }
     <div class="griglia griglia-2 spazio-4">
         <div class="blocco">
             <h3>La scheda dell'albero</h3>
-            <p>Genere, specie, cultivar e nome comune; diametro a 1,30 m, circonferenza, altezza, chioma e sua inserzione, numero di fusti; età precisa o stimata, stato vegetativo, posizione sociale, bersaglio, sito di crescita; tutori e consolidamenti; messa a dimora e abbattimento. Alberi monumentali, tutelati e dedicati.</p>
+            <p>Genere, specie, cultivar e nome comune; diametro, circonferenza, altezza, chioma, fusti; età precisa o stimata, stato vegetativo, posizione sociale, bersaglio, sito di crescita; tutori e consolidamenti; messa a dimora e abbattimento. Alberi monumentali, tutelati e dedicati.</p>
+        </div>
+        <div class="blocco">
+            <h3>La cronologia</h3>
+            <p>Rilievo, modifiche, valutazioni, lavori, segnalazioni e fotografie in fila per giorno, con chi ha fatto che cosa. Una foto eliminata resta visibile nella cronologia, e un abbattimento non cancella la storia.</p>
         </div>
         <div class="blocco">
             <h3>Le valutazioni di stabilità (VTA)</h3>
-            <p>Difetti per parte della pianta, bersagli, classe di propensione al cedimento (A, B, C, C/D, D), esito, prescrizioni e data della prossima verifica. Analisi strumentali con il referto allegato. Gli intervalli di ricontrollo per classe si impostano dall'interfaccia.</p>
+            <p>Difetti per parte della pianta, bersagli, classe di propensione al cedimento, esito, prescrizioni e prossima verifica. Analisi strumentali con referto allegato; intervalli di ricontrollo per classe.</p>
         </div>
         <div class="blocco">
             <h3>La perizia come atto</h3>
-            <p>Da ogni valutazione esce la perizia in PDF con protocollo, data di emissione, fotografie e riga per la firma. Validata, si congela: contenuto bloccato, impronta SHA-256, fotografie fissate alla firma. Ristampata fra un anno è identica. Si valida anche in blocco.</p>
+            <p>Perizia in PDF con protocollo, data di emissione, fotografie e riga per la firma. Validata si congela: contenuto bloccato, impronta SHA-256, fotografie fissate alla firma. Con la marca temporale diventa una prova datata.</p>
         </div>
         <div class="blocco">
-            <h3>Lo scadenzario che diventa agenda</h3>
-            <p>Ogni albero ha la data del prossimo controllo. Con un gesto i ricontrolli dovuti diventano ordini di lavoro in agenda, senza doppioni anche se lo si preme due volte. Il cruscotto Oggi conta anche quelli ancora senza ordine.</p>
-        </div>
-        <div class="blocco">
-            <h3>Il bilancio arboreo (legge 10/2013)</h3>
-            <p>Messi a dimora, abbattuti e sostituiti fra due date, per committente, con la stampa PDF pronta per il consiglio comunale o per il bilancio di fine mandato.</p>
+            <h3>Scadenzario e bilancio arboreo</h3>
+            <p>I ricontrolli dovuti diventano ordini di lavoro in agenda, senza doppioni. Bilancio arboreo fra due date secondo la legge 10/2013, con stampa per il consiglio comunale.</p>
         </div>
         <div class="blocco">
             <h3>I benefici ambientali, dichiarati</h3>
-            <p>Anidride carbonica immagazzinata e assorbimento annuo con il controvalore economico; ossigeno, polveri sottili e pioggia intercettata. Il modello è scritto nella configurazione con i suoi riferimenti e ogni pagina dichiara il metodo. In pubblico escono solo se il committente li accende.</p>
+            <p>Anidride carbonica immagazzinata e assorbita con controvalore economico; ossigeno, polveri sottili, pioggia intercettata. Metodo scritto con i suoi riferimenti; in pubblico solo se l'ente li accende.</p>
         </div>
     </div>
 
     <div class="fascia sangue spazio-3">
-        <div class="accanto" style="grid-template-columns: 98mm 1fr;">
+        <div class="accanto" style="grid-template-columns: 104mm 1fr;">
             <figure class="figura">
-                <div class="schermo"><div class="barra"><span></span></div><img src="img/vta.png" alt="La pagina VTA del gestionale con scadenzario, bilancio arboreo ed export CAM"></div>
-                <figcaption>La pagina VTA: lo stato delle valutazioni, i ricontrolli in scadenza, il bilancio arboreo fra due date e l'esportazione CAM.</figcaption>
+                <div class="schermo"><div class="barra"><span></span></div><img src="img/scheda.png" alt="La scheda di un albero nel gestionale"></div>
+                <figcaption>La scheda di un albero: misure con i benefici stimati, identità e posizione, pulsanti per nuovo lavoro, VTA e stampa.</figcaption>
             </figure>
             <div class="pila">
                 <p class="richiamo">Una perizia validata, ristampata fra un anno, è identica: fotografie comprese.</p>
                 <p class="nota">
                     Lo stato che vedono i cittadini (sano, in cura, da potare, in verifica) non si
-                    scrive a mano: nasce dall'ultima valutazione e dai lavori aperti, con una regola
-                    sola, e cambia da solo quando si chiude un lavoro o si registra una nuova
-                    valutazione.
-                </p>
-                <p class="nota">
-                    La valutazione si compila nel gestionale, dove si ha tutto sotto gli occhi; in
-                    campo si fanno sopralluogo, fotografie e appunti, e l'app apre la scheda giusta.
+                    scrive a mano: nasce dall'ultima valutazione e dai lavori aperti, con una
+                    regola sola.
                 </p>
             </div>
         </div>
@@ -502,7 +498,7 @@ em { font-style: italic; }
 
 <!-- ==================================================== 4. APP DI CAMPO -->
 <section class="pagina">
-    <header class="testata"><span class="marchio">WebGIS Censimento</span><span>L'app di campo</span></header>
+    <header class="testata"><span class="marchio">ArborLab</span><span>L'app di campo</span></header>
 
     <div class="titolo">
         <div class="grande">04</div>
@@ -510,141 +506,125 @@ em { font-style: italic; }
             <span class="occhiello">In campo</span>
             <h2>Il rilievo si fa sul posto, anche senza rete</h2>
             <p class="guida">
-                L'app di campo si installa sul telefono e lavora senza copertura: tutto resta in coda
-                sul dispositivo e parte da solo appena torna la rete. Sotto gli alberi e nei parchi
-                non è un dettaglio.
+                L'app di campo si installa sul telefono dal browser e lavora senza copertura:
+                tutto resta in coda sul dispositivo e parte da solo appena torna la rete.
             </p>
         </div>
     </div>
 
-    <div class="accanto spazio-4" style="grid-template-columns: 1fr 44mm;">
-        <div class="griglia griglia-2">
+    <div class="griglia griglia-3 spazio-4">
             <div class="blocco">
-                <h3>Quattro cose da fare, in una schermata</h3>
-                <p>Nuovo albero; misure, fotografie, cartellino e segnalazione su un elemento già in archivio; ispezione di un'area con lista di verifica; valutazione VTA, che apre la scheda giusta nel gestionale. Chi entra come operatore arriva qui direttamente.</p>
+                <h3>Il rilievo completo</h3>
+                <p>Posizione GPS con la precisione, tipo, specie cercata per nome comune o botanico, misure e stato vegetativo in un solo passaggio; poi fotografie e cartellino. Il codice del censimento lo assegna il programma.</p>
             </div>
             <div class="blocco">
-                <h3>Posizione e misure</h3>
-                <p>GPS con l'indicazione della precisione e il punto spostabile a mano; l'app propone l'area in cui ci si trova. Specie cercata per nome comune o botanico; diametro, altezza e chioma con le stesse quote per tutti gli alberi.</p>
+                <h3>Aree nate in campo</h3>
+                <p>Se l'area non esiste ancora la si apre dal telefono, anche per un committente nuovo; il perimetro provvisorio resta fuori dal portale finché l'ufficio non lo ridisegna.</p>
             </div>
             <div class="blocco">
                 <h3>Fotografie e cartellini</h3>
-                <p>Le foto scattate dall'app finiscono nella scheda giusta e partono con la sincronizzazione. Il cartellino si registra con la fotocamera (QR e codici a barre), con un lettore esterno o digitando il codice; l'archivio registra anche tag NFC e RFID.</p>
+                <p>Le foto dell'app finiscono nella scheda giusta. Il cartellino si registra con la fotocamera (QR e codici a barre), con un lettore esterno o digitando il codice; l'archivio registra anche tag NFC e RFID.</p>
             </div>
             <div class="blocco">
                 <h3>I miei lavori</h3>
-                <p>Gli ordini assegnati alla squadra con gli elementi da lavorare, l'avvio, la sospensione e il consuntivo: ore, quantità, mezzi, attrezzature, materiali. Il giro del giorno ordina i lavori per vicinanza e la navigazione porta all'elemento.</p>
+                <p>Ordini della squadra con gli elementi, avvio, sospensione e consuntivo: ore, quantità, mezzi, attrezzature, materiali. Il giro del giorno li ordina per vicinanza e la navigazione porta all'elemento.</p>
             </div>
             <div class="blocco">
-                <h3>Ispezioni e segnalazioni</h3>
-                <p>Le liste di verifica si compilano sul posto, con le foto; una segnalazione si apre in due passaggi. Anche queste vanno in coda e si allineano da sole.</p>
+                <h3>Le ditte esterne</h3>
+                <p>Chi lavora per un'impresa affidataria rendiconta dal campo solo i lavori della sua squadra, con foto e consuntivi, senza vedere né toccare il resto del censimento.</p>
             </div>
             <div class="blocco">
                 <h3>Una sincronizzazione che spiega</h3>
-                <p>La scheda Sync dice quante operazioni aspettano e, se il server ne rifiuta una, il motivo scritto chiaro: si corregge o si scarta, e nulla resta a metà. Il registro attività tiene traccia di tutto.</p>
+                <p>La scheda Sync dice quante operazioni aspettano e, se ne viene rifiutata una, il motivo scritto chiaro: si corregge o si scarta, nulla resta a metà.</p>
             </div>
         </div>
-        <figure class="figura">
-            <div class="telefono"><img src="img/operatore.png" alt="La schermata iniziale dell'app di campo sul telefono"></div>
-            <figcaption>La schermata di partenza dell'app di campo, sul telefono.</figcaption>
-        </figure>
-    </div>
 
     <div class="fascia sangue spazio-3">
-        <p class="richiamo" style="margin-bottom: var(--s3);">Senza rete si lavora lo stesso: la coda parte da sola appena torna il segnale.</p>
-        <span class="occhiello">Come si lavora, in una giornata</span>
-        <ol class="passi spazio-2" style="grid-template-columns: repeat(4, 1fr); gap: var(--s2) var(--s3);">
-            <li><div><h3>La sera prima, con il Wi-Fi</h3><p>Si scaricano i dati di lavoro: aree, catalogo ed elementi già censiti della zona.</p></div></li>
-            <li><div><h3>Sul posto</h3><p>Posizione, tipo, specie, misure, foto, cartellino. Il codice lo assegna il programma.</p></div></li>
-            <li><div><h3>Senza copertura</h3><p>Si continua a lavorare: ogni registrazione va in coda, numerata in ordine.</p></div></li>
-            <li><div><h3>A fine giornata</h3><p>Sincronizza ora, e si aspetta la scritta "Sincronizzato": da lì i dati sono al sicuro.</p></div></li>
-        </ol>
+        <div class="accanto" style="grid-template-columns: 124mm 1fr; align-items: start;">
+            <div class="telefoni" style="justify-content: flex-start;">
+                <figure class="figura" style="width: 38mm;"><div class="telefono"><img src="img/operatore.png" alt="La schermata iniziale dell'app di campo"></div><figcaption>La partenza.</figcaption></figure>
+                <figure class="figura" style="width: 38mm;"><div class="telefono"><img src="img/operatore-rilievo.png" alt="Il modulo del nuovo rilievo"></div><figcaption>Il nuovo rilievo.</figcaption></figure>
+                <figure class="figura" style="width: 38mm;"><div class="telefono"><img src="img/operatore-lavori.png" alt="I lavori della squadra con il giro del giorno"></div><figcaption>I lavori del giorno.</figcaption></figure>
+            </div>
+            <div>
+                <p class="richiamo">Senza rete si lavora lo stesso: la coda parte da sola appena torna il segnale.</p>
+                <span class="occhiello spazio-3">Una giornata</span>
+                <ol class="passi spazio-1">
+                    <li><div><h3>La sera prima</h3><p>Con il Wi-Fi si scaricano aree, catalogo ed elementi della zona.</p></div></li>
+                    <li><div><h3>Sul posto</h3><p>Posizione, specie, misure, foto, cartellino, consuntivi.</p></div></li>
+                    <li><div><h3>Senza copertura</h3><p>Ogni registrazione va in coda, in ordine.</p></div></li>
+                    <li><div><h3>A fine giornata</h3><p>Sincronizza ora, fino alla scritta "Sincronizzato".</p></div></li>
+                </ol>
+            </div>
+        </div>
     </div>
-
-    <p class="nota spazio-3 stretto">
-        Le stesse funzioni si usano anche dal computer, dalla voce Campo del menu: per provare,
-        o per lavorare in ufficio con gli stessi strumenti.
-    </p>
 
     <footer class="pie"><span>Un dato che non si è misurato resta vuoto: il programma non inventa quello che non sa.</span><span class="numero">4</span></footer>
 </section>
 
-<!-- ========================================================= 5. LAVORI -->
+<!-- ==================================================== 5. OGGI E LAVORI -->
 <section class="pagina">
-    <header class="testata"><span class="marchio">WebGIS Censimento</span><span>Lavori ed economia</span></header>
+    <header class="testata"><span class="marchio">ArborLab</span><span>Oggi e lavori</span></header>
 
     <div class="titolo">
         <div class="grande">05</div>
         <div>
             <span class="occhiello">Lavori ed economia</span>
-            <h2>Dall'ordine di lavoro al SAL</h2>
+            <h2>Dalle cose da fare oggi al SAL</h2>
             <p class="guida">
-                Ogni intervento è un ordine con un codice, gli elementi coinvolti, la squadra e uno
-                stato che avanza: bozza, pianificato, assegnato, in corso, sospeso, completato o
-                annullato. Chiuso l'ordine, la storia dell'albero si aggiorna da sola.
+                Ogni mattina una lista sola, in ordine di urgenza. Ogni intervento è un ordine con
+                la sua pagina, i suoi elementi, il consuntivo e la cronologia.
             </p>
         </div>
     </div>
 
     <div class="griglia griglia-2 spazio-4">
         <div class="blocco">
-            <h3>Otto viste sugli stessi ordini</h3>
-            <p>Elenco, Agenda per giorno e per squadra, Gantt sulla linea del tempo, Rendiconto per committente e periodo valorizzato dal listino, Qualità, Preventivi, SAL e Piani.</p>
+            <h3>La pagina Oggi</h3>
+            <p>Lavori in ritardo e in arrivo, ispezioni scadute, segnalazioni fuori tempo, non conformità, patentini in scadenza, ricontrolli VTA, stagione irrigua, documenti da chiudere e quanto arrivato dal campo, ognuno con il suo pulsante. Le stesse voci per email ogni mattina.</p>
         </div>
         <div class="blocco">
-            <h3>Quantità dalla geometria</h3>
-            <p>Collegando un elemento a un ordine, i metri quadrati vengono dalla superficie del poligono, i metri dalla lunghezza, "cadauno" vale uno per elemento. Il prezzo del listino fa il resto.</p>
+            <h3>La pagina dell'ordine</h3>
+            <p>Stato e passaggi ammessi, che cosa si fa, elementi con quantità previste e fatto o da fare, consuntivo valorizzato dal listino, controlli di qualità, mappa degli elementi, documenti collegati e cronologia con ogni cambio di stato.</p>
         </div>
         <div class="blocco">
-            <h3>Listini e preventivi</h3>
-            <p>Voci con prezzo per unità di misura, spese generali e oneri di sicurezza. Il preventivo si compone dal catalogo delle lavorazioni o con voci libere, calcola l'IVA, esce in PDF e, accettato, diventa ordine di lavoro con un clic.</p>
+            <h3>Più viste sugli stessi ordini</h3>
+            <p>Elenco con la scorciatoia "in ritardo", agenda per squadra, Gantt, rendiconto per committente e periodo, qualità, preventivi, SAL e piani. Calendario personale su Google Calendar, iPhone e Outlook.</p>
         </div>
         <div class="blocco">
-            <h3>SAL e incassi</h3>
-            <p>Stati di avanzamento con IVA per riga e spese generali ripartite in proporzione, validazione, fatturato e incasso registrati, stampa PDF ed elenco dei crediti ancora aperti.</p>
+            <h3>Quantità, listini e preventivi</h3>
+            <p>Metri quadrati, metri e numero di pezzi dalla geometria degli elementi, prezzi dal listino con spese generali e oneri di sicurezza. Preventivo in PDF che, accettato, diventa ordine con un clic.</p>
         </div>
         <div class="blocco">
-            <h3>Piani pluriennali</h3>
-            <p>Lavorazioni ricorrenti per area con intervallo in mesi e finestra stagionale. Gli ordini dovuti in un periodo si generano in blocco, con l'anteprima di quanti ne nascerebbero e senza doppioni.</p>
+            <h3>SAL e piani pluriennali</h3>
+            <p>Stati di avanzamento con IVA per riga, validazione, fatturato, incasso e crediti aperti. Piani di manutenzione ricorrenti con finestra stagionale, ordini generati in blocco senza doppioni.</p>
         </div>
         <div class="blocco">
-            <h3>Squadre interne e imprese esterne</h3>
-            <p>Le squadre interne lavorano per chiunque; un'impresa appaltatrice appartiene a un committente e le si affidano solo i suoi lavori. Dal suo portale vede gli ordini e chiede la riprogrammazione con un motivo codificato; decide l'ufficio.</p>
+            <h3>Squadre e imprese</h3>
+            <p>Le squadre interne lavorano per chiunque; un'impresa appaltatrice lavora per il suo committente, vede i suoi ordini e chiede la riprogrammazione con un motivo. Decide l'ufficio.</p>
         </div>
     </div>
 
     <div class="fascia sangue spazio-3">
-        <div class="accanto" style="grid-template-columns: 100mm 1fr;">
-            <div class="pila">
-                <figure class="figura">
-                    <div class="schermo"><div class="barra"><span></span></div><img src="img/gantt.png" alt="Il diagramma a barre dei lavori nel gestionale"></div>
-                    <figcaption>Gli ordini di lavoro sulla linea del tempo, per squadra o per committente: il clic sulla barra apre la scheda.</figcaption>
-                </figure>
-                <p class="richiamo spazio-2">Quello che il programma annuncia in anteprima è quello che fa.</p>
-            </div>
-            <div class="pila">
-                <div class="riquadro">
-                    <h3>Il cruscotto Oggi</h3>
-                    <p class="piccolo" style="color: var(--inchiostro);">Lavori in ritardo e dei prossimi sette giorni, controlli scaduti, segnalazioni fuori tempo, non conformità, patentini, ricontrolli VTA, stagione irrigua. Le stesse voci per email ogni mattina, solo se c'è qualcosa da dire.</p>
-                </div>
-                <div class="riquadro">
-                    <h3>Il calendario sul telefono</h3>
-                    <p class="piccolo" style="color: var(--inchiostro);">L'agenda dei lavori e le scadenze si leggono da Google Calendar, iPhone e Outlook con un abbonamento personale, senza aprire il gestionale.</p>
-                </div>
-                <div class="riquadro">
-                    <h3>Le statistiche</h3>
-                    <p class="piccolo" style="color: var(--inchiostro);">Consistenze per tipologia e specie, alberi per classe di stabilità, ordini per stato e per mese, segnalazioni con i tempi, trattamenti per anno.</p>
-                </div>
-            </div>
+        <div class="accanto" style="grid-template-columns: 1fr 1fr;">
+            <figure class="figura">
+                <div class="schermo"><div class="barra"><span></span></div><img src="img/oggi.png" alt="La pagina Oggi del gestionale"></div>
+                <figcaption>La pagina Oggi: una frase con i conteggi veri e le cose da fare nell'ordine in cui conviene farle.</figcaption>
+            </figure>
+            <figure class="figura">
+                <div class="schermo"><div class="barra"><span></span></div><img src="img/ordine.png" alt="La pagina di un ordine di lavoro"></div>
+                <figcaption>La pagina di un ordine: che cosa si fa, gli elementi con fatto e da fare, la mappa, i documenti, la cronologia.</figcaption>
+            </figure>
         </div>
+        <p class="richiamo spazio-3">Quello che il programma annuncia in anteprima è quello che fa.</p>
     </div>
 
-    <footer class="pie"><span>Ogni ordine ha un codice progressivo per anno e resta agli atti anche quando è chiuso.</span><span class="numero">5</span></footer>
+    <footer class="pie"><span>Chiuso l'ordine, la storia di ogni albero coinvolto si aggiorna da sola.</span><span class="numero">5</span></footer>
 </section>
 
-<!-- ============================================ 6. CONTROLLI E REGISTRI -->
+<!-- ============================== 6. CONTROLLI, REGISTRI E DOCUMENTI -->
 <section class="pagina">
-    <header class="testata"><span class="marchio">WebGIS Censimento</span><span>Controlli e registri</span></header>
+    <header class="testata"><span class="marchio">ArborLab</span><span>Controlli, registri e documenti</span></header>
 
     <div class="titolo">
         <div class="grande">06</div>
@@ -653,67 +633,63 @@ em { font-style: italic; }
             <h2>Gli adempimenti, con la carta che li dimostra</h2>
             <p class="guida">
                 Ispezioni, segnalazioni, trattamenti, abilitazioni e irrigazione nello stesso
-                programma del censimento, ognuno con la sua stampa.
+                programma, e tutti i documenti in un posto solo.
             </p>
         </div>
     </div>
 
     <div class="griglia griglia-2 spazio-4">
         <div class="blocco">
-            <h3>Ispezioni con lista di verifica</h3>
-            <p>Modelli per aree o per elementi con domande sì/no, testi e numeri; periodicità e scadenzario con i ritardi in cima. L'esito è calcolato dalle risposte e ogni voce negativa può aprire da sola una non conformità.</p>
-        </div>
-        <div class="blocco">
-            <h3>Aree gioco</h3>
-            <p>Con un gesto si installano la scheda dell'attrezzo e tre liste di verifica costruite sulla struttura della norma EN 1176 (non il suo testo, che è protetto). Gli adattamenti già fatti restano.</p>
-        </div>
-        <div class="blocco">
-            <h3>Non conformità e controlli di fine lavoro</h3>
-            <p>Aperta, azione correttiva, verificata, chiusa: ogni non conformità ha il suo percorso. Il verbale di controllo qualità si compila dal dettaglio dell'ordine di lavoro.</p>
+            <h3>Ispezioni e aree gioco</h3>
+            <p>Liste di verifica per aree o elementi con periodicità e scadenzario; esito calcolato dalle risposte e non conformità aperte da sole; verbale in PDF. Scheda dell'attrezzo e liste costruite sulla struttura della EN 1176.</p>
         </div>
         <div class="blocco">
             <h3>Segnalazioni con i tempi</h3>
-            <p>Codice, gravità e due scadenze fissate dal programma: presa in carico entro 1-10 giorni e risoluzione entro 3-30, secondo la gravità. Arrivano dai colleghi, dal portale del committente o dai cittadini, e con un pulsante diventano un ordine.</p>
+            <p>Gravità e due scadenze fissate dal programma: presa in carico entro 1-10 giorni, risoluzione entro 3-30. Arrivano dai colleghi, dall'ufficio tecnico o dai cittadini e con un pulsante diventano un ordine.</p>
         </div>
         <div class="blocco">
-            <h3>Registro dei trattamenti fitosanitari</h3>
-            <p>Il quaderno di campagna: data, area o singolo albero, coltura, prodotto con numero di registrazione, principio attivo, avversità, metodo, quantità, acqua, superficie, tempo di rientro, chi ha eseguito. Il registro dell'anno si stampa in PDF.</p>
+            <h3>Fitosanitari e patentini</h3>
+            <p>Quaderno di campagna con prodotto, principio attivo, avversità, dosi, superficie, rientro e chi ha eseguito, stampato per anno. Scadenzario di patentini, abilitazioni, tarature e assicurazioni.</p>
         </div>
         <div class="blocco">
-            <h3>Patentini e certificati</h3>
-            <p>Patentino fitosanitario, abilitazioni, corsi sulla sicurezza, taratura dell'irroratrice, assicurazioni: intestatario, ente, numero, date. Scaduto in rosso, in scadenza entro 60 giorni in ambra, e tutto nel cruscotto Oggi.</p>
-        </div>
-        <div class="blocco">
-            <h3>Irrigazione</h3>
-            <p>Impianti per area con settori, portata e programma settimanale, stagione di apertura e chiusura, stato. Le letture del contatore danno il consumo e lo confrontano con la stima del programma: una perdita salta all'occhio.</p>
-        </div>
-        <div class="blocco">
-            <h3>Relazione annuale e scheda della località</h3>
-            <p>La relazione annuale del verde per committente: patrimonio, bilancio arboreo, lavori, controlli, segnalazioni, trattamenti, stima CO2 e fotografie. La scheda della località con superfici totale e gestita, piante, documenti e planimetrie.</p>
+            <h3>Irrigazione e relazione annuale</h3>
+            <p>Impianti con settori, programmi e letture del contatore confrontate con la stima: una perdita salta all'occhio. Relazione annuale del verde per committente, scheda della località con planimetrie.</p>
         </div>
     </div>
 
     <div class="fascia sangue spazio-3">
-        <div>
-            <div>
-                <span class="occhiello">Le dieci stampe</span>
-                <table class="tabella">
-                    <thead><tr><th>Stampa</th><th>Che cosa contiene</th><th>Da dove esce</th></tr></thead>
-                    <tbody>
-                        <tr><td>Scheda dell'elemento</td><td>Dati, misure, foto, posizione; sezioni a scelta</td><td>Scheda del censimento</td></tr>
-                        <tr><td>Cartellino QR</td><td>Formato A6 con codice e QR verso la pagina pubblica</td><td>Scheda del censimento</td></tr>
-                        <tr><td>Perizia di stabilità</td><td>Protocollo, valutazione, difetti, fotografie, firma</td><td>Valutazione VTA</td></tr>
-                        <tr><td>Bilancio arboreo</td><td>Messi a dimora, abbattuti, sostituiti fra due date</td><td>Pagina VTA</td></tr>
-                        <tr><td>Verbale di ispezione</td><td>Lista di verifica compilata, esito, foto</td><td>Dettaglio dell'ispezione</td></tr>
-                        <tr><td>Registro fitosanitari</td><td>I trattamenti dell'anno, anche per una sola area</td><td>Pagina Fitosanitari</td></tr>
-                        <tr><td>Preventivo</td><td>Voci, quantità, prezzi, IVA, totale</td><td>Vista Preventivi</td></tr>
-                        <tr><td>SAL</td><td>Righe, IVA per aliquota, spese generali, totale</td><td>Vista SAL</td></tr>
-                        <tr><td>Scheda della località</td><td>Superfici, piante, lavori, planimetrie delle aree</td><td>Pagina Territorio</td></tr>
-                        <tr><td>Relazione annuale</td><td>Il lavoro dell'anno per un committente</td><td>Pagina Lavori</td></tr>
-                    </tbody>
-                </table>
+        <div class="accanto" style="grid-template-columns: 96mm 1fr;">
+            <figure class="figura">
+                <div class="schermo"><div class="barra"><span></span></div><img src="img/documenti.png" alt="La sezione Documenti con i documenti da produrre e le marche temporali"></div>
+                <figcaption>La sezione Documenti: perizie, verbali, preventivi, SAL ed esportazioni in un elenco; a fianco i registri da produrre e le marche temporali.</figcaption>
+            </figure>
+            <div class="pila">
+                <p class="richiamo">Ogni adempimento ha la sua stampa, con una sola data per foglio e la riga per la firma.</p>
+                <div class="riquadro">
+                    <h3>Marche temporali</h3>
+                    <p class="piccolo" style="color: var(--inchiostro);">Perizie validate, verbali chiusi e registri si marcano con un servizio accreditato (protocollo RFC 3161): il programma conserva il PDF esatto e la marca, e li verifica. Le marche si acquistano a lotti dal fornitore.</p>
+                </div>
             </div>
         </div>
+    </div>
+
+    <div class="spazio-3">
+        <span class="occhiello">Le dieci stampe</span>
+        <table class="tabella">
+            <thead><tr><th>Stampa</th><th>Che cosa contiene</th><th>Da dove esce</th></tr></thead>
+            <tbody>
+                <tr><td>Scheda dell'elemento</td><td>Dati, misure, foto, posizione; sezioni a scelta</td><td>Scheda dell'elemento</td></tr>
+                <tr><td>Cartellino QR</td><td>Formato A6 con codice e QR verso la pagina pubblica</td><td>Scheda dell'elemento</td></tr>
+                <tr><td>Perizia di stabilità</td><td>Protocollo, valutazione, difetti, fotografie, firma</td><td>Valutazione VTA</td></tr>
+                <tr><td>Bilancio arboreo</td><td>Messi a dimora, abbattuti, sostituiti fra due date</td><td>Documenti</td></tr>
+                <tr><td>Verbale di ispezione</td><td>Lista di verifica compilata, esito, foto</td><td>Ispezione chiusa</td></tr>
+                <tr><td>Registro fitosanitari</td><td>I trattamenti dell'anno, anche per una sola area</td><td>Documenti</td></tr>
+                <tr><td>Preventivo</td><td>Voci, quantità, prezzi, IVA, totale</td><td>Lavori, preventivi</td></tr>
+                <tr><td>SAL</td><td>Righe, IVA per aliquota, spese generali, totale</td><td>Lavori, SAL</td></tr>
+                <tr><td>Scheda della località</td><td>Superfici, piante, lavori, planimetrie delle aree</td><td>Committenti</td></tr>
+                <tr><td>Relazione annuale</td><td>Il lavoro dell'anno per un committente</td><td>Documenti</td></tr>
+            </tbody>
+        </table>
     </div>
 
     <footer class="pie"><span>Su uno stesso foglio non compaiono mai due date diverse: la firma riusa la data del documento.</span><span class="numero">6</span></footer>
@@ -721,17 +697,16 @@ em { font-style: italic; }
 
 <!-- ========================================================= 7. PORTALI -->
 <section class="pagina">
-    <header class="testata"><span class="marchio">WebGIS Censimento</span><span>I portali</span></header>
+    <header class="testata"><span class="marchio">ArborLab</span><span>I portali</span></header>
 
     <div class="titolo">
         <div class="grande">07</div>
         <div>
             <span class="occhiello">Chi sta fuori dall'ufficio</span>
-            <h2>Un portale per i cittadini, uno per il committente, uno per le imprese</h2>
+            <h2>Un portale per i cittadini, uno per l'ufficio tecnico, uno per le imprese</h2>
             <p class="guida">
-                Nessun dato esce da solo. Ogni lavoro, perizia e vincolo ha il proprio interruttore
-                "pubblico"; i singoli alberi si possono nascondere; le note interne e le fotografie
-                dei difetti non escono mai.
+                Nessun dato esce da solo: ogni lavoro, perizia e vincolo si pubblica su decisione
+                dell'ente, e le note interne e le fotografie dei difetti non escono mai.
             </p>
         </div>
     </div>
@@ -740,18 +715,18 @@ em { font-style: italic; }
         <div>
             <h3>Il portale pubblico del Comune</h3>
             <ul class="elenco spazio-2">
-                <li><strong>Un indirizzo per Comune</strong> (nomedelcomune.dominio), con stemma, colore dell'ente, testo di benvenuto, recapito per le segnalazioni e informativa. Si accende con un gesto quando il censimento è presentabile.</li>
-                <li><strong>Il campo del cartellino nel primo schermo:</strong> il cittadino legge il numero sull'albero, lo scrive o inquadra il QR, e apre la scheda.</li>
-                <li><strong>La mappa del verde</strong> con lo stato di ogni elemento a quattro voci: sano, in cura, da potare, in verifica.</li>
-                <li><strong>La scheda di ogni albero:</strong> specie, misure, data del rilievo, cronologia degli atti pubblici (lavori conclusi e relazioni tecniche), vincoli con il documento, come raggiungerlo e come segnalare un problema.</li>
-                <li><strong>I numeri dell'ente</strong> in prima pagina, aggiornati da soli; le stime ambientali si accendono a parte e sono dichiarate come tali, con il metodo.</li>
-                <li><strong>Fatto per il telefono e per la legge:</strong> testo mai sotto i 17 px, contrasti garantiti qualunque colore scelga l'ente, nessun cookie, nessuna richiesta a terzi.</li>
+                <li><strong>Un indirizzo per Comune</strong>, con stemma, colore dell'ente, fotografia di copertina, benvenuto, recapiti dell'ufficio e informativa. Si accende quando il censimento è presentabile.</li>
+                <li><strong>Il campo del cartellino nel primo schermo:</strong> il cittadino scrive il numero o inquadra il QR e apre la scheda.</li>
+                <li><strong>La mappa del verde</strong> con lo stato di ogni pianta: sano, in cura, da potare, in verifica.</li>
+                <li><strong>La scheda di ogni albero:</strong> fotografia, specie, misure, atti pubblicati, vincoli, come raggiungerlo e come segnalare un problema.</li>
+                <li><strong>I numeri dell'ente</strong> aggiornati da soli; le stime ambientali accese a parte e dichiarate come tali.</li>
+                <li><strong>Fatto per il telefono:</strong> testo mai sotto i 17 px, contrasti garantiti, nessun cookie, nessuna richiesta a terzi.</li>
             </ul>
         </div>
         <div class="telefoni">
             <figure class="figura">
                 <div class="telefono"><img src="img/portale-home-telefono.png" alt="La prima pagina del portale pubblico sul telefono"></div>
-                <figcaption>La prima pagina del portale, sul telefono.</figcaption>
+                <figcaption>La prima pagina del portale.</figcaption>
             </figure>
             <figure class="figura">
                 <div class="telefono"><img src="img/portale-elemento-telefono.png" alt="La scheda pubblica di un albero sul telefono"></div>
@@ -761,30 +736,30 @@ em { font-style: italic; }
     </div>
 
     <div class="fascia sangue spazio-3">
-        <div class="accanto" style="grid-template-columns: 88mm 1fr;">
+        <div class="accanto" style="grid-template-columns: 96mm 1fr;">
             <figure class="figura">
-                <div class="schermo"><div class="barra"><span></span></div><img src="img/portale-mappa.png" alt="La mappa pubblica del Comune dimostrativo dal computer"></div>
-                <figcaption>La mappa pubblica: lo stato di ogni pianta con la legenda, le chiome in scala, la ricerca del cartellino.</figcaption>
+                <div class="schermo"><div class="barra"><span></span></div><img src="img/area-riservata.png" alt="L'area riservata dell'ufficio tecnico del Comune"></div>
+                <figcaption>L'area riservata dell'ufficio tecnico: panoramica, mappa del territorio, patrimonio, lavori, segnalazioni e documenti.</figcaption>
             </figure>
             <div class="pila">
                 <div class="pannello">
-                    <h3>L'area riservata del committente</h3>
-                    <p>Il Comune o il cliente privato entra con il proprio utente e vede solo il suo territorio: aree, elementi censiti, ultimi lavori completati e segnalazioni, senza dati economici. Può inviare una richiesta con descrizione, urgenza e fino a tre fotografie, e ne segue lo stato e l'esito.</p>
+                    <h3>L'area riservata dell'ufficio tecnico</h3>
+                    <p>Sei schede: panoramica con i conteggi, mappa con lo stato di ogni elemento, patrimonio con filtri, lavori in programma e fatti con le foto, segnalazioni e richieste con il lavoro che ne è nato, perizie e verbali in PDF. Senza prezzi e mai dati di altri committenti.</p>
                 </div>
                 <div class="pannello">
-                    <h3>Il portale delle imprese appaltatrici</h3>
-                    <p>Un ingresso dedicato per le ditte a cui si affidano lavori: vedono solo gli ordini delle proprie squadre e chiedono formalmente una riprogrammazione, con motivo e data proposta. La decisione resta all'ufficio e tutto rimane agli atti.</p>
+                    <h3>Il portale delle imprese</h3>
+                    <p>Ingresso dedicato per le ditte appaltatrici: solo gli ordini affidati, richiesta formale di riprogrammazione con motivo e data. Decide l'ufficio.</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <footer class="pie"><span>Il portale non è un modulo a parte: nasce dagli stessi dati del censimento.</span><span class="numero">7</span></footer>
+    <footer class="pie"><span>I portali non sono moduli a parte: nascono dagli stessi dati del censimento.</span><span class="numero">7</span></footer>
 </section>
 
 <!-- ============================================ 8. COME È FATTO, CONTATTI -->
 <section class="pagina">
-    <header class="testata"><span class="marchio">WebGIS Censimento</span><span>Sicurezza, dati e avvio</span></header>
+    <header class="testata"><span class="marchio">ArborLab</span><span>Sicurezza, dati e avvio</span></header>
 
     <div class="titolo">
         <div class="grande">08</div>
@@ -797,27 +772,27 @@ em { font-style: italic; }
     <div class="griglia griglia-3 spazio-4">
         <div class="blocco">
             <h3>Ognuno vede il suo</h3>
-            <p>Ogni organizzazione vede solo i propri dati. Dentro, cinque ruoli di serie (amministratore, tecnico, operatore, cliente, impresa) e ruoli su misura con i permessi scelti uno per uno, spiegati in italiano.</p>
+            <p>Ogni organizzazione vede solo i propri dati. Ruoli di serie (amministratore, tecnico, operatore, cliente, impresa, esecutore) e ruoli su misura, con i permessi spiegati in italiano.</p>
+        </div>
+        <div class="blocco">
+            <h3>Accesso protetto</h3>
+            <p>Verifica in due passaggi con il codice dell'app del telefono, per singolo utente o obbligatoria per tutti; codici di recupero; cambio della propria password.</p>
         </div>
         <div class="blocco">
             <h3>Niente si perde</h3>
-            <p>Storia delle modifiche su ogni scheda, registro delle operazioni, eliminazioni che restano in archivio. Se due persone salvano la stessa scheda, la seconda viene avvisata: nessuna modifica va persa in silenzio.</p>
-        </div>
-        <div class="blocco">
-            <h3>Errori che si spiegano</h3>
-            <p>Nessun caricamento fallisce in silenzio: ogni avviso porta il numero dell'errore e il pulsante Riprova, e le richieste respinte per motivi passeggeri si ripetono da sole.</p>
+            <p>Cronologia di ogni scheda, registro delle operazioni, eliminazioni che restano in archivio. Due modifiche contemporanee non si sovrascrivono in silenzio.</p>
         </div>
         <div class="blocco">
             <h3>Il dato è vostro</h3>
-            <p>Formati aperti in uscita (CSV, Excel, GeoJSON, Shapefile, CAM) e importazione dai file di altri. Se domani cambiate fornitore, il lavoro fatto non si perde.</p>
+            <p>Formati aperti in uscita (CSV, Excel, GeoJSON, Shapefile, CAM) e importazione dai file di altri. Se cambiate fornitore, il lavoro fatto non si perde.</p>
         </div>
         <div class="blocco">
-            <h3>Documenti che reggono</h3>
-            <p>Dieci stampe con lo stesso impianto: una sola data per foglio, riga "Luogo, data" per la firma, fotografie con didascalia, nessuna risorsa esterna, perizie immutabili dopo la validazione.</p>
+            <h3>Errori che si spiegano</h3>
+            <p>Nessun caricamento fallisce in silenzio: ogni avviso porta il numero dell'errore e il pulsante Riprova.</p>
         </div>
         <div class="blocco">
             <h3>Server in Italia</h3>
-            <p>Installazione su un server cloud in data center italiano, certificato HTTPS automatico, copia di sicurezza giornaliera di dati e fotografie, aggiornamento con un comando e diagnosi del server in italiano.</p>
+            <p>Data center italiano, HTTPS automatico, copie di sicurezza giornaliere di dati e fotografie, aggiornamenti compresi.</p>
         </div>
     </div>
 
@@ -827,8 +802,7 @@ em { font-style: italic; }
                 <span class="occhiello">Come si parte</span>
                 <ol class="passi spazio-2">
                     <li><div><h3>Attivazione</h3><p>Organizzazione, utenti e ruoli, dati di chi firma.</p></div></li>
-                    <li><div><h3>Territorio</h3><p>Committenti, sedi, località, aree e vincoli.</p></div></li>
-                    <li><div><h3>Dati esistenti</h3><p>Importazione da Excel, CSV, GeoJSON o CAM, con anteprima.</p></div></li>
+                    <li><div><h3>Territorio e dati esistenti</h3><p>Committenti, aree, vincoli; importazione con anteprima.</p></div></li>
                     <li><div><h3>Rilievo in campo</h3><p>Con l'app e i cartellini; controllo in ufficio.</p></div></li>
                     <li><div><h3>Portale pubblico</h3><p>Quando il censimento è presentabile e l'ente è d'accordo.</p></div></li>
                 </ol>
@@ -837,26 +811,24 @@ em { font-style: italic; }
                 <span class="occhiello">Per una prova</span>
                 <div class="pannello spazio-2">
                     <h3>Un Comune dimostrativo, pronto</h3>
-                    <p>Il programma prepara con un comando un Comune di prova con alberi, valutazioni e lavori verosimili: portale e gestionale si vedono prima di avere i vostri dati, e la prova continua con i vostri.</p>
-                    <p class="spazio-2">La guida all'uso è dentro il programma e il manuale operativo è in italiano semplice: prima il territorio, poi il rilievo, poi le consegne.</p>
+                    <p>Un Comune di prova con alberi, valutazioni e lavori verosimili: portale e gestionale si vedono prima di avere i vostri dati, e la prova continua con i vostri.</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- RECAPITI: i dati societari sono quelli verificati di config/sito.php
-         (DAMA S.R.L., 19/09/2026); telefono ed email li ha dati il committente
-         il 24/09/2026. Il capitale sociale non si stampa (sua decisione). -->
+    <!-- RECAPITI: dati societari di config/sito.php (DAMA S.R.L., senza il
+         capitale sociale), telefono ed email dati dal committente il 24/09/2026. -->
     <div class="chiusura sangue">
         <h3>Per una dimostrazione su un caso concreto</h3>
-        <p>Si parte dal vostro patrimonio: un'area, un viale, un parco. Si importa quello che avete, si accende il portale di prova, si guarda il programma con i vostri dati.</p>
+        <p>Si parte dal vostro patrimonio: un'area, un viale, un parco. Si importa quello che avete, si accende il portale di prova, si guarda ArborLab con i vostri dati.</p>
         <div class="recapiti">
             <div class="voce"><span class="etichetta">Telefono</span><span class="valore">392 305 1950</span></div>
             <div class="voce"><span class="etichetta">Email</span><span class="valore">info@damagroup.it</span></div>
             <div class="voce"><span class="etichetta">Posta certificata</span><span class="valore">dama25@pec.it</span></div>
         </div>
         <p class="societari">DAMA S.R.L. &middot; Via Crescenzio 58, 00193 Roma (RM) &middot; Partita IVA e codice fiscale 17947161000 &middot; REA RM-1751463</p>
-        <div class="pie-scuro"><span>WebGIS Censimento, depliant informativo. Edizione settembre 2026.</span><span class="numero">8</span></div>
+        <div class="pie-scuro"><span>ArborLab, depliant informativo. Edizione settembre 2026.</span><span class="numero">8</span></div>
     </div>
 </section>
 

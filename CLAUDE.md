@@ -415,6 +415,20 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - Ogni pagina ha l'altezza fissa del foglio: `genera-pdf.mjs` si ferma se il
   contenuto sborda, invece di stampare una pagina tagliata. I recapiti in ultima
   pagina si compilano nella sorgente (commento `RECAPITI`) prima di consegnarlo.
+- **Nome commerciale ArborLab, venditore DAMA S.R.L.** (decisione committente
+  28/09/2026). Depliant rifatto sulla nuova interfaccia (schermate di Oggi,
+  Patrimonio, scheda, ordine, Documenti, mappa a livelli, app di campo, area
+  riservata, portale): nel menu del programma resta "WebGIS Censimento" e
+  `schermate.mjs` lo sostituisce solo nella schermata. Dati di DAMA in copertina e
+  in chiusura, **senza capitale sociale** (decisione committente 24/09/2026).
+  Avvertenza data al committente prima della scelta: "ArborLab" e' gia' il nome di
+  uno studio di arboricoltura di Livorno; la verifica del marchio e' sua.
+- **Offerta commerciale** in `docs/offerta/offerta-arborlab.docx`, in Word perche'
+  il committente la compila caso per caso: campi fra parentesi quadre evidenziati in
+  giallo, testo in `genera-docx.cjs` (pacchetto npm `docx`, fuori dalle dipendenze).
+  Stesse regole del depliant: solo funzioni operative e gestionali, niente console
+  della piattaforma, niente vivaio; le marche temporali si dicono acquistate a
+  lotti dal fornitore del servizio.
 
 ## Ricerca (dal 23/08/2026)
 
