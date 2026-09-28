@@ -309,7 +309,7 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 ## Marche temporali (dal 28/09/2026)
 
 - La marca temporale certifica che un documento esisteva cosi' com'e' a un istante certo:
-  la rilascia una TSA accreditata (Aruba, InfoCert, Namirial...) e si compra a lotti. Il
+  la rilascia una TSA accreditata (Aruba, InfoCert, Namirial...); ai clienti le vende DAMA a pacchetti. Il
   programma parla il **protocollo standard RFC 3161** sopra HTTPS con nome utente e password
   (`App\Support\Rfc3161`: richiesta e risposta scritte e lette **a mano in DER**, senza
   librerie; il gettone e' un CMS SignedData con dentro il TSTInfo). Nessun fornitore e' cablato:
@@ -427,8 +427,18 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   il committente la compila caso per caso: campi fra parentesi quadre evidenziati in
   giallo, testo in `genera-docx.cjs` (pacchetto npm `docx`, fuori dalle dipendenze).
   Stesse regole del depliant: solo funzioni operative e gestionali, niente console
-  della piattaforma, niente vivaio; le marche temporali si dicono acquistate a
-  lotti dal fornitore del servizio.
+  della piattaforma, niente vivaio. **Le marche temporali le vende DAMA S.R.L.**, a
+  pacchetti insieme al programma (decisione committente 28/09/2026: "da noi si
+  comprano"): mai scrivere che si comprano "dal fornitore" in depliant, offerta o
+  pagine del programma; nell'offerta sono una riga della tabella dei prezzi, non fra
+  gli esclusi. In Documenti, a marche spente, il messaggio rimanda all'assistenza.
+- **Tono dei testi commerciali** (osservazione del committente 28/09/2026: "i testi
+  devono essere naturali e meno AI"): frasi semplici da brochure italiana, rivolte al
+  lettore ("potete", "vi mostriamo"). Niente slogan e aforismi ("il dato resta di chi lo
+  ha pagato", "ogni albero ha una storia, non una riga"), niente frasi a effetto nei pie'
+  di pagina (li' solo "ArborLab · DAMA S.R.L."), pochi due punti e punti e virgola,
+  niente elenchi di sostantivi accatastati, niente commenti sul proprio stile ("niente
+  riquadri decorativi"). CAM si scioglie in "Criteri Ambientali Minimi".
 
 ## Ricerca (dal 23/08/2026)
 

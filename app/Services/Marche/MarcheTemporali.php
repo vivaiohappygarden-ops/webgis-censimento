@@ -172,7 +172,7 @@ class MarcheTemporali
 
         $configurazione = $this->configurazione($utente->tenant_id);
         if (! $configurazione['attiva']) {
-            throw new MarcaTemporaleException("Le marche temporali non sono configurate: servono l'indirizzo del servizio e le credenziali dell'account (le inserisce chi gestisce gli utenti, in Documenti, oppure si scrivono nel file .env del server).");
+            throw new MarcaTemporaleException("Le marche temporali non sono ancora attive. Per attivarle serve un pacchetto di marche, che potete richiedere alla nostra assistenza; se avete gia' un vostro account di marcatura temporale, le credenziali si inseriscono in Documenti.");
         }
         if ($configurazione['quota_giorno'] > 0 && $this->usateOggi($configurazione['account']) >= $configurazione['quota_giorno']) {
             throw new MarcaTemporaleException("Per oggi le marche sono finite ({$configurazione['quota_giorno']} al giorno con questo account): la prossima si può apporre domani.");

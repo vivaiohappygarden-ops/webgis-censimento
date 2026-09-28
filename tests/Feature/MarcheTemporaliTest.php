@@ -118,7 +118,7 @@ class MarcheTemporaliTest extends TestCase
 
         [, $valutazione] = $this->periziaValidata();
         $this->postJson('/api/v1/documenti/marche', ['tipo' => 'perizia', 'id' => $valutazione])
-            ->assertUnprocessable()->assertJsonPath('errors.marca.0', fn ($m) => str_contains($m, 'non sono configurate'));
+            ->assertUnprocessable()->assertJsonPath('errors.marca.0', fn ($m) => str_contains($m, 'non sono ancora attive'));
         $this->assertSame(0, MarcaTemporale::query()->count());
         Http::assertNothingSent();
     }

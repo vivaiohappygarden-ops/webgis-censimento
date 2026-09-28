@@ -12,7 +12,10 @@ return [
     | e vale come prova opponibile. Il programma parla il protocollo standard
     | RFC 3161 sopra HTTPS con nome utente e password dell'account: e' quello
     | usato da Aruba (Marca Temporale), InfoCert, Namirial e dagli altri
-    | fornitori italiani. Le marche si comprano a lotti dal fornitore.
+    | fornitori italiani. Ai clienti le marche le vende DAMA S.R.L. insieme al
+    | programma, a pacchetti: l'account del servizio e' quello di DAMA e le sue
+    | credenziali stanno qui (decisione committente 28/09/2026). Un cliente con
+    | un proprio account puo' comunque inserirlo da Documenti.
     |
     | Senza credenziali le marche restano spente e la pagina Documenti lo
     | dice. Queste sono le credenziali della piattaforma, valide per tutte le
