@@ -12,6 +12,7 @@ import { usaCaricamento } from '@/caricamento';
 import { avvisoCaricamento } from '@/avvisi';
 import { statusLabel } from '@/assetStatus';
 import { contornoSiIncrocia } from '@/geometria';
+import { areaPiana, lunghezzaPiana, testoCoordinate } from '@/proiezione';
 
 const page = usePage();
 // Nella veste nuova la pagina porta la testata di Patrimonio con le sue schede
@@ -25,6 +26,9 @@ const canCreate = computed(() => permissions.value.includes('assets.create'));
 const canUpdate = computed(() => permissions.value.includes('assets.update'));
 const canViewClients = computed(() => permissions.value.includes('clients.view'));
 const canManageWorks = computed(() => permissions.value.includes('works.manage'));
+const canViewWorks = computed(() => permissions.value.includes('works.view'));
+// Il sistema metrico dell'organizzazione (RDN2008): coordinate piane e misure
+const srid = computed(() => Number(page.props.auth?.user?.organization?.metric_srid) || 7791);
 
 const mapEl = ref(null);
 let map = null;
@@ -37,12 +41,42 @@ const TP = [
     { code: '4', label: 'Fattori ambientali', color: '#dc2626' },
 ];
 const tpVisible = reactive({ 1: true, 2: true, 3: true, 4: true });
+// Sottotipi spenti (chiave "tp|ts"): di serie tutto acceso
+const tsSpenti = reactive({});
+// Il tipo principale aperto nell'albero dei livelli
+const tpAperto = ref('');
 
 const colorExpr = [
     'match', ['slice', ['get', 'type_code'], 1, 2],
     '1', '#16a34a', '2', '#475569', '3', '#d97706', '4', '#dc2626',
     '#2563eb',
 ];
+/*
+ * Gli elementi lineari (siepi e filari, recinzioni, muri, cordoli,
+ * cancelli, percorsi, canaline) si distinguono per famiglia, come nelle
+ * carte del verde: una recinzione e una siepe corrono spesso affiancate e
+ * con lo stesso colore non si capirebbe quale delle due si sta guardando.
+ * La famiglia e' il sottotipo del Modello Dati (posizioni 2-4 del codice).
+ */
+const FAMIGLIE_LINEE = [
+    { codici: ['103'], colore: '#15803d', label: 'Siepi, filari e cigli (vegetazione lineare)' },
+    { codici: ['217', '218'], colore: '#b91c1c', label: 'Recinzioni, reti e cancelli' },
+    { codici: ['215'], colore: '#7c2d12', label: 'Muri' },
+    { codici: ['216'], colore: '#a16207', label: 'Cordoli' },
+    { codici: ['205', '228'], colore: '#6b7280', label: 'Percorsi e piste (tratteggio)', tratteggio: true },
+    { codici: ['220'], colore: '#2563eb', label: 'Canaline di scolo' },
+];
+const CODICI_TRATTEGGIO = FAMIGLIE_LINEE.filter((f) => f.tratteggio).flatMap((f) => f.codici);
+const coloreLinee = ['match', ['slice', ['get', 'type_code'], 1, 4],
+    ...FAMIGLIE_LINEE.flatMap((f) => f.codici.flatMap((c) => [c, f.colore])),
+    colorExpr,
+];
+// Lo spessore cresce con lo zoom; "extra" allarga bordo e anelli (un'espressione
+// sullo zoom deve stare in cima: non si puo' sommare dopo)
+const larghezzaLinee = (extra = 0) => ['interpolate', ['linear'], ['zoom'], 13, 1.5 + extra, 16, 3 + extra, 19, 5 + extra];
+// L'archivio (abbattuti e dismessi), quando lo si fa vedere, resta in secondo piano
+const ARCHIVIO = ['removed', 'dismissed'];
+const opacitaStato = (piena, archivio) => ['case', ['in', ['get', 'status'], ['literal', ARCHIVIO]], archivio, piena];
 
 const selected = ref(null);
 const areas = ref([]);
@@ -66,6 +100,31 @@ const vista = reactive({ clientId: '', areaId: '', mostraArchivio: false, busy: 
 
 // Chiome a dimensione reale: il cerchio cresce con il diametro censito
 const chiomeVisibili = ref(true);
+// Etichette con il numero del cartellino accanto a ogni elemento (dagli zoom alti)
+const etichetteVisibili = ref(localStorage.getItem('webgis:etichette-mappa') !== 'no');
+// Anello arancione sugli elementi con un lavoro programmato o in corso
+const lavoriApertiVisibili = ref(false);
+// Segnalazioni aperte (o prese in carico) come punti rossi
+const segnalazioniVisibili = ref(false);
+const segnalazioni = ref([]);
+const segnalazioniErrore = ref('');
+// Conteggi per livello (tipo principale e sottotipo), con i filtri della vista
+const livelli = ref([]);
+const nomiSottotipi = ref({});
+// Il pannello: tre schede come in un GIS (livelli, strumenti, legenda); sul
+// telefono si chiude per lasciare la mappa
+const scheda = ref('livelli');
+const pannelloAperto = ref(window.innerWidth >= 768);
+// Coordinate sotto il puntatore (o al centro, sul telefono) e scala approssimata
+const coordinate = ref(null);
+const scalaTesto = ref('');
+// Misura di distanze e superfici a punti, nel sistema metrico dell'organizzazione
+const misura = reactive({ active: false, vertices: [] });
+const misuraLunghezza = computed(() => (misura.vertices.length >= 2 ? lunghezzaPiana(misura.vertices, srid.value) : 0));
+const misuraArea = computed(() => (misura.vertices.length >= 3 ? areaPiana(misura.vertices, srid.value) : 0));
+const misuraPerimetro = computed(() => (misura.vertices.length >= 3 ? lunghezzaPiana([...misura.vertices, misura.vertices[0]], srid.value) : 0));
+const formattaMetri = (v) => (v >= 1000 ? `${(v / 1000).toLocaleString('it-IT', { maximumFractionDigits: 2 })} km` : `${v.toLocaleString('it-IT', { maximumFractionDigits: 1 })} m`);
+const formattaMq = (v) => (v >= 10000 ? `${(v / 10000).toLocaleString('it-IT', { maximumFractionDigits: 2 })} ha` : `${v.toLocaleString('it-IT', { maximumFractionDigits: 0 })} m²`);
 
 // Sfondo della mappa: strade (OpenStreetMap) o ortofoto satellitare (Esri).
 // La scelta resta per la prossima visita: chi censisce il verde lavora
@@ -159,6 +218,8 @@ function applicaChiome() {
 // quindi il motivo del rifiuto va spiegato, non nascosto
 const posizione = reactive({ error: '', located: false, cercando: false });
 let posizioneTimer = null;
+// Se chi guarda ha gia' spostato la mappa, i ripieghi automatici non la muovono piu'
+let mossaDaChiGuarda = false;
 const creating = reactive({ active: false, typeId: '', areaId: '', vertices: [], saving: false, message: '', ok: false });
 
 // Ridisegno della geometria di un elemento gia' censito (sposta un punto,
@@ -198,23 +259,118 @@ const tilesUrl = () => {
     return `${window.location.origin}/api/v1/tiles/assets/{z}/{x}/{y}?${params.toString()}`;
 };
 
-function applyVisibility() {
+/** Il filtro di categoria: tipi principali accesi meno i sottotipi spenti. */
+function filtroLivelli() {
     const active = TP.filter((t) => tpVisible[t.code]).map((t) => t.code);
-    const tpFilter = ['in', ['slice', ['get', 'type_code'], 1, 2], ['literal', active]];
-    map.setFilter('assets-fill', ['all', ['==', ['geometry-type'], 'Polygon'], tpFilter]);
-    map.setFilter('assets-line', ['all', ['==', ['geometry-type'], 'LineString'], tpFilter]);
-    map.setFilter('assets-point', ['all', ['==', ['geometry-type'], 'Point'], tpFilter]);
+    const spenti = Object.keys(tsSpenti).filter((k) => tsSpenti[k]).map((k) => k.replace('|', ''));
+
+    return ['all',
+        ['in', ['slice', ['get', 'type_code'], 1, 2], ['literal', active]],
+        ['!', ['in', ['slice', ['get', 'type_code'], 1, 4], ['literal', spenti]]],
+    ];
+}
+
+function applyVisibility() {
+    if (! map?.getLayer('assets-point')) return;
+    const livello = filtroLivelli();
+    const punto = ['==', ['geometry-type'], 'Point'];
+    const linea = ['==', ['geometry-type'], 'LineString'];
+    const tratteggiata = ['in', ['slice', ['get', 'type_code'], 1, 4], ['literal', CODICI_TRATTEGGIO]];
+    map.setFilter('assets-fill', ['all', ['==', ['geometry-type'], 'Polygon'], livello]);
+    map.setFilter('assets-line-bordo', ['all', linea, livello]);
+    map.setFilter('assets-line', ['all', linea, ['!', tratteggiata], livello]);
+    map.setFilter('assets-line-tratteggio', ['all', linea, tratteggiata, livello]);
+    map.setFilter('assets-point', ['all', punto, livello]);
     // Le chiome seguono la categoria del loro albero: spegnendo la
     // Vegetazione non devono restare cerchi orfani sulla mappa
-    map.setFilter('chiome', ['all',
-        ['==', ['geometry-type'], 'Point'],
-        ['>', ['coalesce', ['to-number', ['get', 'chioma_m']], 0], 0],
-        tpFilter,
-    ]);
+    map.setFilter('chiome', ['all', punto, ['>', ['coalesce', ['to-number', ['get', 'chioma_m']], 0], 0], livello]);
+    map.setFilter('etichette-punti', ['all', punto, livello]);
+    map.setFilter('etichette-linee', ['all', linea, livello]);
+    const conLavoro = ['==', ['get', 'lavoro_aperto'], true];
+    map.setFilter('lavori-aperti-punti', ['all', punto, conLavoro, livello]);
+    map.setFilter('lavori-aperti-linee', ['all', ['!=', ['geometry-type'], 'Point'], conLavoro, livello]);
+}
+
+function applicaEtichette() {
+    const v = etichetteVisibili.value ? 'visible' : 'none';
+    map?.setLayoutProperty('etichette-punti', 'visibility', v);
+    map?.setLayoutProperty('etichette-linee', 'visibility', v);
+    localStorage.setItem('webgis:etichette-mappa', etichetteVisibili.value ? 'si' : 'no');
+}
+
+function applicaLavoriAperti() {
+    const v = lavoriApertiVisibili.value ? 'visible' : 'none';
+    map?.setLayoutProperty('lavori-aperti-punti', 'visibility', v);
+    map?.setLayoutProperty('lavori-aperti-linee', 'visibility', v);
+}
+
+/** Le segnalazioni aperte: si scaricano la prima volta che si accende il livello. */
+async function applicaSegnalazioni() {
+    const v = segnalazioniVisibili.value ? 'visible' : 'none';
+    map?.setLayoutProperty('segnalazioni-punti', 'visibility', v);
+    map?.setLayoutProperty('segnalazioni-etichette', 'visibility', v);
+    if (segnalazioniVisibili.value && ! segnalazioni.value.length) await caricaSegnalazioni();
+}
+
+async function caricaSegnalazioni() {
+    segnalazioniErrore.value = '';
+    try {
+        const [aperte, inCarico] = await Promise.all([
+            tutteLePagine('/api/v1/issues', { status: 'open' }),
+            tutteLePagine('/api/v1/issues', { status: 'in_charge' }),
+        ]);
+        segnalazioni.value = [...aperte, ...inCarico].filter((i) => i.geom_geojson);
+        map?.getSource('segnalazioni')?.setData({
+            type: 'FeatureCollection',
+            features: segnalazioni.value.map((i) => ({
+                type: 'Feature', geometry: i.geom_geojson,
+                properties: { id: i.id, code: i.code, severity: i.severity, status: i.status, descrizione: i.description, elemento: i.asset?.census_code ?? '' },
+            })),
+        });
+    } catch (err) {
+        segnalazioniErrore.value = 'Segnalazioni non caricate. ' + avvisoCaricamento(err);
+    }
+}
+
+/** Quanti elementi per livello, con gli stessi filtri delle tessere. */
+async function caricaLivelli() {
+    const params = {};
+    if (vista.clientId) params.client_id = vista.clientId;
+    if (vista.areaId) params.area_id = vista.areaId;
+    if (! vista.mostraArchivio) params.archivio = 0;
+    const { data } = await axios.get('/api/v1/tiles/livelli', { params });
+    livelli.value = data.data;
+}
+
+const ETICHETTA_GEO = { P: 'punti', L: 'linee', S: 'superfici' };
+/** L'albero dei livelli: per ogni tipo principale i sottotipi presenti con i loro numeri. */
+const alberoLivelli = computed(() => TP.map((tp) => {
+    const righe = livelli.value.filter((l) => l.tp === tp.code);
+    const perSottotipo = new Map();
+    for (const r of righe) {
+        const voce = perSottotipo.get(r.ts) ?? { ts: r.ts, chiave: `${tp.code}|${r.ts}`, nome: nomiSottotipi.value[`${tp.code}|${r.ts}`] ?? `Sottotipo ${r.ts}`, n: 0, geo: new Set(), lavoriAperti: 0 };
+        voce.n += r.n;
+        voce.lavoriAperti += r.lavori_aperti;
+        voce.geo.add(r.geo);
+        perSottotipo.set(r.ts, voce);
+    }
+    const sottotipi = [...perSottotipo.values()].sort((a, b) => a.ts.localeCompare(b.ts)).map((v) => ({
+        ...v, geoTesto: [...v.geo].sort().map((g) => ETICHETTA_GEO[g] ?? g).join(', '),
+    }));
+
+    return { ...tp, sottotipi, n: sottotipi.reduce((t, v) => t + v.n, 0), lavoriAperti: sottotipi.reduce((t, v) => t + v.lavoriAperti, 0) };
+}));
+const totaleLavoriAperti = computed(() => alberoLivelli.value.reduce((t, tp) => t + tp.lavoriAperti, 0));
+const totaleElementi = computed(() => alberoLivelli.value.reduce((t, tp) => t + tp.n, 0));
+
+function commutaSottotipo(chiave) {
+    tsSpenti[chiave] = ! tsSpenti[chiave];
+    applyVisibility();
 }
 
 function refreshTiles() {
     map.getSource('assets').setTiles([tilesUrl()]);
+    caricaLivelli().catch(() => {});
 }
 
 /** Anteprima dei vertici sul livello di disegno: chiusa per le superfici, aperta per le linee. */
@@ -355,7 +511,17 @@ async function caricaContorno() {
             }))
         )
     );
+    // I nomi dei sottotipi per l'albero dei livelli ("PIANTA" diventa "Pianta")
+    const nomi = {};
+    for (const m of catalogRes.data.data) {
+        for (const st of m.sub_types) {
+            const nome = String(st.name ?? '').trim();
+            nomi[`${m.code}|${String(st.code).padStart(2, '0')}`] = nome ? nome.charAt(0).toUpperCase() + nome.slice(1).toLowerCase() : `Sottotipo ${st.code}`;
+        }
+    }
+    nomiSottotipi.value = nomi;
     refreshAreasSource();
+    await caricaLivelli();
 }
 
 /** Cambio di committente/area/abbattuti: nuove tessere, nuove aree, nuova inquadratura. */
@@ -392,18 +558,21 @@ function vaiAllaPosizione() {
 
         return;
     }
-    geolocate?.trigger();
     // Alcuni browser, quando la posizione è bloccata, non rispondono affatto:
-    // senza questa attesa la mappa resterebbe ferma senza spiegare perché
+    // senza questa attesa la mappa resterebbe ferma senza spiegare perché.
+    // L'attesa parte PRIMA della richiesta: se il rifiuto arriva subito, il
+    // gestore dell'errore la annulla, altrimenti dodici secondi dopo la mappa
+    // scatterebbe sulle aree sotto le mani di chi nel frattempo l'ha spostata
     posizione.cercando = true;
     clearTimeout(posizioneTimer);
     posizioneTimer = setTimeout(() => {
         posizione.cercando = false;
         if (! posizione.located) {
             posizione.error = messaggioPosizione(null);
-            fitToAreas();
+            if (! mossaDaChiGuarda) fitToAreas();
         }
     }, 12000);
+    geolocate?.trigger();
 }
 
 // La geometria che il tipo scelto richiede: P un clic, L e S un disegno
@@ -421,16 +590,28 @@ watch(() => creating.active, (attivo) => {
         drawing.active = false;
         redraw.active = false;
         selezione.active = false;
+        misura.active = false;
     }
     creating.vertices = [];
     creating.message = '';
     anteprimaCreazione();
+});
+watch(() => misura.active, (attivo) => {
+    if (attivo) {
+        creating.active = false;
+        drawing.active = false;
+        redraw.active = false;
+        selezione.active = false;
+    }
+    misura.vertices = [];
+    disegnaAnteprima([], false);
 });
 watch(() => drawing.active, (attivo) => {
     if (attivo) {
         creating.active = false;
         redraw.active = false;
         selezione.active = false;
+        misura.active = false;
     } else {
         // Spento da un altro strumento: i vertici abbandonati non devono
         // restare disegnati come un poligono fantasma
@@ -443,6 +624,7 @@ watch(() => selezione.active, (attivo) => {
         creating.active = false;
         drawing.active = false;
         redraw.active = false;
+        misura.active = false;
         // Il committente del filtro della vista è quasi sempre quello giusto
         if (! selezione.clientId) selezione.clientId = vista.clientId || '';
     } else {
@@ -466,7 +648,7 @@ watch(() => redraw.active, (attivo) => {
 
 // Durante un disegno o una selezione il doppio clic non deve far saltare
 // l'inquadratura
-watch(() => drawing.active || creating.active || redraw.active || selezione.active, (attivo) => {
+watch(() => drawing.active || creating.active || redraw.active || selezione.active || misura.active, (attivo) => {
     if (! map) return;
     if (attivo) map.doubleClickZoom.disable();
     else map.doubleClickZoom.enable();
@@ -478,6 +660,12 @@ watch(() => creating.typeId, () => {
 });
 
 async function onMapClick(e) {
+    if (misura.active) {
+        misura.vertices.push([e.lngLat.lng, e.lngLat.lat]);
+        // Da tre punti in su l'anteprima chiude la figura: si legge anche la superficie
+        disegnaAnteprima(misura.vertices, misura.vertices.length >= 3);
+        return;
+    }
     if (drawing.active) {
         drawing.vertices.push([e.lngLat.lng, e.lngLat.lat]);
         updateDrawPreview();
@@ -659,7 +847,7 @@ function chiudiRidisegno() {
 let clicServito = null;
 
 function onFeatureClick(e) {
-    if (creating.active || drawing.active || redraw.active) return;
+    if (creating.active || drawing.active || redraw.active || misura.active) return;
     if (e.originalEvent === clicServito) return;
     clicServito = e.originalEvent;
     const f = map.queryRenderedFeatures(e.point, { layers: assetLayers })[0] ?? e.features?.[0];
@@ -709,6 +897,92 @@ function svuotaSelezione() {
     aggiornaEvidenzaSelezione();
 }
 
+function annullaUltimaMisura() {
+    misura.vertices.pop();
+    disegnaAnteprima(misura.vertices, misura.vertices.length >= 3);
+}
+
+function ricominciaMisura() {
+    misura.vertices = [];
+    disegnaAnteprima([], false);
+}
+
+/** La scala approssimata dello schermo (1:N) dallo zoom e dalla latitudine, a 96 punti per pollice. */
+function aggiornaScala() {
+    if (! map) return;
+    const metriPerPixel = (156543.03392 * Math.cos((map.getCenter().lat * Math.PI) / 180)) / (2 ** map.getZoom());
+    const denominatore = Math.round(metriPerPixel * 96 / 0.0254);
+    scalaTesto.value = `1:${denominatore.toLocaleString('it-IT')}`;
+}
+
+function aggiornaCoordinate(lngLat) {
+    coordinate.value = testoCoordinate(lngLat.lng, lngLat.lat, srid.value);
+}
+
+/**
+ * Stampa della mappa: l'inquadratura com'e' a video, con titolo, data,
+ * scala, sistema di riferimento, legenda e attribuzione dello sfondo, in una
+ * pagina a parte pronta per la stampante o per "Salva come PDF".
+ */
+const stampa = reactive({ busy: false, errore: '' });
+function stampaMappa() {
+    if (! map || stampa.busy) return;
+    stampa.errore = '';
+    // La finestra si apre subito, dentro il clic: aperta dopo, il browser la bloccherebbe
+    const finestra = window.open('', '_blank');
+    if (! finestra) {
+        stampa.errore = 'Il browser ha bloccato la finestra di stampa: consenti le finestre a comparsa per questo sito.';
+        return;
+    }
+    stampa.busy = true;
+    finestra.document.write('<!doctype html><title>Stampa della mappa</title><p style="font-family:system-ui;padding:24px">Preparazione della stampa…</p>');
+    const scatta = () => {
+        try {
+            const immagine = map.getCanvas().toDataURL('image/png');
+            const committente = clients.value.find((c) => c.id === vista.clientId)?.name;
+            const area = areas.value.find((a) => a.id === vista.areaId)?.name;
+            const titolo = ['Mappa del verde', committente, area].filter(Boolean).join(' · ');
+            const attribuzione = mapEl.value?.querySelector('.maplibregl-ctrl-attribution')?.textContent?.trim() ?? '';
+            const centro = testoCoordinate(map.getCenter().lng, map.getCenter().lat, srid.value);
+            const sfuggi = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+            const legenda = [
+                ...TP.filter((tp) => tpVisible[tp.code]).map((tp) => `<li><span style="background:${tp.color}"></span>${sfuggi(tp.label)}</li>`),
+                ...FAMIGLIE_LINEE.map((f) => `<li><span style="background:${f.colore};height:3px;margin-top:6px"></span>${sfuggi(f.label)}</li>`),
+                '<li><span style="border:1.5px dashed #15803d;background:transparent"></span>Aree di gestione</li>',
+                ...(lavoriApertiVisibili.value ? ['<li><span style="border:3px solid #ea580c;background:transparent"></span>Elementi con lavori aperti</li>'] : []),
+                ...(segnalazioniVisibili.value ? ['<li><span style="background:#dc2626;border:2px solid #7f1d1d"></span>Segnalazioni aperte</li>'] : []),
+            ].join('');
+            finestra.document.open();
+            finestra.document.write(`<!doctype html><html lang="it"><head><meta charset="utf-8"><title>${sfuggi(titolo)}</title>
+<style>
+  body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #111; margin: 0; padding: 14mm; font-variant-numeric: tabular-nums; }
+  h1 { font-size: 18px; margin: 0 0 4px; } .meta { font-size: 12px; color: #444; margin: 0 0 10px; }
+  img { width: 100%; height: auto; border: 1px solid #999; display: block; }
+  ul { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; }
+  li { display: flex; align-items: center; gap: 6px; } li span { display: inline-block; width: 14px; height: 14px; border-radius: 3px; }
+  .pie { font-size: 11px; color: #555; margin-top: 8px; }
+  @media print { body { padding: 0; } }
+</style></head><body>
+<h1>${sfuggi(titolo)}</h1>
+<p class="meta">Stampata il ${new Date().toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })} · scala a video circa ${sfuggi(scalaTesto.value)} · centro ${sfuggi(centro.wgs84)} · ${sfuggi(centro.metrico)} (${sfuggi(centro.sistema)})</p>
+<img src="${immagine}" alt="Mappa">
+<ul>${legenda}</ul>
+<p class="pie">${sfuggi(attribuzione)} · La scala vale per la finestra da cui e' stata stampata: per misure fedeli si usano le coordinate e le misure del programma.</p>
+<script>window.addEventListener('load', () => setTimeout(() => window.print(), 300));<\/script>
+</body></html>`);
+            finestra.document.close();
+        } catch (err) {
+            stampa.errore = 'Stampa non riuscita: ' + (err?.message ?? 'errore');
+            finestra.close();
+        } finally {
+            stampa.busy = false;
+        }
+    };
+    if (map.loaded()) map.once('idle', scatta);
+    else map.once('load', () => map.once('idle', scatta));
+    map.triggerRepaint();
+}
+
 async function creaOrdineDaSelezione() {
     selezione.saving = true;
     selezione.message = '';
@@ -743,8 +1017,13 @@ onMounted(async () => {
         center: [9.191, 45.465],
         zoom: 15,
         attributionControl: { compact: true },
+        // Serve alla stampa: senza, il disegno non si puo' rileggere dal canvas
+        preserveDrawingBuffer: true,
         style: {
             version: 8,
+            // I caratteri delle etichette, ospitati in casa (DejaVu Sans):
+            // nessuna richiesta a server esterni per scrivere un numero di cartellino
+            glyphs: `${window.location.origin}/mappa/font/{fontstack}/{range}.pbf`,
             sources: {
                 osm: {
                     type: 'raster',
@@ -765,6 +1044,7 @@ onMounted(async () => {
                     attribution: 'Esri, Maxar, Earthstar Geographics',
                 },
                 assets: { type: 'vector', tiles: [tilesUrl()], minzoom: 5, maxzoom: 22 },
+                segnalazioni: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
             },
             layers: [
                 { id: 'sfondo', type: 'background', paint: { 'background-color': '#e8ede9' } },
@@ -798,8 +1078,10 @@ onMounted(async () => {
         posizione.cercando = false;
         posizione.error = messaggioPosizione(e);
         // Ripiego: se la posizione non arriva, almeno si vede il verde censito
-        if (! posizione.located) fitToAreas();
+        if (! posizione.located && ! mossaDaChiGuarda) fitToAreas();
     });
+    map.on('dragstart', () => { mossaDaChiGuarda = true; });
+    map.on('wheel', () => { mossaDaChiGuarda = true; });
 
     map.on('load', () => {
         // Lo sfondo scelto l'ultima volta (strade o satellite) si riapplica
@@ -833,12 +1115,27 @@ onMounted(async () => {
         map.addLayer({
             id: 'assets-fill', type: 'fill', source: 'assets', 'source-layer': 'assets',
             filter: ['==', ['geometry-type'], 'Polygon'],
-            paint: { 'fill-color': colorExpr, 'fill-opacity': 0.35 },
+            paint: { 'fill-color': colorExpr, 'fill-opacity': opacitaStato(0.35, 0.12), 'fill-outline-color': colorExpr },
+        });
+        // Le linee hanno un bordo bianco sotto: sull'ortofoto una siepe verde
+        // sul prato o una recinzione scura sull'asfalto sparirebbero
+        map.addLayer({
+            id: 'assets-line-bordo', type: 'line', source: 'assets', 'source-layer': 'assets',
+            filter: ['==', ['geometry-type'], 'LineString'],
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': '#ffffff', 'line-width': larghezzaLinee(2.5), 'line-opacity': opacitaStato(0.85, 0.4) },
         });
         map.addLayer({
             id: 'assets-line', type: 'line', source: 'assets', 'source-layer': 'assets',
-            filter: ['==', ['geometry-type'], 'LineString'],
-            paint: { 'line-color': colorExpr, 'line-width': 2.5 },
+            filter: ['all', ['==', ['geometry-type'], 'LineString'], ['!', ['in', ['slice', ['get', 'type_code'], 1, 4], ['literal', CODICI_TRATTEGGIO]]]],
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': coloreLinee, 'line-width': larghezzaLinee(), 'line-opacity': opacitaStato(1, 0.45) },
+        });
+        map.addLayer({
+            id: 'assets-line-tratteggio', type: 'line', source: 'assets', 'source-layer': 'assets',
+            filter: ['all', ['==', ['geometry-type'], 'LineString'], ['in', ['slice', ['get', 'type_code'], 1, 4], ['literal', CODICI_TRATTEGGIO]]],
+            layout: { 'line-join': 'round' },
+            paint: { 'line-color': coloreLinee, 'line-width': larghezzaLinee(), 'line-dasharray': [2, 1.5], 'line-opacity': opacitaStato(1, 0.45) },
         });
         /*
          * Chioma a dimensione reale e sagomata: non un cerchio piatto ma una
@@ -940,8 +1237,83 @@ onMounted(async () => {
                 'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 3, 16, 7],
                 'circle-stroke-width': 1.5,
                 'circle-stroke-color': '#ffffff',
+                'circle-opacity': opacitaStato(1, 0.4),
+                'circle-stroke-opacity': opacitaStato(1, 0.4),
             },
         });
+        // Anello arancione sugli elementi con un lavoro programmato o in corso
+        map.addLayer({
+            id: 'lavori-aperti-linee', type: 'line', source: 'assets', 'source-layer': 'assets',
+            filter: ['all', ['!=', ['geometry-type'], 'Point'], ['==', ['get', 'lavoro_aperto'], true]],
+            layout: { visibility: 'none', 'line-join': 'round' },
+            paint: { 'line-color': '#ea580c', 'line-width': larghezzaLinee(6), 'line-opacity': 0.55 },
+        });
+        map.addLayer({
+            id: 'lavori-aperti-punti', type: 'circle', source: 'assets', 'source-layer': 'assets',
+            filter: ['all', ['==', ['geometry-type'], 'Point'], ['==', ['get', 'lavoro_aperto'], true]],
+            layout: { visibility: 'none' },
+            paint: {
+                'circle-color': '#ea580c', 'circle-opacity': 0,
+                'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 6, 16, 11],
+                'circle-stroke-width': 3, 'circle-stroke-color': '#ea580c',
+            },
+        });
+        // Il numero del cartellino accanto a ogni elemento, dagli zoom alti: le
+        // etichette che si accavallano si diradano da sole
+        const carattere = ['DejaVuSans'];
+        const testoEtichetta = ['coalesce', ['get', 'census_code'], ''];
+        map.addLayer({
+            id: 'etichette-punti', type: 'symbol', source: 'assets', 'source-layer': 'assets',
+            minzoom: 16.5,
+            filter: ['==', ['geometry-type'], 'Point'],
+            layout: {
+                'text-field': testoEtichetta, 'text-font': carattere,
+                'text-size': ['interpolate', ['linear'], ['zoom'], 16.5, 10, 19, 13],
+                'text-offset': [0, 0.9], 'text-anchor': 'top', 'text-optional': true,
+                visibility: etichetteVisibili.value ? 'visible' : 'none',
+            },
+            paint: { 'text-color': '#111827', 'text-halo-color': '#ffffff', 'text-halo-width': 1.4 },
+        });
+        map.addLayer({
+            id: 'etichette-linee', type: 'symbol', source: 'assets', 'source-layer': 'assets',
+            minzoom: 16,
+            filter: ['==', ['geometry-type'], 'LineString'],
+            layout: {
+                'symbol-placement': 'line', 'text-field': ['coalesce', ['get', 'census_code'], ['get', 'type_name']],
+                'text-font': carattere, 'text-size': 11, 'text-offset': [0, -0.9], 'symbol-spacing': 300,
+                visibility: etichetteVisibili.value ? 'visible' : 'none',
+            },
+            paint: { 'text-color': '#111827', 'text-halo-color': '#ffffff', 'text-halo-width': 1.4 },
+        });
+        // Segnalazioni aperte: punto rosso con bordo scuro e il codice accanto
+        map.addLayer({
+            id: 'segnalazioni-punti', type: 'circle', source: 'segnalazioni',
+            layout: { visibility: 'none' },
+            paint: {
+                'circle-color': ['match', ['get', 'severity'], 'critical', '#7f1d1d', 'high', '#dc2626', '#f97316'],
+                'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 5, 16, 9],
+                'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
+            },
+        });
+        map.addLayer({
+            id: 'segnalazioni-etichette', type: 'symbol', source: 'segnalazioni',
+            minzoom: 15,
+            layout: {
+                'text-field': ['get', 'code'], 'text-font': carattere, 'text-size': 11,
+                'text-offset': [0, 1], 'text-anchor': 'top', 'text-optional': true, visibility: 'none',
+            },
+            paint: { 'text-color': '#7f1d1d', 'text-halo-color': '#ffffff', 'text-halo-width': 1.4 },
+        });
+        map.on('click', 'segnalazioni-punti', (e) => {
+            if (creating.active || drawing.active || redraw.active || misura.active || selezione.active) return;
+            const f = e.features?.[0];
+            if (! f) return;
+            clicServito = e.originalEvent;
+            selected.value = { segnalazione: f.properties };
+        });
+        map.on('mouseenter', 'segnalazioni-punti', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'segnalazioni-punti', () => { map.getCanvas().style.cursor = ''; });
+        applyVisibility();
 
         // Evidenza ambra degli elementi scelti per un ordine di lavoro
         // (i filtri partono su un id impossibile: nessuna evidenza)
@@ -975,6 +1347,11 @@ onMounted(async () => {
         }
         map.on('click', onMapClick);
     });
+    // Coordinate del puntatore e scala: sul telefono, senza puntatore, vale il centro
+    map.on('mousemove', (e) => aggiornaCoordinate(e.lngLat));
+    map.on('move', () => { aggiornaScala(); if (! matchMedia('(pointer: fine)').matches) aggiornaCoordinate(map.getCenter()); });
+    aggiornaScala();
+    aggiornaCoordinate(map.getCenter());
 
     await carica(caricaContorno);
 
@@ -1013,11 +1390,40 @@ onBeforeUnmount(() => {
             </div>
             <div ref="mapEl" class="h-full w-full" />
 
-            <!-- Pannello layer -->
-            <div class="absolute left-4 top-4 max-h-[calc(100%-2rem)] w-60 overflow-y-auto rounded-xl bg-white/95 p-4 shadow-lg backdrop-blur">
+            <!-- Pulsante del pannello: sul telefono il pannello si chiude per lasciare la mappa -->
+            <button
+                v-if="! pannelloAperto"
+                type="button"
+                class="absolute left-3 top-3 z-10 inline-flex min-h-11 items-center rounded-lg border border-gray-300 bg-white/95 px-3 text-sm font-semibold text-gray-900 shadow-lg backdrop-blur md:min-h-[38px]"
+                data-test="apri-pannello"
+                @click="pannelloAperto = true"
+            >Pannello</button>
+
+            <!-- Pannello: livelli, strumenti, legenda -->
+            <div
+                v-if="pannelloAperto"
+                class="absolute left-3 top-3 z-10 flex max-h-[calc(100%-1.5rem)] w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-xl bg-white/95 shadow-lg backdrop-blur md:left-4 md:top-4 md:w-72"
+                data-test="pannello-mappa"
+            >
+                <div class="flex items-center gap-1 border-b border-gray-200 px-2 pt-2" role="tablist" aria-label="Sezioni del pannello">
+                    <button
+                        v-for="[chiave, etichetta] in [['livelli', 'Livelli'], ['strumenti', 'Strumenti'], ['legenda', 'Legenda']]"
+                        :key="chiave"
+                        type="button"
+                        role="tab"
+                        class="min-h-11 border-b-2 px-2.5 text-sm font-semibold md:min-h-9"
+                        :class="scheda === chiave ? 'border-green-700 text-green-800' : 'border-transparent text-gray-600 hover:text-gray-900'"
+                        :aria-selected="scheda === chiave"
+                        :data-test="`scheda-${chiave}`"
+                        @click="scheda = chiave"
+                    >{{ etichetta }}</button>
+                    <button type="button" class="ml-auto min-h-11 min-w-11 text-gray-500 hover:text-gray-800 md:hidden" aria-label="Chiudi il pannello" data-test="chiudi-pannello" @click="pannelloAperto = false">✕</button>
+                </div>
+                <div class="min-h-0 overflow-y-auto p-3 md:p-4">
+                <template v-if="scheda === 'livelli'">
                 <h2 class="mb-2 text-sm font-semibold">Vista</h2>
                 <button
-                    class="w-full rounded-lg border border-green-700 px-2 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+                    class="min-h-11 w-full rounded-lg border border-green-700 px-2 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50 md:min-h-[34px]"
                     :disabled="posizione.cercando"
                     data-test="mia-posizione"
                     @click="vaiAllaPosizione"
@@ -1055,11 +1461,57 @@ onBeforeUnmount(() => {
                     >
                     Mostra anche l'archivio (abbattuti e dismessi)
                 </label>
+
+                <hr class="my-3 border-gray-200">
+                <h2 class="mb-1 text-sm font-semibold">Livelli <span class="font-normal text-gray-500">· {{ totaleElementi.toLocaleString('it-IT') }} elementi</span></h2>
+                <div v-for="tp in alberoLivelli" :key="tp.code" class="text-sm" :data-test="`livello-${tp.code}`">
+                    <div class="flex items-center gap-2 py-0.5">
+                        <input :id="`tp-${tp.code}`" v-model="tpVisible[tp.code]" type="checkbox" class="rounded border-gray-300" @change="applyVisibility">
+                        <span class="inline-block h-3 w-3 shrink-0 rounded-full" :style="{ background: tp.color }" />
+                        <label :for="`tp-${tp.code}`" class="min-w-0 flex-1 cursor-pointer" :class="tp.n ? '' : 'text-gray-400'">{{ tp.label }}</label>
+                        <span class="tabular-nums text-xs text-gray-500" :data-test="`livello-${tp.code}-n`">{{ tp.n.toLocaleString('it-IT') }}</span>
+                        <button
+                            v-if="tp.sottotipi.length"
+                            type="button"
+                            class="min-h-11 min-w-11 rounded text-base leading-none text-gray-500 hover:bg-gray-100 md:min-h-9 md:min-w-9"
+                            :aria-expanded="tpAperto === tp.code"
+                            :aria-label="`${tpAperto === tp.code ? 'Chiudi' : 'Apri'} i sottotipi di ${tp.label}`"
+                            :data-test="`apri-livello-${tp.code}`"
+                            @click="tpAperto = tpAperto === tp.code ? '' : tp.code"
+                        >{{ tpAperto === tp.code ? '−' : '+' }}</button>
+                        <span v-else class="min-w-9" />
+                    </div>
+                    <div v-if="tpAperto === tp.code" class="mb-1 ml-1.5 border-l border-gray-200 pl-3" :data-test="`sottotipi-${tp.code}`">
+                        <label v-for="st in tp.sottotipi" :key="st.chiave" class="flex min-h-9 cursor-pointer items-center gap-2 text-[13px]" :data-test="`sottotipo-${st.chiave.replace('|', '')}`">
+                            <input type="checkbox" :checked="! tsSpenti[st.chiave]" :disabled="! tpVisible[tp.code]" class="rounded border-gray-300" @change="commutaSottotipo(st.chiave)">
+                            <span class="min-w-0 flex-1" :title="st.geoTesto">{{ st.nome }} <span class="text-gray-400">({{ st.geoTesto }})</span></span>
+                            <span class="tabular-nums text-xs text-gray-500">{{ st.n.toLocaleString('it-IT') }}</span>
+                        </label>
+                    </div>
+                </div>
+
+                <hr class="my-3 border-gray-200">
+                <h2 class="mb-1 text-sm font-semibold">Altri livelli</h2>
                 <label class="flex items-center gap-2 text-sm text-gray-600">
                     <input v-model="chiomeVisibili" type="checkbox" data-test="mostra-chiome" class="rounded border-gray-300" @change="applicaChiome">
                     Chiome a dimensione reale
                 </label>
 
+                <label class="flex cursor-pointer items-center gap-2 py-1 text-sm text-gray-600">
+                    <input v-model="etichetteVisibili" type="checkbox" data-test="mostra-etichette" class="rounded border-gray-300" @change="applicaEtichette">
+                    Etichette con il cartellino <span class="text-xs text-gray-400">(da vicino)</span>
+                </label>
+                <label class="flex cursor-pointer items-center gap-2 py-1 text-sm text-gray-600">
+                    <input v-model="lavoriApertiVisibili" type="checkbox" data-test="mostra-lavori-aperti" class="rounded border-gray-300" @change="applicaLavoriAperti">
+                    Elementi con lavori aperti <span class="tabular-nums text-xs text-gray-500">· {{ totaleLavoriAperti.toLocaleString('it-IT') }}</span>
+                </label>
+                <label v-if="canViewWorks" class="flex cursor-pointer items-center gap-2 py-1 text-sm text-gray-600">
+                    <input v-model="segnalazioniVisibili" type="checkbox" data-test="mostra-segnalazioni" class="rounded border-gray-300" @change="applicaSegnalazioni">
+                    Segnalazioni aperte<span v-if="segnalazioniVisibili" class="tabular-nums text-xs text-gray-500"> · {{ segnalazioni.length }}</span>
+                </label>
+                <p v-if="segnalazioniErrore" class="mt-1 text-xs text-red-600" data-test="segnalazioni-errore">{{ segnalazioniErrore }}</p>
+
+                <hr class="my-3 border-gray-200">
                 <div class="mt-2 flex items-center gap-3 text-sm text-gray-600">
                     <span class="text-gray-500">Sfondo</span>
                     <label class="flex items-center gap-1.5">
@@ -1079,17 +1531,40 @@ onBeforeUnmount(() => {
                     </label>
                 </div>
 
-                <hr class="my-3 border-gray-200">
-                <h2 class="mb-2 text-sm font-semibold">Layer</h2>
-                <label
-                    v-for="tp in TP"
-                    :key="tp.code"
-                    class="flex cursor-pointer items-center gap-2 py-1 text-sm"
-                >
-                    <input v-model="tpVisible[tp.code]" type="checkbox" class="rounded border-gray-300" @change="applyVisibility">
-                    <span class="inline-block h-3 w-3 rounded-full" :style="{ background: tp.color }" />
-                    {{ tp.label }}
+                </template>
+
+                <template v-else-if="scheda === 'strumenti'">
+                <label class="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                    <input v-model="misura.active" type="checkbox" data-test="misura" class="rounded border-gray-300">
+                    Misura distanze e superfici
                 </label>
+                <div v-if="misura.active" class="mt-2 space-y-2" data-test="pannello-misura">
+                    <p class="text-xs text-gray-500">
+                        Clicca i punti sulla mappa ({{ misura.vertices.length }}): da due punti si legge la lunghezza, da tre anche la superficie della figura chiusa. Misure piane nel sistema {{ coordinate?.sistema ?? 'metrico dell\'organizzazione' }}.
+                    </p>
+                    <dl v-if="misura.vertices.length >= 2" class="space-y-1 text-sm tabular-nums">
+                        <div class="flex justify-between gap-2"><dt class="text-gray-500">Lunghezza</dt><dd class="font-semibold" data-test="misura-lunghezza">{{ formattaMetri(misuraLunghezza) }}</dd></div>
+                        <template v-if="misura.vertices.length >= 3">
+                            <div class="flex justify-between gap-2"><dt class="text-gray-500">Superficie</dt><dd class="font-semibold" data-test="misura-area">{{ formattaMq(misuraArea) }}</dd></div>
+                            <div class="flex justify-between gap-2"><dt class="text-gray-500">Perimetro</dt><dd data-test="misura-perimetro">{{ formattaMetri(misuraPerimetro) }}</dd></div>
+                        </template>
+                    </dl>
+                    <div class="flex gap-2">
+                        <button type="button" class="min-h-11 flex-1 rounded-lg border border-gray-300 px-2 text-xs disabled:opacity-50 md:min-h-9" :disabled="! misura.vertices.length" data-test="misura-ultimo" @click="annullaUltimaMisura">← Ultimo punto</button>
+                        <button type="button" class="min-h-11 rounded-lg border border-gray-300 px-2 text-xs disabled:opacity-50 md:min-h-9" :disabled="! misura.vertices.length" @click="ricominciaMisura">Ricomincia</button>
+                    </div>
+                </div>
+
+                <hr class="my-3 border-gray-200">
+                <button
+                    type="button"
+                    class="w-full rounded-lg border border-green-700 px-2 py-2 text-sm font-medium text-green-700 hover:bg-green-50 disabled:opacity-50 md:py-1.5"
+                    :disabled="stampa.busy"
+                    data-test="stampa-mappa"
+                    @click="stampaMappa"
+                >{{ stampa.busy ? 'Preparazione…' : 'Stampa la mappa' }}</button>
+                <p class="mt-1 text-xs text-gray-500">L'inquadratura com'è a video, con data, scala, coordinate del centro e legenda, in una pagina da stampare o salvare in PDF.</p>
+                <p v-if="stampa.errore" class="mt-1 text-xs text-red-600" data-test="stampa-errore">{{ stampa.errore }}</p>
 
                 <template v-if="canCreateAreas">
                     <hr class="my-3 border-gray-200">
@@ -1113,11 +1588,11 @@ onBeforeUnmount(() => {
                         <input v-model="drawing.code" placeholder="Codice (opzionale)" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs">
                         <div class="flex gap-2">
                             <button
-                                class="flex-1 rounded-lg bg-green-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                                class="min-h-11 flex-1 rounded-lg bg-green-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50 md:min-h-9"
                                 :disabled="drawing.saving || drawing.vertices.length < 3"
                                 @click="saveDrawnArea"
                             >{{ drawing.saving ? 'Salvataggio…' : 'Salva area' }}</button>
-                            <button class="rounded-lg border border-gray-300 px-2 py-1.5 text-xs" @click="resetDrawing">Ricomincia</button>
+                            <button class="min-h-11 rounded-lg border border-gray-300 px-2 py-1.5 text-xs md:min-h-9" @click="resetDrawing">Ricomincia</button>
                         </div>
                         <p v-if="drawing.message" class="text-xs font-medium" :class="drawing.ok ? 'text-green-700' : 'text-red-600'">
                             {{ drawing.message }}
@@ -1163,12 +1638,12 @@ onBeforeUnmount(() => {
                         <div v-if="geoScelta !== 'P'" class="flex gap-2">
                             <button
                                 data-test="salva-elemento-disegnato"
-                                class="flex-1 rounded-lg bg-green-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                                class="min-h-11 flex-1 rounded-lg bg-green-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50 md:min-h-9"
                                 :disabled="creating.saving || ! creating.areaId || creating.vertices.length < (geoScelta === 'L' ? 2 : 3)"
                                 @click="salvaElementoDisegnato"
                             >{{ creating.saving ? 'Salvataggio…' : 'Salva elemento' }}</button>
                             <button
-                                class="rounded-lg border border-gray-300 px-2 py-1.5 text-xs disabled:opacity-50"
+                                class="min-h-11 rounded-lg border border-gray-300 px-2 py-1.5 text-xs disabled:opacity-50 md:min-h-9"
                                 :disabled="! creating.vertices.length"
                                 @click="annullaUltimoPunto"
                             >← Ultimo punto</button>
@@ -1227,7 +1702,7 @@ onBeforeUnmount(() => {
                         />
                         <button
                             data-test="selezione-crea"
-                            class="w-full rounded-lg bg-green-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                            class="min-h-11 w-full rounded-lg bg-green-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50 md:min-h-9"
                             :disabled="selezione.saving || ! selezione.ids.length || ! selezione.titolo.trim()"
                             @click="creaOrdineDaSelezione"
                         >{{ selezione.saving ? 'Creazione…' : 'Crea ordine di lavoro (in bozza)' }}</button>
@@ -1242,20 +1717,65 @@ onBeforeUnmount(() => {
                         </p>
                     </div>
                 </template>
+                </template>
+
+                <template v-else>
+                <h2 class="mb-2 text-sm font-semibold">Legenda</h2>
+                <ul class="space-y-1.5 text-sm text-gray-700" data-test="legenda">
+                    <li v-for="tp in TP" :key="tp.code" class="flex items-center gap-2"><span class="inline-block h-3.5 w-3.5 shrink-0 rounded-full border border-white shadow" :style="{ background: tp.color }" />{{ tp.label }} <span class="text-xs text-gray-400">(punti e superfici)</span></li>
+                    <li v-for="f in FAMIGLIE_LINEE" :key="f.label" class="flex items-center gap-2"><span class="inline-block h-1 w-5 shrink-0 rounded" :style="{ background: f.colore, borderTop: f.tratteggio ? `3px dashed ${f.colore}` : 'none', backgroundColor: f.tratteggio ? 'transparent' : f.colore, height: f.tratteggio ? 0 : '4px' }" />{{ f.label }}</li>
+                    <li class="flex items-center gap-2"><span class="inline-block h-3.5 w-3.5 shrink-0 rounded-sm border-2 border-dashed border-green-700 bg-green-700/10" />Aree di gestione</li>
+                    <li class="flex items-center gap-2"><span class="inline-block h-4 w-4 shrink-0 rounded-full border border-green-900/50 bg-gradient-to-br from-green-300/80 to-green-800/60" />Chioma a dimensione reale (da vicino)</li>
+                    <li class="flex items-center gap-2"><span class="inline-block h-3.5 w-3.5 shrink-0 rounded-full border-[3px] border-orange-600" />Elemento con un lavoro programmato o in corso</li>
+                    <li class="flex items-center gap-2"><span class="inline-block h-3.5 w-3.5 shrink-0 rounded-full border-[3px] border-amber-700" />Elemento scelto per un nuovo ordine di lavoro</li>
+                    <li v-if="canViewWorks" class="flex items-center gap-2"><span class="inline-block h-3.5 w-3.5 shrink-0 rounded-full border-2 border-white bg-red-600 shadow" />Segnalazione aperta (rosso scuro: critica; arancione: bassa o media)</li>
+                    <li class="flex items-center gap-2"><span class="inline-block h-3.5 w-3.5 shrink-0 rounded-full bg-gray-400 opacity-40" />Archivio (abbattuti e dismessi), se mostrato</li>
+                    <li class="flex items-center gap-2"><span class="inline-block h-3.5 w-3.5 shrink-0 rounded-full border-2 border-white bg-blue-600 shadow" />La mia posizione</li>
+                </ul>
+                <p class="mt-3 text-xs text-gray-500">Le etichette portano il numero del cartellino (per le linee, il tipo se il cartellino manca). Coordinate e misure sono nel sistema {{ coordinate?.sistema ?? 'metrico dell\'organizzazione' }}, lo stesso della banca dati.</p>
+                </template>
+                </div>
+            </div>
+
+            <!-- Coordinate e scala, come nella barra di stato di un GIS -->
+            <div
+                v-if="coordinate"
+                class="pointer-events-none absolute bottom-8 left-2 z-10 hidden max-w-[calc(100%-1rem)] rounded-md bg-white/90 px-2 py-1 text-[11px] tabular-nums text-gray-700 shadow sm:block"
+                data-test="coordinate"
+            >
+                <span data-test="coordinate-wgs84">{{ coordinate.wgs84 }}</span> · <span data-test="coordinate-metriche">{{ coordinate.metrico }}</span> · {{ coordinate.sistema }} · scala <span data-test="scala">{{ scalaTesto }}</span>
+            </div>
+
+            <!-- Segnalazione scelta sulla mappa -->
+            <div v-if="selected?.segnalazione" class="absolute bottom-4 left-4 z-10 w-[calc(100%-2rem)] rounded-xl bg-white p-4 shadow-lg md:w-72" data-test="scheda-segnalazione">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <div class="text-xs uppercase tracking-wide text-gray-400">Segnalazione {{ selected.segnalazione.status === 'in_charge' ? 'presa in carico' : 'aperta' }}</div>
+                        <div class="font-semibold">{{ selected.segnalazione.code }}</div>
+                    </div>
+                    <button class="min-h-9 min-w-9 text-gray-400 hover:text-gray-600" aria-label="Chiudi" @click="selected = null">✕</button>
+                </div>
+                <p class="mt-2 line-clamp-4 text-sm text-gray-700">{{ selected.segnalazione.descrizione }}</p>
+                <dl class="mt-2 space-y-1 text-sm">
+                    <div class="flex justify-between"><dt class="text-gray-500">Gravità</dt><dd>{{ { low: 'bassa', medium: 'media', high: 'alta', critical: 'critica' }[selected.segnalazione.severity] ?? selected.segnalazione.severity }}</dd></div>
+                    <div v-if="selected.segnalazione.elemento" class="flex justify-between"><dt class="text-gray-500">Elemento</dt><dd>{{ selected.segnalazione.elemento }}</dd></div>
+                </dl>
+                <a :href="`/segnalazioni?q=${encodeURIComponent(selected.segnalazione.code)}`" class="mt-3 block rounded-lg bg-green-700 px-3 py-2 text-center text-sm font-medium text-white hover:bg-green-800">Apri fra le segnalazioni</a>
             </div>
 
             <!-- Scheda elemento selezionato -->
-            <div v-if="selected" class="absolute bottom-4 left-4 w-72 rounded-xl bg-white p-4 shadow-lg">
+            <div v-else-if="selected" class="absolute bottom-4 left-4 z-10 w-[calc(100%-2rem)] rounded-xl bg-white p-4 shadow-lg md:w-72">
                 <div class="flex items-start justify-between">
                     <div>
                         <div class="text-xs uppercase tracking-wide text-gray-400">{{ selected.type_code }}</div>
                         <div class="font-semibold">{{ selected.type_name }}</div>
                     </div>
-                    <button class="text-gray-400 hover:text-gray-600" @click="selected = null">✕</button>
+                    <button class="min-h-9 min-w-9 text-gray-400 hover:text-gray-600" aria-label="Chiudi" @click="selected = null">✕</button>
                 </div>
                 <dl class="mt-2 space-y-1 text-sm">
                     <div class="flex justify-between"><dt class="text-gray-500">Codice</dt><dd>{{ selected.census_code || '—' }}</dd></div>
                     <div class="flex justify-between"><dt class="text-gray-500">Stato</dt><dd>{{ statusLabel(selected.status) }}</dd></div>
+                    <div v-if="selected.lavoro_aperto === true || selected.lavoro_aperto === 'true'" class="flex justify-between"><dt class="text-gray-500">Lavori</dt><dd class="text-orange-700" data-test="scheda-lavoro-aperto">un lavoro aperto</dd></div>
                 </dl>
                 <a
                     :href="`/censimento/${selected.id}`"
@@ -1304,13 +1824,13 @@ onBeforeUnmount(() => {
                 <div class="mt-2 flex gap-2">
                     <button
                         data-test="salva-ridisegno"
-                        class="flex-1 rounded-lg bg-green-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50"
+                        class="min-h-11 flex-1 rounded-lg bg-green-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-800 disabled:opacity-50 md:min-h-9"
                         :disabled="redraw.saving || redraw.vertices.length < minimoPunti"
                         @click="salvaRidisegno"
                     >{{ redraw.saving ? 'Salvataggio…' : 'Salva la nuova geometria' }}</button>
                     <button
                         v-if="redraw.geo !== 'P'"
-                        class="rounded-lg border border-gray-300 px-2 py-1.5 text-xs disabled:opacity-50"
+                        class="min-h-11 rounded-lg border border-gray-300 px-2 py-1.5 text-xs disabled:opacity-50 md:min-h-9"
                         :disabled="! redraw.vertices.length"
                         @click="redraw.vertices.pop(); disegnaAnteprima(redraw.vertices, redraw.geo === 'S')"
                     >← Ultimo punto</button>

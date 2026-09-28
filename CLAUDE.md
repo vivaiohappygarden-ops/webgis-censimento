@@ -359,6 +359,46 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   `Http::fakeSequence`). Chi vuole la TSA di prova anche in locale la lancia con
   `php -S 127.0.0.1:8099 scratchpad/verifica-marche/tsa-server.php` (credenziali demo/demo).
 
+## Mappa del gestionale (rifatta il 28/09/2026, spunti da GreenSpaces)
+
+- Il committente ha mostrato la mappa di GisClient (GreenSpaces) con l'albero dei livelli,
+  le siepi e le recinzioni come linee rosse etichettate, i numeri accanto agli alberi e la
+  barra con scala e coordinate: "una schermata cosi' noi non ce l'abbiamo". La nostra mappa
+  (`Pages/Mappa.vue`, MapLibre dentro la pagina) ora ha un **pannello a tre schede**:
+  Livelli (vista, albero dei livelli, altri livelli, sfondo), Strumenti (misura, stampa,
+  disegna area, nuovo elemento, elementi per un lavoro), Legenda. Sul telefono il pannello
+  parte chiuso (pulsante "Pannello") e occupa tutta la larghezza.
+- **Albero dei livelli**: i quattro tipi principali del Modello Dati con i sottotipi
+  **presenti davvero** e i loro numeri, da `GET tiles/livelli` (`TileController::livelli`,
+  stessi filtri delle tessere: il metodo `filtri()` e' uno solo per tutte e due). Il filtro
+  di categoria si legge dal codice del tipo nella tessera: posizione 2 il tipo principale,
+  posizioni 2-4 il sottotipo (`filtroLivelli()`), quindi accendere e spegnere non richiede
+  nuove tessere. I nomi dei sottotipi vengono dal catalogo ("PIANTA" diventa "Pianta").
+- **Linee per famiglia** (`FAMIGLIE_LINEE`): siepi, filari e cigli verde scuro; recinzioni,
+  reti e cancelli rosse; muri, cordoli, canaline con il loro colore; percorsi e piste
+  **tratteggiati** (livello a parte, perche' il tratteggio non e' un dato). Sotto ogni linea un
+  **bordo bianco**: sull'ortofoto una siepe verde sul prato sparirebbe. L'archivio, quando
+  lo si mostra, resta sbiadito (`opacitaStato`).
+- **Etichette** con il numero del cartellino accanto ai punti (dallo zoom 16,5) e lungo le
+  linee (cartellino o tipo): i **glifi sono ospitati in casa** in `public/mappa/font/`
+  (DejaVu Sans, generati con fontnik dai caratteri di sistema, intervalli latini), lo stile
+  dichiara `glyphs` sul nostro dominio e nessun carattere arriva da server esterni. La
+  spunta si ricorda (`webgis:etichette-mappa`).
+- **Lavori aperti**: la tessera porta `lavoro_aperto` (EXISTS su ordini programmati,
+  assegnati, in corso o sospesi) e il livello disegna un anello arancione; la scheda
+  dell'elemento lo dice. **Segnalazioni aperte** (`works.view`): punti rossi da `GET issues`
+  con `geom_geojson` (posizione della segnalazione o centro dell'elemento segnalato, cast
+  `array` nel modello perche' arriva come testo JSON), scheda al clic.
+- **Coordinate e scala** sotto la mappa come nella barra di stato di un GIS: WGS84 e
+  coordinate piane nel sistema metrico dell'organizzazione (`metric_srid`, ora fra le prop
+  condivise), calcolate in pagina da `resources/js/proiezione.js` (trasversa di Mercatore,
+  serie di Kruger, verificata al centimetro su una lettura di un altro GIS in
+  `tests/js/proiezione.test.mjs`). **Misura** di distanze e superfici a punti, piane nello
+  stesso sistema della banca dati. **Stampa**: `preserveDrawingBuffer` e una pagina a parte
+  con immagine, data, scala a video, coordinate del centro, legenda e attribuzione.
+- Collaudo nel browser in `scratchpad/verifica-mappa/` (prepara il Comune Demo con siepe,
+  recinzione, percorso, ordine aperto e segnalazione; `pulizia.php` li toglie).
+
 ## Depliant commerciale (dal 17/09/2026)
 
 - In `docs/depliant/` c'e' il depliant del programma (otto pagine A4): sorgente

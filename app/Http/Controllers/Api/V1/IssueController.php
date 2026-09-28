@@ -48,7 +48,11 @@ class IssueController extends Controller implements HasMiddleware
                 'asset:id,census_code', 'area:id,name',
                 'reporter:id,name', 'workOrder:id,code,status',
                 'photos:id,subject_id,original_filename',
-            ]);
+            ])
+            // Dove sta la segnalazione, per il livello sulla mappa: la sua
+            // posizione se ce l'ha, altrimenti il centro dell'elemento segnalato
+            ->select('issues.*')
+            ->selectRaw('ST_AsGeoJSON(COALESCE(issues.geom, (SELECT ST_Centroid(a.geom) FROM assets a WHERE a.id = issues.asset_id)))::json AS geom_geojson');
 
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));

@@ -32,6 +32,8 @@ class Issue extends Model
     protected function casts(): array
     {
         return [
+            // Posizione per la mappa (ST_AsGeoJSON nell'elenco): arriva come testo JSON
+            'geom_geojson' => 'array',
             'sla_due_at' => 'datetime',
             'taken_charge_due_at' => 'datetime',
             'taken_charge_at' => 'datetime',

@@ -145,6 +145,8 @@ class IssueTest extends TestCase
 
         // L'operatore vede e apre segnalazioni dal campo
         $this->getJson('/api/v1/issues')->assertOk()->assertJsonCount(1, 'data');
+        // Senza elemento ne' posizione la segnalazione non ha un punto per la mappa
+        $this->assertNull($this->getJson('/api/v1/issues')->json('data.0.geom_geojson'));
         $this->postJson('/api/v1/issues', ['description' => 'Buca nel prato area giochi.'])->assertCreated();
 
         // Ma non gestisce né genera ordini
@@ -332,6 +334,23 @@ class IssueTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('results.0.status', 'rejected')
             ->assertJsonPath('results.0.code', 'VALIDATION_FAILED');
+    }
+
+    public function test_la_segnalazione_porta_la_posizione_per_la_mappa(): void
+    {
+        $area = $this->createArea($this->organization);
+        $tipo = $this->makeObjectType($this->organization, 'P', 'P103108');
+        $asset = $this->postJson('/api/v1/assets', ['area_id' => $area->id, 'object_type_id' => $tipo->id, 'geometry' => $this->pointGeometry(9.1905, 45.4652)])
+            ->assertCreated()->json('data.id');
+        $conElemento = $this->postJson('/api/v1/issues', ['description' => 'Ramo spezzato.', 'asset_id' => $asset])->assertCreated()->json('data.id');
+        $senza = $this->postJson('/api/v1/issues', ['description' => 'Segnalazione generica.'])->assertCreated()->json('data.id');
+
+        $righe = collect($this->getJson('/api/v1/issues')->assertOk()->json('data'))->keyBy('id');
+        // Senza una posizione propria vale il centro dell'elemento segnalato, come oggetto GeoJSON e non come testo
+        $this->assertSame('Point', $righe[$conElemento]['geom_geojson']['type']);
+        $this->assertEqualsWithDelta(9.1905, $righe[$conElemento]['geom_geojson']['coordinates'][0], 0.00001);
+        $this->assertEqualsWithDelta(45.4652, $righe[$conElemento]['geom_geojson']['coordinates'][1], 0.00001);
+        $this->assertNull($righe[$senza]['geom_geojson']);
     }
 
     public function test_issues_are_tenant_isolated(): void

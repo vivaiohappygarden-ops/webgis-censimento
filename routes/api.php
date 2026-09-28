@@ -325,5 +325,7 @@ Route::prefix('v1')->group(function () {
         Route::get('tiles/assets/{z}/{x}/{y}', [TileController::class, 'assets'])
             ->middleware('throttle:tiles')
             ->whereNumber(['z', 'x', 'y']);
+        // Quanti elementi per livello (tipo e sottotipo), con gli stessi filtri delle tessere
+        Route::get('tiles/livelli', [TileController::class, 'livelli']);
     });
 });

@@ -141,6 +141,56 @@ class TileTest extends TestCase
         $this->assertStringNotContainsString('TILE-RIMOSSO', $vecchio);
     }
 
+    public function test_le_tessere_dicono_se_un_elemento_ha_lavori_aperti_e_i_livelli_contano_per_sottotipo(): void
+    {
+        [$organization, $user] = $this->createTenantUser();
+        $area = $this->createArea($organization);
+        $altraArea = $this->createArea($organization, ['name' => 'Area due']);
+        $albero = $this->makeObjectType($organization, 'P', 'P103108');
+        $siepe = $this->makeObjectType($organization, 'L', 'L103107');
+        $recinzione = $this->makeObjectType($organization, 'L', 'L217000');
+
+        $lon = 9.1905;
+        $lat = 45.4652;
+        $crea = fn (string $code, $tipo, string $areaId, array $geometria) => Asset::create([
+            'tenant_id' => $organization->id, 'area_id' => $areaId, 'object_type_id' => $tipo->id,
+            'census_code' => $code, 'geom' => Geometry::toEwkb($geometria),
+        ]);
+        $linea = ['type' => 'LineString', 'coordinates' => [[$lon, $lat], [$lon + 0.0004, $lat + 0.0001]]];
+        $conLavoro = $crea('TILE-LAVORO', $albero, $area->id, $this->pointGeometry($lon, $lat));
+        $crea('TILE-LIBERO', $albero, $area->id, $this->pointGeometry($lon + 0.0001, $lat));
+        $crea('TILE-SIEPE', $siepe, $area->id, $linea);
+        $crea('TILE-RETE', $recinzione, $altraArea->id, $linea);
+
+        $this->actingAsTenantUser($user);
+        // Un ordine programmato sul primo albero, uno annullato sul secondo (non conta)
+        $ordine = fn (string $stato) => \App\Models\WorkOrder::create([
+            'tenant_id' => $organization->id, 'code' => \App\Models\WorkOrder::nextCode($organization->id),
+            'title' => 'Potatura', 'status' => $stato, 'created_by' => $user->id, 'updated_by' => $user->id,
+        ]);
+        \App\Models\WorkOrderAsset::create(['tenant_id' => $organization->id, 'work_order_id' => $ordine('planned')->id, 'asset_id' => $conLavoro->id]);
+        \App\Models\WorkOrderAsset::create(['tenant_id' => $organization->id, 'work_order_id' => $ordine('cancelled')->id,
+            'asset_id' => Asset::withoutGlobalScopes()->where('census_code', 'TILE-LIBERO')->firstOrFail()->id]);
+
+        [$x, $y] = $this->tileForLonLat($lon, $lat, 15);
+        $tessera = $this->get("/api/v1/tiles/assets/15/{$x}/{$y}")->assertOk()->getContent();
+        $this->assertStringContainsString('lavoro_aperto', $tessera);
+
+        // I livelli: tipo principale e sottotipo letti dal codice, con i conteggi
+        $livelli = collect($this->getJson('/api/v1/tiles/livelli')->assertOk()->json('data'));
+        $this->assertSame([
+            ['tp' => '1', 'ts' => '03', 'geo' => 'L', 'n' => 1, 'lavori_aperti' => 0],
+            ['tp' => '1', 'ts' => '03', 'geo' => 'P', 'n' => 2, 'lavori_aperti' => 1],
+            ['tp' => '2', 'ts' => '17', 'geo' => 'L', 'n' => 1, 'lavori_aperti' => 0],
+        ], $livelli->all());
+
+        // Stessi filtri delle tessere
+        $this->assertSame([['tp' => '2', 'ts' => '17', 'geo' => 'L', 'n' => 1, 'lavori_aperti' => 0]],
+            $this->getJson("/api/v1/tiles/livelli?area_id={$altraArea->id}")->assertOk()->json('data'));
+        $this->assertSame(2, collect($this->getJson("/api/v1/tiles/livelli?object_type_id={$albero->id}")->json('data'))->sum('n'));
+        $this->getJson('/api/v1/tiles/livelli?area_id=non-uuid')->assertUnprocessable();
+    }
+
     /** @return array{0: int, 1: int} */
     private function tileForLonLat(float $lon, float $lat, int $zoom): array
     {

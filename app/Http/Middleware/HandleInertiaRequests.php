@@ -23,7 +23,8 @@ class HandleInertiaRequests extends Middleware
                     'tenant_id' => $user->tenant_id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'organization' => Organization::find($user->tenant_id)?->only(['name', 'slug']),
+                    // Il sistema metrico serve alla mappa per le coordinate piane e le misure
+                    'organization' => Organization::find($user->tenant_id)?->only(['name', 'slug', 'metric_srid']),
                     'permissions' => $user->getAllPermissions()->pluck('name')->values(),
                     // Chi gestisce la piattaforma vede la console nel menu
                     'piattaforma' => (bool) $user->is_platform_manager,
