@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Client;
+use App\Models\MarcaTemporale;
+use App\Services\Marche\MarcheTemporali;
 use App\Support\RicercaTestuale;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,11 +19,13 @@ use Illuminate\Support\Str;
  * emesse, i verbali di ispezione chiusi, i preventivi, i SAL e le
  * esportazioni gia' fatte (dal registro delle operazioni), letti dalle loro
  * tabelle e messi in fila per data. Ogni sorgente esce solo a chi ha il
- * permesso della sua pagina.
+ * permesso della sua pagina. Le marche temporali apposte (MarcheController)
+ * si agganciano alle righe di perizie e verbali; i registri marcati, che non
+ * hanno una riga propria, escono come documenti di tipo "marca".
  */
 class DocumentiController extends Controller
 {
-    private const TIPI = ['perizia', 'verbale', 'preventivo', 'sal', 'esportazione'];
+    private const TIPI = ['perizia', 'verbale', 'preventivo', 'sal', 'esportazione', 'marca'];
 
     private const STATO_PREVENTIVO = ['draft' => 'Bozza', 'sent' => 'Inviato', 'accepted' => 'Accettato', 'rejected' => 'Rifiutato'];
 
@@ -47,18 +52,26 @@ class DocumentiController extends Controller
             'tipo' => ['sometimes', 'nullable', 'string'],
             'client_id' => ['sometimes', 'nullable', 'uuid'],
             'anno' => ['sometimes', 'nullable', 'integer', 'between:2000,2100'],
-            'stato' => ['sometimes', 'nullable', 'in:da_validare'],
+            'stato' => ['sometimes', 'nullable', 'in:da_validare,marcati'],
             'q' => ['sometimes', 'nullable', ...RicercaTestuale::regole()],
         ]);
 
         $tenantId = $user->tenant_id;
+        // Le marche apposte, una volta sola: le ultime per perizia e verbale si
+        // agganciano alle loro righe, quelle dei registri diventano righe
+        $tutteLeMarche = MarcaTemporale::query()->with('richiedente:id,name')->orderBy('generato_il')->get();
+        $marche = $tutteLeMarche->whereNotNull('soggetto_id')->keyBy(fn ($m) => $m->tipo.'|'.$m->soggetto_id);
+
         $righe = collect();
         if ($user->can('assets.view')) {
-            $righe = $righe->concat($this->perizie($tenantId))->concat($this->esportazioni($tenantId));
+            $righe = $righe->concat($this->perizie($tenantId, $marche))->concat($this->esportazioni($tenantId));
         }
         if ($user->can('works.view')) {
-            $righe = $righe->concat($this->verbali($tenantId))->concat($this->preventivi($tenantId))->concat($this->sal($tenantId));
+            $righe = $righe->concat($this->verbali($tenantId, $marche))->concat($this->preventivi($tenantId))->concat($this->sal($tenantId));
         }
+        $righe = $righe->concat($this->marche($tutteLeMarche->whereNull('soggetto_id')->filter(
+            fn ($m) => $user->can(MarcheTemporali::PERMESSI[$m->tipo] ?? 'users.manage'),
+        )));
         $righe = $righe->sortByDesc(fn ($r) => ($r['data'] ?? '').'|'.($r['ora'] ?? ''))->values();
 
         // I conteggi delle schede e degli anni si fanno prima dei filtri di
@@ -84,7 +97,7 @@ class DocumentiController extends Controller
                 return true;
             });
         }
-        $conteggi = ['tutti' => $base->count(), 'da_validare' => $base->where('da_validare', true)->count()];
+        $conteggi = ['tutti' => $base->count(), 'da_validare' => $base->where('da_validare', true)->count(), 'marcati' => $base->where('marcato', true)->count()];
         foreach (self::TIPI as $tipo) {
             $conteggi[$tipo] = $base->where('tipo', $tipo)->count();
         }
@@ -96,6 +109,8 @@ class DocumentiController extends Controller
         }
         if ($request->input('stato') === 'da_validare') {
             $filtrate = $filtrate->where('da_validare', true);
+        } elseif ($request->input('stato') === 'marcati') {
+            $filtrate = $filtrate->where('marcato', true);
         }
 
         return response()->json([
@@ -106,7 +121,7 @@ class DocumentiController extends Controller
     }
 
     /** Perizie emesse: rapporto numerato, validato o ancora da validare. */
-    private function perizie(string $tenantId): array
+    private function perizie(string $tenantId, $marche): array
     {
         return collect(DB::select(<<<'SQL'
             SELECT ta.id, ta.report_number, ta.report_issued_at, ta.validated_at, ta.content_hash, ta.tree_id,
@@ -128,11 +143,14 @@ class DocumentiController extends Controller
                 'impronta' => $r->content_hash,
                 'href' => '/censimento/'.$r->tree_id.'?vta=1',
                 'pdf' => '/api/v1/assessments/'.$r->id.'/perizia-pdf',
+                // La marca si appone solo a una perizia validata: prima protocollo e impronta possono ancora cambiare
+                'marcabile' => $r->validated_at !== null,
+                ...$this->conMarca($marche, 'perizia', $r->id),
             ]))->all();
     }
 
     /** Verbali di ispezione chiusi. */
-    private function verbali(string $tenantId): array
+    private function verbali(string $tenantId, $marche): array
     {
         return collect(DB::select(<<<'SQL'
             SELECT i.id, i.completed_at, i.outcome, it.name AS template, a.census_code, ar.name AS area_name,
@@ -151,7 +169,39 @@ class DocumentiController extends Controller
             'Verbale di ispezione · '.($r->template ?? 'controllo').' · '.($r->census_code ?? $r->area_name ?? ''),
             $r->completed_at, self::ESITO_ISPEZIONE[$r->outcome] ?? ($r->outcome ?? '—'), $r->client_id, $r->client_name, [
                 'href' => '/ispezioni', 'pdf' => '/api/v1/inspections/'.$r->id.'/pdf',
+                'marcabile' => true,
+                ...$this->conMarca($marche, 'verbale', $r->id),
             ]))->all();
+    }
+
+    /** L'ultima marca apposta a quel documento, se c'e'. */
+    private function conMarca($marche, string $tipo, string $id): array
+    {
+        $marca = $marche[$tipo.'|'.$id] ?? null;
+
+        return ['marca' => $marca ? MarcheController::riga($marca) : null, 'marcato' => $marca !== null];
+    }
+
+    /**
+     * I registri marcati (fitosanitari, bilancio arboreo, relazione annuale):
+     * non hanno una riga propria, il documento e' la copia conservata.
+     */
+    private function marche($marche): array
+    {
+        $committenti = Client::query()->whereIn('id', $marche->map(fn ($m) => $m->parametri['client_id'] ?? null)->filter()->unique()->values())->pluck('name', 'id');
+
+        return $marche->map(function (MarcaTemporale $m) use ($committenti) {
+            $clientId = $m->parametri['client_id'] ?? null;
+
+            return $this->riga('marca', $m->id, $m->seriale ? 'n. '.$m->seriale : null, $m->titolo, $m->generato_il, 'Marcata',
+                $clientId, $clientId ? ($committenti[$clientId] ?? null) : null, [
+                    'impronta' => $m->sha256,
+                    'utente' => $m->richiedente?->name,
+                    'pdf' => '/api/v1/documenti/marche/'.$m->id.'/pdf',
+                    'marca' => MarcheController::riga($m),
+                    'marcato' => true,
+                ]);
+        })->values()->all();
     }
 
     private function preventivi(string $tenantId): array
@@ -225,6 +275,9 @@ class DocumentiController extends Controller
             'utente' => null,
             'href' => null,
             'pdf' => null,
+            'marcabile' => false,
+            'marca' => null,
+            'marcato' => false,
             ...$extra,
         ];
     }

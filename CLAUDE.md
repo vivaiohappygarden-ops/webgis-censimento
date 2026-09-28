@@ -274,7 +274,7 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   azioni `export.*`), con schede per tipo, ricerca a parole, committente, anno e la
   scorciatoia "da validare"; a fianco "Da produrre" (bilancio arboreo, relazione annuale,
   registro fitosanitari: PDF a richiesta con i parametri dei loro endpoint) e una nota onesta:
-  le marche temporali **non sono ancora attive** e la pagina lo dice. Ogni sorgente esce solo
+  le marche temporali (dal 28/09/2026, sezione sotto) con lo stato onesto del servizio. Ogni sorgente esce solo
   a chi ha il permesso della sua pagina (perizie ed esportazioni con `assets.view`; verbali,
   preventivi e SAL con `works.view`). `/committenti` (`Pages/Nuovo/Committenti.vue`, `GET
   committenti/riepilogo` in `CommittentiController`) e' l'anagrafica con elementi, aree,
@@ -303,10 +303,61 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   Statistiche, Territorio, Utenti, Catalogo, Listini, e i componenti di Agenda, Gantt,
   qualita', preventivi, SAL, rendiconto e piani. Si rifanno se e quando il committente lo
   chiede: la veste nuova e' un ordine diverso delle stesse funzioni, non una riscrittura.
-  **Da fare dopo**: le marche temporali dei registri con il servizio OpenAPI (10 al giorno
-  gratuite) per fitosanitari, DPI, manutenzioni e tutto cio' che ha valore legale; la pagina
-  Documenti gia' dichiara che non sono attive. Ogni pagina nuova si verifica sul Comune Demo in
+  **Fatto il 28/09/2026**: le marche temporali (sezione "Marche temporali" sotto). Ogni pagina nuova si verifica sul Comune Demo in
   Chromium a 390, 768, 1024 e 1440 (copioni in `scratchpad/verifica-blocco*` della sessione).
+
+## Marche temporali (dal 28/09/2026)
+
+- La marca temporale certifica che un documento esisteva cosi' com'e' a un istante certo:
+  la rilascia una TSA accreditata (Aruba, InfoCert, Namirial...) e si compra a lotti. Il
+  programma parla il **protocollo standard RFC 3161** sopra HTTPS con nome utente e password
+  (`App\Support\Rfc3161`: richiesta e risposta scritte e lette **a mano in DER**, senza
+  librerie; il gettone e' un CMS SignedData con dentro il TSTInfo). Nessun fornitore e' cablato:
+  l'indirizzo di serie e' quello di Aruba (`config/marche.php`).
+- **Credenziali a due livelli**: quelle della piattaforma nel `.env` (`MARCHE_URL`,
+  `MARCHE_UTENTE`, `MARCHE_PASSWORD`, `MARCHE_POLICY`, `MARCHE_QUOTA_GIORNO`, `MARCHE_CATENA`)
+  valgono per tutte le organizzazioni; ogni organizzazione puo' inserire le proprie da Documenti
+  (permesso `users.manage`, `organizations.settings['marche']`, password cifrata con `Crypt`,
+  scrittura sotto `lockForUpdate` come le altre impostazioni) e **vincono** su quelle della
+  piattaforma. Senza ne' l'una ne' l'altra le marche sono spente e la pagina lo dice, senza
+  fingere. Solo indirizzi https (tranne il proprio computer).
+- **La logica sta una volta sola in `App\Services\Marche\MarcheTemporali`**: `configurazione`,
+  `stato`, `applica`, `verifica`. `applica` produce il PDF **con lo stesso codice della stampa**
+  (richiama i controller delle stampe con una richiesta interna e l'utente che chiede: perizia
+  validata, verbale chiuso, registro fitosanitari, bilancio arboreo, relazione annuale), ne
+  calcola l'impronta SHA-256, manda la richiesta con un nonce casuale, controlla che la
+  risposta sia concessa, **con la stessa impronta e lo stesso nonce**, e conserva in
+  `storage/app/private/marche/{tenant}/` il PDF esatto e il gettone `.tsr`
+  (`marche_temporali`: titolo, impronta, istante certificato `generato_il`, seriale, TSA,
+  politica, servizio, `account`). **Il PDF marcato che si scarica e' la copia conservata**, non
+  una ristampa: una ristampa puo' avere byte diversi e la marca vale solo per quei byte. Una
+  risposta rifiutata, incoerente o non leggibile non lascia niente (ne' riga ne' file) e il
+  messaggio riporta lo stato e i motivi scritti dalla TSA.
+- **Chi puo' stampare un documento puo' marcarlo** (`PERMESSI`: perizie e bilancio con
+  `assets.view`; verbali, registro fitosanitari e relazione con `works.view`): i controller
+  delle stampe richiamati direttamente non passano dal loro middleware, quindi il permesso lo
+  controllano `MarcheController` e il servizio. Si marca **solo** una perizia validata (prima
+  protocollo e impronta possono cambiare) e un verbale chiuso.
+- **Quota giornaliera per account** (`quota_giorno`, 10 di serie, 0 = senza tetto), contata su
+  tutte le organizzazioni che condividono lo stesso account (`account` = impronta di url e
+  utente): e' il lotto che si consuma, non la pagina.
+- **Verifica** (`GET documenti/marche/{id}/verifica`): ricalcola l'impronta del PDF conservato,
+  controlla che il gettone parli di quell'impronta e, se sul server c'e' la catena dei
+  certificati della TSA (`MARCHE_CATENA`, file PEM), verifica anche la firma con
+  `openssl ts -verify` (il `openssl_cms_verify` di PHP non accetta lo scopo "marcatura
+  temporale"). Senza catena lo dice: la firma si controlla fuori dal programma con il `.tsr`.
+- **Pagina Documenti**: carta "Marche temporali" (`#marche`, stato del servizio, credenziali
+  dell'organizzazione per chi gestisce gli utenti), pulsante "Marca temporale" sulle righe
+  marcabili, poi "PDF marcato", "Gettone .tsr" e "Verifica"; "Genera e marca" / "Stampa e
+  marca" nei documenti da produrre: il registro marcato diventa un documento (`tipo` `marca`,
+  scheda "Registri marcati"); scorciatoia "Con marca temporale" (`stato=marcati`). Impostazioni
+  ha la voce che porta qui. Registro: `marca.applicata`, `marche.configurazione`.
+- **Prove**: `MarcheTemporaliTest` usa una **TSA vera creata da openssl**
+  (`Tests\Support\TsaDiProva`: autorita', certificato con scopo timeStamping, risposte
+  firmate) dietro `Http::fake`, piu' una risposta registrata in `tests/Fixtures/marche/`; le
+  finte HTTP di Laravel si accodano e la prima che corrisponde vince, quindi una per prova (o
+  `Http::fakeSequence`). Chi vuole la TSA di prova anche in locale la lancia con
+  `php -S 127.0.0.1:8099 scratchpad/verifica-marche/tsa-server.php` (credenziali demo/demo).
 
 ## Depliant commerciale (dal 17/09/2026)
 

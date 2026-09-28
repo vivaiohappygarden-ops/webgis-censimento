@@ -543,6 +543,50 @@ sudo -u www-data php artisan piattaforma:gestore titolare@happygarden.it
 
 Poi nel menu compare la voce **Piattaforma**.
 
+### 6.10 Marche temporali (data certa sui documenti)
+
+La marca temporale certifica che un documento esisteva, cosi' com'e', a un istante certo:
+la rilascia un servizio accreditato (Aruba, InfoCert, Namirial e altri) e vale come prova.
+Nel programma si appone da **Documenti** alle perizie validate, ai verbali di ispezione
+chiusi e ai registri (fitosanitari, bilancio arboreo, relazione annuale): il programma
+conserva il PDF esatto e il gettone della marca (`.tsr`), e la voce "Verifica" controlla
+che il file conservato sia ancora quello marcato.
+
+Le marche si comprano **a lotti** dal fornitore (per Aruba: "Marca Temporale" dal pannello
+dei servizi di firma; all'attivazione si ricevono il nome utente e la password dell'account
+di marcatura). Il programma parla il protocollo standard RFC 3161: servono tre cose,
+l'indirizzo del servizio, il nome utente e la password.
+
+Ci sono due posti dove metterle:
+
+- **per tutte le organizzazioni del server**, nel file `.env` (poi `sudo -u www-data php
+  artisan config:clear` se la configurazione e' in cache, oppure un aggiornamento):
+
+  ```
+  MARCHE_URL=https://servizi.arubapec.it/tsa/ngrequest.php
+  MARCHE_UTENTE=nome-utente-dell-account
+  MARCHE_PASSWORD=la-password
+  MARCHE_QUOTA_GIORNO=10
+  ```
+
+- **per una sola organizzazione**, da Documenti > Marche temporali > "Credenziali di questa
+  organizzazione" (chi gestisce gli utenti). Queste vincono su quelle del file `.env`: un
+  Comune con il proprio lotto usa il suo.
+
+`MARCHE_QUOTA_GIORNO` e' il tetto di marche al giorno per account (0 = nessun tetto): serve a
+non svuotare un lotto per errore. Se il fornitore chiede una "politica" (un identificativo a
+punti), va in `MARCHE_POLICY` o nel campo apposito.
+
+Per far controllare al programma anche la **firma** della marca, si scaricano dal sito del
+fornitore i certificati della sua autorita' di marcatura (la catena, in formato PEM), si
+mettono in un file sul server (per esempio `/etc/webgis/tsa-catena.pem`) e si indica il
+percorso in `MARCHE_CATENA=`. Senza, la verifica controlla impronta e gettone e dice che la
+firma va controllata fuori dal programma: il file `.tsr` si apre con qualunque programma di
+verifica delle marche.
+
+I file conservati stanno in `storage/app/private/marche/` e finiscono nei salvataggi come le
+fotografie.
+
 ---
 
 *Questa guida accompagna gli script in `deploy/`: `provision.sh`

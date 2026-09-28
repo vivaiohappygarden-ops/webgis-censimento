@@ -201,6 +201,17 @@ Route::prefix('v1')->group(function () {
         Route::get('oggi', [\App\Http\Controllers\Api\V1\OggiController::class, 'riepilogo']);
         // Veste nuova (blocchi 5 e 6): i documenti in un elenco solo e i committenti con i loro numeri
         Route::get('documenti', [\App\Http\Controllers\Api\V1\DocumentiController::class, 'index']);
+        // Marche temporali (RFC 3161) sui documenti chiusi: elenco, apposizione, PDF
+        // conservato e gettone, verifica; le credenziali dell'organizzazione a chi gestisce gli utenti
+        Route::get('documenti/marche', [\App\Http\Controllers\Api\V1\MarcheController::class, 'index']);
+        Route::post('documenti/marche', [\App\Http\Controllers\Api\V1\MarcheController::class, 'store']);
+        Route::get('documenti/marche/configurazione', [\App\Http\Controllers\Api\V1\MarcheController::class, 'configurazione'])->middleware('can:users.manage');
+        Route::put('documenti/marche/configurazione', [\App\Http\Controllers\Api\V1\MarcheController::class, 'aggiornaConfigurazione'])->middleware('can:users.manage');
+        Route::delete('documenti/marche/configurazione', [\App\Http\Controllers\Api\V1\MarcheController::class, 'eliminaConfigurazione'])->middleware('can:users.manage');
+        Route::get('documenti/marche/{id}', [\App\Http\Controllers\Api\V1\MarcheController::class, 'show'])->whereUuid('id');
+        Route::get('documenti/marche/{id}/pdf', [\App\Http\Controllers\Api\V1\MarcheController::class, 'pdf'])->whereUuid('id');
+        Route::get('documenti/marche/{id}/tsr', [\App\Http\Controllers\Api\V1\MarcheController::class, 'marca'])->whereUuid('id');
+        Route::get('documenti/marche/{id}/verifica', [\App\Http\Controllers\Api\V1\MarcheController::class, 'verifica'])->whereUuid('id');
         Route::get('committenti/riepilogo', [\App\Http\Controllers\Api\V1\CommittentiController::class, 'riepilogo'])->middleware('can:clients.view');
         Route::get('stats/overview', [\App\Http\Controllers\Api\V1\StatsController::class, 'overview']);
 

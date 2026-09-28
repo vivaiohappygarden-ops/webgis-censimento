@@ -42,6 +42,7 @@ const voci = computed(() => [
     { titolo: 'Patentini e certificati', testo: 'Le abilitazioni del personale con le scadenze, che compaiono in Oggi quando si avvicinano.', href: '/patentini', show: can('works.view') },
     { titolo: 'Portali pubblici e dominio', testo: props.dominioPortali ? `I portali dei Comuni escono su ${props.dominioPortali}: si accendono committente per committente.` : 'I portali dei Comuni si accendono committente per committente; il dominio si collega dal server.', href: '/committenti', show: can('clients.view') },
     { titolo: 'Collegamento al gestionale giardini', testo: 'Le impostazioni per inviare gli elementi al gestionale giardini (WordPress).', href: '/utenti#gestionale', show: can('users.manage') },
+    { titolo: 'Marche temporali', testo: 'Il servizio che appone la data certa ai documenti chiusi (perizie validate, verbali, registri): credenziali dell\'account e marche al giorno.', href: '/documenti#marche', show: can('users.manage') },
     { titolo: 'App di campo', testo: "L'app per il telefono: rilievi, misure, foto e cartellini anche senza rete. Le istruzioni stanno nella Guida.", href: '/operatore', show: can('assets.create') },
 ].filter((v) => v.show));
 

@@ -84,7 +84,7 @@ class SezioniNuoveTest extends TestCase
         $righe = collect($risposta['data']);
 
         $this->assertSame(['perizia', 'preventivo', 'esportazione'], $righe->pluck('tipo')->all());
-        $this->assertSame(['tutti' => 3, 'da_validare' => 1, 'perizia' => 1, 'verbale' => 0, 'preventivo' => 1, 'sal' => 0, 'esportazione' => 1], $risposta['conteggi']);
+        $this->assertSame(['tutti' => 3, 'da_validare' => 1, 'marcati' => 0, 'perizia' => 1, 'verbale' => 0, 'preventivo' => 1, 'sal' => 0, 'esportazione' => 1, 'marca' => 0], $risposta['conteggi']);
         $this->assertSame([now()->year], $risposta['anni']);
 
         $perizia = $righe->firstWhere('tipo', 'perizia');
