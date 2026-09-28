@@ -50,6 +50,7 @@
         ];
     @endphp
 
+    @include('pdf.partials.intestazione', ['tenantId' => $organization?->id])
     <div class="head">
         <h1>Relazione annuale del verde {{ $anno }} - {{ $client->name }}</h1>
         <div class="muted">

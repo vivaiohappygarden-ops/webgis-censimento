@@ -132,6 +132,12 @@ Route::prefix('v1')->group(function () {
         Route::post('assessments/{assessment}/instrumental-analyses', [\App\Http\Controllers\Api\V1\InstrumentalAnalysisController::class, 'store'])->whereUuid('assessment');
         Route::delete('instrumental-analyses/{id}', [\App\Http\Controllers\Api\V1\InstrumentalAnalysisController::class, 'destroy'])->whereUuid('id');
         Route::get('assessments/{id}/perizia-pdf', [\App\Http\Controllers\Api\V1\PeriziaController::class, 'pdf'])->whereUuid('id');
+        // Intestazione dei documenti dell'organizzazione (ragione sociale, recapiti, logo)
+        Route::get('intestazione', [\App\Http\Controllers\Api\V1\IntestazioneController::class, 'index']);
+        Route::put('intestazione', [\App\Http\Controllers\Api\V1\IntestazioneController::class, 'update']);
+        Route::post('intestazione/logo', [\App\Http\Controllers\Api\V1\IntestazioneController::class, 'logo']);
+        Route::delete('intestazione/logo', [\App\Http\Controllers\Api\V1\IntestazioneController::class, 'rimuoviLogo']);
+        Route::get('intestazione/logo', [\App\Http\Controllers\Api\V1\IntestazioneController::class, 'fileLogo']);
         Route::get('perizia/settings', [\App\Http\Controllers\Api\V1\PeriziaController::class, 'settings']);
         Route::put('perizia/settings', [\App\Http\Controllers\Api\V1\PeriziaController::class, 'updateSettings']);
         Route::get('vta/intervalli', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'intervalli']);

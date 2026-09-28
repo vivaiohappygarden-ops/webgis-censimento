@@ -30,6 +30,7 @@
         $elementi = array_sum(array_map(fn ($r) => (int) $r->quanti, $scheda['per_tipo']));
     @endphp
 
+    @include('pdf.partials.intestazione', ['tenantId' => $organization?->id])
     <div class="head">
         <h1>Scheda della località — {{ $loc['name'] }}@if ($loc['code']) ({{ $loc['code'] }})@endif</h1>
         <div class="muted">

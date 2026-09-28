@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import TestataSezione from '@/Components/Nuovo/TestataSezione.vue';
@@ -321,7 +321,80 @@ async function testGestionale() {
     }
 }
 
-// Intestazione dei documenti firmati (dati del professionista e luogo di firma)
+// Intestazione dell'organizzazione: ragione sociale, recapiti e logo in cima
+// a ogni documento stampato. L'organizzazione e' del cliente in tutto: sui
+// suoi documenti compare lei, non la piattaforma
+const intestazione = reactive({
+    form: { nome: '', partita_iva: '', codice_fiscale: '', indirizzo: '', comune: '', telefono: '', email: '', pec: '', sito: '' },
+    logoUrl: null, busy: false, logoBusy: false, message: '', messageOk: false,
+});
+function applicaIntestazione(dati) {
+    for (const k of Object.keys(intestazione.form)) intestazione.form[k] = dati[k] ?? '';
+    intestazione.logoUrl = dati.logo_url ?? null;
+}
+async function loadIntestazione() {
+    try {
+        const { data } = await axios.get('/api/v1/intestazione');
+        applicaIntestazione(data.data);
+    } catch (err) {
+        intestazione.message = avvisoCaricamento(err);
+        intestazione.messageOk = false;
+    }
+}
+async function saveIntestazione() {
+    intestazione.busy = true;
+    intestazione.message = '';
+    try {
+        const { data } = await axios.put('/api/v1/intestazione', intestazione.form);
+        applicaIntestazione(data.data);
+        intestazione.message = 'Salvata: da ora compare in cima a tutti i documenti stampati.';
+        intestazione.messageOk = true;
+        // Il nome dell'organizzazione sta anche nel menu: si rilegge
+        router.reload({ only: ['auth'] });
+    } catch (err) {
+        intestazione.message = firstError(err, 'Salvataggio non riuscito');
+        intestazione.messageOk = false;
+    } finally {
+        intestazione.busy = false;
+    }
+}
+async function caricaLogo(event) {
+    const file = event.target.files?.[0];
+    if (! file) return;
+    intestazione.logoBusy = true;
+    intestazione.message = '';
+    try {
+        const corpo = new FormData();
+        corpo.append('logo', file);
+        const { data } = await axios.post('/api/v1/intestazione/logo', corpo);
+        applicaIntestazione(data.data);
+        intestazione.message = 'Logo caricato: esce in cima ai documenti, accanto alla ragione sociale.';
+        intestazione.messageOk = true;
+    } catch (err) {
+        intestazione.message = firstError(err, 'Caricamento del logo non riuscito');
+        intestazione.messageOk = false;
+    } finally {
+        intestazione.logoBusy = false;
+        event.target.value = '';
+    }
+}
+async function togliLogo() {
+    intestazione.logoBusy = true;
+    intestazione.message = '';
+    try {
+        const { data } = await axios.delete('/api/v1/intestazione/logo');
+        applicaIntestazione(data.data);
+        intestazione.message = 'Logo tolto.';
+        intestazione.messageOk = true;
+    } catch (err) {
+        intestazione.message = firstError(err, 'Rimozione del logo non riuscita');
+        intestazione.messageOk = false;
+    } finally {
+        intestazione.logoBusy = false;
+    }
+}
+
+// Chi firma i documenti (dati del professionista e luogo di firma)
 const perizia = reactive({
     form: { nome: '', titolo: '', iscrizione: '', recapiti: '', luogo: '' },
     busy: false,
@@ -537,6 +610,7 @@ onMounted(() => {
     load();
     loadGestionale();
     loadPerizia();
+    loadIntestazione();
     loadIntervalli();
     loadSquadre();
 });
@@ -749,7 +823,67 @@ onMounted(() => {
             <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" id="firma" data-test="perizia-settings">
                 <h2 class="text-sm font-semibold">Intestazione e firma dei documenti</h2>
                 <p class="mt-1 text-xs text-gray-500">
-                    Chi firma: nome, titolo professionale, iscrizione all'albo e recapiti. Compaiono in
+                    Quello che compare in cima a ogni documento stampato (perizie, verbali, registri,
+                    preventivi, SAL, schede): la vostra ragione sociale, i vostri recapiti e il vostro
+                    logo. Sono i dati della vostra organizzazione e non ne compaiono altri.
+                </p>
+                <div class="mt-3 grid gap-3 md:grid-cols-2" data-test="intestazione">
+                    <label class="block text-xs md:col-span-2">
+                        <span class="text-gray-500">Ragione sociale</span>
+                        <input v-model="intestazione.form.nome" maxlength="200" required data-test="intestazione-nome" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Partita IVA</span>
+                        <input v-model="intestazione.form.partita_iva" maxlength="20" data-test="intestazione-piva" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Codice fiscale</span>
+                        <input v-model="intestazione.form.codice_fiscale" maxlength="20" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Indirizzo</span>
+                        <input v-model="intestazione.form.indirizzo" maxlength="200" placeholder="via e numero civico" data-test="intestazione-indirizzo" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">CAP e comune</span>
+                        <input v-model="intestazione.form.comune" maxlength="120" placeholder="es. 00012 Guidonia Montecelio (RM)" data-test="intestazione-comune" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Telefono</span>
+                        <input v-model="intestazione.form.telefono" maxlength="60" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Email</span>
+                        <input v-model="intestazione.form.email" type="email" maxlength="150" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">PEC</span>
+                        <input v-model="intestazione.form.pec" type="email" maxlength="150" data-test="intestazione-pec" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Sito</span>
+                        <input v-model="intestazione.form.sito" maxlength="200" placeholder="www.esempio.it" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <div class="text-xs md:col-span-2">
+                        <span class="text-gray-500">Logo</span>
+                        <div class="mt-1 flex flex-wrap items-center gap-3">
+                            <img v-if="intestazione.logoUrl" :src="intestazione.logoUrl" alt="Logo dell'organizzazione" class="h-14 max-w-[9rem] rounded border border-gray-200 bg-white object-contain p-1" data-test="intestazione-logo">
+                            <span v-else class="text-gray-500" data-test="intestazione-senza-logo">Nessun logo: in cima ai documenti resta la sola ragione sociale.</span>
+                            <label class="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 md:min-h-9">
+                                {{ intestazione.logoBusy ? 'Caricamento…' : (intestazione.logoUrl ? 'Cambia il logo' : 'Carica il logo') }}
+                                <input type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" :disabled="intestazione.logoBusy" data-test="intestazione-logo-file" @change="caricaLogo">
+                            </label>
+                            <button v-if="intestazione.logoUrl" type="button" class="min-h-11 rounded-lg border border-gray-300 px-3 text-sm text-gray-700 hover:bg-gray-50 md:min-h-9" :disabled="intestazione.logoBusy" data-test="intestazione-logo-togli" @click="togliLogo">Togli il logo</button>
+                        </div>
+                        <span class="mt-1 block text-gray-500">PNG, JPEG o WEBP fino a 4 MB; viene ridotto e stampato alto circa due centimetri.</span>
+                    </div>
+                </div>
+                <p v-if="intestazione.message" class="mt-3 rounded-lg px-3 py-2 text-sm" :class="intestazione.messageOk ? 'bg-green-100 text-green-900' : 'bg-red-50 text-red-700'" data-test="intestazione-msg">{{ intestazione.message }}</p>
+                <button class="mt-3 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50" :disabled="intestazione.busy" data-test="intestazione-salva" @click="saveIntestazione">Salva l'intestazione</button>
+
+                <h3 class="mt-6 text-sm font-semibold">Chi firma</h3>
+                <p class="mt-1 text-xs text-gray-500">
+                    Nome, titolo professionale, iscrizione all'albo e recapiti del professionista. Compaiono in
                     cima e in calce alla perizia di stabilità. Il luogo di firma vale invece per tutti i
                     documenti stampati.
                 </p>

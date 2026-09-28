@@ -27,6 +27,7 @@
         $pct = fn ($v) => rtrim(rtrim(number_format((float) $v, 2, ',', '.'), '0'), ',');
     @endphp
 
+    @include('pdf.partials.intestazione', ['tenantId' => $organization?->id])
     <div class="head">
         <h1>Stato di avanzamento lavori @if ($sal->code){{ $sal->code }}@endif</h1>
         <div class="muted">

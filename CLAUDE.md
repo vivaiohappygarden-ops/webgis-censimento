@@ -412,6 +412,28 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 - Collaudo nel browser in `scratchpad/verifica-mappa/` (prepara il Comune Demo con siepe,
   recinzione, percorso, ordine aperto e segnalazione; `pulizia.php` li toglie).
 
+## Intestazione per organizzazione (dal 28/09/2026)
+
+- **Principio** (committente 28/09/2026): un'organizzazione affittata sulla piattaforma e' del
+  cliente in tutto. Il suo tecnico, la sua intestazione, i suoi documenti, le sue email: tutto a
+  nome suo, niente della piattaforma o di DAMA nelle sue pagine e nei suoi fogli. Nel codice del
+  prodotto non ci sono nomi fissi (restano solo nel sito aziendale, nel depliant e nell'offerta,
+  che sono di DAMA).
+- **Intestazione dei documenti**: ragione sociale (`organizations.name`), partita IVA
+  (`vat_number`) e `organizations.branding` (`indirizzo`, `comune`, `telefono`, `email`, `pec`,
+  `sito`, `codice_fiscale`, `logo_path`), regolati da Utenti > "Intestazione e firma dei
+  documenti" (`IntestazioneController`, permesso `users.manage`, scrittura sotto
+  `lockForUpdate`). Il logo si ricodifica in PNG entro 600 px (`ImageDerivative::png`) in
+  `intestazioni/{tenant}/logo-<ora>.png` e si serve solo alla propria organizzazione
+  (`GET intestazione/logo`). **`App\Services\Pdf\Intestazione::per($tenantId)`** compone nome,
+  righe (sede, recapiti, dati fiscali: solo quello che c'e') e il logo come data URI; il partial
+  `pdf.partials.intestazione` sta **in cima a ogni PDF** (perizia, verbale, registro
+  fitosanitari, bilancio, relazione, preventivo, SAL, scheda localita', scheda elemento). Il
+  "chi firma" del professionista resta a parte (`settings['professionista']`).
+- Le email del riepilogo partono con il **nome dell'organizzazione** come mittente
+  (l'indirizzo resta quello del server). Il nome nel menu si rilegge al salvataggio
+  (`router.reload({ only: ['auth'] })`). Prove: `IntestazioneTest`.
+
 ## Depliant commerciale (dal 17/09/2026)
 
 - In `docs/depliant/` c'e' il depliant del programma (otto pagine A4): sorgente

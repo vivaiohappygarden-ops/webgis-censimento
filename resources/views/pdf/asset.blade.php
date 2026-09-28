@@ -18,9 +18,10 @@
 </style>
 </head>
 <body>
+    @include('pdf.partials.intestazione', ['tenantId' => $organization?->id])
     <div class="head">
         <h1>Scheda elemento {{ $asset->census_code ?? '' }}</h1>
-        <div class="muted">{{ $organization?->name }} - stampata il {{ now()->timezone('Europe/Rome')->format('d/m/Y H:i') }}</div>
+        <div class="muted">Stampata il {{ now()->timezone('Europe/Rome')->format('d/m/Y H:i') }}</div>
     </div>
 
     <table>

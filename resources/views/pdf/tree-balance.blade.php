@@ -28,6 +28,7 @@
         $posti = $bilancio['planting_sites'];
     @endphp
 
+    @include('pdf.partials.intestazione', ['tenantId' => $organization?->id])
     <div class="head">
         <h1>Bilancio arboreo{{ $client ? ' - '.$client->name : '' }}</h1>
         <div class="muted">

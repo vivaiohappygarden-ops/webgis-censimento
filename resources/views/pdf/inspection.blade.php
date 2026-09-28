@@ -19,9 +19,9 @@
 </style>
 </head>
 <body>
+    @include('pdf.partials.intestazione', ['tenantId' => $organization?->id])
     <div class="head">
         <h1>Verbale di ispezione</h1>
-        <div class="muted">{{ $organization?->name }}</div>
     </div>
 
     <table>

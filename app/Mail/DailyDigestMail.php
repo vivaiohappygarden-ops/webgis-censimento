@@ -26,6 +26,9 @@ class DailyDigestMail extends Mailable
         $date = Carbon::parse($this->digest['date'])->format('d/m/Y');
 
         return new Envelope(
+            // L'indirizzo e' quello del server, il nome e' quello dell'organizzazione:
+            // chi riceve legge il nome del proprio studio, non quello della piattaforma
+            from: new \Illuminate\Mail\Mailables\Address((string) config('mail.from.address'), $this->organization->name),
             subject: sprintf(
                 'Verde %s - %d %s da attenzionare (%s)',
                 $this->organization->name,

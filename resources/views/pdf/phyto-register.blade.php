@@ -24,6 +24,7 @@
             'iniezione_suolo' => 'Iniezione al suolo', 'esca' => 'Esca', 'altro' => 'Altro',
         ];
     @endphp
+    @include('pdf.partials.intestazione', ['tenantId' => $organization?->id])
     <div class="head">
         <h1>Registro dei trattamenti fitosanitari - anno {{ $year }}</h1>
         <div class="muted">

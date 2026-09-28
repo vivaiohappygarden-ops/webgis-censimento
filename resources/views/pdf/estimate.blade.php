@@ -69,9 +69,8 @@
     <table class="head">
         <tr>
             <td style="width: 58%;" class="mittente">
-                <strong>{{ $organization?->name }}</strong><br>
-                @if ($organization?->vat_number) P. IVA {{ $organization->vat_number }}<br> @endif
-                @if ($recapiti) {{ $recapiti }} @endif
+                {{-- Chi emette: l'intestazione dell'organizzazione (logo, sede, recapiti, dati fiscali) --}}
+                @include('pdf.partials.intestazione', ['tenantId' => $organization?->id])
             </td>
             <td style="width: 42%;">
                 <div class="doc">

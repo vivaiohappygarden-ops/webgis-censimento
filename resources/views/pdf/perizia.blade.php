@@ -56,6 +56,7 @@
         emessa il {{ $emessaIl->format('d/m/Y') }}
     </div>
 
+    @include('pdf.partials.intestazione', ['tenantId' => $assessment->tenant_id])
     <div class="head">
         <table style="border: none;">
             <tr>

@@ -85,6 +85,10 @@ Che cosa fa il nuovo amministratore al primo accesso, in ordine:
 5. Pagina **Utenti**, sezione **Squadre**: squadre interne ed esterne, con i membri.
 6. Quando i dati sono in ordine: portale pubblico del Comune da **Territorio** (interruttore, colore dell'ente, recapiti; niente esce da solo: lavori, perizie e vincoli hanno la propria spunta "pubblico").
 
+### L'organizzazione e' tutta loro
+
+Un'organizzazione creata per un cliente e' sua in tutto: i suoi utenti, il suo tecnico che firma, la sua intestazione. Al primo accesso il suo amministratore va in Utenti, "Intestazione e firma dei documenti", e scrive ragione sociale, partita IVA, indirizzo, recapiti e carica il logo: da quel momento compaiono in cima a tutte le stampe (perizie, verbali, registri, preventivi, stati di avanzamento, schede). Sotto, "Chi firma" e il luogo di firma. Niente della piattaforma finisce sui suoi documenti.
+
 ## 5. Collegare una ditta esterna nella propria organizzazione (casi 2 e 3)
 
 1. **Utenti**, "Nuovo utente": nome, email, ruolo **Esecutore**. Consegna la password provvisoria.
