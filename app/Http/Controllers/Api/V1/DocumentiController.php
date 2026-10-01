@@ -38,6 +38,7 @@ class DocumentiController extends Controller
         'export.cam_delivery' => 'Consegna CAM completa',
         'export.assets_csv' => 'Elenco del censimento (CSV)',
         'export.assets_xlsx' => 'Elenco del censimento (Excel)',
+        'export.assets_pdf' => 'Elenco del censimento (PDF)',
         'export.vta_registro' => 'Registro delle valutazioni VTA (CSV)',
     ];
 

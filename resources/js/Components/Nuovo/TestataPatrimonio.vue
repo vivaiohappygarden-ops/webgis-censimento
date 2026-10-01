@@ -26,7 +26,7 @@ const schede = computed(() => [
 </script>
 
 <template>
-    <div class="flex flex-wrap items-center justify-between gap-3" data-test="testata-patrimonio">
+    <div class="relative flex flex-wrap items-center justify-between gap-3" data-test="testata-patrimonio">
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
             <h1 class="text-2xl font-bold text-gray-900">{{ props.titolo }}</h1>
             <nav

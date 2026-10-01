@@ -9,6 +9,7 @@ import ScegliVoce from '@/Components/ScegliVoce.vue';
 import VisteSalvate from '@/Components/VisteSalvate.vue';
 import { usaCaricamento } from '@/caricamento';
 import { STATUS_LABELS, inArchivio, statusLabel } from '@/assetStatus';
+import { fetchPdf } from '@/pdf';
 
 const page = usePage();
 const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
@@ -469,6 +470,16 @@ async function esportaElenco(formato = 'xlsx') {
     // Si esporta quello che si vede: stessi parametri dell'elenco
     params.set('archivio', String(paramArchivio.value));
     const suffix = params.toString() ? `?${params.toString()}` : '';
+    if (formato === 'pdf') {
+        // Il PDF si apre in una scheda, come le altre stampe
+        camExport.busy = true;
+        camExport.error = '';
+        const { error } = await fetchPdf(`/api/v1/exports/assets.pdf${suffix}`);
+        if (error) camExport.error = error;
+        camExport.busy = false;
+
+        return;
+    }
     await downloadCam(`/api/v1/exports/assets.${formato}${suffix}`, 'censimento', formato);
 }
 
@@ -667,6 +678,13 @@ const dataAbbattimento = (row) => {
                         data-test="csv-export"
                         @click="esportaElenco('csv')"
                     >Esporta CSV</button>
+                    <button
+                        class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        :disabled="camExport.busy"
+                        title="Lo stesso elenco in PDF, da stampare o allegare, con l'intestazione dell'organizzazione"
+                        data-test="pdf-export"
+                        @click="esportaElenco('pdf')"
+                    >Esporta PDF</button>
                     <button
                         v-if="canCreate"
                         class="rounded-lg bg-green-700 px-3 py-2 text-sm font-medium text-white hover:bg-green-800"

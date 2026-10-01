@@ -122,6 +122,8 @@ Route::prefix('v1')->group(function () {
         Route::get('exports/assets.csv', [\App\Http\Controllers\Api\V1\ExportController::class, 'assetsCsv']);
         // Stesso elenco, stessi filtri, foglio Excel invece del CSV
         Route::get('exports/assets.xlsx', [\App\Http\Controllers\Api\V1\ExportController::class, 'assetsXlsxRoute']);
+        // ...e in PDF da stampare o allegare, con l'intestazione dell'organizzazione
+        Route::get('exports/assets.pdf', [\App\Http\Controllers\Api\V1\ExportController::class, 'assetsPdf']);
 
         Route::get('assets/{asset}/assessments', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'index'])->whereUuid('asset');
         Route::post('assets/{asset}/assessments', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'store'])->whereUuid('asset');

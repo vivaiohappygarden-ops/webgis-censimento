@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\Site;
 use App\Services\Export\CamDeliveryBuilder;
 use App\Services\Export\CamExporter;
+use App\Services\Export\ElencoPdf;
 use App\Services\Export\FoglioXlsx;
 use App\Support\AssetStatus;
 use App\Support\Audit;
@@ -94,22 +95,118 @@ class ExportController extends Controller implements HasMiddleware
         return $this->assetsCsv($request->merge(['formato' => 'xlsx']));
     }
 
+    /**
+     * Lo stesso elenco filtrato, in PDF da stampare o allegare: intestazione
+     * dell'organizzazione, filtri applicati scritti in chiaro, le colonne che
+     * stanno su un foglio (quelle segnate per il PDF in colonneAssets, con i
+     * valori di rigaAsset: nessuna seconda lista), nell'ordine dell'elenco
+     * (cartellino, poi data di rilievo). Il documento lo scrive ElencoPdf senza
+     * dompdf; il tetto di righe protegge il server e il PDF lo dichiara.
+     */
+    public function assetsPdf(Request $request, ElencoPdf $elenco)
+    {
+        $query = FiltriElementi::applica($request, Asset::query());
+        $totale = (clone $query)->count();
+        $tetto = max(1, (int) config('esportazioni.pdf_righe_massime', 20000));
+        $ids = (clone $query)->orderByRaw('assets.census_code ASC NULLS LAST')->orderBy('assets.created_at')->orderBy('assets.id')
+            ->limit($tetto)->pluck('assets.id')->all();
+        $indici = array_keys(array_filter($this->colonneAssets(), fn ($c) => $c['pdf'] ?? false));
+        $colonne = array_values(array_filter($this->colonneAssets(), fn ($c) => $c['pdf'] ?? false));
+
+        // Le righe si leggono a blocchi nell'ordine deciso sopra (chunkById ordinerebbe per id)
+        $posizione = array_flip($ids);
+        $righe = array_fill(0, count($ids), null);
+        foreach (array_chunk($ids, 500) as $blocco) {
+            foreach ($this->queryEsportazione()->whereIn('assets.id', $blocco)->get() as $asset) {
+                $tutti = $this->rigaAsset($asset);
+                $righe[$posizione[$asset->id]] = array_map(fn ($i) => $tutti[$i], $indici);
+            }
+        }
+        $righe = array_values(array_filter($righe, fn ($r) => $r !== null));
+
+        // Un solo orologio per tutto il documento, come per le altre stampe
+        $adesso = now('Europe/Rome');
+        $pdf = $elenco->componi([
+            'organization' => Organization::query()->find($request->user()->tenant_id),
+            'colonne' => $colonne,
+            'righe' => $righe,
+            'totale' => $totale,
+            'tetto' => $tetto,
+            'filtri' => $this->filtriInChiaro($request),
+            'stampatoIl' => $adesso,
+        ]);
+
+        Audit::log('export.assets_pdf', null, ['filters' => $request->only(FiltriElementi::PARAMETRI), 'righe' => count($righe), 'totale' => $totale]);
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="elenco_elementi_'.$adesso->format('Ymd').'.pdf"',
+        ]);
+    }
+
+    /** I filtri dell'elenco scritti come li legge una persona, per la testata del PDF. */
+    private function filtriInChiaro(Request $request): array
+    {
+        $voci = [];
+        if ($request->filled('client_id')) {
+            $nome = \App\Models\Client::query()->whereKey($request->string('client_id'))->value('name');
+            $voci[] = 'committente '.($nome ?? '?');
+        }
+        if ($request->filled('locality_id')) {
+            $nome = \App\Models\Locality::query()->whereKey($request->string('locality_id'))->value('name');
+            $voci[] = 'localita\' '.($nome ?? '?');
+        }
+        if ($request->filled('area_id')) {
+            $nome = \App\Models\Area::query()->whereKey($request->string('area_id'))->value('name');
+            $voci[] = 'area '.($nome ?? '?');
+        }
+        if ($request->filled('object_type_id')) {
+            $tipo = \App\Models\CatalogObjectType::query()->whereKey($request->string('object_type_id'))->first(['code', 'name']);
+            $voci[] = 'tipo '.($tipo ? "{$tipo->code} {$tipo->name}" : '?');
+        } elseif ($request->filled('type_code')) {
+            $voci[] = 'tipo '.$request->string('type_code');
+        }
+        if ($request->filled('status')) {
+            $voci[] = 'stato '.(AssetStatus::LABELS[$request->string('status')->toString()] ?? $request->string('status'));
+        } elseif ($request->has('archivio')) {
+            $voci[] = $request->boolean('archivio') ? 'solo archivio (abbattuti e dismessi)' : 'senza archivio';
+        } elseif ($request->boolean('hide_removed')) {
+            $voci[] = 'senza abbattuti';
+        }
+        if ($request->filled('q')) {
+            $voci[] = 'ricerca "'.$request->string('q').'"';
+        }
+        if ($request->filled('vta')) {
+            $voci[] = ['scaduta' => 'VTA scaduta', 'in_scadenza' => 'VTA in scadenza', 'mai' => 'mai valutati', 'valutato' => 'con VTA'][$request->string('vta')->toString()] ?? 'VTA '.$request->string('vta');
+        }
+        if ($request->boolean('senza_specie')) {
+            $voci[] = 'senza specie';
+        }
+
+        return $voci;
+    }
+
+    /** Le relazioni che servono a rigaAsset: una volta sola per CSV, foglio e PDF. */
+    private function queryEsportazione()
+    {
+        return Asset::query()->with([
+            'objectType:id,code,name,sub_type_id',
+            'objectType.subType:id,name,main_type_id',
+            'objectType.subType.mainType:id,name',
+            'area:id,name,locality_id',
+            'area.locality:id,name,site_id',
+            'area.locality.site:id,name,client_id',
+            'area.locality.site.client:id,name',
+            'tree:asset_id,genus,species,common_name,height_m,dbh_cm',
+        ]);
+    }
+
     public function assetsCsv(Request $request)
     {
         // Stessa scelta fatta a video: il file esporta quello che si sta
         // guardando. I filtri sono quelli dell'elenco (FiltriElementi), non
         // una copia: un filtro aggiunto all'elenco vale subito anche qui
-        $query = FiltriElementi::applica($request, Asset::query()
-            ->with([
-                'objectType:id,code,name,sub_type_id',
-                'objectType.subType:id,name,main_type_id',
-                'objectType.subType.mainType:id,name',
-                'area:id,name,locality_id',
-                'area.locality:id,name,site_id',
-                'area.locality.site:id,name,client_id',
-                'area.locality.site.client:id,name',
-                'tree:asset_id,genus,species,common_name,height_m,dbh_cm',
-            ]));
+        $query = FiltriElementi::applica($request, $this->queryEsportazione());
 
         $formato = $request->string('formato')->lower()->toString() ?: 'csv';
 
@@ -124,30 +221,32 @@ class ExportController extends Controller implements HasMiddleware
      * Le colonne dell'esportazione del censimento: titolo, larghezza in
      * Excel e tipo del dato.
      *
-     * Stanno qui una volta sola perche' il CSV e il foglio Excel devono
-     * esportare esattamente le stesse cose, nello stesso ordine: due elenchi
-     * paralleli divergerebbero al primo campo aggiunto.
+     * Stanno qui una volta sola perche' il CSV, il foglio Excel e il PDF
+     * devono esportare esattamente le stesse cose, nello stesso ordine: due
+     * elenchi paralleli divergerebbero al primo campo aggiunto. Il PDF prende
+     * le sole colonne segnate "pdf" (quelle che stanno su un foglio A4
+     * orizzontale), con i valori della stessa riga.
      *
-     * @return list<array{titolo: string, larghezza: int, tipo: string}>
+     * @return list<array{titolo: string, larghezza: int, tipo: string, pdf?: bool, decimali?: int}>
      */
     private function colonneAssets(): array
     {
         return [
-            ['titolo' => 'Codice', 'larghezza' => 14, 'tipo' => 'testo'],
-            ['titolo' => 'Tipo', 'larghezza' => 10, 'tipo' => 'testo'],
-            ['titolo' => 'Descrizione tipo', 'larghezza' => 28, 'tipo' => 'testo'],
+            ['titolo' => 'Codice', 'larghezza' => 14, 'tipo' => 'testo', 'pdf' => true],
+            ['titolo' => 'Tipo', 'larghezza' => 10, 'tipo' => 'testo', 'pdf' => true],
+            ['titolo' => 'Descrizione tipo', 'larghezza' => 28, 'tipo' => 'testo', 'pdf' => true],
             ['titolo' => 'Categoria', 'larghezza' => 18, 'tipo' => 'testo'],
-            ['titolo' => 'Committente', 'larghezza' => 24, 'tipo' => 'testo'],
-            ['titolo' => 'Area', 'larghezza' => 22, 'tipo' => 'testo'],
-            ['titolo' => 'Localita', 'larghezza' => 22, 'tipo' => 'testo'],
-            ['titolo' => 'Stato', 'larghezza' => 14, 'tipo' => 'testo'],
-            ['titolo' => 'Data rilievo', 'larghezza' => 12, 'tipo' => 'data'],
-            ['titolo' => 'Specie', 'larghezza' => 22, 'tipo' => 'testo'],
+            ['titolo' => 'Committente', 'larghezza' => 24, 'tipo' => 'testo', 'pdf' => true],
+            ['titolo' => 'Area', 'larghezza' => 22, 'tipo' => 'testo', 'pdf' => true],
+            ['titolo' => 'Localita', 'larghezza' => 22, 'tipo' => 'testo', 'pdf' => true],
+            ['titolo' => 'Stato', 'larghezza' => 14, 'tipo' => 'testo', 'pdf' => true],
+            ['titolo' => 'Data rilievo', 'larghezza' => 12, 'tipo' => 'data', 'pdf' => true],
+            ['titolo' => 'Specie', 'larghezza' => 22, 'tipo' => 'testo', 'pdf' => true],
             ['titolo' => 'Nome comune', 'larghezza' => 20, 'tipo' => 'testo'],
-            ['titolo' => 'Altezza (m)', 'larghezza' => 11, 'tipo' => 'numero'],
-            ['titolo' => 'Diametro fusto (cm)', 'larghezza' => 16, 'tipo' => 'numero'],
-            ['titolo' => 'Superficie (m2)', 'larghezza' => 14, 'tipo' => 'numero'],
-            ['titolo' => 'Lunghezza (m)', 'larghezza' => 13, 'tipo' => 'numero'],
+            ['titolo' => 'Altezza (m)', 'larghezza' => 11, 'tipo' => 'numero', 'pdf' => true, 'decimali' => 1],
+            ['titolo' => 'Diametro fusto (cm)', 'larghezza' => 16, 'tipo' => 'numero', 'pdf' => true, 'decimali' => 1],
+            ['titolo' => 'Superficie (m2)', 'larghezza' => 14, 'tipo' => 'numero', 'pdf' => true, 'decimali' => 0],
+            ['titolo' => 'Lunghezza (m)', 'larghezza' => 13, 'tipo' => 'numero', 'pdf' => true, 'decimali' => 1],
             ['titolo' => 'Perimetro (m)', 'larghezza' => 13, 'tipo' => 'numero'],
             ['titolo' => 'Note', 'larghezza' => 40, 'tipo' => 'testo'],
             ['titolo' => 'Data abbattimento/rimozione', 'larghezza' => 16, 'tipo' => 'data'],

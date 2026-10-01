@@ -669,8 +669,19 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   API e stessa regola: senza fine prevista il lavoro occupa il solo giorno di inizio).
 - **Esportazioni**: `App\Services\Export\FoglioXlsx` scrive un .xlsx vero senza
   librerie (zip di XML, righe su file temporaneo). Colonne e valori dell'export del
-  censimento si dichiarano **una volta sola** nel controller: CSV e foglio partono da
-  li', o al primo campo aggiunto divergono.
+  censimento si dichiarano **una volta sola** nel controller: CSV, foglio e PDF partono da
+  li', o al primo campo aggiunto divergono. **L'elenco filtrato in PDF** (dal 01/10/2026,
+  `GET exports/assets.pdf`, `App\Services\Export\ElencoPdf`, A4 orizzontale): intestazione
+  dell'organizzazione, filtri scritti in chiaro (`filtriInChiaro`), le sole colonne segnate
+  `pdf` in `colonneAssets()` con i valori di `rigaAsset()`, ordine dell'elenco (cartellino),
+  tetto `config('esportazioni.pdf_righe_massime')` (20.000) dichiarato nel documento, registro
+  `export.assets_pdf` che Documenti elenca come le altre. **Non passa da dompdf**: dompdf costa
+  quasi mezzo megabyte per riga di tabella (500 righe superano i 256 MB del server), quindi
+  il PDF lo scrive `App\Services\Pdf\ScrittorePdf` (pagine, testo, linee, rettangoli, JPEG,
+  xref: tutto a mano) con `CarattereTrueType` che legge i DejaVu Sans Mono di dompdf (cmap,
+  hmtx, descrittore) e li incorpora con la mappa ToUnicode: stesso carattere delle altre
+  stampe, ventimila righe in pochi secondi. Nei test `Tests\Support\LettorePdf` rilegge il
+  testo di questi PDF (oggetti, flussi, ToUnicode), come `RaccoglitorePdf` per dompdf.
 - **Ruoli su misura**: i cinque di serie non si rinominano ne' si eliminano, i loro
   permessi si cambiano tranne quelli dell'`amministratore`; i permessi dei portali non
   si mescolano con quelli interni. Il modello `Role` viene dal pacchetto dei permessi e

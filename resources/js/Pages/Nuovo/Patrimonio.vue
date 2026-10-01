@@ -9,6 +9,7 @@ import ScegliVoce from '@/Components/ScegliVoce.vue';
 import VisteSalvate from '@/Components/VisteSalvate.vue';
 import TestataPatrimonio from '@/Components/Nuovo/TestataPatrimonio.vue';
 import { usaCaricamento } from '@/caricamento';
+import { fetchPdf } from '@/pdf';
 import { avvisoCaricamento } from '@/avvisi';
 import { STATUS_LABELS, inArchivio, statusLabel } from '@/assetStatus';
 import { BOTTONE, BOTTONE_PICCOLO, BOTTONE_SECONDARIO, CARTA, CHIP, plurale } from '@/nuovo/stile';
@@ -403,6 +404,16 @@ async function scarica(url, nomeBase, estensione) {
 async function esportaElenco(formato) {
     const params = new URLSearchParams();
     Object.entries(parametriCompleti.value).forEach(([k, v]) => { if (v !== undefined) params.set(k, String(v)); });
+    if (formato === 'pdf') {
+        // Il PDF si apre in una scheda, come le altre stampe
+        esportazione.busy = true;
+        esportazione.error = '';
+        const { error } = await fetchPdf(`/api/v1/exports/assets.pdf?${params.toString()}`);
+        if (error) esportazione.error = error;
+        esportazione.busy = false;
+
+        return;
+    }
     await scarica(`/api/v1/exports/assets.${formato}?${params.toString()}`, 'censimento', formato);
 }
 
@@ -463,13 +474,16 @@ const TIPO_EVENTO = {
         <div class="mx-auto flex max-w-[1640px] flex-col gap-4 p-4 md:p-6 lg:px-7">
             <TestataPatrimonio attiva="elenco">
                 <Link v-if="can('assets.create')" href="/mappa" :class="BOTTONE">Nuovo elemento</Link>
-                <details class="relative">
+                <!-- Sul telefono il menu si stende su tutta la testata (details e' static, la testata e' relative):
+                     agganciato al pulsante uscirebbe dallo schermo a 390 px -->
+                <details class="static sm:relative">
                     <summary :class="BOTTONE_SECONDARIO" class="cursor-pointer list-none">Esporta</summary>
-                    <div :class="CARTA" class="absolute right-0 z-20 mt-1 w-80 p-3 text-sm shadow-lg" data-test="menu-esporta">
+                    <div :class="CARTA" class="absolute left-0 right-0 z-20 mt-1 w-auto p-3 text-sm shadow-lg sm:left-auto sm:right-0 sm:w-80" data-test="menu-esporta">
                         <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">L'elenco filtrato</div>
                         <div class="mt-1 flex flex-wrap gap-2">
                             <button type="button" :class="BOTTONE_PICCOLO" :disabled="esportazione.busy" data-test="esporta-csv" @click="esportaElenco('csv')">CSV</button>
                             <button type="button" :class="BOTTONE_PICCOLO" :disabled="esportazione.busy" data-test="esporta-xlsx" @click="esportaElenco('xlsx')">Excel</button>
+                            <button type="button" :class="BOTTONE_PICCOLO" :disabled="esportazione.busy" data-test="esporta-pdf" title="Da stampare o allegare, con l'intestazione dell'organizzazione" @click="esportaElenco('pdf')">PDF</button>
                         </div>
                         <div class="mt-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Modello Dati CAM</div>
                         <select v-model="exportLayer" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm" aria-label="Livello CAM">
