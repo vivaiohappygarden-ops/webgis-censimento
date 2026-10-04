@@ -309,7 +309,17 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 ## Le dodici modifiche del 04/10/2026 (elenco del committente, "MODIFICHE_ARBORLAB")
 
 Stato per punto; i dettagli stanno nelle sezioni che seguono.
-1. Stampa della mappa in PDF: da fare.
+1. **Fatto**: la stampa della mappa e' un **PDF** (`POST exports/mappa.pdf`, `ExportController::mappaPdf`,
+   `App\Services\Export\MappaPdf` su `ScrittorePdf`): il browser manda l'immagine della mappa com'e' a video
+   (JPEG entro 2400 px, lo sfondo arriva da server esterni che il server non interroga), il titolo con
+   committente e area, la scala a video, i metri coperti dalla larghezza (per la **scala grafica**), la
+   rotazione (per la **freccia del nord**), le coordinate del centro, la legenda dei livelli accesi e
+   l'attribuzione; il server compone il foglio (orizzontale o verticale secondo l'immagine) con
+   l'intestazione dell'organizzazione e la nota sulla scala. Registro `export.mappa_pdf`, in Documenti
+   come le altre esportazioni. `fetchPdf` (`resources/js/pdf.js`) accetta `method`, `body` e `apri`; la
+   pagina apre la scheda del PDF dentro il clic e poi la indirizza al file. Le parti comuni delle stampe
+   scritte a mano (intestazione, pie', JPEG da PNG) stanno in `App\Services\Pdf\PartiComuni`, usate da
+   elenco e mappa. Prove: `MappaPdfTest`.
 2. **Fatto**: dizionario delle specie. Tabella `tree_species` (voci di serie con `tenant_id` nullo da
    `database/seeders/data/specie.csv`, 242 voci con genere, famiglia, nome comune e sinonimi anche
    regionali, installate e riallineate dalla migrazione; voci proprie di ogni organizzazione). La logica
@@ -347,7 +357,18 @@ Stato per punto; i dettagli stanno nelle sezioni che seguono.
    valutazione conserva in `tree_assessments.assessor_details` titolo, albo e partita IVA di quel
    giorno; la perizia li stampa accanto al nome (`PeriziaController::rilevatore`). Prove:
    `RilevatoriTest`.
-9. Stampa della scheda con planimetria, cronologia e altri dati: da fare.
+9. **Fatto**: la scheda stampata (`GET assets/{id}/pdf`, `PdfController::asset`, sezioni in
+   `PdfController::SEZIONI_SCHEDA`: posizione, dendro, vta, lavori, attributi, benefici, cronologia, foto)
+   ha **Posizione** (coordinate WGS84 e piane nel sistema metrico dell'organizzazione, tipo di geometria
+   con le misure calcolate, precisione GPS, vincoli) con la **planimetria schematica**
+   (`App\Services\Pdf\PlanimetriaElemento`, PNG disegnato con GD dai soli dati censiti: l'elemento con
+   la chioma a misura, i vicini con il cartellino, i confini delle aree tratteggiati, scala grafica e
+   nord; **senza sfondo cartografico**, perche' lo sfondo a video viene da server esterni), **tutte le
+   valutazioni** VTA con rilevatore e prescrizioni, **lavori** con quello che si fa su quell'elemento e
+   **segnalazioni**, **benefici ambientali** dichiarati stime, **cronologia** (`CronologiaElemento`, con
+   il totale se tagliata). Le stesse sezioni stanno nei menu di stampa di `Nuovo/Scheda.vue` e
+   `Censimento/Show.vue`. Il SRID nelle `ST_Transform` va legato come intero (`?::int`): legato come
+   testo PostGIS lo legge come stringa proj. Prove: `SchedaPdfCompletaTest`.
 10. Che cosa fare su ogni elemento dell'ordine: da fare.
 11. Scadenze di concimazioni e trattamenti: da fare.
 12. **Fatto**: le pagine di prima montate nelle sezioni nuove hanno tutte lo stesso involucro

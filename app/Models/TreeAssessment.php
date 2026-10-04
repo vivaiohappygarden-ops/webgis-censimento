@@ -20,6 +20,9 @@ class TreeAssessment extends Model
     /** Parti dell'albero esaminate nell'analisi visiva, nell'ordine della scheda. */
     public const BODY_PARTS = ['rilevamenti', 'radici', 'colletto', 'fusto', 'castello', 'branche', 'chioma'];
 
+    /** Etichette italiane degli esiti, per le stampe (a video: OUTCOMES in TreeVtaPanel.vue). */
+    public const ESITI = ['ok' => 'Nessun intervento', 'monitor' => 'Monitorare', 'prescriptions' => 'Prescrizioni', 'fell' => 'Abbattimento'];
+
     protected $fillable = [
         'tenant_id', 'tree_id', 'assessment_type', 'assessed_on', 'assessor_id',
         'assessor_external', 'assessor_details', 'defects', 'targets', 'failure_class', 'outcome',

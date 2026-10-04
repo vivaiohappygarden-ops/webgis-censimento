@@ -13,6 +13,7 @@ import { avvisoCaricamento } from '@/avvisi';
 import { statusLabel } from '@/assetStatus';
 import { contornoSiIncrocia } from '@/geometria';
 import { areaPiana, lunghezzaPiana, testoCoordinate } from '@/proiezione';
+import { fetchPdf } from '@/pdf';
 
 const page = usePage();
 // Nella veste nuova la pagina porta la testata di Patrimonio con le sue schede
@@ -925,62 +926,94 @@ function aggiornaCoordinate(lngLat) {
  * pagina a parte pronta per la stampante o per "Salva come PDF".
  */
 const stampa = reactive({ busy: false, errore: '' });
-function stampaMappa() {
+// La mappa in PDF: l'immagine la disegna il browser (lo sfondo arriva da
+// server esterni che il server non interroga), il foglio con intestazione,
+// scala, legenda e attribuzione lo compone il server (exports/mappa.pdf)
+async function stampaMappa() {
     if (! map || stampa.busy) return;
     stampa.errore = '';
-    // La finestra si apre subito, dentro il clic: aperta dopo, il browser la bloccherebbe
+    // La scheda si apre subito, dentro il clic: aperta dopo, il browser la bloccherebbe
     const finestra = window.open('', '_blank');
     if (! finestra) {
-        stampa.errore = 'Il browser ha bloccato la finestra di stampa: consenti le finestre a comparsa per questo sito.';
+        stampa.errore = 'Il browser ha bloccato la scheda del PDF: consenti le finestre a comparsa per questo sito.';
         return;
     }
     stampa.busy = true;
-    finestra.document.write('<!doctype html><title>Stampa della mappa</title><p style="font-family:system-ui;padding:24px">Preparazione della stampa…</p>');
-    const scatta = () => {
-        try {
-            const immagine = map.getCanvas().toDataURL('image/png');
-            const committente = clients.value.find((c) => c.id === vista.clientId)?.name;
-            const area = areas.value.find((a) => a.id === vista.areaId)?.name;
-            const titolo = ['Mappa del verde', committente, area].filter(Boolean).join(' · ');
-            const attribuzione = mapEl.value?.querySelector('.maplibregl-ctrl-attribution')?.textContent?.trim() ?? '';
-            const centro = testoCoordinate(map.getCenter().lng, map.getCenter().lat, srid.value);
-            const sfuggi = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-            const legenda = [
-                ...TP.filter((tp) => tpVisible[tp.code]).map((tp) => `<li><span style="background:${tp.color}"></span>${sfuggi(tp.label)}</li>`),
-                ...FAMIGLIE_LINEE.map((f) => `<li><span style="background:${f.colore};height:3px;margin-top:6px"></span>${sfuggi(f.label)}</li>`),
-                '<li><span style="border:1.5px dashed #15803d;background:transparent"></span>Aree di gestione</li>',
-                ...(lavoriApertiVisibili.value ? ['<li><span style="border:3px solid #ea580c;background:transparent"></span>Elementi con lavori aperti</li>'] : []),
-                ...(segnalazioniVisibili.value ? ['<li><span style="background:#dc2626;border:2px solid #7f1d1d"></span>Segnalazioni aperte</li>'] : []),
-            ].join('');
-            finestra.document.open();
-            finestra.document.write(`<!doctype html><html lang="it"><head><meta charset="utf-8"><title>${sfuggi(titolo)}</title>
-<style>
-  body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #111; margin: 0; padding: 14mm; font-variant-numeric: tabular-nums; }
-  h1 { font-size: 18px; margin: 0 0 4px; } .meta { font-size: 12px; color: #444; margin: 0 0 10px; }
-  img { width: 100%; height: auto; border: 1px solid #999; display: block; }
-  ul { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; }
-  li { display: flex; align-items: center; gap: 6px; } li span { display: inline-block; width: 14px; height: 14px; border-radius: 3px; }
-  .pie { font-size: 11px; color: #555; margin-top: 8px; }
-  @media print { body { padding: 0; } }
-</style></head><body>
-<h1>${sfuggi(titolo)}</h1>
-<p class="meta">Stampata il ${new Date().toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })} · scala a video circa ${sfuggi(scalaTesto.value)} · centro ${sfuggi(centro.wgs84)} · ${sfuggi(centro.metrico)} (${sfuggi(centro.sistema)})</p>
-<img src="${immagine}" alt="Mappa">
-<ul>${legenda}</ul>
-<p class="pie">${sfuggi(attribuzione)} · La scala vale per la finestra da cui e' stata stampata: per misure fedeli si usano le coordinate e le misure del programma.</p>
-<script>window.addEventListener('load', () => setTimeout(() => window.print(), 300));<\/script>
-</body></html>`);
-            finestra.document.close();
-        } catch (err) {
-            stampa.errore = 'Stampa non riuscita: ' + (err?.message ?? 'errore');
+    finestra.document.write('<!doctype html><title>Stampa della mappa</title><p style="font-family:system-ui;padding:24px">Preparazione del PDF…</p>');
+    try {
+        // Si aspetta che la mappa finisca di disegnare, ma non all'infinito: uno
+        // sfondo che non risponde non deve bloccare la stampa di quello che c'e'
+        await new Promise((risolvi) => {
+            const orologio = setTimeout(risolvi, 4000);
+            map.once('idle', () => { clearTimeout(orologio); risolvi(); });
+            map.triggerRepaint();
+        });
+        const { error, url } = await fetchPdf('/api/v1/exports/mappa.pdf', { method: 'POST', body: datiStampa(), apri: false });
+        if (error || ! url) {
             finestra.close();
-        } finally {
-            stampa.busy = false;
+            if (error) stampa.errore = error;
+            return;
         }
+        finestra.location.href = url;
+        setTimeout(() => URL.revokeObjectURL(url), 120000);
+    } catch (err) {
+        finestra.close();
+        stampa.errore = 'Stampa non riuscita: ' + (err?.message ?? 'errore');
+    } finally {
+        stampa.busy = false;
+    }
+}
+
+function datiStampa() {
+    const canvas = map.getCanvas();
+    // L'immagine entro 2400 px di larghezza: basta per un A4 e tiene leggera la richiesta
+    const riduzione = Math.min(1, 2400 / canvas.width);
+    let sorgente = canvas;
+    if (riduzione < 1) {
+        const tela = document.createElement('canvas');
+        tela.width = Math.round(canvas.width * riduzione);
+        tela.height = Math.round(canvas.height * riduzione);
+        tela.getContext('2d').drawImage(canvas, 0, 0, tela.width, tela.height);
+        sorgente = tela;
+    }
+    const committente = clients.value.find((c) => c.id === vista.clientId)?.name;
+    const area = areas.value.find((a) => a.id === vista.areaId)?.name;
+    const centroMappa = map.getCenter();
+    const centro = testoCoordinate(centroMappa.lng, centroMappa.lat, srid.value);
+    const metriPerPixel = (156543.03392 * Math.cos((centroMappa.lat * Math.PI) / 180)) / (2 ** map.getZoom());
+    const legenda = [
+        ...TP.filter((tp) => tpVisible[tp.code]).map((tp) => ({ etichetta: tp.label, colore: tp.color, forma: 'punto' })),
+        ...FAMIGLIE_LINEE.map((f) => ({ etichetta: f.label, colore: f.colore, forma: f.tratteggio ? 'tratteggio' : 'linea' })),
+        { etichetta: 'Aree di gestione', colore: '#15803d', forma: 'area' },
+        ...(lavoriApertiVisibili.value ? [{ etichetta: 'Elementi con lavori aperti', colore: '#ea580c', forma: 'anello' }] : []),
+        ...(segnalazioniVisibili.value ? [{ etichetta: 'Segnalazioni aperte', colore: '#dc2626', forma: 'segnalazione' }] : []),
+    ];
+    return {
+        immagine: sorgente.toDataURL('image/jpeg', 0.9),
+        titolo: 'Mappa del verde',
+        sottotitolo: [committente, area].filter(Boolean).join(' - ') || null,
+        scala: scalaTesto.value || null,
+        // Metri coperti dalla larghezza dell'immagine: servono alla scala grafica
+        metri_larghezza: metriPerPixel * map.getContainer().clientWidth,
+        rotazione: map.getBearing(),
+        centro: { wgs84: centro.wgs84, metrico: centro.metrico, sistema: centro.sistema },
+        legenda,
+        attribuzione: mapEl.value?.querySelector('.maplibregl-ctrl-attribution')?.textContent?.trim() || attribuzioneDaStile(),
     };
-    if (map.loaded()) map.once('idle', scatta);
-    else map.once('load', () => map.once('idle', scatta));
-    map.triggerRepaint();
+}
+
+// L'attribuzione dello sfondo letta dallo stile quando il controllo a video
+// non l'ha ancora scritta (sorgenti usate dai livelli visibili, senza HTML)
+function attribuzioneDaStile() {
+    try {
+        const stile = map.getStyle();
+        const usate = new Set(stile.layers.filter((l) => l.layout?.visibility !== 'none' && l.source).map((l) => l.source));
+        const testi = [...usate].map((id) => stile.sources[id]?.attribution).filter(Boolean)
+            .map((t) => String(t).replace(/<[^>]+>/g, '').trim()).filter(Boolean);
+        return [...new Set(testi)].join(' - ') || null;
+    } catch {
+        return null;
+    }
 }
 
 async function creaOrdineDaSelezione() {
@@ -1562,8 +1595,8 @@ onBeforeUnmount(() => {
                     :disabled="stampa.busy"
                     data-test="stampa-mappa"
                     @click="stampaMappa"
-                >{{ stampa.busy ? 'Preparazione…' : 'Stampa la mappa' }}</button>
-                <p class="mt-1 text-xs text-gray-500">L'inquadratura com'è a video, con data, scala, coordinate del centro e legenda, in una pagina da stampare o salvare in PDF.</p>
+                >{{ stampa.busy ? 'Preparazione del PDF…' : 'Stampa la mappa (PDF)' }}</button>
+                <p class="mt-1 text-xs text-gray-500">L'inquadratura com'è a video in un PDF con l'intestazione, la data, la scala a video e quella grafica, le coordinate del centro e la legenda: si apre in una scheda nuova, da stampare o salvare.</p>
                 <p v-if="stampa.errore" class="mt-1 text-xs text-red-600" data-test="stampa-errore">{{ stampa.errore }}</p>
 
                 <template v-if="canCreateAreas">

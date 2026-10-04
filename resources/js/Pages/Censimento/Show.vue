@@ -53,10 +53,15 @@ const pdfError = ref('');
 
 // Stampa componibile: prima di stampare si scelgono le sezioni della scheda
 const stampaAperta = ref(false);
+// Le stesse sezioni di PdfController::SEZIONI_SCHEDA, nell'ordine del documento
 const SEZIONI_SCHEDA = {
+    posizione: 'Posizione e planimetria',
     dendro: 'Dati dendrometrici e agronomici',
-    vta: 'Ultima valutazione di stabilità',
+    vta: 'Valutazioni di stabilità',
+    lavori: 'Lavori e segnalazioni',
     attributi: 'Attributi del tipo',
+    benefici: 'Benefici ambientali (stima)',
+    cronologia: 'Cronologia',
     foto: 'Documentazione fotografica',
 };
 const stampaSezioni = reactive(Object.fromEntries(Object.keys(SEZIONI_SCHEDA).map((k) => [k, true])));

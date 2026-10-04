@@ -60,10 +60,15 @@ function valutaVta() {
 }
 const storia = reactive({ righe: null, caricamento: false, errore: '' });
 const azione = reactive({ errore: '', inCorso: false });
+// Le stesse sezioni di PdfController::SEZIONI_SCHEDA, nell'ordine del documento
 const SEZIONI_STAMPA = {
+    posizione: 'Posizione e planimetria',
     dendro: 'Dati dendrometrici e agronomici',
-    vta: 'Ultima valutazione di stabilità',
+    vta: 'Valutazioni di stabilità',
+    lavori: 'Lavori e segnalazioni',
     attributi: 'Attributi del tipo',
+    benefici: 'Benefici ambientali (stima)',
+    cronologia: 'Cronologia',
     foto: 'Documentazione fotografica',
 };
 const stampa = reactive({ busy: false, errore: '', sezioni: Object.fromEntries(Object.keys(SEZIONI_STAMPA).map((k) => [k, true])) });

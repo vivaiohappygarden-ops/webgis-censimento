@@ -39,6 +39,7 @@ class DocumentiController extends Controller
         'export.assets_csv' => 'Elenco del censimento (CSV)',
         'export.assets_xlsx' => 'Elenco del censimento (Excel)',
         'export.assets_pdf' => 'Elenco del censimento (PDF)',
+        'export.mappa_pdf' => 'Mappa del verde (PDF)',
         'export.vta_registro' => 'Registro delle valutazioni VTA (CSV)',
     ];
 
@@ -251,7 +252,11 @@ class DocumentiController extends Controller
             return $this->riga('esportazione', $r->id, $p['riferimento'] ?? null,
                 $titolo.($dettagli ? ' · '.implode(' · ', $dettagli) : ''), $r->created_at, 'Scaricata', null, null, [
                     'utente' => $r->utente,
-                    'href' => str_starts_with($r->action, 'export.cam') ? '/patrimonio' : ($r->action === 'export.vta_registro' ? '/vta' : '/patrimonio'),
+                    'href' => match (true) {
+                        $r->action === 'export.vta_registro' => '/vta',
+                        $r->action === 'export.mappa_pdf' => '/mappa',
+                        default => '/patrimonio',
+                    },
                 ]);
         })->all();
     }

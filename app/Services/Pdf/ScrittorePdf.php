@@ -178,12 +178,15 @@ final class ScrittorePdf
         );
     }
 
-    public function linea(float $x1, float $y1, float $x2, float $y2, float $spessore = 0.5, array $colore = [0.8, 0.8, 0.8]): void
+    /** @param  list<float>|null  $tratteggio  lunghezze di tratto e vuoto (es. [3, 2]); null per la linea continua */
+    public function linea(float $x1, float $y1, float $x2, float $y2, float $spessore = 0.5, array $colore = [0.8, 0.8, 0.8], ?array $tratteggio = null): void
     {
         $this->assicuraPagina();
         $this->pagine[$this->corrente] .= sprintf(
-            "%s RG %s w %s %s m %s %s l S\n",
-            $this->colore($colore), $this->n($spessore), $this->n($x1), $this->n($this->altezza - $y1), $this->n($x2), $this->n($this->altezza - $y2)
+            "%s%s RG %s w %s %s m %s %s l S%s\n",
+            $tratteggio ? '['.implode(' ', array_map(fn (float $t) => $this->n($t), $tratteggio)).'] 0 d ' : '',
+            $this->colore($colore), $this->n($spessore), $this->n($x1), $this->n($this->altezza - $y1), $this->n($x2), $this->n($this->altezza - $y2),
+            $tratteggio ? ' [] 0 d' : ''
         );
     }
 
@@ -203,6 +206,51 @@ final class ScrittorePdf
         }
         $operatore = $riempimento !== null && $bordo !== null ? 'B' : ($riempimento !== null ? 'f' : 'S');
         $this->pagine[$this->corrente] .= $comando.sprintf("%s %s %s %s re %s\n", $this->n($x), $this->n($this->altezza - $y - $a), $this->n($l), $this->n($a), $operatore);
+    }
+
+    /** Un cerchio di centro cx, cy (quattro archi di Bezier): riempito, bordato o tutti e due. */
+    public function cerchio(float $cx, float $cy, float $r, ?array $riempimento = null, ?array $bordo = null, float $spessore = 0.5): void
+    {
+        $this->assicuraPagina();
+        if ($riempimento === null && $bordo === null) {
+            return;
+        }
+        $k = 0.5523 * $r;
+        $y = $this->altezza - $cy;
+        $p = fn (float $px, float $py) => $this->n($px).' '.$this->n($py);
+        $comando = ($riempimento !== null ? $this->colore($riempimento).' rg ' : '')
+            .($bordo !== null ? $this->colore($bordo).' RG '.$this->n($spessore).' w ' : '');
+        $operatore = $riempimento !== null && $bordo !== null ? 'B' : ($riempimento !== null ? 'f' : 'S');
+        $this->pagine[$this->corrente] .= $comando.sprintf(
+            "%s m %s %s %s c %s %s %s c %s %s %s c %s %s %s c %s\n",
+            $p($cx + $r, $y),
+            $p($cx + $r, $y + $k), $p($cx + $k, $y + $r), $p($cx, $y + $r),
+            $p($cx - $k, $y + $r), $p($cx - $r, $y + $k), $p($cx - $r, $y),
+            $p($cx - $r, $y - $k), $p($cx - $k, $y - $r), $p($cx, $y - $r),
+            $p($cx + $k, $y - $r), $p($cx + $r, $y - $k), $p($cx + $r, $y),
+            $operatore
+        );
+    }
+
+    /**
+     * Un poligono chiuso dai suoi vertici (x, y con l'origine in alto a sinistra, come il resto).
+     *
+     * @param  list<array{0: float, 1: float}>  $punti
+     */
+    public function poligono(array $punti, ?array $riempimento = null, ?array $bordo = null, float $spessore = 0.5): void
+    {
+        $this->assicuraPagina();
+        if (count($punti) < 3 || ($riempimento === null && $bordo === null)) {
+            return;
+        }
+        $comando = ($riempimento !== null ? $this->colore($riempimento).' rg ' : '')
+            .($bordo !== null ? $this->colore($bordo).' RG '.$this->n($spessore).' w ' : '');
+        $operatore = $riempimento !== null && $bordo !== null ? 'b' : ($riempimento !== null ? 'f' : 's');
+        $tratti = [];
+        foreach (array_values($punti) as $i => [$px, $py]) {
+            $tratti[] = $this->n($px).' '.$this->n($this->altezza - $py).($i === 0 ? ' m' : ' l');
+        }
+        $this->pagine[$this->corrente] .= $comando.implode(' ', $tratti).' '.$operatore."\n";
     }
 
     /** Un'immagine JPEG (a colori o in scala di grigi) dentro il rettangolo dato. */

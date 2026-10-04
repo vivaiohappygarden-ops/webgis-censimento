@@ -4,6 +4,7 @@ namespace App\Services\Export;
 
 use App\Models\Organization;
 use App\Services\Pdf\Intestazione;
+use App\Services\Pdf\PartiComuni;
 use App\Services\Pdf\ScrittorePdf;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
@@ -32,6 +33,8 @@ class ElencoPdf
 
     private const BORDO = [0.78, 0.78, 0.78];
 
+    public function __construct(private PartiComuni $parti = new PartiComuni) {}
+
     /**
      * @param  array{organization: ?Organization, colonne: list<array{titolo: string, larghezza: int, tipo: string, decimali?: int}>, righe: list<list<mixed>>, totale: int, tetto: int, filtri: list<string>, stampatoIl: CarbonInterface}  $dati
      */
@@ -43,7 +46,7 @@ class ElencoPdf
         $pdf->nuovaPagina();
         $x = self::MARGINE;
         $larghezzaUtile = $pdf->larghezza - 2 * self::MARGINE;
-        $y = $this->intestazione($pdf, Intestazione::per($organizzazione?->id), $x, 24.0, $larghezzaUtile);
+        $y = $this->parti->intestazione($pdf, Intestazione::per($organizzazione?->id), $x, 24.0, $larghezzaUtile);
 
         $pdf->testo($x, $y + 10, self::TITOLO, 11.5, 'grassetto');
         $y += 16;
@@ -71,69 +74,9 @@ class ElencoPdf
         $y += 6;
 
         $this->tabella($pdf, $dati['colonne'], $dati['righe'], $x, $y, $larghezzaUtile);
-        $this->piede($pdf, ($organizzazione?->name ? self::TITOLO.' - '.$organizzazione->name : self::TITOLO).' - stampato il '.$stampato);
+        $this->parti->piede($pdf, ($organizzazione?->name ? self::TITOLO.' - '.$organizzazione->name : self::TITOLO).' - stampato il '.$stampato, self::MARGINE);
 
         return $pdf->salva();
-    }
-
-    /** L'intestazione dell'organizzazione come nelle altre stampe: logo entro 24 x 18 mm, nome, righe dei recapiti, riga di chiusura. */
-    private function intestazione(ScrittorePdf $pdf, ?array $intestazione, float $x, float $y, float $larghezza): float
-    {
-        if (! $intestazione) {
-            return $y;
-        }
-        $xTesto = $x;
-        $altezzaLogo = 0.0;
-        $logo = $this->logoJpeg($intestazione['logo']);
-        if ($logo) {
-            $scala = min(68 / $logo['larghezza'], 51 / $logo['altezza']);
-            $altezzaLogo = $logo['altezza'] * $scala;
-            $pdf->immagineJpeg($logo['jpeg'], $x, $y, $logo['larghezza'] * $scala, $altezzaLogo);
-            $xTesto = $x + 68 + 8;
-        }
-        $pdf->testo($xTesto, $y + 10, $intestazione['nome'], 11, 'grassetto');
-        $yTesto = $y + 14;
-        foreach ($intestazione['righe'] as $riga) {
-            foreach ($pdf->spezza($riga, $larghezza - ($xTesto - $x), 7.5) as $r) {
-                $pdf->testo($xTesto, $yTesto + 7, $r, 7.5, 'normale', self::GRIGIO);
-                $yTesto += 9.5;
-            }
-        }
-        $fine = max($yTesto, $y + $altezzaLogo) + 4;
-        $pdf->linea($x, $fine, $x + $larghezza, $fine, 0.6, [0.53, 0.53, 0.53]);
-
-        return $fine + 10;
-    }
-
-    /**
-     * Il logo (PNG, anche con trasparenza) appiattito su bianco in JPEG: e' il
-     * formato che entra in un PDF senza doverlo decodificare.
-     *
-     * @return array{jpeg: string, larghezza: int, altezza: int}|null
-     */
-    private function logoJpeg(?string $dataUri): ?array
-    {
-        if (! $dataUri || ! function_exists('imagecreatefromstring')) {
-            return null;
-        }
-        $virgola = strpos($dataUri, ',');
-        $png = $virgola === false ? false : base64_decode(substr($dataUri, $virgola + 1), true);
-        $immagine = $png ? @imagecreatefromstring($png) : false;
-        if (! $immagine) {
-            return null;
-        }
-        $l = imagesx($immagine);
-        $a = imagesy($immagine);
-        $tela = imagecreatetruecolor($l, $a);
-        imagefill($tela, 0, 0, (int) imagecolorallocate($tela, 255, 255, 255));
-        imagecopy($tela, $immagine, 0, 0, 0, 0, $l, $a);
-        ob_start();
-        imagejpeg($tela, null, 90);
-        $jpeg = (string) ob_get_clean();
-        imagedestroy($tela);
-        imagedestroy($immagine);
-
-        return $jpeg === '' ? null : ['jpeg' => $jpeg, 'larghezza' => $l, 'altezza' => $a];
     }
 
     /**
@@ -309,18 +252,6 @@ class ElencoPdf
                 }
             }
             $y += $altezza;
-        }
-    }
-
-    private function piede(ScrittorePdf $pdf, string $testo): void
-    {
-        $n = $pdf->numeroPagine();
-        for ($i = 0; $i < $n; $i++) {
-            $pdf->vaiAPagina($i);
-            $yLinea = $pdf->altezza - 24;
-            $pdf->linea(self::MARGINE, $yLinea, $pdf->larghezza - self::MARGINE, $yLinea, 0.4, self::BORDO);
-            $pdf->testo(self::MARGINE, $yLinea + 9, $testo, 6.5, 'normale', self::GRIGIO);
-            $pdf->testo(self::MARGINE, $yLinea + 9, sprintf('Pagina %d di %d', $i + 1, $n), 6.5, 'normale', self::GRIGIO, 'destra', $pdf->larghezza - 2 * self::MARGINE);
         }
     }
 

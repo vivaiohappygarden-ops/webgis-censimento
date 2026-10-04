@@ -10,6 +10,7 @@ use App\Services\Export\CamDeliveryBuilder;
 use App\Services\Export\CamExporter;
 use App\Services\Export\ElencoPdf;
 use App\Services\Export\FoglioXlsx;
+use App\Services\Export\MappaPdf;
 use App\Support\AssetStatus;
 use App\Support\Audit;
 use App\Support\FiltriElementi;
@@ -17,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ExportController extends Controller implements HasMiddleware
 {
@@ -141,6 +143,59 @@ class ExportController extends Controller implements HasMiddleware
         return response($pdf, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="elenco_elementi_'.$adesso->format('Ymd').'.pdf"',
+        ]);
+    }
+
+    /**
+     * La mappa in PDF: l'immagine disegnata dal browser (lo sfondo arriva da
+     * server esterni che il server non interroga) con intestazione, data, scala
+     * a video e grafica, nord, coordinate del centro, legenda e attribuzione.
+     */
+    public function mappaPdf(Request $request, MappaPdf $mappa)
+    {
+        $data = $request->validate([
+            'immagine' => ['required', 'string', 'max:16000000'],
+            'titolo' => ['nullable', 'string', 'max:160'],
+            'sottotitolo' => ['nullable', 'string', 'max:300'],
+            'scala' => ['nullable', 'string', 'max:40'],
+            'metri_larghezza' => ['nullable', 'numeric', 'min:0.1', 'max:100000000'],
+            'rotazione' => ['nullable', 'numeric', 'between:-360,360'],
+            'centro' => ['nullable', 'array'],
+            'centro.wgs84' => ['nullable', 'string', 'max:80'],
+            'centro.metrico' => ['nullable', 'string', 'max:80'],
+            'centro.sistema' => ['nullable', 'string', 'max:40'],
+            'legenda' => ['nullable', 'array', 'max:40'],
+            'legenda.*.etichetta' => ['required', 'string', 'max:80'],
+            'legenda.*.colore' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'legenda.*.forma' => ['required', Rule::in(MappaPdf::FORME)],
+            'attribuzione' => ['nullable', 'string', 'max:300'],
+        ]);
+        $immagine = $mappa->immagineDa($data['immagine']);
+        if (! $immagine) {
+            throw ValidationException::withMessages(['immagine' => "L'immagine della mappa non è leggibile o è troppo grande: riprova la stampa."]);
+        }
+
+        $adesso = now('Europe/Rome');
+        $titolo = trim((string) ($data['titolo'] ?? '')) ?: MappaPdf::TITOLO;
+        $pdf = $mappa->componi([
+            'organization' => Organization::query()->find($request->user()->tenant_id),
+            'immagine' => $immagine,
+            'titolo' => $titolo,
+            'sottotitolo' => $data['sottotitolo'] ?? null,
+            'scala' => $data['scala'] ?? null,
+            'metri_larghezza' => isset($data['metri_larghezza']) ? (float) $data['metri_larghezza'] : null,
+            'rotazione' => (float) ($data['rotazione'] ?? 0),
+            'centro' => $data['centro'] ?? [],
+            'legenda' => array_values($data['legenda'] ?? []),
+            'attribuzione' => $data['attribuzione'] ?? null,
+            'stampatoIl' => $adesso,
+        ]);
+
+        Audit::log('export.mappa_pdf', null, ['titolo' => $titolo, 'sottotitolo' => $data['sottotitolo'] ?? null, 'scala' => $data['scala'] ?? null]);
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="mappa_'.$adesso->format('Ymd_Hi').'.pdf"',
         ]);
     }
 

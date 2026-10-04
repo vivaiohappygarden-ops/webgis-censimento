@@ -73,7 +73,7 @@ class StampeComponibiliTest extends TestCase
 
         $html = $this->stampe->html['pdf.asset'];
         $this->assertStringContainsString('Dati dendrometrici e agronomici', $html);
-        $this->assertStringContainsString('Ultima valutazione di stabilità', $html);
+        $this->assertStringContainsString('Valutazioni di stabilità', $html);
         $this->assertStringContainsString('Documentazione fotografica', $html);
     }
 
@@ -86,7 +86,7 @@ class StampeComponibiliTest extends TestCase
         // La testata resta sempre
         $this->assertStringContainsString('ALB-SEZ-1', $html);
         $this->assertStringContainsString('Dati dendrometrici e agronomici', $html);
-        $this->assertStringNotContainsString('Ultima valutazione di stabilità', $html);
+        $this->assertStringNotContainsString('Valutazioni di stabilità', $html);
         $this->assertStringNotContainsString('Documentazione fotografica', $html);
     }
 

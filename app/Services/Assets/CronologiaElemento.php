@@ -27,7 +27,7 @@ class CronologiaElemento
 
     private const GRAVITA = ['critical' => 'critica', 'high' => 'alta', 'medium' => 'media', 'low' => 'bassa'];
 
-    private const STATO_SEGNALAZIONE = [
+    public const STATO_SEGNALAZIONE = [
         'open' => 'aperta', 'in_charge' => 'presa in carico', 'resolved' => 'risolta', 'closed' => 'chiusa', 'rejected' => 'respinta',
     ];
 

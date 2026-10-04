@@ -125,6 +125,8 @@ Route::prefix('v1')->group(function () {
         Route::get('exports/assets.xlsx', [\App\Http\Controllers\Api\V1\ExportController::class, 'assetsXlsxRoute']);
         // ...e in PDF da stampare o allegare, con l'intestazione dell'organizzazione
         Route::get('exports/assets.pdf', [\App\Http\Controllers\Api\V1\ExportController::class, 'assetsPdf']);
+        // La mappa com'e' a video, in PDF: l'immagine la manda il browser
+        Route::post('exports/mappa.pdf', [\App\Http\Controllers\Api\V1\ExportController::class, 'mappaPdf']);
 
         Route::get('assets/{asset}/assessments', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'index'])->whereUuid('asset');
         Route::post('assets/{asset}/assessments', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'store'])->whereUuid('asset');
