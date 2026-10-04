@@ -140,6 +140,9 @@ Route::prefix('v1')->group(function () {
         Route::post('intestazione/logo', [\App\Http\Controllers\Api\V1\IntestazioneController::class, 'logo']);
         Route::delete('intestazione/logo', [\App\Http\Controllers\Api\V1\IntestazioneController::class, 'rimuoviLogo']);
         Route::get('intestazione/logo', [\App\Http\Controllers\Api\V1\IntestazioneController::class, 'fileLogo']);
+        // Rilevatori abilitati alle valutazioni di stabilita' (elenco dell'organizzazione)
+        Route::get('rilevatori', [\App\Http\Controllers\Api\V1\RilevatoriController::class, 'index']);
+        Route::put('rilevatori', [\App\Http\Controllers\Api\V1\RilevatoriController::class, 'update']);
         Route::get('perizia/settings', [\App\Http\Controllers\Api\V1\PeriziaController::class, 'settings']);
         Route::put('perizia/settings', [\App\Http\Controllers\Api\V1\PeriziaController::class, 'updateSettings']);
         Route::get('vta/intervalli', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'intervalli']);

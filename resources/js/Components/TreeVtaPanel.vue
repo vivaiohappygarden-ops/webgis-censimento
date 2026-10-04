@@ -4,6 +4,8 @@ import { usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { fetchPdf } from '@/pdf';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import ScegliVoce from '@/Components/ScegliVoce.vue';
+import CercaElemento from '@/Components/CercaElemento.vue';
 import { usaCaricamento } from '@/caricamento';
 
 const props = defineProps({
@@ -111,10 +113,44 @@ const blankVta = () => ({
     next_check_due: '',
     is_public: false,
     assessor_external: '',
+    // '' = io stesso; 'altro' = nome scritto a mano; altrimenti l'id di un rilevatore abilitato
+    rilevatore_id: '',
     bersagli: '',
     survey: blankSurvey(),
 });
 const vta = reactive(blankVta());
+
+// Prescrizioni ricorrenti (config/agronomia.php): si cercano a parole e si
+// aggiungono al testo libero, che resta la prescrizione vera e si corregge a mano
+const prescrizioniVoci = (agronomia.prescrizioni_vta ?? []).map((testo, i) => ({ id: String(i + 1), name: testo }));
+const prescrizioneScelta = ref('');
+function aggiungiPrescrizione(id) {
+    const voce = prescrizioniVoci.find((v) => v.id === id);
+    if (! voce) return;
+    const righe = vta.prescriptions.split('\n').map((r) => r.trim()).filter(Boolean);
+    if (! righe.includes(voce.name)) righe.push(voce.name);
+    vta.prescriptions = righe.join('\n');
+    nextTick(() => { prescrizioneScelta.value = ''; });
+}
+
+// Un elemento censito come bersaglio: entra con il suo cartellino, che e' il suo nome
+function aggiungiBersaglio(elemento) {
+    const righe = vta.bersagli.split('\n').map((r) => r.trim()).filter(Boolean);
+    if (! righe.includes(elemento.etichetta)) righe.push(elemento.etichetta);
+    vta.bersagli = righe.join('\n');
+}
+
+// Rilevatori abilitati dell'organizzazione (Utenti > Chi firma > Rilevatori abilitati)
+const rilevatori = ref([]);
+const rilevatoreScelto = computed(() => rilevatori.value.find((r) => r.id === vta.rilevatore_id) ?? null);
+const dettagliRilevatore = (r) => [r.titolo, r.iscrizione, r.partita_iva ? `P. IVA ${r.partita_iva}` : null].filter(Boolean).join(' · ');
+async function caricaRilevatori() {
+    try {
+        rilevatori.value = (await axios.get('/api/v1/rilevatori')).data.data ?? [];
+    } catch {
+        rilevatori.value = [];
+    }
+}
 
 /** Riapre una valutazione già registrata per correggerla. */
 function editAssessment(a) {
@@ -129,6 +165,9 @@ function editAssessment(a) {
         next_check_due: dateOnly(a.next_check_due),
         is_public: !! a.is_public,
         assessor_external: a.assessor_external ?? '',
+        rilevatore_id: a.assessor_details?.id && rilevatori.value.some((r) => r.id === a.assessor_details.id)
+            ? a.assessor_details.id
+            : (a.assessor_external ? 'altro' : ''),
         bersagli: (Array.isArray(a.targets) ? a.targets : Object.values(a.targets ?? {})).join('\n'),
         survey: { ...blankSurvey(), ...(a.survey ?? {}),
             contesto: { ...blankSurvey().contesto, ...(a.survey?.contesto ?? {}) },
@@ -327,7 +366,12 @@ async function saveVta() {
             prescriptions: vta.prescriptions || null,
             next_check_due: vta.next_check_due || null,
             is_public: !! vta.is_public,
-            assessor_external: vta.assessor_external || null,
+            assessor_external: rilevatoreScelto.value
+                ? rilevatoreScelto.value.nome
+                : (vta.rilevatore_id === 'altro' ? (vta.assessor_external || null) : null),
+            assessor_details: rilevatoreScelto.value
+                ? { id: rilevatoreScelto.value.id, nome: rilevatoreScelto.value.nome, titolo: rilevatoreScelto.value.titolo, iscrizione: rilevatoreScelto.value.iscrizione, partita_iva: rilevatoreScelto.value.partita_iva }
+                : null,
             targets: vta.bersagli.split('\n').map((r) => r.trim()).filter(Boolean),
             survey: vta.survey,
         };
@@ -420,6 +464,7 @@ const fmtOra = (d) => (d ? new Date(d).toLocaleString('it-IT', { dateStyle: 'sho
 
 onMounted(async () => {
     await carica(loadAssessments);
+    if (props.canUpdate) await caricaRilevatori();
     if (props.apriValutazione && props.canUpdate) {
         showVtaForm.value = true;
         nextTick(() => document.querySelector('[data-test=vta-bersagli]')?.scrollIntoView({ block: 'center' }));
@@ -662,25 +707,52 @@ watch(() => props.apriValutazione, (apri) => {
                     emessa, il documento corretto uscirà con un numero e una data nuovi.
                 </p>
                 <div class="grid gap-2 md:grid-cols-2">
-                    <label class="block text-xs">
-                        <span class="text-gray-500">Bersagli (uno per riga: cosa c'è sotto o vicino all'albero)</span>
-                        <textarea
-                            v-model="vta.bersagli"
-                            rows="3"
-                            data-test="vta-bersagli"
-                            placeholder="area giochi&#10;marciapiede&#10;posti auto"
-                            class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
-                        />
-                    </label>
-                    <label class="block text-xs">
-                        <span class="text-gray-500">Rilievo eseguito da (se non sei tu)</span>
-                        <input v-model="vta.assessor_external" maxlength="254" placeholder="nome e cognome del rilevatore" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
-                    </label>
+                    <div class="block text-xs">
+                        <label class="block">
+                            <span class="text-gray-500">Bersagli (uno per riga: cosa c'è sotto o vicino all'albero)</span>
+                            <textarea
+                                v-model="vta.bersagli"
+                                rows="3"
+                                data-test="vta-bersagli"
+                                placeholder="area giochi&#10;marciapiede&#10;posti auto"
+                                class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+                            />
+                        </label>
+                        <!-- Un bersaglio puo' essere un altro elemento censito: entra con il suo cartellino -->
+                        <CercaElemento class="mt-1" segnaposto="Aggiungi un elemento censito come bersaglio (cartellino, tipo, area)…" :escludi="[props.asset.id]" @scelto="aggiungiBersaglio" />
+                    </div>
+                    <div class="block text-xs">
+                        <label class="block">
+                            <span class="text-gray-500">Rilievo eseguito da</span>
+                            <select v-model="vta.rilevatore_id" data-test="vta-rilevatore" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
+                                <option value="">Io stesso</option>
+                                <option v-for="r in rilevatori" :key="r.id" :value="r.id">{{ r.nome }}{{ r.titolo ? ' · ' + r.titolo : '' }}</option>
+                                <option value="altro">Altro (scrivo il nome)</option>
+                            </select>
+                        </label>
+                        <input v-if="vta.rilevatore_id === 'altro'" v-model="vta.assessor_external" maxlength="254" placeholder="nome e cognome del rilevatore" data-test="vta-rilevatore-nome" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                        <span v-if="rilevatoreScelto && dettagliRilevatore(rilevatoreScelto)" class="mt-1 block text-gray-500" data-test="vta-rilevatore-dettagli">{{ dettagliRilevatore(rilevatoreScelto) }}: la perizia li stampa accanto al nome.</span>
+                        <span v-else-if="! rilevatori.length && vta.rilevatore_id !== 'altro'" class="mt-1 block text-gray-500">Agronomi esterni e operatori abilitati si registrano in Utenti, sotto "Chi firma": qui si scelgono con albo e partita IVA.</span>
+                    </div>
                 </div>
-                <label class="block text-xs">
-                    <span class="text-gray-500">Prescrizioni</span>
-                    <textarea v-model="vta.prescriptions" rows="2" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" />
-                </label>
+                <div class="block text-xs">
+                    <label class="block">
+                        <span class="text-gray-500">Prescrizioni (una per riga)</span>
+                        <textarea v-model="vta.prescriptions" rows="3" data-test="vta-prescrizioni" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" />
+                    </label>
+                    <!-- Le formule ricorrenti si cercano a parole e si aggiungono al testo, che resta libero -->
+                    <ScegliVoce
+                        v-if="prescrizioniVoci.length"
+                        v-model="prescrizioneScelta"
+                        :voci="prescrizioniVoci"
+                        tutti="Aggiungi una prescrizione dall'elenco…"
+                        segnaposto="Cerca nell'elenco (es. rimonda, endoterapico, consolidamento)…"
+                        vuoto="Nessuna prescrizione con queste parole: scrivila nel riquadro sopra."
+                        class="mt-1"
+                        data-test="vta-prescrizioni-elenco"
+                        @cambia="aggiungiPrescrizione"
+                    />
+                </div>
                 <div class="grid gap-2 md:grid-cols-2">
                     <label class="block text-xs">
                         <span class="text-gray-500">Prossimo controllo (vuoto = automatico dalla classe)</span>

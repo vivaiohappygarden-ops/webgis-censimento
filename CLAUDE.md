@@ -306,6 +306,33 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   **Fatto il 28/09/2026**: le marche temporali (sezione "Marche temporali" sotto). Ogni pagina nuova si verifica sul Comune Demo in
   Chromium a 390, 768, 1024 e 1440 (copioni in `scratchpad/verifica-blocco*` della sessione).
 
+## Le dodici modifiche del 04/10/2026 (elenco del committente, "MODIFICHE_ARBORLAB")
+
+Stato per punto; i dettagli stanno nelle sezioni che seguono.
+1. Stampa della mappa in PDF: da fare.
+2. Dizionario delle specie (genere, famiglia, nome comune automatici): da fare.
+3. "Invia al gestionale" spegnibile per organizzazione, spento di serie per chi affitta: da fare.
+4. Zone (sedi distanti, accessi per zona): da fare, per ultimo.
+5. **Fatto**: bersagli della VTA anche dagli elementi censiti (`Components/CercaElemento.vue`, ricerca a
+   parole su `GET assets?q=`; il bersaglio entra come riga "CARTELLINO · descrizione", i `targets`
+   restano stringhe).
+6. **Fatto**: prescrizioni da un elenco predefinito con ricerca a parole (`config/agronomia.php`,
+   chiave `prescrizioni_vta`, 38 formule d'uso) piu' il testo libero, che resta la prescrizione vera.
+7. Interventi prescritti dalle VTA raccolti con data suggerita e pulsante per l'ordine: da fare (oggi
+   il programma genera da solo solo i ricontrolli, `GeneratoreRicontrolliVta`).
+8. **Fatto**: rilevatori abilitati (`RilevatoriController`, `organizations.settings['rilevatori']`,
+   Utenti > Chi firma > "Rilevatori abilitati", permesso `users.manage` per scrivere; chiunque legge).
+   La scheda VTA li propone in "Rilievo eseguito da" ("Io stesso" / elenco / "Altro" a mano) e la
+   valutazione conserva in `tree_assessments.assessor_details` titolo, albo e partita IVA di quel
+   giorno; la perizia li stampa accanto al nome (`PeriziaController::rilevatore`). Prove:
+   `RilevatoriTest`.
+9. Stampa della scheda con planimetria, cronologia e altri dati: da fare.
+10. Che cosa fare su ogni elemento dell'ordine: da fare.
+11. Scadenze di concimazioni e trattamenti: da fare.
+12. **Fatto**: le pagine di prima montate nelle sezioni nuove hanno tutte lo stesso involucro
+    (`mx-auto max-w-[1640px] p-4 md:p-6 lg:px-7`, lo stesso delle pagine nuove) e il titolo delle
+    testate sta in una riga da 36 px (`min-h-9`): cambiando scheda il titolo non si sposta.
+
 ## Marche temporali (dal 28/09/2026)
 
 - La marca temporale certifica che un documento esisteva cosi' com'e' a un istante certo:

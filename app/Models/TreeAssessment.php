@@ -22,7 +22,7 @@ class TreeAssessment extends Model
 
     protected $fillable = [
         'tenant_id', 'tree_id', 'assessment_type', 'assessed_on', 'assessor_id',
-        'assessor_external', 'defects', 'targets', 'failure_class', 'outcome',
+        'assessor_external', 'assessor_details', 'defects', 'targets', 'failure_class', 'outcome',
         'prescriptions', 'next_check_due', 'survey', 'is_public', 'created_by', 'updated_by',
     ];
 
@@ -35,6 +35,7 @@ class TreeAssessment extends Model
             'validated_at' => 'datetime',
             'defects' => 'array',
             'targets' => 'array',
+            'assessor_details' => 'array',
             'survey' => 'array',
             'is_public' => 'boolean',
             'version' => 'integer',

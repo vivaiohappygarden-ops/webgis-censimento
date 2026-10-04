@@ -298,6 +298,14 @@ class TreeAssessmentController extends Controller implements HasMiddleware
             // la data proposta a video sarebbe "nel futuro" per il server
             'assessed_on' => [$obbligatorio, 'date', 'before_or_equal:'.now('Europe/Rome')->toDateString()],
             'assessor_external' => ['nullable', 'string', 'max:254'],
+            // Copia dei dati del rilevatore scelto dall'elenco dell'organizzazione
+            // (RilevatoriController): la perizia stampa quelli di quel giorno
+            'assessor_details' => ['nullable', 'array'],
+            'assessor_details.id' => ['nullable', 'string', 'max:40'],
+            'assessor_details.nome' => ['nullable', 'string', 'max:150'],
+            'assessor_details.titolo' => ['nullable', 'string', 'max:150'],
+            'assessor_details.iscrizione' => ['nullable', 'string', 'max:200'],
+            'assessor_details.partita_iva' => ['nullable', 'string', 'max:30'],
             'defects' => ['sometimes', 'array'],
             'targets' => ['sometimes', 'array'],
             'targets.*' => ['nullable', 'string', 'max:254'],

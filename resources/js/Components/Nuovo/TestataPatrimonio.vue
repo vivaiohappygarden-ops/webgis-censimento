@@ -28,7 +28,7 @@ const schede = computed(() => [
 <template>
     <div class="relative flex flex-wrap items-center justify-between gap-3" data-test="testata-patrimonio">
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <h1 class="text-2xl font-bold text-gray-900">{{ props.titolo }}</h1>
+            <h1 class="flex min-h-9 items-center text-2xl font-bold text-gray-900">{{ props.titolo }}</h1>
             <nav
                 class="flex flex-wrap gap-2 md:inline-flex md:gap-0 md:overflow-hidden md:rounded-lg md:border md:border-gray-300 md:bg-white"
                 aria-label="Sezioni del patrimonio"

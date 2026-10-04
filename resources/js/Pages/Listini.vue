@@ -183,7 +183,7 @@ onMounted(() => carica(load));
     <Head title="Listini" />
 
     <AppLayout>
-        <div class="p-6">
+        <div class="mx-auto max-w-[1640px] p-4 md:p-6 lg:px-7">
             <div v-if="nuova" class="mb-4"><TestataSezione titolo="Impostazioni" attiva="listini" :schede="SCHEDE_IMPOSTAZIONI" /></div>
             <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
 

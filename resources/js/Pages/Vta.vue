@@ -485,7 +485,7 @@ onMounted(async () => {
     <Head title="Scadenzario VTA" />
 
     <AppLayout>
-        <div class="p-6">
+        <div class="mx-auto max-w-[1640px] p-4 md:p-6 lg:px-7">
             <div v-if="nuova" class="mb-4"><TestataPatrimonio attiva="alberi" /></div>
             <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>

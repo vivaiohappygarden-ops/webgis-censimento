@@ -836,7 +836,7 @@ onMounted(async () => {
     <Head title="Territorio" />
 
     <AppLayout>
-        <div class="p-6">
+        <div class="mx-auto max-w-[1640px] p-4 md:p-6 lg:px-7">
             <div v-if="nuova" class="mb-4"><TestataSezione titolo="Committenti" attiva="territorio" :schede="SCHEDE_COMMITTENTI" /></div>
             <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>

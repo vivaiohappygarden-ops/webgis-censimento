@@ -22,7 +22,7 @@ const visibili = computed(() => schedeVisibili(props.schede, page.props.auth?.us
     <div class="flex flex-wrap items-center justify-between gap-3" :data-test="`testata-${props.schede[0]?.chiave ?? 'sezione'}`">
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
             <div>
-                <h1 class="text-2xl font-bold text-gray-900">{{ props.titolo }}</h1>
+                <h1 class="flex min-h-9 items-center text-2xl font-bold text-gray-900">{{ props.titolo }}</h1>
                 <p v-if="props.sottotitolo" class="text-[13px] text-gray-500">{{ props.sottotitolo }}</p>
             </div>
             <nav

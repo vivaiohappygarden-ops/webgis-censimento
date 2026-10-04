@@ -394,7 +394,7 @@ onMounted(load);
     <Head title="Irrigazione" />
 
     <AppLayout>
-        <div class="p-6">
+        <div class="mx-auto max-w-[1640px] p-4 md:p-6 lg:px-7">
             <div v-if="nuova" class="mb-4"><TestataPatrimonio attiva="irrigazione" /></div>
             <div class="mb-4 flex items-center justify-between">
                 <div>

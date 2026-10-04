@@ -402,6 +402,55 @@ const perizia = reactive({
     messageOk: false,
 });
 
+// Rilevatori abilitati alle valutazioni di stabilita': agronomi esterni e
+// operatori qualificati, con albo e partita IVA (elenco dell'organizzazione)
+const rilevatori = reactive({
+    elenco: [],
+    busy: false,
+    message: '',
+    messageOk: false,
+    nuovo: { nome: '', titolo: '', iscrizione: '', partita_iva: '' },
+});
+
+async function loadRilevatori() {
+    try {
+        const { data } = await axios.get('/api/v1/rilevatori');
+        rilevatori.elenco = data.data ?? [];
+    } catch (err) {
+        rilevatori.message = avvisoCaricamento(err);
+        rilevatori.messageOk = false;
+    }
+}
+
+async function salvaRilevatori(elenco, esito) {
+    rilevatori.busy = true;
+    rilevatori.message = '';
+    try {
+        const { data } = await axios.put('/api/v1/rilevatori', { rilevatori: elenco });
+        rilevatori.elenco = data.data ?? [];
+        rilevatori.message = esito;
+        rilevatori.messageOk = true;
+    } catch (err) {
+        rilevatori.message = Object.values(err.response?.data?.errors ?? {})[0]?.[0]
+            ?? err.response?.data?.message ?? `Salvataggio non riuscito (${err.response?.status ?? 'rete assente'})`;
+        rilevatori.messageOk = false;
+    } finally {
+        rilevatori.busy = false;
+    }
+}
+
+async function aggiungiRilevatore() {
+    const nuovo = { ...rilevatori.nuovo };
+    if (! nuovo.nome.trim()) return;
+    await salvaRilevatori([...rilevatori.elenco, nuovo], `Rilevatore aggiunto: ${nuovo.nome.trim()}.`);
+    if (rilevatori.messageOk) rilevatori.nuovo = { nome: '', titolo: '', iscrizione: '', partita_iva: '' };
+}
+
+async function togliRilevatore(r) {
+    if (! window.confirm(`Togliere ${r.nome} dall'elenco dei rilevatori? Le valutazioni già registrate restano come sono.`)) return;
+    await salvaRilevatori(rilevatori.elenco.filter((x) => x.id !== r.id), `Rilevatore tolto: ${r.nome}.`);
+}
+
 async function loadPerizia() {
     try {
         const { data } = await axios.get('/api/v1/perizia/settings');
@@ -610,6 +659,7 @@ onMounted(() => {
     load();
     loadGestionale();
     loadPerizia();
+    loadRilevatori();
     loadIntestazione();
     loadIntervalli();
     loadSquadre();
@@ -620,7 +670,7 @@ onMounted(() => {
     <Head title="Utenti" />
 
     <AppLayout>
-        <div class="p-6">
+        <div class="mx-auto max-w-[1640px] p-4 md:p-6 lg:px-7">
             <div v-if="nuova" class="mb-4"><TestataSezione titolo="Impostazioni" attiva="utenti" :schede="SCHEDE_IMPOSTAZIONI" /></div>
             <div class="mb-4 flex items-center justify-between">
                 <div>
@@ -921,6 +971,52 @@ onMounted(() => {
                 </div>
                 <p v-if="perizia.message" class="mt-3 rounded-lg px-3 py-2 text-sm" :class="perizia.messageOk ? 'bg-green-100 text-green-900' : 'bg-red-50 text-red-700'" data-test="perizia-msg">{{ perizia.message }}</p>
                 <button class="mt-3 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50" :disabled="perizia.busy" data-test="perizia-save" @click="savePerizia">Salva</button>
+
+                <h3 class="mt-6 text-sm font-semibold" id="rilevatori">Rilevatori abilitati</h3>
+                <p class="mt-1 text-xs text-gray-500">
+                    Agronomi esterni e operatori qualificati che possono eseguire il rilievo di una valutazione di
+                    stabilità. La scheda VTA li propone nella voce "Rilievo eseguito da" e conserva nella valutazione
+                    titolo, albo e partita IVA di quel giorno: la perizia li stampa accanto al nome anche se l'elenco cambia.
+                </p>
+                <div v-if="rilevatori.elenco.length" class="mt-3 overflow-x-auto">
+                    <table class="w-full text-sm" data-test="rilevatori">
+                        <thead>
+                            <tr class="text-left text-xs uppercase tracking-wide text-gray-500">
+                                <th class="py-1 pr-3 font-semibold">Nome</th><th class="py-1 pr-3 font-semibold">Titolo</th><th class="py-1 pr-3 font-semibold">Iscrizione all'albo</th><th class="py-1 pr-3 font-semibold">Partita IVA</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="r in rilevatori.elenco" :key="r.id" class="border-t border-gray-100" data-test="rilevatore-riga">
+                                <td class="py-1.5 pr-3 font-medium">{{ r.nome }}</td>
+                                <td class="py-1.5 pr-3 text-gray-600">{{ r.titolo || '—' }}</td>
+                                <td class="py-1.5 pr-3 text-gray-600">{{ r.iscrizione || '—' }}</td>
+                                <td class="py-1.5 pr-3 text-gray-600">{{ r.partita_iva || '—' }}</td>
+                                <td class="py-1.5 text-right"><button type="button" class="min-h-11 text-sm text-red-700 hover:underline md:min-h-9" :disabled="rilevatori.busy" data-test="rilevatore-togli" @click="togliRilevatore(r)">Togli</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p v-else class="mt-3 text-sm text-gray-500" data-test="rilevatori-vuoto">Nessun rilevatore registrato: nella scheda VTA il nome si scrive a mano.</p>
+                <div class="mt-3 grid gap-3 md:grid-cols-4">
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Nome e cognome</span>
+                        <input v-model="rilevatori.nuovo.nome" maxlength="150" data-test="rilevatore-nome" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Titolo</span>
+                        <input v-model="rilevatori.nuovo.titolo" maxlength="150" placeholder="es. Dott. agronomo" data-test="rilevatore-titolo" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Iscrizione all'albo</span>
+                        <input v-model="rilevatori.nuovo.iscrizione" maxlength="200" placeholder="es. Ordine di Roma n. 000" data-test="rilevatore-iscrizione" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                    <label class="block text-xs">
+                        <span class="text-gray-500">Partita IVA</span>
+                        <input v-model="rilevatori.nuovo.partita_iva" maxlength="30" data-test="rilevatore-piva" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                    </label>
+                </div>
+                <p v-if="rilevatori.message" class="mt-3 rounded-lg px-3 py-2 text-sm" :class="rilevatori.messageOk ? 'bg-green-100 text-green-900' : 'bg-red-50 text-red-700'" data-test="rilevatori-msg">{{ rilevatori.message }}</p>
+                <button type="button" class="mt-3 rounded-lg border border-green-700 px-4 py-2 text-sm font-medium text-green-800 hover:bg-green-50 disabled:opacity-50" :disabled="rilevatori.busy || ! rilevatori.nuovo.nome.trim()" data-test="rilevatore-aggiungi" @click="aggiungiRilevatore">Aggiungi rilevatore</button>
             </section>
 
             <!-- Intervalli di ricontrollo VTA per classe di propensione al cedimento -->

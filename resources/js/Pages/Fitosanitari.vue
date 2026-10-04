@@ -301,7 +301,7 @@ onMounted(() => {
 <template>
     <Head title="Fitosanitari" />
     <AppLayout>
-        <div class="mx-auto max-w-7xl px-4 py-6">
+        <div class="mx-auto max-w-[1640px] p-4 md:p-6 lg:px-7">
             <div v-if="nuova" class="mb-4"><TestataSezione titolo="Documenti" attiva="fitosanitari" :schede="SCHEDE_DOCUMENTI" /></div>
             <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>

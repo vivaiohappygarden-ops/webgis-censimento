@@ -142,6 +142,27 @@ class PeriziaController extends Controller implements HasMiddleware
         return response()->json(['data' => $this->professionista($organization->id, withDefaults: false)]);
     }
 
+    /**
+     * Chi ha eseguito il rilievo: il nome e, se la valutazione li conserva,
+     * titolo, iscrizione all'albo e partita IVA del rilevatore (copiati al
+     * momento del rilievo dall'elenco dell'organizzazione).
+     */
+    public static function rilevatore(TreeAssessment $assessment): ?string
+    {
+        $nome = $assessment->assessor_external ?: $assessment->assessor?->name;
+        if (! $nome) {
+            return null;
+        }
+        $dettagli = $assessment->assessor_details ?? [];
+        $righe = array_values(array_filter([
+            $dettagli['titolo'] ?? null,
+            $dettagli['iscrizione'] ?? null,
+            filled($dettagli['partita_iva'] ?? null) ? 'P. IVA '.$dettagli['partita_iva'] : null,
+        ]));
+
+        return $righe ? $nome.' - '.implode(' - ', $righe) : $nome;
+    }
+
     /** La perizia in PDF per una valutazione. */
     public function pdf(Request $request, string $id, PdfRenderer $renderer, StaticMap $map)
     {
@@ -185,7 +206,7 @@ class PeriziaController extends Controller implements HasMiddleware
             // prima stampa e si azzera se la valutazione viene corretta, quindi
             // dice sempre quando e' stato emesso questo testo.
             'luogoData' => LuogoFirma::riga($assessment->tenant_id, $assessment->report_issued_at),
-            'rilevatore' => $assessment->assessor_external ?: $assessment->assessor?->name,
+            'rilevatore' => self::rilevatore($assessment),
             'tipoValutazione' => self::TYPE_LABELS[$assessment->assessment_type] ?? $assessment->assessment_type,
             'esito' => self::OUTCOME_LABELS[$assessment->outcome] ?? null,
             'asset' => $asset,
