@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\Issue;
 use App\Models\User;
 use App\Models\WorkOrder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -111,6 +112,43 @@ class OggiNuovoTest extends TestCase
         $this->assertStringContainsString('senza ordine', $oggi['voci'][1]['dettaglio']);
         $this->assertStringStartsWith('Albero senza cartellino', $oggi['voci'][1]['titolo']);
         $this->assertNotEmpty($oggi['giorno']);
+    }
+
+    public function test_la_segnalazione_con_il_lavoro_completato_dice_che_resta_da_chiudere(): void
+    {
+        $ordine = $this->ordine(['status' => 'completed', 'completed_at' => now()]);
+        $segnalazione = Issue::create([
+            'tenant_id' => $this->organizzazione->id,
+            'code' => Issue::nextCode($this->organizzazione->id),
+            'status' => 'in_charge',
+            'severity' => 'high',
+            'reporter_type' => 'internal',
+            'channel' => 'backoffice',
+            'description' => 'Panchina divelta vicino all\'ingresso nord.',
+            'taken_charge_at' => now()->subDays(3),
+            'sla_due_at' => now()->subDay(),
+            'work_order_id' => $ordine->id,
+        ]);
+        $aperta = Issue::create([
+            'tenant_id' => $this->organizzazione->id,
+            'code' => Issue::nextCode($this->organizzazione->id),
+            'status' => 'open',
+            'severity' => 'medium',
+            'reporter_type' => 'internal',
+            'channel' => 'backoffice',
+            'description' => 'Ramo basso sul vialetto.',
+            'taken_charge_due_at' => now()->subDay(),
+            'sla_due_at' => now()->addDay(),
+        ]);
+
+        $voci = collect($this->getJson('/api/v1/oggi')->assertOk()->json('data.voci'));
+        $daChiudere = $voci->firstWhere('chiave', 'segnalazione:'.$segnalazione->id);
+        $this->assertNotNull($daChiudere);
+        $this->assertStringContainsString('lavoro '.$ordine->code.' completato: da chiudere', $daChiudere['dettaglio']);
+        $this->assertSame('Chiudi', $daChiudere['azioni'][0]['label']);
+        $senzaOrdine = $voci->firstWhere('chiave', 'segnalazione:'.$aperta->id);
+        $this->assertStringNotContainsString('lavoro', $senzaOrdine['dettaglio']);
+        $this->assertSame('Prendi in carico', $senzaOrdine['azioni'][0]['label']);
     }
 
     public function test_campo_documenti_e_portali(): void

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import * as maplibregl from 'maplibre-gl';
 import axios from 'axios';
@@ -34,7 +34,7 @@ const permessi = computed(() => page.props.auth?.user?.permissions ?? []);
 const can = (p) => permessi.value.includes(p);
 const canUpdate = computed(() => can('assets.update'));
 const canDelete = computed(() => can('assets.delete'));
-const apriValutazione = new URLSearchParams(window.location.search).get('vta') === '1';
+const apriValutazione = ref(new URLSearchParams(window.location.search).get('vta') === '1');
 
 const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 const asset = ref(null);
@@ -46,7 +46,16 @@ const vincoliDisponibili = ref([]);
 const vincoloDaCollegare = ref('');
 
 const modifica = reactive({ misure: false, identita: false, scheda: false });
-const pannelli = reactive({ vta: apriValutazione, storia: false, gestionale: false, fineVita: false });
+const pannelli = reactive({ vta: apriValutazione.value, storia: false, gestionale: false, fineVita: false });
+
+// "Valuta VTA" in testa: apre la sezione con il modulo della nuova valutazione
+// e scorre fin li'. E' una funzione e non un'espressione nel template perche'
+// nel template "document" non esiste (Vue risolve i nomi sul componente).
+function valutaVta() {
+    pannelli.vta = true;
+    apriValutazione.value = true;
+    nextTick(() => document.getElementById('sezione-vta')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+}
 const storia = reactive({ righe: null, caricamento: false, errore: '' });
 const azione = reactive({ errore: '', inCorso: false });
 const SEZIONI_STAMPA = {
@@ -500,7 +509,7 @@ onBeforeUnmount(() => map?.remove());
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <Link v-if="can('works.manage') && ! inArchivio(asset.status)" :href="`/lavori?nuovo=1&elementi=${asset.id}`" :class="BOTTONE">Nuovo lavoro</Link>
-                        <button v-if="canUpdate && albero" type="button" :class="BOTTONE_SECONDARIO" data-test="scheda-valuta" @click="pannelli.vta = true; $nextTick(() => document.getElementById('sezione-vta')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))">Valuta VTA</button>
+                        <button v-if="canUpdate && albero" type="button" :class="BOTTONE_SECONDARIO" data-test="scheda-valuta" @click="valutaVta">Valuta VTA</button>
                         <details class="relative">
                             <summary :class="BOTTONE_SECONDARIO" class="cursor-pointer list-none">Stampa</summary>
                             <div :class="CARTA" class="absolute right-0 z-20 mt-1 w-72 p-3 text-sm shadow-lg" data-test="menu-stampa">

@@ -113,6 +113,7 @@ class CoseDaFare
     {
         $soon = now()->addDays(3);
         $query = Issue::query()
+            ->with('workOrder:id,code,status')
             ->whereIn('status', ['open', 'in_charge'])
             ->where(function ($q) use ($soon) {
                 // La scadenza che conta: presa in carico se aperta, chiusura poi
@@ -133,6 +134,8 @@ class CoseDaFare
                 'status' => $issue->status,
                 'description' => mb_strimwidth((string) $issue->description, 0, 90, '…'),
                 'sla' => IssueSla::describe($issue),
+                // L'ordine nato dalla segnalazione: se e' completato, la segnalazione e' da chiudere
+                'work_order' => $issue->workOrder ? ['code' => $issue->workOrder->code, 'status' => $issue->workOrder->status] : null,
             ]);
 
         return [

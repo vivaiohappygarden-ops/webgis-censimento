@@ -889,5 +889,23 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   installa rsync), altrimenti i server gia' in piedi terrebbero la versione vecchia.
   Prove: `SalvataggiTest` (lancia davvero lo script su cartelle temporanee).
 - Verifica ogni blocco anche nel browser reale (Playwright/Chromium) oltre che con i test.
+- **Prove d'uso** (dal 04/10/2026, richiesta del committente "puoi fare delle prove pratiche di
+  utilizzo?", riferite al gestionale e all'app di campo, non al portale pubblico): si percorre
+  nel browser un flusso intero come farebbe l'ufficio, sul Comune Demo in locale (copioni in
+  `scratchpad/prova-uso/` della sessione, con il diario `diario.txt` e le schermate). Il primo
+  giro, "dalla segnalazione al lavoro chiuso" (segnalazione -> Genera l'ordine -> Modifica con
+  squadra e date -> Assegna -> app di campo: Avvia, Completa con consuntivo -> ordine completato
+  in ufficio -> segnalazione risolta -> Oggi), ha trovato e fatto correggere: il pulsante
+  "Valuta VTA" in testa alla scheda nuova non apriva il modulo (`document` dentro un'espressione
+  del template: Vue risolve i nomi sul componente, quindi i gestori che toccano il DOM vanno in
+  una funzione dello script); dopo "Registra valutazione" testata, carta e cronologia non si
+  aggiornavano (`TreeVtaPanel` ora emette `saved` anche per valutazioni e validazioni, e
+  `apriValutazione` e' osservata, non solo letta al montaggio); dal pannello della segnalazione
+  il codice dell'ordine non era un collegamento e, a lavoro completato dal campo, nulla diceva
+  che restava da chiudere la segnalazione (ora collegamento con lo stato, avviso nel pannello,
+  riga di Oggi "lavoro ODL-x completato: da chiudere" con il pulsante "Chiudi", da
+  `CoseDaFare::issues()` che porta `work_order`); le scorciatoie di Patrimonio e Lavori e "Salva
+  vista" erano sotto i 44 px sul telefono. Un flusso che passa e' un fatto, non un'impressione:
+  le prove d'uso si ripetono dopo ogni blocco che tocca il flusso.
 - Il committente non è tecnico: i resoconti si scrivono in italiano semplice, senza tecnicismi
   non spiegati e senza emoji.

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import TestataLavori from '@/Components/Nuovo/TestataLavori.vue';
@@ -15,6 +15,9 @@ const nuova = computed(() => page.props.interfaccia?.modo === 'nuova');
 // Un errore di caricamento va detto, non lasciato indovinare da un elenco vuoto
 const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 const canManage = computed(() => (page.props.auth?.user?.permissions ?? []).includes('works.manage'));
+
+// Stato dell'ordine di lavoro nato dalla segnalazione, in minuscolo accanto al codice
+const STATO_ORDINE = { draft: 'in bozza', planned: 'pianificato', assigned: 'assegnato', in_progress: 'in corso', suspended: 'sospeso', completed: 'completato', cancelled: 'annullato' };
 
 const STATUS = {
     open: { label: 'Aperta', cls: 'bg-red-100 text-red-800' },
@@ -317,7 +320,13 @@ onMounted(async () => {
                             <td class="max-w-64 truncate px-4 py-2" :title="issue.description">{{ issue.description }}</td>
                             <td class="px-4 py-2 text-gray-600">{{ issue.asset?.census_code ?? issue.area?.name ?? '—' }}</td>
                             <td class="px-4 py-2 text-gray-600">{{ issue.reporter_name || issue.reporter?.name || '—' }}</td>
-                            <td class="px-4 py-2 text-gray-600">{{ issue.work_order?.code ?? '—' }}</td>
+                            <td class="px-4 py-2 text-gray-600">
+                                <template v-if="issue.work_order">
+                                    <Link :href="`/lavori/${issue.work_order.id}`" class="font-medium text-green-800 underline-offset-2 hover:underline" :title="`Apri l'ordine ${issue.work_order.code}`" data-test="issue-wo-link" @click.stop>{{ issue.work_order.code }}</Link>
+                                    <span v-if="issue.work_order.status === 'completed'" class="ml-1 text-xs text-gray-500">completato</span>
+                                </template>
+                                <template v-else>—</template>
+                            </td>
                         </tr>
                         <tr v-if="! rows.length && ! loading">
                             <td colspan="8" class="px-4 py-8 text-center text-gray-400">Nessuna segnalazione.</td>
@@ -470,7 +479,16 @@ onMounted(async () => {
                             </div>
                             <div v-if="detail.taken_charge_at" class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Presa in carico</dt><dd>{{ fmtDateTime(detail.taken_charge_at) }}</dd></div>
                             <div v-if="detail.resolved_at" class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Risolta il</dt><dd>{{ fmtDateTime(detail.resolved_at) }}</dd></div>
-                            <div class="flex justify-between gap-3 border-b border-gray-50 py-1"><dt class="text-gray-500">Ordine di lavoro</dt><dd>{{ detail.work_order?.code ?? '—' }}</dd></div>
+                            <div class="flex justify-between gap-3 border-b border-gray-50 py-1">
+                                <dt class="text-gray-500">Ordine di lavoro</dt>
+                                <dd>
+                                    <template v-if="detail.work_order">
+                                        <Link :href="`/lavori/${detail.work_order.id}`" class="font-medium text-green-800 underline-offset-2 hover:underline" data-test="issue-detail-wo-link">{{ detail.work_order.code }}</Link>
+                                        <span class="ml-1 text-xs text-gray-500">· {{ STATO_ORDINE[detail.work_order.status] ?? detail.work_order.status }}</span>
+                                    </template>
+                                    <template v-else>—</template>
+                                </dd>
+                            </div>
                         </dl>
 
                         <p v-if="detail.resolution_notes && detail.status === 'resolved'" class="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-900">
@@ -497,6 +515,9 @@ onMounted(async () => {
                             <!-- La risoluzione arriva solo DOPO la presa in carico:
                                  proporre azioni che il flusso rifiuterebbe confonde -->
                             <div v-if="detail.status === 'in_charge'" class="rounded-xl border border-gray-200 p-3">
+                                <p v-if="detail.work_order?.status === 'completed'" class="mb-2 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-900" data-test="issue-wo-completed">
+                                    Il lavoro {{ detail.work_order.code }} è stato completato. Se il problema è risolto, scrivi come e segna la segnalazione come risolta.
+                                </p>
                                 <label class="block text-xs">
                                     <span class="text-gray-500">Come è stata risolta</span>
                                     <textarea v-model="resolveNotes" rows="2" data-test="issue-resolve-notes" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Rimosso il ramo e messa in sicurezza l'area" />

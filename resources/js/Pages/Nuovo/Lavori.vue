@@ -393,7 +393,7 @@ onMounted(async () => {
                         <button
                             v-if="inRitardo !== null"
                             type="button"
-                            class="inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition"
+                            class="inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition md:min-h-9"
                             :class="filtri.soloRitardo ? 'border-red-800 bg-red-800 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-red-300'"
                             :aria-pressed="filtri.soloRitardo"
                             data-test="scorciatoia-ritardo"

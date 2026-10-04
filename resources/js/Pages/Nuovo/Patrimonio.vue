@@ -559,7 +559,7 @@ const TIPO_EVENTO = {
                     <button
                         v-if="riepilogo"
                         type="button"
-                        class="inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition"
+                        class="inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition md:min-h-9"
                         :class="filtri.vta === 'scaduta' ? 'border-red-800 bg-red-800 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-red-300'"
                         :aria-pressed="filtri.vta === 'scaduta'"
                         data-test="scorciatoia-vta"
@@ -568,7 +568,7 @@ const TIPO_EVENTO = {
                     <button
                         v-if="riepilogo"
                         type="button"
-                        class="inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition"
+                        class="inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition md:min-h-9"
                         :class="filtri.vta === 'mai' ? 'border-green-800 bg-green-800 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'"
                         :aria-pressed="filtri.vta === 'mai'"
                         data-test="scorciatoia-mai"
@@ -577,7 +577,7 @@ const TIPO_EVENTO = {
                     <button
                         v-if="riepilogo"
                         type="button"
-                        class="inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition"
+                        class="inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition md:min-h-9"
                         :class="filtri.senzaSpecie ? 'border-green-800 bg-green-800 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'"
                         :aria-pressed="filtri.senzaSpecie"
                         data-test="scorciatoia-specie"

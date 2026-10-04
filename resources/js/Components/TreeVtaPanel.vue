@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { fetchPdf } from '@/pdf';
@@ -340,6 +340,8 @@ async function saveVta() {
         showSurvey.value = false;
         Object.assign(vta, blankVta());
         await loadAssessments();
+        // La pagina che ospita il pannello rilegge testata e cronologia
+        emit('saved');
     } catch (err) {
         vtaError.value = err.response?.status === 409
             ? 'La valutazione è stata modificata da qualcun altro: ricarica la pagina.'
@@ -373,6 +375,7 @@ async function validaPerizia(a) {
     try {
         await axios.post(`/api/v1/assessments/${a.id}/valida`);
         await loadAssessments();
+        emit('saved');
     } catch (err) {
         periziaError.value = err.response?.data?.message ?? 'Errore nella validazione';
     } finally {
@@ -418,6 +421,15 @@ const fmtOra = (d) => (d ? new Date(d).toLocaleString('it-IT', { dateStyle: 'sho
 onMounted(async () => {
     await carica(loadAssessments);
     if (props.apriValutazione && props.canUpdate) {
+        showVtaForm.value = true;
+        nextTick(() => document.querySelector('[data-test=vta-bersagli]')?.scrollIntoView({ block: 'center' }));
+    }
+});
+
+// Se la richiesta di aprire il modulo arriva a pannello gia' montato
+// (pulsante "Valuta VTA" in testa alla scheda), si apre e si scorre fin qui
+watch(() => props.apriValutazione, (apri) => {
+    if (apri && props.canUpdate) {
         showVtaForm.value = true;
         nextTick(() => document.querySelector('[data-test=vta-bersagli]')?.scrollIntoView({ block: 'center' }));
     }

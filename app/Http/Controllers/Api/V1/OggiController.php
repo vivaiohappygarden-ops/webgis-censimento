@@ -100,11 +100,15 @@ class OggiController extends Controller
                 $verbo = $r['status'] === 'open' ? 'presa in carico' : 'risoluzione';
                 $inRitardo = ($fase['state'] ?? null) === 'overdue';
                 $giorni = $inRitardo ? (int) ($fase['days_late'] ?? 0) : $this->giorniA($fase['due_at'] ?? null, $today);
+                // L'ordine nato dalla segnalazione: completato dal campo, resta solo da chiudere la segnalazione
+                $ordine = $r['work_order'] ?? null;
+                $ordineCompletato = ($ordine['status'] ?? null) === 'completed';
                 $voci[] = $this->voce('segnalazione', 'segnalazioni', $r['id'], $r['code'].' · '.$r['description'],
                     ['gravità '.(self::GRAVITA[$r['severity']] ?? $r['severity']),
-                        $inRitardo ? $verbo.' in ritardo di '.$giorni.' '.$this->giorni($giorni) : $verbo.' entro il '.$this->data($fase['due_at'] ?? null)],
+                        $inRitardo ? $verbo.' in ritardo di '.$giorni.' '.$this->giorni($giorni) : $verbo.' entro il '.$this->data($fase['due_at'] ?? null),
+                        $ordine ? 'lavoro '.$ordine['code'].' '.mb_strtolower(\App\Models\WorkOrder::STATUS_LABELS[$ordine['status']] ?? $ordine['status']).($ordineCompletato ? ': da chiudere' : '') : null],
                     $inRitardo ? 'ritardo' : 'presto', $giorni,
-                    [['label' => $r['status'] === 'open' ? 'Prendi in carico' : 'Apri', 'href' => '/segnalazioni']]);
+                    [['label' => $ordineCompletato ? 'Chiudi' : ($r['status'] === 'open' ? 'Prendi in carico' : 'Apri'), 'href' => '/segnalazioni']]);
             }
 
             $nc = $cose->nonConformities();
