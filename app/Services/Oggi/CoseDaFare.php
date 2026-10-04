@@ -13,7 +13,9 @@ use App\Services\Inspections\InspectionDeadlines;
 use App\Services\Works\GeneratorePrescrizioniVta;
 use App\Support\AssetStatus;
 use App\Support\IssueSla;
+use App\Support\PerimetroZone;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -206,6 +208,7 @@ class CoseDaFare
     {
         $horizon = $today->copy()->addDays(30)->toDateString();
         $archivio = AssetStatus::sqlArchivio();
+        [$perimetro, $valoriPerimetro] = PerimetroZone::sqlAree('a.area_id', Auth::user());
 
         $righe = collect(DB::select(<<<SQL
             SELECT a.id, a.census_code, vta.id AS assessment_id,
@@ -224,9 +227,9 @@ class CoseDaFare
                                     AND wo.deleted_at IS NULL AND wo.status <> 'cancelled'
             WHERE a.tenant_id = ? AND a.deleted_at IS NULL
               AND a.status NOT IN ({$archivio})
-              AND vta.next_check_due IS NOT NULL AND vta.next_check_due <= ?
+              AND vta.next_check_due IS NOT NULL AND vta.next_check_due <= ?{$perimetro}
             ORDER BY vta.next_check_due
-            SQL, [$tenantId, $horizon]));
+            SQL, [$tenantId, $horizon, ...$valoriPerimetro]));
 
         $oggi = $today->toDateString();
 
@@ -330,6 +333,7 @@ class CoseDaFare
     public function alberiMaiValutati(string $tenantId): int
     {
         $archivio = AssetStatus::sqlArchivio();
+        [$perimetro, $valoriPerimetro] = PerimetroZone::sqlAree('a.area_id', Auth::user());
 
         return (int) DB::selectOne(<<<SQL
             SELECT COUNT(*) AS n
@@ -340,8 +344,8 @@ class CoseDaFare
               AND NOT EXISTS (
                 SELECT 1 FROM tree_assessments ta
                 WHERE ta.tree_id = a.id AND ta.tenant_id = a.tenant_id AND ta.deleted_at IS NULL
-              )
-            SQL, [$tenantId])->n;
+              ){$perimetro}
+            SQL, [$tenantId, ...$valoriPerimetro])->n;
     }
 
     /** Stagione irrigua: impianti da invernare o da riaprire (entro 7 giorni). */

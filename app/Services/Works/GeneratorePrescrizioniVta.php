@@ -168,6 +168,9 @@ class GeneratorePrescrizioniVta
               AND vta.prescriptions IS NOT NULL AND btrim(vta.prescriptions) <> ''
             SQL;
         $bindings = [$tenantId];
+        [$perimetro, $valoriPerimetro] = \App\Support\PerimetroZone::sqlAree('a.area_id', \Illuminate\Support\Facades\Auth::user());
+        $sql .= $perimetro;
+        $bindings = [...$bindings, ...$valoriPerimetro];
 
         if ($assessmentIds !== null) {
             $segnaposti = implode(',', array_fill(0, max(1, count($assessmentIds)), '?'));

@@ -3,13 +3,17 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\NelPerimetroZona;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class WorkOrder extends Model
 {
-    use BelongsToTenant, HasUuids, SoftDeletes;
+    /** Come il modello si lega al committente per il perimetro di zona (ZonaScope). */
+    public const PERIMETRO_ZONA = 'lavoro';
+
+    use BelongsToTenant, NelPerimetroZona, HasUuids, SoftDeletes;
 
     /** Flusso di default (configurabile per tenant nelle fasi successive). */
     public const STATUSES = ['draft', 'planned', 'assigned', 'in_progress', 'suspended', 'completed', 'cancelled'];

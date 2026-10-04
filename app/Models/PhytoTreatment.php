@@ -3,13 +3,17 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\NelPerimetroZona;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PhytoTreatment extends Model
 {
-    use BelongsToTenant, HasUuids, SoftDeletes;
+    /** Come il modello si lega al committente per il perimetro di zona (ZonaScope). */
+    public const PERIMETRO_ZONA = 'area_id';
+
+    use BelongsToTenant, NelPerimetroZona, HasUuids, SoftDeletes;
 
     public const METHODS = ['irrorazione', 'endoterapia', 'iniezione_suolo', 'esca', 'altro'];
 

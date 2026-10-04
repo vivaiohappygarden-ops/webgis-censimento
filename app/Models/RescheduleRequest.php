@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\NelPerimetroZona;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
@@ -15,7 +16,10 @@ use Illuminate\Database\Eloquent\Model;
  */
 class RescheduleRequest extends Model
 {
-    use BelongsToTenant, HasUuids;
+    /** Come il modello si lega al committente per il perimetro di zona (ZonaScope). */
+    public const PERIMETRO_ZONA = 'work_order_id';
+
+    use BelongsToTenant, NelPerimetroZona, HasUuids;
 
     /** I motivi codificati, mostrati cosi' come sono scritti. */
     public const MOTIVI = [

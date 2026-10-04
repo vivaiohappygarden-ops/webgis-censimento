@@ -18,11 +18,16 @@ export const SCHEDE_COMMITTENTI = [
 export const SCHEDE_IMPOSTAZIONI = [
     { chiave: 'impostazioni', label: 'Impostazioni', href: '/impostazioni', permesso: [] },
     { chiave: 'utenti', label: 'Utenti e studio', href: '/utenti', permesso: ['users.manage'] },
+    // Le zone le gestisce la sede centrale: chi e' di zona non vede la scheda
+    { chiave: 'zone', label: 'Zone', href: '/zone', permesso: ['users.manage'], centrale: true },
     { chiave: 'catalogo', label: 'Catalogo', href: '/catalogo', permesso: ['catalog.view'] },
     { chiave: 'listini', label: 'Listini', href: '/listini', permesso: ['works.view'] },
 ];
 
-/** Le schede visibili a chi ha almeno uno dei permessi indicati (nessun permesso = tutti). */
-export function schedeVisibili(schede, permessi) {
-    return schede.filter((s) => s.permesso.length === 0 || s.permesso.some((p) => permessi.includes(p)));
+/**
+ * Le schede visibili a chi ha almeno uno dei permessi indicati (nessun
+ * permesso = tutti); quelle segnate "centrale" spariscono a chi e' di zona.
+ */
+export function schedeVisibili(schede, permessi, diZona = false) {
+    return schede.filter((s) => (s.permesso.length === 0 || s.permesso.some((p) => permessi.includes(p))) && ! (s.centrale && diZona));
 }

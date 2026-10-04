@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\NelPerimetroZona;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -10,7 +11,10 @@ use Illuminate\Support\Facades\DB;
 
 class Estimate extends Model
 {
-    use BelongsToTenant, HasUuids, SoftDeletes;
+    /** Come il modello si lega al committente per il perimetro di zona (ZonaScope). */
+    public const PERIMETRO_ZONA = 'cliente_o_area';
+
+    use BelongsToTenant, NelPerimetroZona, HasUuids, SoftDeletes;
 
     public const STATUSES = ['draft', 'sent', 'accepted', 'rejected'];
 

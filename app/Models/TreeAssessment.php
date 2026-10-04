@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\NelPerimetroZona;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,7 +11,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class TreeAssessment extends Model
 {
-    use BelongsToTenant, HasFactory, HasUuids, SoftDeletes;
+    /** Come il modello si lega al committente per il perimetro di zona (ZonaScope). */
+    public const PERIMETRO_ZONA = 'tree_id';
+
+    use BelongsToTenant, NelPerimetroZona, HasFactory, HasUuids, SoftDeletes;
 
     public const FAILURE_CLASSES = ['A', 'B', 'C', 'C/D', 'D'];
 

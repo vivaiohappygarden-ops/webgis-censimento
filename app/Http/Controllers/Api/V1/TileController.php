@@ -93,6 +93,10 @@ class TileController extends Controller implements HasMiddleware
 
         $filters = '';
         $bindings = [];
+        // Il perimetro di zona dell'utente, prima dei filtri scelti
+        [$perimetro, $valoriPerimetro] = \App\Support\PerimetroZone::sqlAree('a.area_id', $request->user());
+        $filters .= $perimetro;
+        $bindings = [...$bindings, ...$valoriPerimetro];
         if ($request->filled('area_id')) {
             $filters .= ' AND a.area_id = ?';
             $bindings[] = (string) $request->string('area_id');

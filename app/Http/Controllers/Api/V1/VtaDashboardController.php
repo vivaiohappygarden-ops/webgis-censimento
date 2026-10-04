@@ -84,6 +84,11 @@ class VtaDashboardController extends Controller implements HasMiddleware
             JOIN trees t ON t.asset_id = latest.tree_id AND t.removed_on IS NULL
             SQL;
         $bindings = [$tenantId];
+        [$perimetro, $valoriPerimetro] = \App\Support\PerimetroZone::sqlAree('a.area_id', $request->user());
+        if ($perimetro !== '') {
+            $sql .= "\nWHERE TRUE".$perimetro;
+            $bindings = [...$bindings, ...$valoriPerimetro];
+        }
 
         if ($clientId !== null) {
             $sql .= "\n".<<<'SQL'

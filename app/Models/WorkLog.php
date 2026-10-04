@@ -3,12 +3,16 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\NelPerimetroZona;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class WorkLog extends Model
 {
-    use BelongsToTenant, SoftDeletes;
+    /** Come il modello si lega al committente per il perimetro di zona (ZonaScope). */
+    public const PERIMETRO_ZONA = 'work_order_id';
+
+    use BelongsToTenant, NelPerimetroZona, SoftDeletes;
 
     public $incrementing = false;
 

@@ -21,6 +21,7 @@ class CommittentiController extends Controller
     {
         $tenantId = $request->user()->tenant_id;
         $archivio = AssetStatus::sqlArchivio();
+        [$perimetro, $valoriPerimetro] = \App\Support\PerimetroZone::sqlClienti('c.id', $request->user());
 
         $righe = DB::select(<<<SQL
             SELECT c.id, c.code, c.name, c.client_type, c.vat_number, c.fiscal_code, c.is_active,
@@ -45,9 +46,9 @@ class CommittentiController extends Controller
               WHERE tenant_id = ? AND deleted_at IS NULL AND status NOT IN ('completed', 'cancelled')
               GROUP BY client_id
             ) w ON w.client_id = c.id
-            WHERE c.tenant_id = ? AND c.deleted_at IS NULL
+            WHERE c.tenant_id = ? AND c.deleted_at IS NULL{$perimetro}
             ORDER BY c.name
-            SQL, [$tenantId, $tenantId, $tenantId]);
+            SQL, [$tenantId, $tenantId, $tenantId, ...$valoriPerimetro]);
 
         return response()->json(['data' => array_map(function ($r) {
             $profilo = json_decode((string) $r->public_profile, true) ?: [];

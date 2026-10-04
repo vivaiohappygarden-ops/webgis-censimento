@@ -30,6 +30,8 @@ class HandleInertiaRequests extends Middleware
                     'permissions' => $user->getAllPermissions()->pluck('name')->values(),
                     // Chi gestisce la piattaforma vede la console nel menu
                     'piattaforma' => (bool) $user->is_platform_manager,
+                    // Le zone dell'utente (vuoto = sede centrale): il menu le dice
+                    'zone' => \App\Support\PerimetroZone::zone($user),
                 ] : null,
             ],
             // L'accesso di assistenza in corso: il layout mostra la fascia

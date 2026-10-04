@@ -15,7 +15,7 @@ const props = defineProps({
 });
 
 const page = usePage();
-const visibili = computed(() => schedeVisibili(props.schede, page.props.auth?.user?.permissions ?? []));
+const visibili = computed(() => schedeVisibili(props.schede, page.props.auth?.user?.permissions ?? [], (page.props.auth?.user?.zone ?? []).length > 0));
 </script>
 
 <template>

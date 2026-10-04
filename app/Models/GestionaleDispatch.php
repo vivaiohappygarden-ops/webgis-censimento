@@ -3,13 +3,17 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\NelPerimetroZona;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
 class GestionaleDispatch extends Model
 {
-    use BelongsToTenant, HasUuids;
+    /** Come il modello si lega al committente per il perimetro di zona (ZonaScope). */
+    public const PERIMETRO_ZONA = 'asset_id';
+
+    use BelongsToTenant, NelPerimetroZona, HasUuids;
 
     protected $table = 'gestionale_dispatches';
 

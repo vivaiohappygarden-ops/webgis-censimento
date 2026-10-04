@@ -3,13 +3,17 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\NelPerimetroZona;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
 /** Una riga di SAL: un ordine completato, valorizzato dal listino. */
 class SalItem extends Model
 {
-    use BelongsToTenant, HasUuids;
+    /** Come il modello si lega al committente per il perimetro di zona (ZonaScope). */
+    public const PERIMETRO_ZONA = 'work_order_id';
+
+    use BelongsToTenant, NelPerimetroZona, HasUuids;
 
     protected $fillable = [
         'tenant_id', 'sal_id', 'work_order_id', 'descrizione', 'unit',

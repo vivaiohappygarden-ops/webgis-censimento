@@ -167,6 +167,11 @@ Route::prefix('v1')->group(function () {
         Route::get('vta/bilancio', [\App\Http\Controllers\Api\V1\TreeBalanceController::class, 'index']);
         Route::get('vta/bilancio/pdf', [\App\Http\Controllers\Api\V1\TreeBalanceController::class, 'pdf']);
 
+        // Zone dell'organizzazione: solo la sede centrale (users.manage e nessuna zona addosso)
+        Route::get('zone', [\App\Http\Controllers\Api\V1\ZoneController::class, 'index']);
+        Route::post('zone', [\App\Http\Controllers\Api\V1\ZoneController::class, 'store']);
+        Route::patch('zone/{id}', [\App\Http\Controllers\Api\V1\ZoneController::class, 'update'])->whereUuid('id');
+        Route::delete('zone/{id}', [\App\Http\Controllers\Api\V1\ZoneController::class, 'destroy'])->whereUuid('id');
         Route::get('users', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'index']);
         Route::post('users', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'store']);
         Route::patch('users/{id}', [\App\Http\Controllers\Api\V1\UserAdminController::class, 'update'])->whereUuid('id');

@@ -182,6 +182,10 @@ class GeneratoreRicontrolliVta
             WHERE a.tenant_id = ? AND a.deleted_at IS NULL
             SQL;
         $bindings = [$tenantId];
+        // Il perimetro di zona di chi lancia: un utente di zona non mette in agenda alberi altrui
+        [$perimetro, $valoriPerimetro] = \App\Support\PerimetroZone::sqlAree('a.area_id', \Illuminate\Support\Facades\Auth::user());
+        $sql .= $perimetro;
+        $bindings = [...$bindings, ...$valoriPerimetro];
 
         if ($assetIds !== null) {
             $segnaposti = implode(',', array_fill(0, count($assetIds), '?'));

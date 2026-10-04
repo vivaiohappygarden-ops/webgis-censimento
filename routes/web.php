@@ -191,6 +191,12 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/utenti', fn () => Inertia::render('Utenti'))
         ->middleware('can:users.manage')->name('utenti');
+    // Le zone: solo la sede centrale (un utente di zona non le tocca, qualunque ruolo abbia)
+    Route::get('/zone', function () {
+        \App\Support\PerimetroZone::autorizzaCentrale(request()->user());
+
+        return Inertia::render('Zone');
+    })->middleware('can:users.manage')->name('zone');
 
     // La guida è per tutti gli utenti autenticati, senza permessi dedicati
     Route::get('/guida', fn () => Inertia::render('Guida'))->name('guida');

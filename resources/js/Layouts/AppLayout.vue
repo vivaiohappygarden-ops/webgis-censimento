@@ -199,6 +199,7 @@ const logout = async () => {
             <div class="min-w-0">
                 <div class="truncate text-sm font-semibold leading-tight">WebGIS Censimento</div>
                 <div class="truncate text-xs text-gray-500">{{ user?.organization?.name }}</div>
+                <div v-if="user?.zone?.length" class="truncate text-xs text-green-800" data-test="menu-zona">Zona: {{ user.zone.map((z) => z.name).join(', ') }}</div>
             </div>
         </div>
 
@@ -222,6 +223,8 @@ const logout = async () => {
             <div class="border-b border-gray-100 px-4 py-4">
                 <div class="text-sm font-semibold leading-tight" :class="nuova ? 'text-base font-bold' : ''">WebGIS Censimento</div>
                 <div class="text-xs text-gray-500" :class="nuova ? 'text-[13px]' : ''">{{ user?.organization?.name }}</div>
+                <!-- Chi e' di zona lo legge qui: vede solo il territorio delle sue zone -->
+                <div v-if="user?.zone?.length" class="text-xs text-green-800" :class="nuova ? 'text-[13px]' : ''" data-test="menu-zona">Zona: {{ user.zone.map((z) => z.name).join(', ') }}</div>
             </div>
 
             <div v-if="can('assets.view')" class="px-3 pt-3">

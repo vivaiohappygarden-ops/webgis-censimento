@@ -3,12 +3,16 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\NelPerimetroZona;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Tree extends Model
 {
-    use BelongsToTenant, HasFactory;
+    /** Come il modello si lega al committente per il perimetro di zona (ZonaScope). */
+    public const PERIMETRO_ZONA = 'asset_id';
+
+    use BelongsToTenant, NelPerimetroZona, HasFactory;
 
     protected $primaryKey = 'asset_id';
 

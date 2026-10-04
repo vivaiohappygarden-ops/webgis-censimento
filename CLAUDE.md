@@ -343,7 +343,26 @@ Stato per punto; i dettagli stanno nelle sezioni che seguono.
    migrazione `funzioni_organizzazione` tiene accesa la funzione a chi aveva gia' un indirizzo del
    gestionale configurato. Una funzione nuova si aggiunge a `Funzioni::DI_SERIE` e si regola dalla stessa
    console. Prove: `FunzioniOrganizzazioneTest` (e `GestionaleTest` la accende prima di provare).
-4. Zone (sedi distanti, accessi per zona): da fare, per ultimo.
+4. **Fatto**: le **zone**. Una zona (`zones`, `zone_client`, `zone_user`) e' un gruppo di committenti;
+   un utente assegnato a una o piu' zone vede e tocca solo quello che sta sotto quei committenti (sedi,
+   localita', aree, elementi, alberi, valutazioni, foto, documenti, lavori e le loro righe, consuntivi,
+   controlli, non conformita', segnalazioni, trattamenti, ispezioni, irrigazione, piani, preventivi,
+   contratti, SAL, vincoli); chi non ha zone e' della **sede centrale** e vede tutto; che cosa si puo'
+   fare dentro lo decide il ruolo. **Il perimetro sta una volta sola in `App\Support\PerimetroZone`**
+   (`clienti`, `limitato`, `zone`, `sqlAree`, `sqlClienti`, `sqlLavori`, letto una volta per richiesta
+   per istanza di utente, `azzera()` dopo le assegnazioni): lo applica lo scope globale `ZonaScope`
+   tramite il trait `NelPerimetroZona`, dove ogni modello dichiara come si lega al committente con la
+   costante `PERIMETRO_ZONA` (`id`, `client_id`, `site_id`, `locality_id`, `area_id`, `asset_id`,
+   `tree_id`, `lavoro`, `work_order_id`, `segnalazione`, `area_o_elemento`, `cliente_o_area`, le
+   varianti `_o_nullo`); **le interrogazioni scritte in SQL** chiedono il frammento a `PerimetroZone`
+   (tessere e livelli della mappa in `TileController::filtri`, scadenzario VTA e alberi mai valutati di
+   `CoseDaFare`, i due generatori VTA, `CommittentiController::riepilogo`, `VtaDashboardController::index`):
+   una query nuova sul territorio in SQL va scritta con lo stesso frammento, o un utente di zona
+   vedrebbe gli altri. Le zone le gestisce **solo la sede centrale** (`ZoneController`, permesso
+   `users.manage` piu' `PerimetroZone::autorizzaCentrale`; pagina `/zone`, `Pages/Zone.vue`, scheda
+   "Zone" di Impostazioni che a chi e' di zona non compare); una zona con utenti non si elimina; il menu
+   dice "Zona: ..." (prop `auth.user.zone`). Prove: `ZoneTest` (il tecnico del Nord non vede, non
+   trova sulla mappa, non esporta, non scarica sul telefono e non scrive niente del Sud).
 5. **Fatto**: bersagli della VTA anche dagli elementi censiti (`Components/CercaElemento.vue`, ricerca a
    parole su `GET assets?q=`; il bersaglio entra come riga "CARTELLINO · descrizione", i `targets`
    restano stringhe).
