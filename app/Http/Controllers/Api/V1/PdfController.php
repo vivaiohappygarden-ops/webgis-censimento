@@ -162,7 +162,9 @@ class PdfController extends Controller implements HasMiddleware
         $pdf = $renderer->render('pdf.asset', [
             'organization' => $organizzazione,
             'asset' => $asset,
-            'posizione' => in_array('posizione', $sezioni, true) ? $this->posizione($asset, $srid, $planimetria) : null,
+            // Con la richiesta POST il browser manda l'inquadratura della mappa a video (immagine,
+            // confini, attribuzione): la planimetria si disegna sopra le strade
+            'posizione' => in_array('posizione', $sezioni, true) ? $this->posizione($asset, $srid, $planimetria, is_array($request->input('sfondo')) ? $request->input('sfondo') : null) : null,
             'foto' => $fotografie['foto'],
             'fotoNota' => $fotografie['nota'],
             'fields' => $fields,
@@ -192,7 +194,7 @@ class PdfController extends Controller implements HasMiddleware
      *
      * @return array<string, mixed>
      */
-    private function posizione(Asset $asset, int $srid, PlanimetriaElemento $planimetria): array
+    private function posizione(Asset $asset, int $srid, PlanimetriaElemento $planimetria, ?array $sfondo = null): array
     {
         $centro = DB::table('assets')->where('id', $asset->id)->whereNotNull('geom')
             ->selectRaw('ST_X(ST_Centroid(geom)) AS lon, ST_Y(ST_Centroid(geom)) AS lat, ST_X(ST_Transform(ST_Centroid(geom), ?::int)) AS est, ST_Y(ST_Transform(ST_Centroid(geom), ?::int)) AS nord, GeometryType(geom) AS tipo', [$srid, $srid])
@@ -205,7 +207,7 @@ class PdfController extends Controller implements HasMiddleware
             'est' => $centro?->est !== null ? (float) $centro->est : null,
             'nord' => $centro?->nord !== null ? (float) $centro->nord : null,
             'srid' => $srid,
-            'planimetria' => $planimetria->per($asset, $srid),
+            'planimetria' => $planimetria->per($asset, $srid, $sfondo),
             'vincoli' => LandConstraint::query()->whereHas('assets', fn ($q) => $q->where('assets.id', $asset->id))->orderBy('code')->get(),
         ];
     }

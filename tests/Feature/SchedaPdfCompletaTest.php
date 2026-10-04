@@ -147,6 +147,64 @@ class SchedaPdfCompletaTest extends TestCase
         $this->assertStringNotContainsString('Valutazioni di stabilit', $html);
     }
 
+    /** L'inquadratura della mappa come la manderebbe il browser: un JPEG beige con i confini dati. */
+    private function inquadratura(int $larghezza, int $altezza, array $confini, string $formato = 'jpeg'): array
+    {
+        $img = imagecreatetruecolor($larghezza, $altezza);
+        imagefill($img, 0, 0, (int) imagecolorallocate($img, 235, 225, 210));
+        ob_start();
+        $formato === 'png' ? imagepng($img) : imagejpeg($img, null, 85);
+        $byte = (string) ob_get_clean();
+        imagedestroy($img);
+
+        return ['immagine' => 'data:image/'.$formato.';base64,'.base64_encode($byte), 'bounds' => $confini, 'larghezza' => $larghezza, 'altezza' => $altezza, 'attribuzione' => '© OpenStreetMap contributors'];
+    }
+
+    public function test_la_planimetria_si_disegna_sopra_l_inquadratura_della_mappa_mandata_dal_browser(): void
+    {
+        $albero = $this->elemento('ALB-0400', $this->pointGeometry(9.1905, 45.4652));
+        $this->patchJson("/api/v1/assets/{$albero}", ['tree' => ['species' => 'Tilia cordata', 'crown_diameter_m' => 6]])->assertOk();
+        $this->elemento('ALB-0401', $this->pointGeometry(9.19062, 45.4652));
+        $confini = ['west' => 9.1895, 'south' => 45.4646, 'east' => 9.1915, 'north' => 45.4658];
+
+        $this->post("/api/v1/assets/{$albero}/pdf?sezioni=posizione", ['sfondo' => $this->inquadratura(800, 684, $confini)])->assertOk();
+        $pl = $this->stampe->dati['pdf.asset']['posizione']['planimetria'];
+        $this->assertTrue($pl['sfondo'], "la planimetria usa l'inquadratura");
+        $this->assertSame([800, 684], [$pl['larghezza'], $pl['altezza']], "la tela e' l'inquadratura stessa");
+        $this->assertSame('© OpenStreetMap contributors', $pl['attribuzione']);
+        $this->assertSame(1, $pl['vicini']);
+        // Larghezza dell'inquadratura in metri: 0,002 gradi di longitudine a 45,5 nord sono circa 156 m
+        $this->assertEqualsWithDelta(156, $pl['metri_larghezza'], 6);
+        $img = imagecreatefromstring($pl['png']);
+        // L'elemento sta dove la proiezione della mappa lo mette: in mezzo, verde
+        $c = imagecolorsforindex($img, imagecolorat($img, 400, 342));
+        $this->assertGreaterThan($c['red'] + 40, $c['green'], "al centro c'e' il punto verde dell'elemento");
+        $this->assertGreaterThan($c['blue'] + 40, $c['green']);
+        // Il vicino, 9 metri a est, e' il punto grigio
+        $v = imagecolorsforindex($img, imagecolorat($img, 448, 342));
+        $this->assertLessThan(20, abs($v['red'] - $v['green']) + abs($v['green'] - $v['blue']), 'il vicino e\' grigio');
+        $this->assertLessThan(200, $v['red']);
+        // Un angolo e' ancora lo sfondo beige mandato dal browser (velato dalla campitura
+        // leggera dell'area, mai bianco come il disegno di ripiego)
+        $a = imagecolorsforindex($img, imagecolorat($img, 20, 20));
+        $this->assertLessThan(245, $a['red']);
+        $this->assertGreaterThan(5, $a['red'] - $a['blue'], 'la tinta beige dello sfondo resta');
+        $html = $this->stampe->html['pdf.asset'];
+        $this->assertStringContainsString("inquadratura della mappa", $html);
+        $this->assertStringContainsString('OpenStreetMap', $html);
+        $this->assertStringNotContainsString('senza sfondo cartografico', $html);
+
+        // Un'inquadratura che non contiene l'elemento, o un'immagine illeggibile, non si usa: fondo bianco
+        $this->post("/api/v1/assets/{$albero}/pdf?sezioni=posizione", ['sfondo' => $this->inquadratura(800, 684, ['west' => 12.49, 'south' => 41.89, 'east' => 12.51, 'north' => 41.91])])->assertOk();
+        $this->assertFalse($this->stampe->dati['pdf.asset']['posizione']['planimetria']['sfondo']);
+        $this->assertSame(1200, $this->stampe->dati['pdf.asset']['posizione']['planimetria']['larghezza']);
+        $this->post("/api/v1/assets/{$albero}/pdf?sezioni=posizione", ['sfondo' => ['immagine' => 'data:image/jpeg;base64,'.base64_encode('niente'), 'bounds' => $confini]])->assertOk();
+        $this->assertFalse($this->stampe->dati['pdf.asset']['posizione']['planimetria']['sfondo']);
+        // Un PNG va bene come un JPEG
+        $this->post("/api/v1/assets/{$albero}/pdf?sezioni=posizione", ['sfondo' => $this->inquadratura(400, 342, $confini, 'png')])->assertOk();
+        $this->assertTrue($this->stampe->dati['pdf.asset']['posizione']['planimetria']['sfondo']);
+    }
+
     public function test_l_elemento_di_un_altra_organizzazione_non_si_stampa(): void
     {
         $albero = $this->elemento('ALB-0300', $this->pointGeometry());

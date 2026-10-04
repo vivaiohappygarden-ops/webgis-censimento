@@ -12,6 +12,7 @@ import AvvisoErrore from '@/Components/AvvisoErrore.vue';
 import { usaCaricamento } from '@/caricamento';
 import { avvisoCaricamento } from '@/avvisi';
 import { fetchPdf } from '@/pdf';
+import { istantaneaMappa } from '@/mappaIstantanea';
 import { statusLabel } from '@/assetStatus';
 
 const props = defineProps({ assetId: { type: String, required: true } });
@@ -72,7 +73,10 @@ async function openPdf() {
     const scelte = Object.keys(stampaSezioni).filter((k) => stampaSezioni[k]);
     const query = scelte.length === Object.keys(stampaSezioni).length
         ? '' : `?sezioni=${scelte.join(',')}`;
-    const { error } = await fetchPdf(`/api/v1/assets/${props.assetId}/pdf${query}`);
+    const sfondo = stampaSezioni.posizione ? await istantaneaMappa(map, mapEl.value) : null;
+    const { error } = sfondo
+        ? await fetchPdf(`/api/v1/assets/${props.assetId}/pdf${query}`, { method: 'POST', body: { sfondo } })
+        : await fetchPdf(`/api/v1/assets/${props.assetId}/pdf${query}`);
     if (error) pdfError.value = error;
     else stampaAperta.value = false;
     pdfBusy.value = false;
@@ -280,14 +284,22 @@ async function load() {
     await caricaVincoli();
 }
 
+function primoPunto(coords) {
+    if (! Array.isArray(coords)) return null;
+    return typeof coords[0] === 'number' ? coords : primoPunto(coords[0]);
+}
+
 function initMap() {
     if (!asset.value?.geom_geojson || map) return;
 
     map = new maplibregl.Map({
         container: mapEl.value,
+        center: primoPunto(asset.value.geom_geojson.coordinates) ?? [12.5, 41.9],
         zoom: 17,
         interactive: false,
         attributionControl: false,
+        preserveDrawingBuffer: true,
+        pixelRatio: 2.5,
         style: {
             version: 8,
             sources: {
@@ -297,6 +309,7 @@ function initMap() {
                     tileSize: 256,
                     // Oltre questo livello lo sfondo non ha immagini
                     maxzoom: 19,
+                    attribution: '© OpenStreetMap contributors',
                 },
             },
             layers: [
@@ -351,7 +364,7 @@ function initMap() {
             else coords.forEach(extend);
         };
         extend(asset.value.geom_geojson.coordinates);
-        map.fitBounds(bounds, { padding: 40, maxZoom: 18 });
+        map.fitBounds(bounds, { padding: 40, maxZoom: 18, animate: false });
     });
 }
 

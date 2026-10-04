@@ -295,7 +295,8 @@ Route::prefix('v1')->group(function () {
         Route::post('aree-gioco/modello', [\App\Http\Controllers\Api\V1\AreeGiocoController::class, 'installa']);
         Route::get('inspections/deadlines', [\App\Http\Controllers\Api\V1\InspectionController::class, 'deadlines']);
         Route::get('inspections/{id}/pdf', [\App\Http\Controllers\Api\V1\PdfController::class, 'inspection'])->whereUuid('id');
-        Route::get('assets/{id}/pdf', [\App\Http\Controllers\Api\V1\PdfController::class, 'asset'])->whereUuid('id');
+        // In POST il browser allega l'inquadratura della mappa a video per la planimetria con lo sfondo
+        Route::match(['get', 'post'], 'assets/{id}/pdf', [\App\Http\Controllers\Api\V1\PdfController::class, 'asset'])->whereUuid('id');
         Route::post('assets/{id}/public-page', [\App\Http\Controllers\Api\V1\PublicPageController::class, 'enable'])->whereUuid('id');
         Route::delete('assets/{id}/public-page', [\App\Http\Controllers\Api\V1\PublicPageController::class, 'disable'])->whereUuid('id');
         Route::get('assets/{id}/public-tag', [\App\Http\Controllers\Api\V1\PublicPageController::class, 'tag'])->whereUuid('id');

@@ -97,7 +97,11 @@
     <div class="planimetria">
         <img src="data:image/png;base64,{{ base64_encode($pl['png']) }}" alt="Planimetria">
         <div class="legenda">
+            @if ($pl['sfondo'] ?? false)
+            Planimetria sull'inquadratura della mappa a video{{ ! empty($pl['attribuzione']) ? ' (sfondo '.$pl['attribuzione'].')' : '' }}, orientata a nord, finestra di circa {{ $numero($pl['metri_larghezza'], 0) }} x {{ $numero($pl['metri_altezza'], 0) }} m.
+            @else
             Planimetria schematica nel sistema metrico EPSG:{{ $pl['srid'] }}, orientata a nord, finestra di {{ $numero($pl['metri_larghezza'], 0) }} x {{ $numero($pl['metri_altezza'], 0) }} m, senza sfondo cartografico.
+            @endif
             In verde l'elemento{{ $asset->tree && $asset->tree->crown_diameter_m ? ' con la chioma a misura' : '' }}; in grigio {{ $pl['vicini'] === 1 ? 'l\'elemento vicino censito' : $pl['vicini'].' elementi vicini censiti' }}{{ $pl['etichette'] ? ' con il numero del cartellino' : ' (etichette omesse per densità)' }};
             tratteggiati i confini {{ $pl['aree'] === 1 ? 'dell\'area di gestione' : 'delle '.$pl['aree'].' aree di gestione' }}.
         </div>

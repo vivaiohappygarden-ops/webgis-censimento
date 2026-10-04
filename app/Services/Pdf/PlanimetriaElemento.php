@@ -28,6 +28,9 @@ class PlanimetriaElemento
 
     public const MASSIMO_VICINI = 300;
 
+    /** Larghezza massima dell'inquadratura della mappa accettata dal browser, in pixel. */
+    public const LARGHEZZA_SFONDO = 1600;
+
     /** Oltre questo numero di vicini le etichette si omettono: si coprirebbero a vicenda. */
     public const MASSIMO_ETICHETTE = 120;
 
@@ -39,38 +42,97 @@ class PlanimetriaElemento
     private array $colori = [];
 
     /**
-     * @return array{png: string, larghezza: int, altezza: int, vicini: int, etichette: bool, aree: int, metri_larghezza: float, metri_altezza: float, srid: int}|null  null senza geometria o senza GD
+     * @param  array<string, mixed>|null  $sfondo  l'inquadratura della mappa a video mandata dal browser
+     *                                             (immagine, confini geografici, attribuzione): con lo sfondo
+     *                                             la planimetria si disegna sopra le strade, senza resta il
+     *                                             disegno dei soli dati censiti su fondo bianco
+     * @return array{png: string, larghezza: int, altezza: int, vicini: int, etichette: bool, aree: int, metri_larghezza: float, metri_altezza: float, srid: int, sfondo: bool, attribuzione: ?string}|null  null senza geometria o senza GD
      */
-    public function per(Asset $asset, int $srid): ?array
+    public function per(Asset $asset, int $srid, ?array $sfondo = null): ?array
     {
         if (! function_exists('imagecreatetruecolor')) {
             return null;
         }
-        $riga = DB::table('assets')->where('id', $asset->id)->whereNotNull('geom')
-            ->selectRaw(
-                'ST_AsGeoJSON(ST_Transform(geom, ?::int))::text AS g, ST_XMin(ST_Transform(geom, ?::int)) AS x1, ST_YMin(ST_Transform(geom, ?::int)) AS y1, ST_XMax(ST_Transform(geom, ?::int)) AS x2, ST_YMax(ST_Transform(geom, ?::int)) AS y2',
-                array_fill(0, 5, $srid)
-            )->first();
+        $inquadratura = $sfondo ? $this->inquadratura($sfondo) : null;
+
+        if ($inquadratura) {
+            // Con lo sfondo si lavora in coordinate geografiche: la proiezione e' quella
+            // della mappa a video (Mercatore sferica), l'inquadratura e' la finestra
+            $riga = DB::table('assets')->where('id', $asset->id)->whereNotNull('geom')
+                ->selectRaw('ST_AsGeoJSON(geom)::text AS g, ST_X(ST_Centroid(geom)) AS cx, ST_Y(ST_Centroid(geom)) AS cy')->first();
+            if ($riga && $riga->g && ($riga->cx < $inquadratura['west'] || $riga->cx > $inquadratura['east'] || $riga->cy < $inquadratura['south'] || $riga->cy > $inquadratura['north'])) {
+                // L'elemento non e' nell'inquadratura: meglio il disegno su fondo bianco che una mappa di un altro posto
+                imagedestroy($inquadratura['img']);
+                $inquadratura = null;
+            }
+        }
+        if (! $inquadratura) {
+            $riga = DB::table('assets')->where('id', $asset->id)->whereNotNull('geom')
+                ->selectRaw(
+                    'ST_AsGeoJSON(ST_Transform(geom, ?::int))::text AS g, ST_XMin(ST_Transform(geom, ?::int)) AS x1, ST_YMin(ST_Transform(geom, ?::int)) AS y1, ST_XMax(ST_Transform(geom, ?::int)) AS x2, ST_YMax(ST_Transform(geom, ?::int)) AS y2',
+                    array_fill(0, 5, $srid)
+                )->first();
+        }
         if (! $riga || ! $riga->g) {
+            if ($inquadratura) {
+                imagedestroy($inquadratura['img']);
+            }
+
             return null;
         }
         $geometria = json_decode($riga->g, true);
         if (! is_array($geometria) || empty($geometria['type'])) {
+            if ($inquadratura) {
+                imagedestroy($inquadratura['img']);
+            }
+
             return null;
         }
-        $f = $this->finestra((float) $riga->x1, (float) $riga->y1, (float) $riga->x2, (float) $riga->y2);
-        $involucro = sprintf('ST_Transform(ST_MakeEnvelope(%F, %F, %F, %F, %d), 4326)', $f['x1'], $f['y1'], $f['x2'], $f['y2'], $srid);
+
+        if ($inquadratura) {
+            $larghezza = $inquadratura['w'];
+            $altezza = $inquadratura['h'];
+            $west = $this->mercX($inquadratura['west']);
+            $east = $this->mercX($inquadratura['east']);
+            $south = $this->mercY($inquadratura['south']);
+            $north = $this->mercY($inquadratura['north']);
+            $cosLat = cos(deg2rad(($inquadratura['south'] + $inquadratura['north']) / 2));
+            $proietta = fn (float $lon, float $lat): array => [
+                (int) round(($this->mercX($lon) - $west) / ($east - $west) * $larghezza),
+                (int) round(($north - $this->mercY($lat)) / ($north - $south) * $altezza),
+            ];
+            $pxPerMetro = $larghezza / (($east - $west) * $cosLat);
+            $metriLarghezza = ($east - $west) * $cosLat;
+            $metriAltezza = ($north - $south) * $cosLat;
+            $involucro = sprintf('ST_MakeEnvelope(%F, %F, %F, %F, 4326)', $inquadratura['west'], $inquadratura['south'], $inquadratura['east'], $inquadratura['north']);
+            $geomSql = 'ST_AsGeoJSON(%s)::text AS g';
+            $legami = [];
+        } else {
+            $larghezza = self::LARGHEZZA;
+            $altezza = self::ALTEZZA;
+            $f = $this->finestra((float) $riga->x1, (float) $riga->y1, (float) $riga->x2, (float) $riga->y2);
+            $proietta = fn (float $x, float $y): array => [
+                (int) round(($x - $f['x1']) / $f['lx'] * $larghezza),
+                (int) round(($f['y2'] - $y) / $f['ly'] * $altezza),
+            ];
+            $pxPerMetro = $larghezza / $f['lx'];
+            $metriLarghezza = $f['lx'];
+            $metriAltezza = $f['ly'];
+            $involucro = sprintf('ST_Transform(ST_MakeEnvelope(%F, %F, %F, %F, %d), 4326)', $f['x1'], $f['y1'], $f['x2'], $f['y2'], $srid);
+            $geomSql = 'ST_AsGeoJSON(ST_Transform(%s, ?::int))::text AS g';
+            $legami = [$srid];
+        }
 
         // Vicini e aree della stessa organizzazione (lo scope dei modelli), dentro la finestra
         $vicini = Asset::query()->where('assets.id', '<>', $asset->id)
             ->whereRaw("ST_Intersects(assets.geom, {$involucro})")
-            ->selectRaw('assets.id, assets.census_code, assets.status, ST_AsGeoJSON(ST_Transform(assets.geom, ?::int))::text AS g', [$srid])
+            ->selectRaw('assets.id, assets.census_code, assets.status, '.sprintf($geomSql, 'assets.geom'), $legami)
             ->orderBy('assets.census_code')->limit(self::MASSIMO_VICINI)->get();
         $aree = Area::query()->whereRaw("ST_Intersects(areas.geom, {$involucro})")
-            ->selectRaw('areas.id, areas.name, areas.code, ST_AsGeoJSON(ST_Transform(areas.geom, ?::int))::text AS g', [$srid])
+            ->selectRaw('areas.id, areas.name, areas.code, '.sprintf($geomSql, 'areas.geom'), $legami)
             ->orderBy('areas.name')->limit(50)->get();
 
-        $img = imagecreatetruecolor(self::LARGHEZZA, self::ALTEZZA);
+        $img = $inquadratura['img'] ?? imagecreatetruecolor($larghezza, $altezza);
         imagealphablending($img, true);
         $c = $this->colori = [
             'sfondo' => imagecolorallocate($img, 255, 255, 255),
@@ -81,7 +143,8 @@ class PlanimetriaElemento
             'vicino' => imagecolorallocate($img, 120, 120, 120),
             'vicino_fondo' => imagecolorallocatealpha($img, 120, 120, 120, 100),
             'vicino_archivio' => imagecolorallocate($img, 190, 190, 190),
-            'vicino_testo' => imagecolorallocate($img, 70, 70, 70),
+            'vicino_testo' => imagecolorallocate($img, 50, 50, 50),
+            'alone_testo' => imagecolorallocatealpha($img, 255, 255, 255, 45),
             'elemento' => imagecolorallocate($img, 22, 163, 74),
             'elemento_bordo' => imagecolorallocate($img, 20, 83, 45),
             'elemento_fondo' => imagecolorallocatealpha($img, 22, 163, 74, 85),
@@ -89,12 +152,9 @@ class PlanimetriaElemento
             'nero' => imagecolorallocate($img, 20, 20, 20),
             'bianco' => imagecolorallocate($img, 255, 255, 255),
         ];
-        imagefill($img, 0, 0, $c['sfondo']);
-        $proietta = fn (float $x, float $y): array => [
-            (int) round(($x - $f['x1']) / $f['lx'] * self::LARGHEZZA),
-            (int) round(($f['y2'] - $y) / $f['ly'] * self::ALTEZZA),
-        ];
-        $pxPerMetro = self::LARGHEZZA / $f['lx'];
+        if (! $inquadratura) {
+            imagefill($img, 0, 0, $c['sfondo']);
+        }
 
         foreach ($aree as $area) {
             $g = json_decode($area->g, true);
@@ -103,7 +163,7 @@ class PlanimetriaElemento
             }
             $this->disegna($img, $g, $proietta, ['riempimento' => $c['area_fondo'], 'bordo' => $c['area_bordo'], 'spessore' => 2, 'tratteggio' => true, 'raggio' => 4]);
             $centro = $this->centro($g, $proietta);
-            if ($centro && $centro[0] > 20 && $centro[0] < self::LARGHEZZA - 20 && $centro[1] > 20 && $centro[1] < self::ALTEZZA - 20) {
+            if ($centro && $centro[0] > 20 && $centro[0] < $larghezza - 20 && $centro[1] > 20 && $centro[1] < $altezza - 20) {
                 $this->etichetta($img, $centro[0], $centro[1], (string) $area->name, 11, $c['area_testo'], true, true);
             }
         }
@@ -120,7 +180,7 @@ class PlanimetriaElemento
             if ($etichette && $v->census_code) {
                 $centro = $this->centro($g, $proietta);
                 if ($centro) {
-                    $this->etichetta($img, $centro[0] + 9, $centro[1] + 4, (string) $v->census_code, 10, $c['vicino_testo'], false, false);
+                    $this->etichetta($img, $centro[0] + 9, $centro[1] + 4, (string) $v->census_code, 10, $c['vicino_testo'], false, $inquadratura !== null);
                 }
             }
         }
@@ -139,9 +199,9 @@ class PlanimetriaElemento
             $this->etichetta($img, $centro[0] + 12, $centro[1] - 10, (string) $asset->census_code, 13, $c['elemento_bordo'], true, true);
         }
 
-        $this->scalaGrafica($img, $pxPerMetro, $f['lx']);
-        $this->nord($img);
-        imagerectangle($img, 0, 0, self::LARGHEZZA - 1, self::ALTEZZA - 1, $c['cornice']);
+        $this->scalaGrafica($img, $pxPerMetro, $metriLarghezza, $altezza);
+        $this->nord($img, $larghezza);
+        imagerectangle($img, 0, 0, $larghezza - 1, $altezza - 1, $c['cornice']);
 
         ob_start();
         imagepng($img, null, 6);
@@ -153,14 +213,16 @@ class PlanimetriaElemento
 
         return [
             'png' => $png,
-            'larghezza' => self::LARGHEZZA,
-            'altezza' => self::ALTEZZA,
+            'larghezza' => $larghezza,
+            'altezza' => $altezza,
             'vicini' => $vicini->count(),
             'etichette' => $etichette,
             'aree' => $aree->count(),
-            'metri_larghezza' => round($f['lx'], 1),
-            'metri_altezza' => round($f['ly'], 1),
+            'metri_larghezza' => round($metriLarghezza, 1),
+            'metri_altezza' => round($metriAltezza, 1),
             'srid' => $srid,
+            'sfondo' => $inquadratura !== null,
+            'attribuzione' => $inquadratura['attribuzione'] ?? null,
         ];
     }
 
@@ -326,13 +388,13 @@ class PlanimetriaElemento
         }
         $scatolaTesto = imagettfbbox($corpo, 0, $carattere, $testo);
         if ($scatola && $scatolaTesto) {
-            imagefilledrectangle($img, $x + $scatolaTesto[6] - 3, $y + $scatolaTesto[7] - 2, $x + $scatolaTesto[2] + 3, $y + $scatolaTesto[3] + 2, $this->colori['bianco']);
+            imagefilledrectangle($img, $x + $scatolaTesto[6] - 3, $y + $scatolaTesto[7] - 2, $x + $scatolaTesto[2] + 3, $y + $scatolaTesto[3] + 2, $grassetto ? $this->colori['bianco'] : ($this->colori['alone_testo'] ?? $this->colori['bianco']));
         }
         imagettftext($img, $corpo, 0, $x, $y, $colore, $carattere, $testo);
     }
 
     /** La scala grafica in basso a sinistra: un numero tondo di metri, meta' nera e meta' bianca. */
-    private function scalaGrafica(GdImage $img, float $pxPerMetro, float $metriLarghezza): void
+    private function scalaGrafica(GdImage $img, float $pxPerMetro, float $metriLarghezza, int $altezza): void
     {
         $metri = $this->numeroTondo($metriLarghezza / 4);
         if ($metri <= 0) {
@@ -340,7 +402,7 @@ class PlanimetriaElemento
         }
         $lunghezza = (int) round($metri * $pxPerMetro);
         $x = 24;
-        $y = self::ALTEZZA - 30;
+        $y = $altezza - 30;
         imagefilledrectangle($img, $x - 10, $y - 24, $x + $lunghezza + 46, $y + 14, $this->colori['bianco']);
         imagerectangle($img, $x - 10, $y - 24, $x + $lunghezza + 46, $y + 14, $this->colori['cornice']);
         imagefilledrectangle($img, $x, $y, $x + intdiv($lunghezza, 2), $y + 7, $this->colori['nero']);
@@ -351,14 +413,81 @@ class PlanimetriaElemento
     }
 
     /** La freccia del nord in alto a destra: nel sistema metrico la mappa e' orientata a nord. */
-    private function nord(GdImage $img): void
+    private function nord(GdImage $img, int $larghezza): void
     {
-        $cx = self::LARGHEZZA - 40;
+        $cx = $larghezza - 40;
         $cy = 44;
         imagefilledellipse($img, $cx, $cy, 52, 52, $this->colori['bianco']);
         imageellipse($img, $cx, $cy, 52, 52, $this->colori['cornice']);
         imagefilledpolygon($img, [$cx, $cy - 18, $cx - 9, $cy + 10, $cx, $cy + 4, $cx + 9, $cy + 10], $this->colori['nero']);
         $this->etichetta($img, $cx - 5, $cy + 42, 'N', 12, $this->colori['nero'], true, false);
+    }
+
+    /**
+     * L'inquadratura mandata dal browser, controllata: immagine leggibile,
+     * confini sensati (nord in alto, al piu' qualche chilometro), ridotta a
+     * LARGHEZZA_SFONDO. Null se qualcosa non torna: si stampa su fondo bianco.
+     *
+     * @param  array<string, mixed>  $sfondo
+     * @return array{img: GdImage, w: int, h: int, west: float, south: float, east: float, north: float, attribuzione: ?string}|null
+     */
+    private function inquadratura(array $sfondo): ?array
+    {
+        $b = $sfondo['bounds'] ?? null;
+        if (! is_array($b) || ! is_string($sfondo['immagine'] ?? null)) {
+            return null;
+        }
+        foreach (['west', 'south', 'east', 'north'] as $k) {
+            if (! isset($b[$k]) || ! is_numeric($b[$k])) {
+                return null;
+            }
+        }
+        [$west, $south, $east, $north] = [(float) $b['west'], (float) $b['south'], (float) $b['east'], (float) $b['north']];
+        if ($west >= $east || $south >= $north || $west < -180 || $east > 180 || $south < -85 || $north > 85
+            || $east - $west > 0.2 || $north - $south > 0.2 || $east - $west < 0.00002 || $north - $south < 0.00001) {
+            return null;
+        }
+        $byte = (new PartiComuni)->byteDaDataUri($sfondo['immagine']);
+        if (! $byte || strlen($byte) > 12_000_000) {
+            return null;
+        }
+        $info = @getimagesizefromstring($byte);
+        if (! $info || $info[0] < 100 || $info[1] < 100 || $info[0] > 6000 || $info[1] > 6000) {
+            return null;
+        }
+        $img = @imagecreatefromstring($byte);
+        if (! $img) {
+            return null;
+        }
+        if (imagesx($img) > self::LARGHEZZA_SFONDO) {
+            $ridotta = imagescale($img, self::LARGHEZZA_SFONDO);
+            imagedestroy($img);
+            if (! $ridotta) {
+                return null;
+            }
+            $img = $ridotta;
+        }
+        if (! imageistruecolor($img)) {
+            $tela = imagecreatetruecolor(imagesx($img), imagesy($img));
+            imagecopy($tela, $img, 0, 0, 0, 0, imagesx($img), imagesy($img));
+            imagedestroy($img);
+            $img = $tela;
+        }
+        $attribuzione = isset($sfondo['attribuzione']) && is_string($sfondo['attribuzione']) ? trim(mb_substr($sfondo['attribuzione'], 0, 300)) : '';
+
+        return ['img' => $img, 'w' => imagesx($img), 'h' => imagesy($img), 'west' => $west, 'south' => $south, 'east' => $east, 'north' => $north, 'attribuzione' => $attribuzione !== '' ? $attribuzione : null];
+    }
+
+    /** Mercatore sferica (EPSG:3857), la proiezione della mappa a video: la x. */
+    private function mercX(float $lon): float
+    {
+        return 6378137.0 * deg2rad($lon);
+    }
+
+    /** Mercatore sferica: la y. */
+    private function mercY(float $lat): float
+    {
+        return 6378137.0 * log(tan(M_PI / 4 + deg2rad(max(-85.0, min(85.0, $lat))) / 2));
     }
 
     private function numeroTondo(float $massimo): float

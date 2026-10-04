@@ -393,10 +393,18 @@ Stato per punto; i dettagli stanno nelle sezioni che seguono.
 9. **Fatto**: la scheda stampata (`GET assets/{id}/pdf`, `PdfController::asset`, sezioni in
    `PdfController::SEZIONI_SCHEDA`: posizione, dendro, vta, lavori, attributi, benefici, cronologia, foto)
    ha **Posizione** (coordinate WGS84 e piane nel sistema metrico dell'organizzazione, tipo di geometria
-   con le misure calcolate, precisione GPS, vincoli) con la **planimetria schematica**
-   (`App\Services\Pdf\PlanimetriaElemento`, PNG disegnato con GD dai soli dati censiti: l'elemento con
-   la chioma a misura, i vicini con il cartellino, i confini delle aree tratteggiati, scala grafica e
-   nord; **senza sfondo cartografico**, perche' lo sfondo a video viene da server esterni), **tutte le
+   con le misure calcolate, precisione GPS, vincoli) con la **planimetria**
+   (`App\Services\Pdf\PlanimetriaElemento`, PNG disegnato con GD: l'elemento con la chioma a misura, i
+   vicini con il cartellino, i confini delle aree tratteggiati, scala grafica e nord). **Lo sfondo
+   stradale lo manda il browser** (richiesta del committente 04/10/2026 "non si puo' fare con lo sfondo
+   stradale?"): stampando dalla scheda, `istantaneaMappa` (`resources/js/mappaIstantanea.js`) legge il
+   canvas della mappa a fianco (`preserveDrawingBuffer`, `pixelRatio` 2,5 per la nitidezza) e manda in
+   `POST assets/{id}/pdf` l'immagine con i confini geografici e l'attribuzione; il server proietta i
+   dati censiti in Mercatore sferica (la proiezione della mappa a video) e li disegna sopra. Il server
+   non interroga i server delle mappe: dipenderebbe da un servizio esterno a ogni stampa, e le regole
+   d'uso di OpenStreetMap non lo gradiscono. Senza inquadratura (GET, collegamento diretto, mappa
+   ruotata o inclinata, elemento fuori dall'inquadratura, immagine illeggibile) resta il disegno su
+   fondo bianco nel sistema metrico dell'organizzazione, e la didascalia lo dice. Poi **tutte le
    valutazioni** VTA con rilevatore e prescrizioni, **lavori** con quello che si fa su quell'elemento e
    **segnalazioni**, **benefici ambientali** dichiarati stime, **cronologia** (`CronologiaElemento`, con
    il totale se tagliata). Le stesse sezioni stanno nei menu di stampa di `Nuovo/Scheda.vue` e

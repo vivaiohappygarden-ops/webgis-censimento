@@ -14,6 +14,7 @@ import { statusLabel } from '@/assetStatus';
 import { contornoSiIncrocia } from '@/geometria';
 import { areaPiana, lunghezzaPiana, testoCoordinate } from '@/proiezione';
 import { fetchPdf } from '@/pdf';
+import { attribuzioneDaStile } from '@/mappaIstantanea';
 
 const page = usePage();
 // Nella veste nuova la pagina porta la testata di Patrimonio con le sue schede
@@ -998,22 +999,8 @@ function datiStampa() {
         rotazione: map.getBearing(),
         centro: { wgs84: centro.wgs84, metrico: centro.metrico, sistema: centro.sistema },
         legenda,
-        attribuzione: mapEl.value?.querySelector('.maplibregl-ctrl-attribution')?.textContent?.trim() || attribuzioneDaStile(),
+        attribuzione: mapEl.value?.querySelector('.maplibregl-ctrl-attribution')?.textContent?.trim() || attribuzioneDaStile(map),
     };
-}
-
-// L'attribuzione dello sfondo letta dallo stile quando il controllo a video
-// non l'ha ancora scritta (sorgenti usate dai livelli visibili, senza HTML)
-function attribuzioneDaStile() {
-    try {
-        const stile = map.getStyle();
-        const usate = new Set(stile.layers.filter((l) => l.layout?.visibility !== 'none' && l.source).map((l) => l.source));
-        const testi = [...usate].map((id) => stile.sources[id]?.attribution).filter(Boolean)
-            .map((t) => String(t).replace(/<[^>]+>/g, '').trim()).filter(Boolean);
-        return [...new Set(testi)].join(' - ') || null;
-    } catch {
-        return null;
-    }
 }
 
 async function creaOrdineDaSelezione() {

@@ -13,6 +13,7 @@ import ModuloAlbero from '@/Components/Nuovo/ModuloAlbero.vue';
 import { usaCaricamento } from '@/caricamento';
 import { avvisoCaricamento } from '@/avvisi';
 import { fetchPdf } from '@/pdf';
+import { istantaneaMappa } from '@/mappaIstantanea';
 import { inArchivio, statusLabel } from '@/assetStatus';
 import { BOTTONE, BOTTONE_PICCOLO, BOTTONE_SECONDARIO, CARTA, CHIP, ETICHETTA, plurale } from '@/nuovo/stile';
 
@@ -317,7 +318,11 @@ async function scaricaPdf() {
     stampa.errore = '';
     const scelte = Object.keys(stampa.sezioni).filter((k) => stampa.sezioni[k]);
     const query = scelte.length === Object.keys(SEZIONI_STAMPA).length ? '' : `?sezioni=${scelte.join(',')}`;
-    const { error } = await fetchPdf(`/api/v1/assets/${props.assetId}/pdf${query}`);
+    // L'inquadratura della mappa a fianco va nella planimetria del PDF, con il suo sfondo
+    const sfondo = stampa.sezioni.posizione ? await istantaneaMappa(map, mapEl.value) : null;
+    const { error } = sfondo
+        ? await fetchPdf(`/api/v1/assets/${props.assetId}/pdf${query}`, { method: 'POST', body: { sfondo } })
+        : await fetchPdf(`/api/v1/assets/${props.assetId}/pdf${query}`);
     if (error) stampa.errore = error;
     stampa.busy = false;
 }
@@ -450,16 +455,27 @@ async function eliminaScheda() {
 const mapEl = ref(null);
 let map = null;
 
+// Il primo vertice di una geometria GeoJSON: basta per centrare la mappa prima dell'inquadratura
+function primoPunto(coords) {
+    if (! Array.isArray(coords)) return null;
+    return typeof coords[0] === 'number' ? coords : primoPunto(coords[0]);
+}
+
 function initMap() {
     if (! asset.value?.geom_geojson || map || ! mapEl.value) return;
     map = new maplibregl.Map({
         container: mapEl.value,
+        center: primoPunto(asset.value.geom_geojson.coordinates) ?? [12.5, 41.9],
         zoom: 17,
         interactive: false,
         attributionControl: false,
+        // La stampa rilegge il canvas (istantaneaMappa): serve il buffer conservato e una
+        // risoluzione maggiore, perche' l'inquadratura finisce stampata nella scheda
+        preserveDrawingBuffer: true,
+        pixelRatio: 2.5,
         style: {
             version: 8,
-            sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, maxzoom: 19 } },
+            sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, maxzoom: 19, attribution: '© OpenStreetMap contributors' } },
             layers: [
                 { id: 'sfondo', type: 'background', paint: { 'background-color': '#e8ede9' } },
                 { id: 'osm', type: 'raster', source: 'osm' },
@@ -488,7 +504,9 @@ function initMap() {
         const bounds = new maplibregl.LngLatBounds();
         const extend = (coords) => { if (typeof coords[0] === 'number') bounds.extend(coords); else coords.forEach(extend); };
         extend(asset.value.geom_geojson.coordinates);
-        map.fitBounds(bounds, { padding: 40, maxZoom: 18 });
+        // Senza animazione: con il volo dal centro del mondo la mappa resterebbe per
+        // secondi su una vista sbagliata, e la stampa la fotograferebbe cosi'
+        map.fitBounds(bounds, { padding: 40, maxZoom: 18, animate: false });
     });
 }
 
@@ -544,6 +562,7 @@ onBeforeUnmount(() => map?.remove());
                                 <label v-for="(nome, chiave) in SEZIONI_STAMPA" :key="chiave" class="mt-1 flex min-h-9 items-center gap-2 text-[13px]">
                                     <input v-model="stampa.sezioni[chiave]" type="checkbox" class="rounded border-gray-300"> {{ nome }}
                                 </label>
+                                <p class="mt-2 text-xs text-gray-500">La planimetria usa l'inquadratura della mappa qui a fianco, con il suo sfondo.</p>
                                 <div class="mt-2 flex flex-wrap gap-2">
                                     <button type="button" :class="BOTTONE_PICCOLO" :disabled="stampa.busy" data-test="scheda-pdf" @click="scaricaPdf">Scarica il PDF</button>
                                     <button v-if="asset.public_token" type="button" :class="BOTTONE_PICCOLO" :disabled="stampa.busy" @click="scaricaCartellino">Cartellino QR</button>
