@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Organization;
+use App\Support\Funzioni;
 use App\Support\Interfaccia;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -14,6 +15,7 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user();
+        $organizzazione = $user ? Organization::find($user->tenant_id) : null;
 
         return [
             ...parent::share($request),
@@ -24,7 +26,7 @@ class HandleInertiaRequests extends Middleware
                     'name' => $user->name,
                     'email' => $user->email,
                     // Il sistema metrico serve alla mappa per le coordinate piane e le misure
-                    'organization' => Organization::find($user->tenant_id)?->only(['name', 'slug', 'metric_srid']),
+                    'organization' => $organizzazione?->only(['name', 'slug', 'metric_srid']),
                     'permissions' => $user->getAllPermissions()->pluck('name')->values(),
                     // Chi gestisce la piattaforma vede la console nel menu
                     'piattaforma' => (bool) $user->is_platform_manager,
@@ -50,6 +52,9 @@ class HandleInertiaRequests extends Middleware
             'portale' => [
                 'base_host' => config('portal.base_host'),
             ],
+            // Le funzioni accese per l'organizzazione dalla console della piattaforma
+            // (es. il gestionale giardini): le pagine non mostrano i comandi di quelle spente
+            'funzioni' => Funzioni::per($organizzazione),
             // Dizionari agronomici della scheda albero: le tendine leggono
             // le stesse voci che il server accetta, senza copie nel JS
             'agronomia' => config('agronomia'),

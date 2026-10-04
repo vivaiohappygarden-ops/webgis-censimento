@@ -8,6 +8,7 @@ use App\Services\Piattaforma\ConsolePiattaforma;
 use App\Services\Sicurezza\DueFattori;
 use App\Services\Tenancy\CreatoreOrganizzazione;
 use App\Support\Audit;
+use App\Support\Funzioni;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -111,6 +112,20 @@ class PiattaformaController extends Controller implements HasMiddleware
             'totale' => $stato['totale'],
             'restanti' => $stato['restanti'],
         ]]);
+    }
+
+    /**
+     * Le funzioni accese per l'organizzazione (App\Support\Funzioni): il
+     * collegamento al gestionale giardini e' nostro e chi affitta il programma lo
+     * trova spento, finche' da qui non lo si accende. Il registro resta nel tenant
+     * del gestore.
+     */
+    public function funzioni(Request $request, string $id, ConsolePiattaforma $console): JsonResponse
+    {
+        $data = $request->validate(array_fill_keys(array_keys(Funzioni::DI_SERIE), ['sometimes', 'boolean']));
+        $organizzazione = $console->impostaFunzioni(Organization::query()->findOrFail($id), $data);
+
+        return response()->json(['data' => Funzioni::per($organizzazione)]);
     }
 
     public function sospendi(Request $request, string $id, ConsolePiattaforma $console): JsonResponse

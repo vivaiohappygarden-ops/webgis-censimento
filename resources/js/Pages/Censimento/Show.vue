@@ -722,7 +722,7 @@ onBeforeUnmount(() => map?.remove());
                         </div>
                     </div>
 
-                    <GestionalePanel :asset="asset" class="mt-6" />
+                    <GestionalePanel v-if="$page.props.funzioni?.gestionale_giardini" :asset="asset" class="mt-6" />
 
                     <!-- Fine vita della scheda: abbattimento (si conserva) o eliminazione (rilievo sbagliato) -->
                     <div v-if="canUpdate || canDelete" class="mt-6 rounded-xl border border-gray-200 bg-white p-6">

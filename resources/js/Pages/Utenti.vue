@@ -657,7 +657,8 @@ async function salvaMembri(team) {
 
 onMounted(() => {
     load();
-    loadGestionale();
+    // Funzione spenta dalla console: la sezione non c'e' e la chiamata risponderebbe 403
+    if (page.props.funzioni?.gestionale_giardini) loadGestionale();
     loadPerizia();
     loadRilevatori();
     loadIntestazione();
@@ -1144,7 +1145,7 @@ onMounted(() => {
             </section>
 
             <!-- Collegamento al gestionale WordPress -->
-            <section class="mt-6 rounded-xl border border-gray-200 bg-white p-6" id="gestionale" data-test="gest-settings">
+            <section v-if="page.props.funzioni?.gestionale_giardini" class="mt-6 rounded-xl border border-gray-200 bg-white p-6" id="gestionale" data-test="gest-settings">
                 <h2 class="text-sm font-semibold">Collegamento al gestionale giardini (WordPress)</h2>
                 <p class="mt-1 text-xs text-gray-500">
                     Dalla scheda di un elemento si può inviare al gestionale un intervento da fare o da

@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\GestionaleDispatch;
 use App\Models\Organization;
 use App\Models\Photo;
+use App\Support\Funzioni;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -44,6 +45,15 @@ class SendToGestionale implements ShouldQueue
         }
 
         $organization = Organization::query()->find($dispatch->tenant_id);
+        // Funzione spenta dalla console dopo l'accodamento: non si spedisce niente
+        if (! Funzioni::attiva($organization, Funzioni::GESTIONALE_GIARDINI)) {
+            $dispatch->forceFill([
+                'status' => 'failed',
+                'last_error' => 'Il collegamento al gestionale non è attivo per questa organizzazione.',
+            ])->save();
+
+            return;
+        }
         $config = $organization?->settings['gestionale'] ?? null;
         if (empty($config['endpoint']) || empty($config['token'])) {
             $dispatch->forceFill([

@@ -28,6 +28,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->throttleApi();
         $middleware->statefulApi();
+        // Funzioni accese per organizzazione dalla console della piattaforma
+        // (es. il gestionale giardini): 'funzione:nome' chiude le chiamate di una spenta
+        $middleware->alias(['funzione' => \App\Http\Middleware\RichiediFunzione::class]);
         // La radice smista per permesso (mappa, portale o guida)
         $middleware->redirectUsersTo('/');
         // Chi bussa al portale dell'impresa da ospite trova la SUA porta

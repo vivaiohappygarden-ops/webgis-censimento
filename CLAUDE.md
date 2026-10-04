@@ -322,7 +322,17 @@ Stato per punto; i dettagli stanno nelle sezioni che seguono.
    compilano genere, famiglia e nome comune ("pino romano" -> Pinus pinea). L'app di campo scarica il
    dizionario nel bootstrap (tabella Dexie `specie`, v6), lo mette nelle proposte e compila da sola
    genere e nome botanico quando il nome scritto e' una voce conosciuta. Prove: `DizionarioSpecieTest`.
-3. "Invia al gestionale" spegnibile per organizzazione, spento di serie per chi affitta: da fare.
+3. **Fatto**: "Invia al gestionale" e' una **funzione per organizzazione** (`App\Support\Funzioni`,
+   `organizations.settings['funzioni']['gestionale_giardini']`), **spenta di serie**: la accende solo la
+   console della piattaforma (`PUT piattaforma/organizzazioni/{id}/funzioni`,
+   `ConsolePiattaforma::impostaFunzioni`, registro `piattaforma.funzioni` nel tenant del gestore, spunta
+   nella scheda dell'organizzazione). Spenta, il middleware `funzione:gestionale_giardini`
+   (`RichiediFunzione`, alias in `bootstrap/app.php`) chiude tutte le chiamate di `GestionaleController`
+   con 403, il job `SendToGestionale` non spedisce, e le pagine non mostrano ne' la sezione in Utenti
+   ne' "Invia al gestionale" nella scheda ne' la voce in Impostazioni (prop condivisa `funzioni`). La
+   migrazione `funzioni_organizzazione` tiene accesa la funzione a chi aveva gia' un indirizzo del
+   gestionale configurato. Una funzione nuova si aggiunge a `Funzioni::DI_SERIE` e si regola dalla stessa
+   console. Prove: `FunzioniOrganizzazioneTest` (e `GestionaleTest` la accende prima di provare).
 4. Zone (sedi distanti, accessi per zona): da fare, per ultimo.
 5. **Fatto**: bersagli della VTA anche dagli elementi censiti (`Components/CercaElemento.vue`, ricerca a
    parole su `GET assets?q=`; il bersaglio entra come riga "CARTELLINO · descrizione", i `targets`

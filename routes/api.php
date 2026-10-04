@@ -43,6 +43,7 @@ Route::prefix('v1')->group(function () {
         Route::post('piattaforma/organizzazioni/{id}/sospendi', [\App\Http\Controllers\Api\V1\PiattaformaController::class, 'sospendi'])->whereUuid('id');
         Route::post('piattaforma/organizzazioni/{id}/riattiva', [\App\Http\Controllers\Api\V1\PiattaformaController::class, 'riattiva'])->whereUuid('id');
         Route::put('piattaforma/organizzazioni/{id}/marche', [\App\Http\Controllers\Api\V1\PiattaformaController::class, 'marche'])->whereUuid('id');
+        Route::put('piattaforma/organizzazioni/{id}/funzioni', [\App\Http\Controllers\Api\V1\PiattaformaController::class, 'funzioni'])->whereUuid('id');
 
         Route::get('catalog', [CatalogController::class, 'index'])->middleware('can:catalog.view');
         Route::post('catalog/object-types', [CatalogAdminController::class, 'storeObjectType']);

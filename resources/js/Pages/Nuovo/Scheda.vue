@@ -46,6 +46,8 @@ const vincoliDisponibili = ref([]);
 const vincoloDaCollegare = ref('');
 
 const modifica = reactive({ misure: false, identita: false, scheda: false });
+// Le funzioni accese per l'organizzazione dalla console della piattaforma (es. il gestionale giardini)
+const funzioni = computed(() => usePage().props.funzioni ?? {});
 const pannelli = reactive({ vta: apriValutazione.value, storia: false, gestionale: false, fineVita: false });
 
 // "Valuta VTA" in testa: apre la sezione con il modulo della nuova valutazione
@@ -532,7 +534,7 @@ onBeforeUnmount(() => map?.remove());
                                 <button v-if="canUpdate" type="button" class="flex min-h-11 w-full items-center rounded-lg px-3 text-left hover:bg-gray-50 md:min-h-9" :disabled="azione.inCorso" data-test="scheda-pagina-pubblica" @click="togglePaginaPubblica">{{ asset.public_token ? 'Disattiva la pagina pubblica con QR' : 'Attiva la pagina pubblica con QR' }}</button>
                                 <button v-if="canUpdate" type="button" class="flex min-h-11 w-full items-center rounded-lg px-3 text-left hover:bg-gray-50 md:min-h-9" :disabled="azione.inCorso" data-test="scheda-nascondi" @click="toggleNascondi">{{ asset.public_hidden ? 'Mostra di nuovo sul portale' : 'Nascondi dal portale' }}</button>
                                 <button type="button" class="flex min-h-11 w-full items-center rounded-lg px-3 text-left hover:bg-gray-50 md:min-h-9" data-test="scheda-storia" @click="apriStoria">{{ pannelli.storia ? 'Chiudi la storia delle modifiche' : 'Storia delle modifiche' }}</button>
-                                <button v-if="can('works.manage')" type="button" class="flex min-h-11 w-full items-center rounded-lg px-3 text-left hover:bg-gray-50 md:min-h-9" @click="pannelli.gestionale = ! pannelli.gestionale">{{ pannelli.gestionale ? 'Chiudi invio al gestionale' : 'Invia al gestionale' }}</button>
+                                <button v-if="can('works.manage') && funzioni.gestionale_giardini" type="button" class="flex min-h-11 w-full items-center rounded-lg px-3 text-left hover:bg-gray-50 md:min-h-9" @click="pannelli.gestionale = ! pannelli.gestionale">{{ pannelli.gestionale ? 'Chiudi invio al gestionale' : 'Invia al gestionale' }}</button>
                                 <button v-if="canUpdate || canDelete" type="button" class="flex min-h-11 w-full items-center rounded-lg px-3 text-left hover:bg-gray-50 md:min-h-9" data-test="scheda-fine-vita" @click="pannelli.fineVita = ! pannelli.fineVita">Abbattimento ed eliminazione</button>
                                 <Link :href="`/censimento/${asset.id}?precedente=1`" class="flex min-h-11 items-center rounded-lg border-t border-gray-100 px-3 text-gray-600 hover:bg-gray-50 md:min-h-9">Scheda della veste precedente</Link>
                             </div>
@@ -742,7 +744,7 @@ onBeforeUnmount(() => map?.remove());
                             </div>
                         </section>
 
-                        <GestionalePanel v-if="pannelli.gestionale" :asset="asset" />
+                        <GestionalePanel v-if="pannelli.gestionale && funzioni.gestionale_giardini" :asset="asset" />
 
                         <section v-if="pannelli.fineVita && (canUpdate || canDelete)" :class="CARTA" class="p-4" data-test="sezione-fine-vita">
                             <h2 class="text-base font-bold text-gray-900">Abbattimento ed eliminazione</h2>

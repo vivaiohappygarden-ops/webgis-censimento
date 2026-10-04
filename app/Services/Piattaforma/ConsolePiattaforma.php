@@ -5,6 +5,7 @@ namespace App\Services\Piattaforma;
 use App\Models\Organization;
 use App\Models\User;
 use App\Support\Audit;
+use App\Support\Funzioni;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -84,6 +85,8 @@ class ConsolePiattaforma
                     'lavori' => (int) ($lavori[$o->id] ?? 0),
                     'marche' => (int) ($marche[$o->id] ?? 0),
                 ],
+                // Le funzioni regolabili dalla console (spente di serie per chi affitta)
+                'gestionale_giardini' => Funzioni::attiva($o, Funzioni::GESTIONALE_GIARDINI),
                 'marche_configurate' => ! empty($o->settings['marche']['utente']) && ! empty($o->settings['marche']['password_cifrata']),
                 'marche_pacchetto' => isset($o->settings['marche']['pacchetto']) && $o->settings['marche']['pacchetto'] !== '' ? (int) $o->settings['marche']['pacchetto'] : null,
                 'marche_utente' => isset($o->settings['marche']['utente']) ? \App\Services\Marche\MarcheTemporali::mascherato($o->settings['marche']['utente']) : null,
@@ -127,6 +130,27 @@ class ConsolePiattaforma
             $o->forceFill(['is_active' => true, 'settings' => $settings])->save();
 
             Audit::log('piattaforma.riattivata', $o, ['slug' => $o->slug, 'sospensione' => $sospensione]);
+        });
+    }
+
+    /**
+     * Accende o spegne le funzioni regolabili di un'organizzazione (App\Support\Funzioni):
+     * scrittura sotto lock come le altre impostazioni, registro nel tenant del gestore.
+     *
+     * @param  array<string, mixed>  $funzioni  nome => acceso
+     */
+    public function impostaFunzioni(Organization $organizzazione, array $funzioni): Organization
+    {
+        return DB::transaction(function () use ($organizzazione, $funzioni) {
+            $o = Organization::query()->lockForUpdate()->findOrFail($organizzazione->id);
+            $prima = Funzioni::per($o);
+            $settings = $o->settings ?? [];
+            $settings['funzioni'] = array_replace($settings['funzioni'] ?? [],
+                array_map(fn ($acceso) => (bool) $acceso, array_intersect_key($funzioni, Funzioni::DI_SERIE)));
+            $o->forceFill(['settings' => $settings])->save();
+            Audit::log('piattaforma.funzioni', $o, ['slug' => $o->slug, 'prima' => $prima, 'dopo' => Funzioni::per($o)]);
+
+            return $o;
         });
     }
 

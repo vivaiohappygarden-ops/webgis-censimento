@@ -9,6 +9,7 @@ use App\Models\GestionaleDispatch;
 use App\Models\Organization;
 use App\Models\Photo;
 use App\Support\Audit;
+use App\Support\Funzioni;
 use App\Support\ListQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,6 +30,9 @@ class GestionaleController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
+            // Il collegamento si accende per organizzazione dalla console della
+            // piattaforma: spento, nessuna chiamata risponde (decisione committente 04/10/2026)
+            new Middleware('funzione:'.Funzioni::GESTIONALE_GIARDINI),
             new Middleware('can:users.manage', only: ['settings', 'updateSettings', 'test']),
             new Middleware('can:works.manage', only: ['dispatchAsset', 'retry']),
             new Middleware('can:works.view', only: ['index']),

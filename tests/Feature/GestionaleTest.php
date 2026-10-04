@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\SendToGestionale;
 use App\Models\GestionaleDispatch;
+use App\Models\Organization;
 use App\Models\Photo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -28,9 +29,17 @@ class GestionaleTest extends TestCase
         parent::setUp();
 
         [$this->organization, $this->user] = $this->createTenantUser();
+        // Il collegamento nasce spento (FunzioniOrganizzazioneTest): qui si prova acceso
+        $this->accendiFunzione($this->organization);
         $this->area = $this->createArea($this->organization);
         $this->treeType = $this->makeObjectType($this->organization, 'P', 'P103108');
         $this->actingAsTenantUser($this->user);
+    }
+
+    /** Quello che fa la console della piattaforma quando accende il gestionale a un'organizzazione. */
+    private function accendiFunzione(Organization $organizzazione): void
+    {
+        $organizzazione->forceFill(['settings' => array_replace($organizzazione->settings ?? [], ['funzioni' => ['gestionale_giardini' => true]])])->save();
     }
 
     private function configure(string $endpoint = 'https://giardini.esempio.it/?rest_route=/yourgarden/v1/sopralluoghi'): void
@@ -354,7 +363,8 @@ class GestionaleTest extends TestCase
         ])->assertForbidden();
 
         // Un altro tenant non vede gli invii ne' le impostazioni altrui
-        [, $foreign] = $this->createTenantUser();
+        [$altra, $foreign] = $this->createTenantUser();
+        $this->accendiFunzione($altra);
         $this->actingAsTenantUser($foreign);
         $this->assertSame([], $this->getJson('/api/v1/gestionale/dispatches')->assertOk()->json('data'));
         $this->assertFalse($this->getJson('/api/v1/gestionale/settings')->assertOk()->json('data.configured'));

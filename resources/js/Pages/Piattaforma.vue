@@ -99,7 +99,27 @@ function scegli(o) {
     azione.chiediMotivo = false;
     azione.note = o.note ?? '';
     azione.noteSalvate = false;
+    Object.assign(funzioni, { gestionale: !! o.gestionale_giardini, salvato: false, errore: '' });
     Object.assign(pacchetto, { valore: o.marche_pacchetto ?? '', utente: '', password: '', url: '', policy: '', apriAccount: false, salvato: false, errore: '' });
+}
+
+// Le funzioni accese per l'organizzazione: il collegamento al gestionale
+// giardini e' spento di serie per chi affitta il programma e si accende da qui
+const funzioni = reactive({ gestionale: false, salvato: false, errore: '' });
+async function salvaFunzioni() {
+    funzioni.errore = '';
+    funzioni.salvato = false;
+    await conAzione(async () => {
+        const { data } = await axios.put(`/api/v1/piattaforma/organizzazioni/${scelta.value.id}/funzioni`, { gestionale_giardini: funzioni.gestionale });
+        scelta.value.gestionale_giardini = data.data.gestionale_giardini;
+        const riga = (organizzazioni.value ?? []).find((o) => o.id === scelta.value.id);
+        if (riga) riga.gestionale_giardini = data.data.gestionale_giardini;
+        funzioni.salvato = true;
+    }, 'Salvataggio delle funzioni non riuscito');
+    if (azione.errore) {
+        funzioni.errore = azione.errore;
+        azione.errore = '';
+    }
 }
 
 // Le marche temporali si vendono a pacchetti: qui si assegna il pacchetto a
@@ -315,6 +335,22 @@ onMounted(() => { if (props.dueFattoriAttiva) carica(caricaElenco); });
                                     <button type="submit" :class="BOTTONE_PICCOLO" :disabled="azione.busy" data-test="salva-pacchetto">Salva il pacchetto</button>
                                     <span v-if="pacchetto.salvato" class="text-[13px] text-green-800" data-test="pacchetto-salvato">Salvato.</span>
                                     <span v-if="pacchetto.errore" class="text-[13px] text-red-700" data-test="pacchetto-errore">{{ pacchetto.errore }}</span>
+                                </div>
+                            </form>
+
+                            <form class="mt-4 space-y-2" data-test="modulo-funzioni" @submit.prevent="salvaFunzioni">
+                                <p class="text-sm font-medium">Funzioni accese per questa organizzazione</p>
+                                <label class="flex min-h-11 items-start gap-2 text-sm md:min-h-9">
+                                    <input v-model="funzioni.gestionale" type="checkbox" class="mt-1 rounded border-gray-300" data-test="funzione-gestionale">
+                                    <span>
+                                        Collegamento al gestionale giardini (WordPress)
+                                        <span class="block text-[13px] text-gray-600">Spento di serie per chi affitta il programma: e' un collegamento nostro, non del prodotto. Acceso, l'organizzazione vede la sezione in Utenti e "Invia al gestionale" nelle schede.</span>
+                                    </span>
+                                </label>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button type="submit" :class="BOTTONE_PICCOLO" :disabled="azione.busy" data-test="salva-funzioni">Salva le funzioni</button>
+                                    <span v-if="funzioni.salvato" class="text-[13px] text-green-800" data-test="funzioni-salvate">Salvato.</span>
+                                    <span v-if="funzioni.errore" class="text-[13px] text-red-700" data-test="funzioni-errore">{{ funzioni.errore }}</span>
                                 </div>
                             </form>
 
