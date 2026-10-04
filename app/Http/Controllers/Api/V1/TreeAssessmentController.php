@@ -312,6 +312,8 @@ class TreeAssessmentController extends Controller implements HasMiddleware
             'failure_class' => ['nullable', Rule::in(TreeAssessment::FAILURE_CLASSES)],
             'outcome' => ['nullable', 'in:ok,monitor,prescriptions,fell'],
             'prescriptions' => ['nullable', 'string'],
+            // Entro quando fare quello che si prescrive: diventa la data dell'ordine (GeneratorePrescrizioniVta)
+            'prescriptions_due_on' => ['nullable', 'date'],
             // Pubblicazione della relazione come atto sul portale
             'is_public' => ['sometimes', 'boolean'],
             'next_check_due' => array_values(array_filter(

@@ -349,8 +349,22 @@ Stato per punto; i dettagli stanno nelle sezioni che seguono.
    restano stringhe).
 6. **Fatto**: prescrizioni da un elenco predefinito con ricerca a parole (`config/agronomia.php`,
    chiave `prescrizioni_vta`, 38 formule d'uso) piu' il testo libero, che resta la prescrizione vera.
-7. Interventi prescritti dalle VTA raccolti con data suggerita e pulsante per l'ordine: da fare (oggi
-   il programma genera da solo solo i ricontrolli, `GeneratoreRicontrolliVta`).
+7. **Fatto**: la valutazione VTA porta la data entro cui fare gli interventi prescritti
+   (`tree_assessments.prescriptions_due_on`, campo "Interventi prescritti da fare entro il" in
+   `TreeVtaPanel`, visibile quando c'e' una prescrizione). `App\Services\Works\GeneratorePrescrizioniVta`
+   (stesse regole di casa di `GeneratoreRicontrolliVta`: anteprima ed esecuzione dallo stesso metodo,
+   riferimento all'**ultima** valutazione di ogni albero, un ordine per valutazione garantito dall'indice
+   unico su `origin = 'vta_prescription'`, l'annullato copre) trasforma la prescrizione in un ordine
+   "Prescrizione VTA - cartellino" pianificato alla data prescritta, con la lavorazione riconosciuta dal
+   testo (il nome del listino piu' lungo che compare, poi la famiglia di parole: potatura/rimonda/
+   riduzione, abbattimento, trattamento, consolidamento) o quella generica `PRE-VTA`, e la prescrizione
+   come nota della riga dell'elemento. `GeneratorePrescrizioniVta::righe` e' l'unica lettura: la usano
+   `GET vta/prescrizioni` (elenco con l'ordine nato o "senza ordine"), `POST vta/prescrizioni`
+   (`assessment_ids` o `client_id`, `prova`; permesso `works.manage`), la sezione "Interventi prescritti
+   dalle VTA" di `Vta.vue` (`?prescrizioni=1` ci porta), il pulsante "Crea l'ordine dalla prescrizione"
+   nella carta Stabilita' della scheda nuova (poi mostra "Intervento in agenda: ODL-x") e le righe
+   `prescrizione` di Oggi (`CoseDaFare::prescrizioniVta`: scadute, entro 30 giorni o senza data, famiglia
+   lavori). Prove: `PrescrizioniVtaTest`.
 8. **Fatto**: rilevatori abilitati (`RilevatoriController`, `organizations.settings['rilevatori']`,
    Utenti > Chi firma > "Rilevatori abilitati", permesso `users.manage` per scrivere; chiunque legge).
    La scheda VTA li propone in "Rilievo eseguito da" ("Io stesso" / elenco / "Altro" a mano) e la
@@ -369,8 +383,23 @@ Stato per punto; i dettagli stanno nelle sezioni che seguono.
    il totale se tagliata). Le stesse sezioni stanno nei menu di stampa di `Nuovo/Scheda.vue` e
    `Censimento/Show.vue`. Il SRID nelle `ST_Transform` va legato come intero (`?::int`): legato come
    testo PostGIS lo legge come stringa proj. Prove: `SchedaPdfCompletaTest`.
-10. Che cosa fare su ogni elemento dell'ordine: da fare.
-11. Scadenze di concimazioni e trattamenti: da fare.
+10. **Fatto**: nella pagina dell'ordine la tabella Elementi ha la colonna "Che cosa si fa": lavorazione
+    di riga (tendina del listino, vuota = quella dell'ordine) e note per la squadra, salvate con la
+    riga (`PATCH work-orders/{id}/assets/{riga}` accetta `work_type_id` e `notes`; un elemento compare
+    una volta per lavorazione, 422 altrimenti) e "+ altra lavorazione…" che aggiunge una seconda riga
+    sullo stesso elemento (siepe A: potatura piu' concimazione). L'app di campo mostra lavorazione e
+    note sotto ogni elemento dell'ordine (lo scarico le portava gia'). Prove: `LavorazioniPerElementoTest`.
+11. **Fatto**: ogni intervento in Fitosanitari ha un **tipo** (`phyto_treatments.kind`:
+    fitosanitario, diserbo, concimazione, biostimolante, altro; `PhytoTreatment::KINDS`) e la data del
+    **prossimo intervento** (`next_due_on`, dopo la data dell'intervento). Nel registro dei trattamenti
+    fitosanitari (PDF) entrano solo i tipi di `PhytoTreatment::NEL_REGISTRO` (fitosanitario e diserbo):
+    concimazioni e altri prodotti restano negli elenchi e nelle scadenze. Le scadenze
+    (`CoseDaFare::trattamenti`: scadute o entro 60 giorni, una scadenza vale finche' sulla stessa area ed
+    elemento non si registra un intervento successivo dello stesso tipo) escono da `GET
+    phyto-treatments/scadenze`, in testa alla pagina Fitosanitari ("Prossimi interventi", pulsante
+    "Registra" che riapre il modulo con i dati dell'ultima volta, anche da `?ripeti=ID`) e come righe
+    `trattamento` di Oggi (famiglia lavori). `GET phyto-treatments/{id}` legge il singolo intervento,
+    l'elenco filtra per `kind`. Prove: `ScadenzeTrattamentiTest`.
 12. **Fatto**: le pagine di prima montate nelle sezioni nuove hanno tutte lo stesso involucro
     (`mx-auto max-w-[1640px] p-4 md:p-6 lg:px-7`, lo stesso delle pagine nuove) e il titolo delle
     testate sta in una riga da 36 px (`min-h-9`): cambiando scheda il titolo non si sposta.

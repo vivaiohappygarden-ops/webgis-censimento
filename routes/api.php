@@ -158,6 +158,9 @@ Route::prefix('v1')->group(function () {
         Route::get('vta/alberi', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'alberi']);
         Route::post('vta/valida', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'valida']);
         Route::post('vta/ricontrolli', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'ricontrolli']);
+        // Interventi prescritti dalle VTA: elenco e ordini di lavoro che ne nascono
+        Route::get('vta/prescrizioni', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'prescrizioni']);
+        Route::post('vta/prescrizioni', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'generaPrescrizioni']);
         // POST e non GET: fino a 500 id selezionati non stanno in un indirizzo
         Route::post('vta/registro', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'registro']);
         Route::get('vta/tutelati', [\App\Http\Controllers\Api\V1\VtaDashboardController::class, 'tutelati']);
@@ -256,8 +259,10 @@ Route::prefix('v1')->group(function () {
             ->only(['index', 'store', 'update', 'destroy'])->whereUuid('certificate');
 
         Route::get('phyto-treatments/register-pdf', [\App\Http\Controllers\Api\V1\PhytoTreatmentController::class, 'registerPdf']);
+        // Prossimi interventi scaduti o in scadenza (trattamenti, concimazioni, altri prodotti)
+        Route::get('phyto-treatments/scadenze', [\App\Http\Controllers\Api\V1\PhytoTreatmentController::class, 'scadenze']);
         Route::apiResource('phyto-treatments', \App\Http\Controllers\Api\V1\PhytoTreatmentController::class)
-            ->only(['index', 'store', 'update', 'destroy'])->whereUuid('phyto_treatment');
+            ->only(['index', 'show', 'store', 'update', 'destroy'])->whereUuid('phyto_treatment');
 
         Route::apiResource('work-orders', \App\Http\Controllers\Api\V1\WorkOrderController::class)
             ->whereUuid('work_order');

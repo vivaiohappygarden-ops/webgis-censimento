@@ -40,7 +40,7 @@ const nonCollegati = Number(parametri.get('non_collegati') ?? 0);
 const PRIORITA = { low: 'Bassa', normal: 'Normale', high: 'Alta', urgent: 'Urgente' };
 const ORIGINI = {
     manual: 'creato a mano', estimate: 'da un preventivo accettato', inspection: "da un'ispezione", issue: 'da una segnalazione',
-    maintenance_plan: 'da un piano di manutenzione', non_conformity: 'da una non conformità', vta_recheck: 'dallo scadenzario VTA', work_check: 'da un controllo qualità',
+    maintenance_plan: 'da un piano di manutenzione', non_conformity: 'da una non conformità', vta_recheck: 'dallo scadenzario VTA', vta_prescription: 'da una prescrizione VTA', work_check: 'da un controllo qualità',
 };
 const TONO_STATO = { draft: 'neutra', planned: 'info', assigned: 'info', in_progress: 'ok', suspended: 'attenzione', completed: 'neutra', cancelled: 'neutra' };
 // Il verbo di ogni passaggio, come lo direbbe chi lavora
@@ -189,6 +189,13 @@ const aggiungiElemento = (a) => conAzione(async () => {
     ricerca.q = '';
     ricerca.risultati = [];
 }, "Errore nell'aggiunta");
+// Lo stesso elemento con un'altra lavorazione: siepe A "potatura" piu' "concimazione"
+const aggiungiLavorazione = (riga, evento) => {
+    const workTypeId = evento.target.value;
+    evento.target.value = '';
+    if (! workTypeId) return;
+    conAzione(() => axios.post(`/api/v1/work-orders/${props.ordineId}/assets`, { asset_id: riga.asset_id, work_type_id: workTypeId }), 'Lavorazione non aggiunta');
+};
 const togliElemento = (riga) => {
     if (! window.confirm(`Togliere ${riga.asset?.census_code ?? 'questo elemento'} dall'ordine?`)) return;
     conAzione(() => axios.delete(`/api/v1/work-orders/${props.ordineId}/assets/${riga.id}`), 'Errore nella rimozione');
@@ -201,7 +208,7 @@ watch(() => ordine.value?.assets, (righe) => {
     Object.keys(righeQuantita).forEach((k) => { if (! correnti.has(k)) delete righeQuantita[k]; });
     (righe ?? []).forEach((r) => {
         if (righeQuantita[r.id]?.dirty) return;
-        righeQuantita[r.id] = { quantity: r.planned_quantity != null ? Number(r.planned_quantity) : null, unit: r.unit ?? '', dirty: false, busy: false };
+        righeQuantita[r.id] = { quantity: r.planned_quantity != null ? Number(r.planned_quantity) : null, unit: r.unit ?? '', work_type_id: r.work_type_id ?? '', notes: r.notes ?? '', dirty: false, busy: false };
     });
 });
 async function salvaQuantita(riga) {
@@ -211,7 +218,9 @@ async function salvaQuantita(riga) {
     azione.errore = '';
     try {
         await axios.patch(`/api/v1/work-orders/${props.ordineId}/assets/${riga.id}`, {
-            planned_quantity: m.quantity === '' || m.quantity == null ? null : m.quantity, unit: m.unit.trim() || null, version: ordine.value.version,
+            planned_quantity: m.quantity === '' || m.quantity == null ? null : m.quantity, unit: m.unit.trim() || null,
+            // Che cosa si fa su questo elemento: lavorazione e note per la squadra (punto 10 del committente)
+            work_type_id: m.work_type_id || null, notes: m.notes.trim() || null, version: ordine.value.version,
         });
         m.dirty = false;
         await ricarica();
@@ -434,11 +443,21 @@ onBeforeUnmount(() => map?.remove());
                             </div>
                             <div v-if="ordine.assets.length" class="overflow-x-auto border-t border-gray-100">
                                 <table class="w-full text-sm">
-                                    <thead><tr class="text-left text-xs font-semibold uppercase tracking-wide text-gray-500"><th class="px-4 py-2">Cartellino</th><th class="px-3 py-2">Specie o tipo</th><th class="px-3 py-2">Quantità prevista</th><th class="px-3 py-2">Stato</th><th class="px-3 py-2">Fatto il</th><th class="px-3 py-2 text-right">Foto</th><th v-if="canManage && ! chiuso" class="px-3 py-2"></th></tr></thead>
+                                    <thead><tr class="text-left text-xs font-semibold uppercase tracking-wide text-gray-500"><th class="px-4 py-2">Cartellino</th><th class="px-3 py-2">Specie o tipo</th><th class="px-3 py-2">Che cosa si fa</th><th class="px-3 py-2">Quantità prevista</th><th class="px-3 py-2">Stato</th><th class="px-3 py-2">Fatto il</th><th class="px-3 py-2 text-right">Foto</th><th v-if="canManage && ! chiuso" class="px-3 py-2"></th></tr></thead>
                                     <tbody class="divide-y divide-gray-100">
                                         <tr v-for="r in ordine.assets" :key="r.id" data-test="ordine-riga-elemento">
                                             <td class="whitespace-nowrap px-4 py-2 font-semibold text-gray-900"><Link :href="`/censimento/${r.asset_id}`" class="underline-offset-2 hover:underline">{{ r.asset?.census_code || r.asset_id.slice(0, 8) }}</Link></td>
-                                            <td class="px-3 py-2 text-gray-700">{{ r.asset?.tree?.species || r.asset?.object_type?.name || '—' }}<span v-if="r.work_type" class="block text-xs text-gray-500">{{ r.work_type.name }}</span></td>
+                                            <td class="px-3 py-2 text-gray-700">{{ r.asset?.tree?.species || r.asset?.object_type?.name || '—' }}</td>
+                                            <td class="px-3 py-2">
+                                                <div v-if="canManage && ! chiuso && righeQuantita[r.id]" class="flex min-w-[14rem] flex-col gap-1.5">
+                                                    <select v-model="righeQuantita[r.id].work_type_id" class="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm" aria-label="Lavorazione su questo elemento" data-test="ordine-riga-lavorazione" @change="righeQuantita[r.id].dirty = true">
+                                                        <option value="">{{ ordine.work_type ? `Come l'ordine (${ordine.work_type.name})` : 'Lavorazione non indicata' }}</option>
+                                                        <option v-for="w in workTypes" :key="w.id" :value="w.id">{{ w.name }}</option>
+                                                    </select>
+                                                    <input v-model="righeQuantita[r.id].notes" maxlength="500" placeholder="Note per la squadra (es. concimare dopo la potatura)" class="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" aria-label="Note per la squadra" data-test="ordine-riga-note" @input="righeQuantita[r.id].dirty = true">
+                                                </div>
+                                                <div v-else class="text-gray-700">{{ r.work_type?.name ?? (ordine.work_type ? `Come l'ordine (${ordine.work_type.name})` : '—') }}<span v-if="r.notes" class="block whitespace-pre-line text-xs text-gray-500">{{ r.notes }}</span></div>
+                                            </td>
                                             <td class="px-3 py-2">
                                                 <div v-if="canManage && ! chiuso && righeQuantita[r.id]" class="flex flex-wrap items-center gap-1.5">
                                                     <input v-model.number="righeQuantita[r.id].quantity" type="number" step="0.01" min="0" class="w-24 rounded-lg border border-gray-300 px-2 py-1.5 text-right text-sm" aria-label="Quantità prevista" data-test="ordine-riga-quantita" @input="righeQuantita[r.id].dirty = true">
@@ -451,7 +470,15 @@ onBeforeUnmount(() => map?.remove());
                                             <td class="whitespace-nowrap px-3 py-2"><span :class="perElemento[r.asset_id]?.fatti ? CHIP.ok : CHIP.attenzione">{{ perElemento[r.asset_id]?.fatti ? 'Fatto' : 'Da fare' }}</span></td>
                                             <td class="whitespace-nowrap px-3 py-2 text-gray-700">{{ formatData(perElemento[r.asset_id]?.ultimo) ?? '—' }}</td>
                                             <td class="px-3 py-2 text-right text-gray-700">{{ perElemento[r.asset_id]?.foto ?? 0 }}</td>
-                                            <td v-if="canManage && ! chiuso" class="px-3 py-2 text-right"><button type="button" class="min-h-9 text-[13px] text-red-700 underline-offset-2 hover:underline" @click="togliElemento(r)">Togli</button></td>
+                                            <td v-if="canManage && ! chiuso" class="px-3 py-2 text-right">
+                                                <div class="flex flex-col items-end gap-1">
+                                                    <button type="button" class="min-h-9 text-[13px] text-red-700 underline-offset-2 hover:underline" @click="togliElemento(r)">Togli</button>
+                                                    <select v-if="workTypes.length" class="max-w-[11rem] rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs" aria-label="Aggiungi un'altra lavorazione su questo elemento" data-test="ordine-riga-altra" @change="aggiungiLavorazione(r, $event)">
+                                                        <option value="">+ altra lavorazione…</option>
+                                                        <option v-for="w in workTypes" :key="w.id" :value="w.id">{{ w.name }}</option>
+                                                    </select>
+                                                </div>
+                                            </td>
                                         </tr>
                                     </tbody>
                                 </table>

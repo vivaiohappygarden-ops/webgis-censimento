@@ -15,6 +15,11 @@ const nuova = computed(() => page.props.interfaccia?.modo === 'nuova');
 const permissions = computed(() => page.props.auth?.user?.permissions ?? []);
 const canManage = computed(() => permissions.value.includes('works.manage'));
 
+// Tipi di intervento (gli stessi di PhytoTreatment::KINDS): nel registro PDF entrano solo i fitosanitari
+const KIND_LABELS = {
+    fitosanitario: 'Trattamento fitosanitario', diserbo: 'Diserbo', concimazione: 'Concimazione',
+    biostimolante: 'Biostimolante o corroborante', altro: 'Altro prodotto',
+};
 const METHOD_LABELS = {
     irrorazione: 'Irrorazione',
     endoterapia: 'Endoterapia',
@@ -40,7 +45,9 @@ function todayLocal() {
 
 const currentYear = Number(todayLocal().slice(0, 4));
 const years = Array.from({ length: 6 }, (_, i) => currentYear - i);
-const filters = reactive({ year: currentYear, area_id: '' });
+const filters = reactive({ year: currentYear, area_id: '', kind: '' });
+// Prossimi interventi scaduti o in scadenza (gli stessi di Oggi)
+const scadenze = ref({ rows: [], overdue_count: 0, due_soon_count: 0 });
 
 // Un solo pannello per creare e modificare: mode distingue i due casi
 const drawer = reactive({ open: false, mode: 'new', id: null, version: null, busy: false, error: '' });
@@ -59,7 +66,7 @@ function closeDrawer() {
 
 function blankForm() {
     return {
-        area_id: '', asset_id: '', treated_on: todayLocal(), product_name: '',
+        area_id: '', asset_id: '', kind: 'fitosanitario', treated_on: todayLocal(), next_due_on: '', product_name: '',
         registration_number: '', active_substance: '', vegetation: '', adversity: '',
         method: 'irrorazione', quantity: null, unit: 'l', water_volume_l: null,
         surface_sqm: null, reentry_hours: null, operator_id: '', notes: '',
@@ -100,11 +107,12 @@ async function load() {
     pageError.value = '';
     try {
         const { data } = await axios.get('/api/v1/phyto-treatments', {
-            params: { year: filters.year, area_id: filters.area_id || undefined },
+            params: { year: filters.year, area_id: filters.area_id || undefined, kind: filters.kind || undefined },
         });
         if (seq !== loadSeq) return;
         treatments.value = data.data;
         total.value = data.total ?? data.data.length;
+        loadScadenze();
     } catch (err) {
         if (seq !== loadSeq) return;
         pageError.value = avvisoCaricamento(err);
@@ -177,6 +185,37 @@ const alberiVoci = computed(() => [
     ...formAssets.value,
 ]);
 
+async function loadScadenze() {
+    try {
+        const { data } = await axios.get('/api/v1/phyto-treatments/scadenze');
+        scadenze.value = data.data;
+    } catch {
+        scadenze.value = { rows: [], overdue_count: 0, due_soon_count: 0 };
+    }
+}
+
+// Lo stesso intervento, da registrare di nuovo: area, elemento, prodotto e
+// avversita' dell'ultima volta, data di oggi e prossima scadenza da scrivere
+async function ripetiDa(id) {
+    try {
+        const { data } = await axios.get(`/api/v1/phyto-treatments/${id}`);
+        const t = data.data;
+        openCreator();
+        Object.assign(form, {
+            area_id: t.area_id, asset_id: t.asset_id ?? '', kind: t.kind ?? 'fitosanitario',
+            product_name: t.product_name ?? '', registration_number: t.registration_number ?? '', active_substance: t.active_substance ?? '',
+            vegetation: t.vegetation ?? '', adversity: t.adversity ?? '', method: t.method ?? 'irrorazione', unit: t.unit ?? 'l',
+            quantity: t.quantity !== null && t.quantity !== undefined ? Number(t.quantity) : null,
+            water_volume_l: t.water_volume_l !== null ? Number(t.water_volume_l) : null,
+            surface_sqm: t.surface_sqm !== null ? Number(t.surface_sqm) : null,
+            reentry_hours: t.reentry_hours,
+        });
+        Object.assign(loaded, { areaId: t.area_id, asset: t.asset ?? null, operatorName: '' });
+    } catch (err) {
+        pageError.value = avvisoCaricamento(err);
+    }
+}
+
 function openCreator() {
     Object.assign(form, blankForm());
     Object.assign(loaded, { areaId: '', asset: null, operatorName: '' });
@@ -197,7 +236,9 @@ function openDetail(treatment) {
     Object.assign(form, blankForm(), {
         area_id: treatment.area_id,
         asset_id: treatment.asset_id ?? '',
+        kind: treatment.kind ?? 'fitosanitario',
         treated_on: dateOnly(treatment.treated_on),
+        next_due_on: dateOnly(treatment.next_due_on),
         product_name: treatment.product_name,
         registration_number: treatment.registration_number ?? '',
         active_substance: treatment.active_substance ?? '',
@@ -224,7 +265,9 @@ function payload() {
     return {
         area_id: form.area_id,
         asset_id: form.asset_id || null,
+        kind: form.kind,
         treated_on: form.treated_on,
+        next_due_on: form.next_due_on || null,
         product_name: form.product_name.trim(),
         registration_number: form.registration_number.trim() || null,
         active_substance: form.active_substance.trim() || null,
@@ -292,9 +335,15 @@ const formValid = computed(() => form.area_id && form.treated_on
 
 watch(() => [filters.year, filters.area_id], load);
 
+watch(() => filters.kind, () => load());
+
 onMounted(() => {
     load();
+    loadScadenze();
     loadLookups();
+    // Da Oggi: "Registra" riapre il modulo con i dati dell'intervento precedente
+    const ripeti = new URLSearchParams(window.location.search).get('ripeti');
+    if (ripeti) ripetiDa(ripeti);
 });
 </script>
 
@@ -319,13 +368,31 @@ onMounted(() => {
                         class="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800"
                         data-test="fito-new"
                         @click="openCreator"
-                    >Nuovo trattamento</button>
+                    >Nuovo intervento</button>
                 </div>
             </div>
+
+            <section v-if="scadenze.rows.length" class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4" data-test="fito-scadenze">
+                <h2 class="text-sm font-semibold text-amber-900">Prossimi interventi: {{ scadenze.overdue_count }} {{ scadenze.overdue_count === 1 ? 'scaduto' : 'scaduti' }}, {{ scadenze.due_soon_count }} entro 60 giorni</h2>
+                <ul class="mt-2 divide-y divide-amber-100">
+                    <li v-for="r in scadenze.rows" :key="r.id" class="flex flex-wrap items-center justify-between gap-2 py-1.5 text-sm">
+                        <span>
+                            <span class="font-medium">{{ r.kind_label }} · {{ r.product_name }}</span>
+                            <span class="text-gray-700"> · {{ r.census_code || r.area || '' }}<template v-if="r.vegetation"> · {{ r.vegetation }}</template></span>
+                            <span class="block text-xs" :class="r.next_due_on < todayLocal() ? 'font-semibold text-red-700' : 'text-gray-600'">{{ r.next_due_on < todayLocal() ? 'scaduto il' : 'entro il' }} {{ formatDate(r.next_due_on) }} · ultimo il {{ formatDate(r.treated_on) }}</span>
+                        </span>
+                        <button v-if="canManage" type="button" class="min-h-11 rounded-lg border border-amber-700 px-3 text-sm font-medium text-amber-900 hover:bg-amber-100 md:min-h-9" data-test="fito-ripeti" @click="ripetiDa(r.id)">Registra</button>
+                    </li>
+                </ul>
+            </section>
 
             <div class="mb-3 flex flex-wrap gap-2">
                 <select v-model="filters.year" data-test="fito-year" class="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
                     <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
+                </select>
+                <select v-model="filters.kind" data-test="fito-tipo" class="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" aria-label="Tipo di intervento">
+                    <option value="">Tutti i tipi</option>
+                    <option v-for="(label, value) in KIND_LABELS" :key="value" :value="value">{{ label }}</option>
                 </select>
                 <ScegliVoce v-model="filters.area_id" data-test="fito-filter-area" class="w-full sm:w-56" campo-classe="px-2.5 py-1.5 text-sm" :voci="areas" :campi-ricerca="['name', 'code']" tutti="Tutte le aree" vuoto="Nessuna area trovata." />
             </div>
@@ -341,6 +408,7 @@ onMounted(() => {
                     <thead>
                         <tr class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
                             <th class="px-4 py-2.5 font-medium">Data</th>
+                            <th class="px-4 py-2.5 font-medium">Tipo</th>
                             <th class="px-4 py-2.5 font-medium">Area / elemento</th>
                             <th class="px-4 py-2.5 font-medium">Prodotto</th>
                             <th class="px-4 py-2.5 font-medium">Avversità</th>
@@ -348,6 +416,7 @@ onMounted(() => {
                             <th class="px-4 py-2.5 text-right font-medium">Quantità</th>
                             <th class="px-4 py-2.5 text-right font-medium">Rientro (h)</th>
                             <th class="px-4 py-2.5 font-medium">Operatore</th>
+                            <th class="px-4 py-2.5 font-medium">Prossimo</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-50">
@@ -359,6 +428,7 @@ onMounted(() => {
                             @click="openDetail(t)"
                         >
                             <td class="px-4 py-2">{{ formatDate(t.treated_on) }}</td>
+                            <td class="px-4 py-2 text-gray-600">{{ KIND_LABELS[t.kind] ?? t.kind }}</td>
                             <td class="px-4 py-2">
                                 {{ t.area?.name }}<template v-if="t.asset"> - {{ t.asset.census_code }}</template>
                                 <span v-if="t.vegetation" class="block text-xs text-gray-500">{{ t.vegetation }}</span>
@@ -372,9 +442,10 @@ onMounted(() => {
                             <td class="px-4 py-2 text-right">{{ fmtQty(t) }}</td>
                             <td class="px-4 py-2 text-right">{{ t.reentry_hours ?? '—' }}</td>
                             <td class="px-4 py-2 text-gray-600">{{ t.operator?.name ?? '—' }}</td>
+                            <td class="px-4 py-2" :class="t.next_due_on && t.next_due_on.slice(0, 10) < todayLocal() ? 'font-semibold text-red-700' : ''">{{ t.next_due_on ? formatDate(t.next_due_on) : '—' }}</td>
                         </tr>
                         <tr v-if="! treatments.length && ! loading && ! pageError">
-                            <td colspan="8" class="px-4 py-8 text-center text-gray-400">
+                            <td colspan="10" class="px-4 py-8 text-center text-gray-400">
                                 Nessun trattamento registrato nel {{ filters.year }}.
                             </td>
                         </tr>
@@ -386,7 +457,7 @@ onMounted(() => {
                 <div v-if="drawer.open" class="fixed inset-0 z-50 flex justify-end bg-black/30" @click.self="closeDrawer">
                     <div class="h-full w-full max-w-xl overflow-y-auto bg-white p-6 shadow-2xl" data-test="fito-drawer">
                         <div class="flex items-start justify-between">
-                            <h2 class="font-semibold">{{ drawer.mode === 'new' ? 'Nuovo trattamento' : 'Trattamento del ' + formatDate(form.treated_on) }}</h2>
+                            <h2 class="font-semibold">{{ drawer.mode === 'new' ? 'Nuovo intervento' : (KIND_LABELS[form.kind] ?? 'Intervento') + ' del ' + formatDate(form.treated_on) }}</h2>
                             <button class="text-gray-400 hover:text-gray-600" @click="closeDrawer">✕</button>
                         </div>
 
@@ -402,8 +473,20 @@ onMounted(() => {
                                 <ScegliVoce v-model="form.asset_id" data-test="fito-asset" class="mt-1 w-full" campo-classe="px-2.5 py-2 text-sm" campo-nome="census_code" :voci="alberiVoci" :campi-ricerca="['census_code']" :disabilitato="! canManage || ! form.area_id" tutti="Tutta l'area" vuoto="Nessun elemento trovato." />
                             </label>
                             <label class="block text-xs">
-                                <span class="text-gray-500">Data del trattamento *</span>
+                                <span class="text-gray-500">Tipo di intervento *</span>
+                                <select v-model="form.kind" data-test="fito-kind" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" :disabled="! canManage">
+                                    <option v-for="(label, value) in KIND_LABELS" :key="value" :value="value">{{ label }}</option>
+                                </select>
+                                <span v-if="! ['fitosanitario', 'diserbo'].includes(form.kind)" class="mt-1 block text-gray-500">Concimazioni e altri prodotti restano negli elenchi e nelle scadenze, ma non entrano nel registro dei trattamenti fitosanitari.</span>
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Data dell'intervento *</span>
                                 <input v-model="form.treated_on" type="date" :max="todayLocal()" data-test="fito-data" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" :disabled="! canManage">
+                            </label>
+                            <label class="block text-xs">
+                                <span class="text-gray-500">Prossimo intervento entro il</span>
+                                <input v-model="form.next_due_on" type="date" :min="form.treated_on" data-test="fito-prossimo" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" :disabled="! canManage">
+                                <span class="mt-1 block text-gray-500">Con la data l'intervento compare fra le scadenze di Oggi e in testa a questa pagina.</span>
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Metodo *</span>

@@ -462,6 +462,8 @@ class WorkOrderController extends Controller implements HasMiddleware
             // DB arrotonderebbe in silenzio un valore con più decimali
             'planned_quantity' => ['sometimes', 'nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999'],
             'unit' => ['sometimes', 'nullable', 'string', 'max:20'],
+            // Che cosa si fa su questo elemento (punto 10 del committente, 04/10/2026): lavorazione e note per riga
+            'work_type_id' => ['sometimes', 'nullable', 'uuid'],
             'notes' => ['sometimes', 'nullable', 'string'],
             'ricalcola' => ['sometimes', 'boolean'],
             'version' => ['sometimes', 'integer', 'min:1'],
@@ -492,6 +494,22 @@ class WorkOrderController extends Controller implements HasMiddleware
                 $row->planned_quantity = $quantita;
                 $row->unit = $unit;
             } else {
+                if (array_key_exists('work_type_id', $data)) {
+                    $nuovoTipo = ! empty($data['work_type_id']) ? WorkType::query()->findOrFail($data['work_type_id']) : null;
+                    // Stessa regola dell'aggancio: un elemento compare una volta per lavorazione
+                    $doppione = WorkOrderAsset::query()
+                        ->where('work_order_id', $workOrder->id)
+                        ->where('asset_id', $row->asset_id)
+                        ->where('id', '<>', $row->id)
+                        ->where('work_type_id', $nuovoTipo?->id)
+                        ->exists();
+                    if ($doppione) {
+                        throw ValidationException::withMessages([
+                            'work_type_id' => 'Questo elemento ha già una riga con questa lavorazione nell\'ordine.',
+                        ]);
+                    }
+                    $row->work_type_id = $nuovoTipo?->id;
+                }
                 $row->fill(collect($data)->only(['planned_quantity', 'unit', 'notes'])->all());
             }
             $row->save();

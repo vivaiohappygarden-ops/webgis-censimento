@@ -15,8 +15,24 @@ class PhytoTreatment extends Model
 
     public const UNITS = ['l', 'ml', 'kg', 'g'];
 
+    /**
+     * Tipi di intervento (punto 11 del committente, 04/10/2026): concimazioni
+     * e altri prodotti si registrano nello stesso posto dei trattamenti, con
+     * la loro scadenza, ma nel registro dei trattamenti fitosanitari entrano
+     * solo i prodotti fitosanitari (anche i diserbanti lo sono).
+     */
+    public const KINDS = [
+        'fitosanitario' => 'Trattamento fitosanitario',
+        'diserbo' => 'Diserbo',
+        'concimazione' => 'Concimazione',
+        'biostimolante' => 'Biostimolante o corroborante',
+        'altro' => 'Altro prodotto',
+    ];
+
+    public const NEL_REGISTRO = ['fitosanitario', 'diserbo'];
+
     protected $fillable = [
-        'tenant_id', 'area_id', 'asset_id', 'treated_on', 'product_name',
+        'tenant_id', 'area_id', 'asset_id', 'kind', 'treated_on', 'next_due_on', 'product_name',
         'registration_number', 'active_substance', 'adversity', 'vegetation',
         'method', 'quantity', 'unit', 'water_volume_l', 'surface_sqm',
         'reentry_hours', 'operator_id', 'notes', 'created_by', 'updated_by',
@@ -26,6 +42,7 @@ class PhytoTreatment extends Model
     {
         return [
             'treated_on' => 'date',
+            'next_due_on' => 'date',
             'version' => 'integer',
             'reentry_hours' => 'integer',
         ];

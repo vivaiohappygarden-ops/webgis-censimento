@@ -170,6 +170,26 @@ const ricontrolloInAgenda = computed(() => (cronologia.value?.eventi ?? [])
 
 const lavoriESegnalazioni = computed(() => (cronologia.value?.eventi ?? []).filter((e) => e.tipo === 'lavoro' || e.tipo === 'segnalazione'));
 
+// L'ordine nato dalle prescrizioni dell'ultima VTA (origine vta_prescription): la scheda lo mostra o offre di crearlo
+const ordinePrescrizione = computed(() => (cronologia.value?.eventi ?? [])
+    .find((e) => e.tipo === 'lavoro' && e.origine === 'vta_prescription') ?? null);
+const prescrizione = reactive({ busy: false, errore: '' });
+async function creaOrdinePrescrizione() {
+    if (! ultimaVta.value || prescrizione.busy) return;
+    prescrizione.busy = true;
+    prescrizione.errore = '';
+    try {
+        const { data } = await axios.post('/api/v1/vta/prescrizioni', { assessment_ids: [ultimaVta.value.id] });
+        const saltato = data.data.saltati?.[0];
+        if (data.data.creati?.length) await carica(load);
+        else prescrizione.errore = saltato ? `Ordine non creato: ${saltato.motivo}.` : 'Nessun ordine creato.';
+    } catch (err) {
+        prescrizione.errore = err.response?.data?.message ?? `Ordine non creato (errore ${err.response?.status ?? 'di rete'}).`;
+    } finally {
+        prescrizione.busy = false;
+    }
+}
+
 // La specie e' spesso gia' il binomio ("Tilia cordata"): il genere non si ripete
 const nomeBotanico = computed(() => {
     const t = albero.value;
@@ -673,6 +693,16 @@ onBeforeUnmount(() => map?.remove());
                                     </div>
                                     <p v-if="ultimaVta.outcome" class="text-gray-700">Esito: {{ ESITI[ultimaVta.outcome] ?? ultimaVta.outcome }}</p>
                                     <p v-if="ultimaVta.prescriptions" class="whitespace-pre-line text-gray-700">Prescrizioni: {{ ultimaVta.prescriptions }}</p>
+                                    <p v-if="ultimaVta.prescriptions" class="mt-1 flex flex-wrap items-center gap-2 text-[13px]" data-test="scheda-prescrizione">
+                                        <template v-if="ordinePrescrizione">
+                                            <span class="text-gray-700">Intervento in agenda: <Link :href="ordinePrescrizione.href" class="font-semibold text-green-800 underline-offset-2 hover:underline">{{ ordinePrescrizione.codice }}</Link><span v-if="ordinePrescrizione.stato_etichetta" class="text-gray-500"> · {{ ordinePrescrizione.stato_etichetta }}</span></span>
+                                        </template>
+                                        <template v-else>
+                                            <span class="text-gray-700">{{ ultimaVta.prescriptions_due_on ? `Da fare entro il ${formatData(ultimaVta.prescriptions_due_on)}` : 'Senza data' }} · senza ordine</span>
+                                            <button v-if="can('works.manage') && ! inArchivio(asset.status)" type="button" :class="BOTTONE_PICCOLO" :disabled="prescrizione.busy" data-test="scheda-crea-ordine-prescrizione" @click="creaOrdinePrescrizione">Crea l'ordine dalla prescrizione</button>
+                                            <span v-if="prescrizione.errore" class="text-red-700">{{ prescrizione.errore }}</span>
+                                        </template>
+                                    </p>
                                     <p class="mt-1" :class="statoVta?.tono === 'errore' ? 'font-semibold text-red-800' : 'text-gray-700'">
                                         {{ statoVta?.testo.replace(/^VTA classe [^·]+ · /, '').replace(/^\w/, (c) => c.toUpperCase()) }}<template v-if="ricontrolloInAgenda"> · in agenda: <Link :href="ricontrolloInAgenda.href" class="text-green-800 underline-offset-2 hover:underline">{{ ricontrolloInAgenda.codice }}</Link></template><template v-else-if="statoVta?.tono === 'errore'"> · senza ordine in agenda</template>
                                     </p>

@@ -6,9 +6,11 @@ use App\Models\Certificate;
 use App\Models\IrrigationSystem;
 use App\Models\Issue;
 use App\Models\NonConformity;
+use App\Models\PhytoTreatment;
 use App\Models\User;
 use App\Models\WorkOrder;
 use App\Services\Inspections\InspectionDeadlines;
+use App\Services\Works\GeneratorePrescrizioniVta;
 use App\Support\AssetStatus;
 use App\Support\IssueSla;
 use Illuminate\Support\Carbon;
@@ -55,6 +57,9 @@ class CoseDaFare
             // La pagina e le API dell'irrigazione richiedono areas.view: chi
             // non le può aprire non deve vederne i dati nel cruscotto
             'irrigation' => $user->can('areas.view') ? $this->irrigation($today) : null,
+            // Interventi prescritti dalle VTA senza ordine e prossimi trattamenti (04/10/2026)
+            'prescrizioni' => $user->can('assets.view') ? $this->prescrizioniVta($today, $user->tenant_id) : null,
+            'trattamenti' => $user->can('works.view') ? $this->trattamenti($today) : null,
         ];
     }
 
@@ -239,6 +244,81 @@ class CoseDaFare
                 'work_order_code' => $r->work_order_code,
                 'species' => $r->species,
                 'common_name' => $r->common_name,
+            ])->values(),
+        ];
+    }
+
+    /**
+     * Interventi prescritti dall'ultima VTA di ogni albero e non ancora in
+     * agenda (punto 7 del committente, 04/10/2026): scaduti, entro 30 giorni
+     * o senza data. La lettura e' GeneratorePrescrizioniVta::righe, la stessa
+     * della pagina VTA e del generatore: i numeri devono tornare.
+     */
+    public function prescrizioniVta(Carbon $today, string $tenantId): array
+    {
+        $righe = GeneratorePrescrizioniVta::righe($tenantId, null, null, soloAperte: true);
+        $oggi = $today->toDateString();
+        $horizon = $today->copy()->addDays(30)->toDateString();
+        $inFinestra = $righe->filter(fn ($r) => $r->prescriptions_due_on === null || $r->prescriptions_due_on <= $horizon);
+
+        return [
+            'open_count' => $righe->count(),
+            'overdue_count' => $righe->filter(fn ($r) => $r->prescriptions_due_on !== null && $r->prescriptions_due_on < $oggi)->count(),
+            'due_soon_count' => $righe->filter(fn ($r) => $r->prescriptions_due_on !== null && $r->prescriptions_due_on >= $oggi && $r->prescriptions_due_on <= $horizon)->count(),
+            'undated_count' => $righe->filter(fn ($r) => $r->prescriptions_due_on === null)->count(),
+            'rows' => $inFinestra->take(self::LIMIT)->map(fn ($r) => [
+                'assessment_id' => $r->assessment_id,
+                'asset_id' => $r->asset_id,
+                'census_code' => $r->census_code,
+                'species' => $r->species,
+                'common_name' => $r->common_name,
+                'failure_class' => $r->failure_class,
+                'prescriptions' => $r->prescriptions,
+                'prescriptions_due_on' => $r->prescriptions_due_on,
+                'assessed_on' => $r->assessed_on,
+            ])->values(),
+        ];
+    }
+
+    /**
+     * Trattamenti, concimazioni e altri prodotti con il prossimo intervento
+     * scaduto o entro 60 giorni (punto 11): la data la scrive chi registra
+     * l'intervento e vale finche' sulla stessa area (ed elemento) non se ne
+     * registra uno successivo dello stesso tipo.
+     */
+    public function trattamenti(Carbon $today, int $limite = self::LIMIT): array
+    {
+        $horizon = $today->copy()->addDays(60)->toDateString();
+        $righe = PhytoTreatment::query()
+            ->whereNotNull('next_due_on')->where('next_due_on', '<=', $horizon)
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('phyto_treatments as dopo')
+                ->whereColumn('dopo.tenant_id', 'phyto_treatments.tenant_id')
+                ->whereColumn('dopo.area_id', 'phyto_treatments.area_id')
+                ->whereRaw('dopo.asset_id IS NOT DISTINCT FROM phyto_treatments.asset_id')
+                ->whereColumn('dopo.kind', 'phyto_treatments.kind')
+                ->whereRaw('(dopo.treated_on, dopo.created_at) > (phyto_treatments.treated_on, phyto_treatments.created_at)')
+                ->whereNull('dopo.deleted_at'))
+            ->with(['area:id,name', 'asset:id,census_code'])
+            ->orderBy('next_due_on')->orderBy('created_at')->get();
+        $oggi = $today->toDateString();
+        $scadenza = fn (PhytoTreatment $t): string => $t->next_due_on->toDateString();
+
+        return [
+            'overdue_count' => $righe->filter(fn ($t) => $scadenza($t) < $oggi)->count(),
+            'due_soon_count' => $righe->filter(fn ($t) => $scadenza($t) >= $oggi)->count(),
+            'rows' => $righe->take($limite)->map(fn (PhytoTreatment $t) => [
+                'id' => $t->id,
+                'kind' => $t->kind,
+                'kind_label' => PhytoTreatment::KINDS[$t->kind] ?? $t->kind,
+                'product_name' => $t->product_name,
+                'vegetation' => $t->vegetation,
+                'adversity' => $t->adversity,
+                'area_id' => $t->area_id,
+                'area' => $t->area?->name,
+                'asset_id' => $t->asset_id,
+                'census_code' => $t->asset?->census_code,
+                'treated_on' => $t->treated_on?->toDateString(),
+                'next_due_on' => $scadenza($t),
             ])->values(),
         ];
     }

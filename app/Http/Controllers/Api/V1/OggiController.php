@@ -59,6 +59,8 @@ class OggiController extends Controller
             'certificati_scaduti' => 0, 'certificati_in_scadenza' => 0,
             'vta_scaduti' => 0, 'vta_in_scadenza' => 0, 'vta_senza_ordine' => 0, 'vta_mai_valutati' => 0,
             'irrigazione' => 0,
+            'prescrizioni_aperte' => 0, 'prescrizioni_scadute' => 0,
+            'trattamenti_scaduti' => 0, 'trattamenti_in_scadenza' => 0,
         ];
 
         if ($user->can('works.view')) {
@@ -150,6 +152,41 @@ class OggiController extends Controller
             }
         }
 
+        // Interventi prescritti dalle VTA senza ordine: lavoro da mettere in agenda
+        if ($user->can('assets.view')) {
+            $prescrizioni = $cose->prescrizioniVta($today, $user->tenant_id);
+            $conteggi['prescrizioni_aperte'] = $prescrizioni['open_count'];
+            $conteggi['prescrizioni_scadute'] = $prescrizioni['overdue_count'];
+            foreach ($prescrizioni['rows'] as $r) {
+                $entro = $r['prescriptions_due_on'];
+                $scaduta = $entro !== null && $entro < $today->toDateString();
+                $testo = preg_replace('/\s*\n+\s*/', ' / ', trim((string) $r['prescriptions'])) ?? '';
+                $voci[] = $this->voce('prescrizione', 'lavori', $r['assessment_id'],
+                    ($r['census_code'] ?: 'Albero senza cartellino').' · '.mb_strimwidth($testo, 0, 80, '…'),
+                    [$entro ? ($scaduta ? 'da fare entro il '.$this->data($entro).', scaduta' : 'da fare entro il '.$this->data($entro)) : 'senza data',
+                        'dalla VTA del '.$this->data($r['assessed_on']).($r['failure_class'] ? ' (classe '.$r['failure_class'].')' : '').' · senza ordine'],
+                    $scaduta ? 'ritardo' : ($entro ? 'presto' : 'programma'), $entro ? abs($this->giorniA($entro, $today)) : 0,
+                    [['label' => 'Crea l\'ordine', 'href' => '/vta?prescrizioni=1'], ['label' => 'Scheda', 'href' => '/censimento/'.$r['asset_id']]]);
+            }
+        }
+
+        // Prossimi trattamenti, concimazioni e altri prodotti
+        if ($user->can('works.view')) {
+            $trattamenti = $cose->trattamenti($today);
+            $conteggi['trattamenti_scaduti'] = $trattamenti['overdue_count'];
+            $conteggi['trattamenti_in_scadenza'] = $trattamenti['due_soon_count'];
+            foreach ($trattamenti['rows'] as $r) {
+                $scaduto = $r['next_due_on'] < $today->toDateString();
+                $voci[] = $this->voce('trattamento', 'lavori', $r['id'],
+                    $r['kind_label'].' · '.$r['product_name'].' · '.($r['census_code'] ?: ($r['area'] ?: 'area non indicata')),
+                    [implode(', ', array_filter([$r['vegetation'], $r['adversity']])),
+                        $scaduto ? 'previsto entro il '.$this->data($r['next_due_on']).', scaduto' : 'previsto entro il '.$this->data($r['next_due_on']),
+                        'ultimo il '.$this->data($r['treated_on'])],
+                    $scaduto ? 'ritardo' : 'presto', abs($this->giorniA($r['next_due_on'], $today)),
+                    [['label' => 'Registra', 'href' => '/fitosanitari?ripeti='.$r['id']]]);
+            }
+        }
+
         if ($user->can('areas.view')) {
             $irrigazione = $cose->irrigation($today);
             $conteggi['irrigazione'] = count($irrigazione['rows']);
@@ -177,7 +214,7 @@ class OggiController extends Controller
         // ogni sezione porta al massimo CoseDaFare::LIMIT righe, la frase in
         // testa alla pagina deve dire quante cose ci sono davvero
         $conteggi['famiglie'] = [
-            'lavori' => $conteggi['lavori_ritardo'] + $conteggi['lavori_settimana'],
+            'lavori' => $conteggi['lavori_ritardo'] + $conteggi['lavori_settimana'] + $conteggi['prescrizioni_aperte'] + $conteggi['trattamenti_scaduti'] + $conteggi['trattamenti_in_scadenza'],
             'controlli' => $conteggi['ispezioni_scadute'] + $conteggi['ispezioni_in_scadenza'] + $conteggi['vta_scaduti'] + $conteggi['vta_in_scadenza'],
             'segnalazioni' => $conteggi['segnalazioni'] + $conteggi['non_conformita'],
             'altro' => $conteggi['certificati_scaduti'] + $conteggi['certificati_in_scadenza'] + $conteggi['irrigazione'],

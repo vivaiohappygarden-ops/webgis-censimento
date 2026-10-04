@@ -110,6 +110,7 @@ const blankVta = () => ({
     failure_class: '',
     outcome: '',
     prescriptions: '',
+    prescriptions_due_on: '',
     next_check_due: '',
     is_public: false,
     assessor_external: '',
@@ -162,6 +163,7 @@ function editAssessment(a) {
         failure_class: a.failure_class ?? '',
         outcome: a.outcome ?? '',
         prescriptions: a.prescriptions ?? '',
+        prescriptions_due_on: dateOnly(a.prescriptions_due_on),
         next_check_due: dateOnly(a.next_check_due),
         is_public: !! a.is_public,
         assessor_external: a.assessor_external ?? '',
@@ -364,6 +366,7 @@ async function saveVta() {
             failure_class: vta.failure_class || null,
             outcome: vta.outcome || null,
             prescriptions: vta.prescriptions || null,
+            prescriptions_due_on: vta.prescriptions.trim() ? (vta.prescriptions_due_on || null) : null,
             next_check_due: vta.next_check_due || null,
             is_public: !! vta.is_public,
             assessor_external: rilevatoreScelto.value
@@ -752,6 +755,12 @@ watch(() => props.apriValutazione, (apri) => {
                         data-test="vta-prescrizioni-elenco"
                         @cambia="aggiungiPrescrizione"
                     />
+                    <!-- Con la data la prescrizione entra fra le scadenze di Oggi e diventa un ordine con un clic -->
+                    <label v-if="vta.prescriptions.trim()" class="mt-2 block">
+                        <span class="text-gray-500">Interventi prescritti da fare entro il</span>
+                        <input v-model="vta.prescriptions_due_on" type="date" :min="vta.assessed_on" data-test="vta-prescrizioni-entro" class="mt-1 block w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm sm:w-56">
+                        <span class="mt-1 block text-gray-500">Con la data la prescrizione compare fra le scadenze di Oggi; dalla scheda o da "Alberi e VTA" diventa un ordine di lavoro con un clic.</span>
+                    </label>
                 </div>
                 <div class="grid gap-2 md:grid-cols-2">
                     <label class="block text-xs">

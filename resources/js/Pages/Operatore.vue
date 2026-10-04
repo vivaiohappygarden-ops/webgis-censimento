@@ -2709,12 +2709,16 @@ onBeforeUnmount(() => {
                 <div class="rounded-xl border border-gray-200 bg-white p-4">
                     <h2 class="text-sm font-semibold">Elementi da lavorare ({{ (selectedOrder.assets ?? []).length }})</h2>
                     <ul v-if="(selectedOrder.assets ?? []).length" class="mt-2 divide-y divide-gray-50">
-                        <li v-for="row in selectedOrder.assets" :key="row.id" class="flex items-center justify-between py-1.5 text-sm">
-                            <span class="font-medium">{{ row.asset?.census_code || (row.asset_id ?? '').slice(0, 8) }}</span>
-                            <span class="text-xs text-gray-500">
-                                {{ row.work_type?.name ?? '' }}
-                                <template v-if="row.planned_quantity"> · {{ Number(row.planned_quantity) }} {{ row.unit ?? '' }}</template>
-                            </span>
+                        <li v-for="row in selectedOrder.assets" :key="row.id" class="py-1.5 text-sm">
+                            <div class="flex items-center justify-between">
+                                <span class="font-medium">{{ row.asset?.census_code || (row.asset_id ?? '').slice(0, 8) }}</span>
+                                <span class="text-xs text-gray-500">
+                                    {{ row.work_type?.name ?? '' }}
+                                    <template v-if="row.planned_quantity"> · {{ Number(row.planned_quantity) }} {{ row.unit ?? '' }}</template>
+                                </span>
+                            </div>
+                            <!-- Che cosa fare su questo elemento, scritto dall'ufficio -->
+                            <p v-if="row.notes" class="mt-0.5 whitespace-pre-line text-xs text-gray-700" data-test="campo-riga-note">{{ row.notes }}</p>
                         </li>
                     </ul>
                     <p v-else class="mt-2 text-sm text-gray-400">Nessun elemento specifico: l'ordine copre l'area indicata.</p>

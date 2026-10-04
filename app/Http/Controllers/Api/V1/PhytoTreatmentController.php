@@ -31,7 +31,7 @@ class PhytoTreatmentController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:works.view', only: ['index', 'registerPdf']),
+            new Middleware('can:works.view', only: ['index', 'show', 'scadenze', 'registerPdf']),
             new Middleware('can:works.manage', only: ['store', 'update', 'destroy']),
         ];
     }
@@ -39,7 +39,7 @@ class PhytoTreatmentController extends Controller implements HasMiddleware
     public function index(Request $request): JsonResponse
     {
         ListQuery::validateUuidFilters($request, ['area_id']);
-        $request->validate(['year' => ['nullable', 'integer', 'between:2000,2100']]);
+        $request->validate(['year' => ['nullable', 'integer', 'between:2000,2100'], 'kind' => ['nullable', Rule::in(array_keys(PhytoTreatment::KINDS))]]);
 
         $rows = $this->filtered($request)
             ->with(['area:id,name', 'asset:id,census_code', 'operator:id,name'])
@@ -52,6 +52,20 @@ class PhytoTreatmentController extends Controller implements HasMiddleware
             'data' => $rows,
             'total' => $rows->count() === 500 ? $this->filtered($request)->count() : $rows->count(),
         ]);
+    }
+
+    public function show(string $id): JsonResponse
+    {
+        return response()->json(['data' => $this->presented($id)]);
+    }
+
+    /**
+     * I prossimi interventi (trattamenti, concimazioni, altri prodotti) scaduti
+     * o in scadenza: la stessa lettura del cruscotto Oggi (CoseDaFare).
+     */
+    public function scadenze(\App\Services\Oggi\CoseDaFare $cose): JsonResponse
+    {
+        return response()->json(['data' => $cose->trattamenti($cose->oggi())]);
     }
 
     public function store(Request $request): JsonResponse
@@ -126,7 +140,10 @@ class PhytoTreatmentController extends Controller implements HasMiddleware
         $request->validate(['year' => ['nullable', 'integer', 'between:2000,2100']]);
         $year = (int) ($request->input('year') ?: now('Europe/Rome')->year);
 
+        // Nel registro entrano solo i prodotti fitosanitari: concimazioni e
+        // altri prodotti restano negli elenchi, non nell'atto
         $treatments = $this->filtered($request, $year)
+            ->whereIn('kind', PhytoTreatment::NEL_REGISTRO)
             ->with(['area:id,name', 'asset:id,census_code', 'operator:id,name'])
             ->orderBy('treated_on')->orderBy('created_at')
             ->get();
@@ -163,6 +180,9 @@ class PhytoTreatmentController extends Controller implements HasMiddleware
         if ($request->filled('area_id')) {
             $query->where('area_id', $request->string('area_id'));
         }
+        if ($request->filled('kind')) {
+            $query->where('kind', $request->string('kind'));
+        }
 
         return $query;
     }
@@ -176,6 +196,9 @@ class PhytoTreatmentController extends Controller implements HasMiddleware
             'area_id' => [$req, 'uuid'],
             'asset_id' => ['nullable', 'uuid'],
             'treated_on' => [$req, 'date', 'before_or_equal:'.now('Europe/Rome')->toDateString()],
+            'kind' => ['sometimes', Rule::in(array_keys(PhytoTreatment::KINDS))],
+            // Il prossimo intervento: finisce fra le scadenze di Oggi e della pagina
+            'next_due_on' => ['nullable', 'date', 'after:treated_on'],
             'product_name' => [$req, 'string', 'max:200'],
             'registration_number' => ['nullable', 'string', 'max:50'],
             'active_substance' => ['nullable', 'string', 'max:200'],

@@ -275,6 +275,53 @@ const ricontrolli = reactive({
     anteprima: null, esito: null,
 });
 
+// Interventi prescritti dall'ultima VTA di ogni albero (punto 7 del
+// committente, 04/10/2026): da qui diventano ordini di lavoro, uno per
+// valutazione; rilanciare non crea doppioni (GeneratorePrescrizioniVta)
+const prescrizioni = reactive({ righe: [], soloAperte: true, inCorso: false, errore: '', esito: '' });
+async function caricaPrescrizioni() {
+    try {
+        const { data } = await axios.get('/api/v1/vta/prescrizioni', {
+            params: { client_id: filtri.client_id || undefined, aperte: prescrizioni.soloAperte ? 1 : 0 },
+        });
+        prescrizioni.righe = data.data;
+        prescrizioni.errore = '';
+    } catch (err) {
+        prescrizioni.errore = avvisoCaricamento(err);
+    }
+}
+async function creaOrdiniPrescrizioni(assessmentIds) {
+    prescrizioni.inCorso = true;
+    prescrizioni.errore = '';
+    prescrizioni.esito = '';
+    try {
+        let corpo = assessmentIds ? { assessment_ids: assessmentIds } : (filtri.client_id ? { client_id: filtri.client_id } : {});
+        if (! assessmentIds) {
+            // Prima si conta (prova), poi si conferma sulle valutazioni contate
+            const { data: anteprima } = await axios.post('/api/v1/vta/prescrizioni', { ...corpo, prova: 1 });
+            const n = anteprima.data.creati.length;
+            if (! n) {
+                prescrizioni.esito = 'Nessun ordine da creare.';
+                return;
+            }
+            if (! window.confirm(`${n === 1 ? 'Nasce 1 ordine di lavoro' : `Nascono ${n} ordini di lavoro`} "Prescrizione VTA", uno per albero, con la data entro cui fare l'intervento. Rilanciare non crea doppioni. Procedere?`)) return;
+            corpo = { assessment_ids: anteprima.data.creati.map((r) => r.assessment_id) };
+        }
+        const { data } = await axios.post('/api/v1/vta/prescrizioni', { ...corpo, prova: 0 });
+        const { creati, saltati } = data.data;
+        prescrizioni.esito = (creati.length === 1 ? `Creato l'ordine ${creati[0].ordine}` : `Creati ${creati.length} ordini`)
+            + (saltati.length ? `; ${saltati.length === 1 ? '1 saltata' : `${saltati.length} saltate`}: ${saltati.map((x) => `${x.codice ?? 'albero'}: ${x.motivo}`).join('; ')}` : '') + '.';
+        await Promise.all([caricaPrescrizioni(), caricaCruscotto()]);
+    } catch (err) {
+        prescrizioni.errore = err.response?.data?.message ?? avvisoCaricamento(err);
+    } finally {
+        prescrizioni.inCorso = false;
+    }
+}
+function portaAllePrescrizioni() {
+    document.getElementById('prescrizioni')?.scrollIntoView({ block: 'start' });
+}
+
 function corpoRicontrolli(dovuti) {
     // "Dovuti": tutti quelli in scadenza entro 30 giorni, ristretti al
     // committente scelto se c'e' un filtro attivo. Altrimenti gli alberi
@@ -462,13 +509,17 @@ async function cambiaCommittente() {
     loadError.value = '';
     selezione.value = new Set();
     try {
-        await Promise.all([caricaCruscotto(), caricaFasce(), caricaElenco(1)]);
+        await Promise.all([caricaCruscotto(), caricaFasce(), caricaElenco(1), caricaPrescrizioni()]);
     } catch (err) {
         loadError.value = avvisoCaricamento(err);
     }
 }
 
 onMounted(async () => {
+    caricaPrescrizioni().then(() => {
+        // Da Oggi: "Crea l'ordine" porta dritto alla sezione
+        if (new URLSearchParams(window.location.search).get('prescrizioni')) setTimeout(portaAllePrescrizioni, 300);
+    });
     try {
         await Promise.all([caricaCruscotto(), caricaFasce(), caricaElenco(1)]);
         // L'elenco dei committenti non deve far fallire il cruscotto se manca
@@ -606,6 +657,48 @@ onMounted(async () => {
                     <div class="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-500">
                         <span>Valutati, nessuna scadenza entro 30 giorni: {{ Math.max(0, data.assessed - data.overdue_count - data.upcoming_count) }} {{ data.assessed - data.overdue_count - data.upcoming_count === 1 ? 'albero' : 'alberi' }}</span>
                         <button class="font-semibold text-green-700 hover:underline" data-test="vedi-tutti-ok" @click="apriElenco('ok')">Mostra →</button>
+                    </div>
+
+                    <!-- Interventi prescritti dalle VTA: da qui diventano ordini di lavoro -->
+                    <div id="prescrizioni" class="rounded-xl border border-gray-200 bg-white" data-test="vta-prescrizioni">
+                        <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+                            <h2 class="text-sm font-semibold">Interventi prescritti dalle VTA ({{ prescrizioni.righe.length }}{{ prescrizioni.soloAperte ? ' senza ordine' : '' }})</h2>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <label class="flex min-h-11 items-center gap-2 text-sm md:min-h-9"><input v-model="prescrizioni.soloAperte" type="checkbox" class="rounded border-gray-300" data-test="prescrizioni-solo-aperte" @change="caricaPrescrizioni"> Solo senza ordine</label>
+                                <button
+                                    v-if="canWorks && prescrizioni.soloAperte && prescrizioni.righe.some((r) => ! r.in_archivio)"
+                                    type="button"
+                                    class="min-h-11 rounded-lg bg-green-700 px-3 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50 md:min-h-9"
+                                    :disabled="prescrizioni.inCorso"
+                                    data-test="prescrizioni-tutte"
+                                    @click="creaOrdiniPrescrizioni(null)"
+                                >Crea gli ordini per tutte</button>
+                            </div>
+                        </div>
+                        <p v-if="prescrizioni.errore" class="mx-4 mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ prescrizioni.errore }}</p>
+                        <p v-if="prescrizioni.esito" class="mx-4 mb-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800" data-test="prescrizioni-esito">{{ prescrizioni.esito }}</p>
+                        <div v-if="prescrizioni.righe.length" class="overflow-x-auto border-t border-gray-100">
+                            <table class="w-full text-sm">
+                                <thead><tr class="text-left text-xs font-semibold uppercase tracking-wide text-gray-500"><th class="px-4 py-2">Albero</th><th class="px-3 py-2">VTA</th><th class="px-3 py-2">Prescrizione</th><th class="px-3 py-2">Entro il</th><th class="px-3 py-2">Ordine</th><th v-if="canWorks" class="px-3 py-2"></th></tr></thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    <tr v-for="r in prescrizioni.righe" :key="r.assessment_id" data-test="prescrizione-riga">
+                                        <td class="px-4 py-2"><Link :href="`/censimento/${r.asset_id}`" class="font-semibold text-gray-900 underline-offset-2 hover:underline">{{ r.census_code || 'senza cartellino' }}</Link><span class="block text-xs text-gray-500">{{ r.species || r.common_name || '' }}<template v-if="r.area_name"> · {{ r.area_name }}</template></span></td>
+                                        <td class="whitespace-nowrap px-3 py-2 text-gray-700">{{ fmt(r.assessed_on) }}<span v-if="r.failure_class" class="block text-xs text-gray-500">classe {{ r.failure_class }}</span></td>
+                                        <td class="max-w-md whitespace-pre-line px-3 py-2 text-gray-800">{{ r.prescriptions }}</td>
+                                        <td class="whitespace-nowrap px-3 py-2" :class="r.scaduta ? 'font-semibold text-red-700' : 'text-gray-700'">{{ r.prescriptions_due_on ? fmt(r.prescriptions_due_on) : '—' }}</td>
+                                        <td class="whitespace-nowrap px-3 py-2">
+                                            <Link v-if="r.work_order" :href="`/lavori/${r.work_order.id}`" class="font-semibold text-green-800 underline-offset-2 hover:underline">{{ r.work_order.code }}</Link>
+                                            <span v-else-if="r.in_archivio" class="text-gray-500">scheda in archivio</span>
+                                            <span v-else class="text-amber-800">senza ordine</span>
+                                        </td>
+                                        <td v-if="canWorks" class="px-3 py-2 text-right">
+                                            <button v-if="! r.work_order && ! r.in_archivio" type="button" class="min-h-11 rounded-lg border border-green-700 px-3 text-sm font-medium text-green-800 hover:bg-green-50 disabled:opacity-50 md:min-h-9" :disabled="prescrizioni.inCorso" data-test="prescrizione-crea" @click="creaOrdiniPrescrizioni([r.assessment_id])">Crea l'ordine</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p v-else class="border-t border-gray-100 px-4 py-3 text-sm text-gray-500">{{ prescrizioni.soloAperte ? 'Nessuna prescrizione senza ordine: quello che le VTA hanno prescritto è in agenda.' : 'Nessuna valutazione con prescrizioni.' }}</p>
                     </div>
 
                     <!-- Elenco completo: alberi e valutazioni, con le azioni collettive -->

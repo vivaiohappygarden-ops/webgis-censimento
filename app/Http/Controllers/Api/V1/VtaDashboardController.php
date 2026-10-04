@@ -7,7 +7,9 @@ use App\Models\Asset;
 use App\Models\Tree;
 use App\Models\TreeAssessment;
 use App\Services\Trees\PeriziaValidation;
+use App\Services\Works\GeneratorePrescrizioniVta;
 use App\Services\Works\GeneratoreRicontrolliVta;
+use App\Support\AssetStatus;
 use App\Support\Audit;
 use App\Support\RicercaTestuale;
 use Illuminate\Http\JsonResponse;
@@ -53,7 +55,7 @@ class VtaDashboardController extends Controller implements HasMiddleware
             new Middleware('can:assets.update', only: ['valida']),
             // Generare ordini di ricontrollo scrive in agenda: serve anche il
             // permesso dei lavori, oltre a quello di leggere lo scadenzario
-            new Middleware('can:works.manage', only: ['ricontrolli']),
+            new Middleware('can:works.manage', only: ['ricontrolli', 'generaPrescrizioni']),
         ];
     }
 
@@ -455,6 +457,57 @@ class VtaDashboardController extends Controller implements HasMiddleware
     }
 
     /** Filtro per committente comune alle sezioni del cruscotto. */
+    /**
+     * Gli interventi prescritti dall'ultima VTA di ogni albero (punto 7 del
+     * committente, 04/10/2026), con l'ordine che ne e' nato o "senza ordine":
+     * la stessa lettura del generatore e del cruscotto Oggi.
+     */
+    public function prescrizioni(Request $request): JsonResponse
+    {
+        $request->validate(['client_id' => ['sometimes', 'nullable', 'uuid'], 'aperte' => ['sometimes', 'boolean']]);
+        $righe = GeneratorePrescrizioniVta::righe($request->user()->tenant_id, $this->clientId($request), null, $request->boolean('aperte'));
+        $oggi = now('Europe/Rome')->toDateString();
+
+        return response()->json(['data' => $righe->map(fn ($r) => [
+            'assessment_id' => $r->assessment_id,
+            'asset_id' => $r->asset_id,
+            'census_code' => $r->census_code,
+            'species' => $r->species,
+            'common_name' => $r->common_name,
+            'area_name' => $r->area_name,
+            'client_name' => $r->client_name,
+            'assessed_on' => $r->assessed_on,
+            'failure_class' => $r->failure_class,
+            'outcome' => $r->outcome,
+            'prescriptions' => $r->prescriptions,
+            'prescriptions_due_on' => $r->prescriptions_due_on,
+            'assessor_name' => $r->assessor_name,
+            'scaduta' => $r->prescriptions_due_on !== null && $r->prescriptions_due_on < $oggi && ! $r->work_order_code,
+            'work_order' => $r->work_order_code ? ['id' => $r->work_order_id, 'code' => $r->work_order_code, 'status' => $r->work_order_status] : null,
+            'in_archivio' => AssetStatus::inArchivio((string) $r->status) || $r->removed_on !== null,
+        ])->values(), 'totale' => $righe->count()]);
+    }
+
+    /** Le prescrizioni diventano ordini di lavoro: anteprima con prova=1, come i ricontrolli. */
+    public function generaPrescrizioni(Request $request, GeneratorePrescrizioniVta $generatore): JsonResponse
+    {
+        $request->validate([
+            'assessment_ids' => ['sometimes', 'array', 'min:1', 'max:'.GeneratorePrescrizioniVta::MASSIMO],
+            'assessment_ids.*' => ['uuid'],
+            'client_id' => ['sometimes', 'nullable', 'uuid'],
+            'prova' => ['sometimes', 'boolean'],
+        ]);
+
+        $esito = $generatore->genera(
+            $this->clientId($request),
+            $request->filled('assessment_ids') ? $request->input('assessment_ids') : null,
+            $request->user(),
+            $request->boolean('prova'),
+        );
+
+        return response()->json(['data' => $esito]);
+    }
+
     private function clientId(Request $request): ?string
     {
         $request->validate(['client_id' => ['sometimes', 'nullable', 'uuid']]);

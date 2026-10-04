@@ -24,6 +24,7 @@ const famiglia = ref('tutte');
 const TIPI = {
     lavoro: 'Lavoro', ispezione: 'Ispezione', segnalazione: 'Segnalazione', non_conformita: 'Non conformità',
     certificato: 'Patentino', vta: 'VTA', irrigazione: 'Irrigazione',
+    prescrizione: 'Prescrizione VTA', trattamento: 'Trattamento',
 };
 const FAMIGLIE = [['tutte', 'Tutte'], ['lavori', 'Lavori'], ['controlli', 'Controlli'], ['segnalazioni', 'Segnalazioni'], ['altro', 'Altro']];
 const URGENZA = { ritardo: CHIP.errore, oggi: CHIP.ok, presto: CHIP.attenzione, programma: CHIP.neutra };
