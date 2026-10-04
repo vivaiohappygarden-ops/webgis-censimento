@@ -215,6 +215,7 @@ class CommandApplier
 
         if ($type->requires_tree_record) {
             Tree::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id, ...$misure]);
+            \App\Services\Botanica\DizionarioSpecie::impara($asset->tenant_id, $misure);
         }
         if ($type->is_planting_site) {
             PlantingSite::create(['asset_id' => $asset->id, 'tenant_id' => $asset->tenant_id]);
@@ -301,6 +302,7 @@ class CommandApplier
 
         $asset->tree->fill($payload);
         $treeChanged = $asset->tree->isDirty();
+        \App\Services\Botanica\DizionarioSpecie::impara($asset->tenant_id, $asset->tree->only(['species', 'genus', 'cultivar', 'family', 'common_name']));
 
         // Ordine obbligato (vedi migrazione snapshot_with_tree): PRIMA la
         // versione su assets — la fotografia scatta lì e deve riprendere la

@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { BOTTONE, BOTTONE_SECONDARIO } from '@/nuovo/stile';
+import CercaSpecie from '@/Components/CercaSpecie.vue';
 
 /*
  * La modifica dei dati dell'albero, una sezione per volta: "misure" (altezza,
@@ -59,6 +60,16 @@ const vociDi = (nome, attuale) => {
 
     return voci;
 };
+
+// Una voce scelta dal dizionario: genere e famiglia derivano dalla specie e si
+// riscrivono; il nome comune si prende se la voce lo porta
+function applicaSpecie(voce) {
+    albero.genus = voce.genus || albero.genus;
+    albero.species = voce.species;
+    if (voce.cultivar) albero.cultivar = voce.cultivar;
+    if (voce.family) albero.family = voce.family;
+    if (voce.common_name) albero.common_name = voce.common_name;
+}
 
 const salvataggio = ref(false);
 const errore = ref('');
@@ -122,6 +133,14 @@ async function salva() {
                     <option :value="null">—</option>
                     <option v-for="v in vociDi(c.voci, albero[c.chiave])" :key="v" :value="v">{{ v }}</option>
                 </select>
+                <!-- Specie e nome comune con le proposte del dizionario: scelta una voce, genere, famiglia e nome comune si compilano da soli -->
+                <CercaSpecie
+                    v-else-if="c.chiave === 'species' || c.chiave === 'common_name'"
+                    v-model="albero[c.chiave]"
+                    :campo="c.chiave"
+                    :segnaposto="c.chiave === 'species' ? 'es. Pinus pinea' : 'es. pino domestico, pino romano'"
+                    @scelta="applicaSpecie"
+                />
                 <input
                     v-else
                     v-model="albero[c.chiave]"
@@ -133,6 +152,11 @@ async function salva() {
                 >
             </label>
         </div>
+        <p v-if="props.sezione === 'identita'" class="mt-2 text-xs text-gray-500" data-test="nota-dizionario">
+            Scrivendo il nome botanico o quello comune il programma propone le voci del dizionario delle specie:
+            scegliendone una si compilano genere, famiglia e nome comune. Una specie nuova, una volta salvata,
+            entra nel dizionario dell'organizzazione.
+        </p>
 
         <template v-if="props.sezione === 'identita'">
             <div class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">

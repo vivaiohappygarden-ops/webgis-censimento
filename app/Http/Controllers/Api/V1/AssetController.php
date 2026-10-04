@@ -314,6 +314,8 @@ class AssetController extends Controller implements HasMiddleware
                 $asset->tree->fill($treeData);
                 $this->assertTreeDates($asset->tree);
                 $treeDirty = $asset->tree->isDirty();
+                // Una specie che il dizionario non conosce entra fra le voci dell'organizzazione
+                \App\Services\Botanica\DizionarioSpecie::impara($asset->tenant_id, $asset->tree->only(['species', 'genus', 'cultivar', 'family', 'common_name']));
             }
 
             if ($siteData !== null && $asset->plantingSite) {

@@ -65,7 +65,7 @@ export class SyncManager {
         const { data } = await axios.get('/api/v1/sync/bootstrap');
 
         await this.db.transaction('rw',
-            [this.db.meta, this.db.areas, this.db.assets, this.db.trees, this.db.asset_tags, this.db.catalog_types, this.db.custom_fields, this.db.sync_queue, this.db.work_orders, this.db.inspection_templates],
+            [this.db.meta, this.db.areas, this.db.assets, this.db.trees, this.db.asset_tags, this.db.catalog_types, this.db.custom_fields, this.db.specie, this.db.sync_queue, this.db.work_orders, this.db.inspection_templates],
             async () => {
                 // Il lavoro locale non ancora sincronizzato non si tocca (P1):
                 // le righe ottimistiche sopravvivono al ri-scarico del working set
@@ -83,7 +83,7 @@ export class SyncManager {
                 await Promise.all([
                     this.db.areas.clear(), this.db.assets.clear(), this.db.trees.clear(),
                     this.db.asset_tags.clear(), this.db.catalog_types.clear(), this.db.custom_fields.clear(),
-                    this.db.work_orders.clear(), this.db.inspection_templates.clear(),
+                    this.db.work_orders.clear(), this.db.inspection_templates.clear(), this.db.specie.clear(),
                 ]);
                 await this.db.areas.bulkPut(data.areas.map((a) => ({ ...a, dirty: false })));
                 await this.db.areas.bulkPut(dirtyAreas);
@@ -101,6 +101,7 @@ export class SyncManager {
                 await this.db.inspection_templates.bulkPut(data.inspection_templates ?? []);
                 await this.db.catalog_types.bulkPut(data.catalog.object_types);
                 await this.db.custom_fields.bulkPut(data.custom_fields);
+                await this.db.specie.bulkPut(data.specie ?? []);
                 await this.db.meta.put({ key: 'cursor', value: data.cursor });
                 // I committenti (solo per chi puo' aprire aree): l'elenco si
                 // rinfresca a ogni scarico, quelli nati in campo li portano le aree

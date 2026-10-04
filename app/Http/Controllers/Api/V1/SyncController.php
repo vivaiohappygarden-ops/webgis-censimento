@@ -108,6 +108,8 @@ class SyncController extends Controller implements HasMiddleware
                 'object_types' => CatalogObjectType::query()->orderBy('code')->get(),
             ],
             'custom_fields' => CustomField::query()->get(),
+            // Il dizionario delle specie: sul telefono compila genere e nome comune anche senza rete
+            'specie' => \App\Services\Botanica\DizionarioSpecie::tutte($user->tenant_id),
         ]);
     }
 

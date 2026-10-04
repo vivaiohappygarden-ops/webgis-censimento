@@ -259,6 +259,27 @@ async function submitAreaIssue() {
     }
 }
 const measureForm = reactive(alberoVuoto());
+
+// Il dizionario delle specie sul telefono: quando il nome scritto (botanico,
+// comune o regionale) e' una voce conosciuta, genere e altro nome si compilano
+const dizionarioSpecie = ref([]);
+function completaDaDizionario(albero, campo) {
+    const scritto = String(albero[campo] ?? '').trim().toLowerCase();
+    if (scritto.length < 3) return;
+    const voce = dizionarioSpecie.value.find((v) => [v.species, v.common_name, ...(v.synonyms ?? [])]
+        .filter(Boolean).some((n) => String(n).toLowerCase() === scritto));
+    if (! voce) return;
+    const perNomeBotanico = String(voce.species).toLowerCase() === scritto;
+    // Un nome comune scritto nel campo della specie diventa il nome botanico;
+    // il nome comune si compila solo se e' vuoto (quello scritto a mano resta)
+    if (! perNomeBotanico) albero.species = voce.species;
+    if (campo === 'species' && voce.common_name && ! String(albero.common_name ?? '').trim()) albero.common_name = voce.common_name;
+    if (voce.genus) albero.genus = voce.genus;
+}
+watch(() => form.albero.species, () => completaDaDizionario(form.albero, 'species'));
+watch(() => form.albero.common_name, () => completaDaDizionario(form.albero, 'common_name'));
+watch(() => measureForm.species, () => completaDaDizionario(measureForm, 'species'));
+watch(() => measureForm.common_name, () => completaDaDizionario(measureForm, 'common_name'));
 const tagForm = reactive({ uid: '', tagType: 'qr' });
 
 // Scansione tag (fotocamera dove disponibile, inserimento manuale sempre)
@@ -992,12 +1013,17 @@ async function refreshLocal() {
     // mostrare i soli alberi quando si sceglie che cosa valutare
     idAlberi.value = new Set(await db.trees.toCollection().primaryKeys());
     const alberiLocali = await db.trees.toArray();
-    specieNote.value = [...new Set(alberiLocali
-        .flatMap((t) => [t.species, t.common_name])
+    // Le proposte: le specie gia' sul telefono piu' il dizionario scaricato
+    // (nomi botanici, comuni e regionali), che compila anche genere e nome comune
+    dizionarioSpecie.value = await db.specie.toArray().catch(() => []);
+    specieNote.value = [...new Set([
+        ...alberiLocali.flatMap((t) => [t.species, t.common_name]),
+        ...dizionarioSpecie.value.flatMap((v) => [v.species, v.common_name, ...(v.synonyms ?? [])]),
+    ]
         .filter(Boolean)
         .map((s) => String(s).trim()))]
         .sort((a, b) => a.localeCompare(b))
-        .slice(0, 300);
+        .slice(0, 800);
     clientiScaricati.value = (await db.meta.get('clients'))?.value ?? [];
     localOrders.value = await db.work_orders.toArray();
     // I punti seguono i lavori: dopo un sync un ordine nuovo o cambiato deve

@@ -140,6 +140,10 @@ Route::prefix('v1')->group(function () {
         Route::post('intestazione/logo', [\App\Http\Controllers\Api\V1\IntestazioneController::class, 'logo']);
         Route::delete('intestazione/logo', [\App\Http\Controllers\Api\V1\IntestazioneController::class, 'rimuoviLogo']);
         Route::get('intestazione/logo', [\App\Http\Controllers\Api\V1\IntestazioneController::class, 'fileLogo']);
+        // Dizionario delle specie: ricerca a parole, elenco intero, voci dell'organizzazione
+        Route::get('specie', [\App\Http\Controllers\Api\V1\SpecieController::class, 'index']);
+        Route::post('specie', [\App\Http\Controllers\Api\V1\SpecieController::class, 'store']);
+        Route::delete('specie/{id}', [\App\Http\Controllers\Api\V1\SpecieController::class, 'destroy'])->whereUuid('id');
         // Rilevatori abilitati alle valutazioni di stabilita' (elenco dell'organizzazione)
         Route::get('rilevatori', [\App\Http\Controllers\Api\V1\RilevatoriController::class, 'index']);
         Route::put('rilevatori', [\App\Http\Controllers\Api\V1\RilevatoriController::class, 'update']);

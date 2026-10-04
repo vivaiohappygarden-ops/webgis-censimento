@@ -310,7 +310,18 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
 
 Stato per punto; i dettagli stanno nelle sezioni che seguono.
 1. Stampa della mappa in PDF: da fare.
-2. Dizionario delle specie (genere, famiglia, nome comune automatici): da fare.
+2. **Fatto**: dizionario delle specie. Tabella `tree_species` (voci di serie con `tenant_id` nullo da
+   `database/seeders/data/specie.csv`, 242 voci con genere, famiglia, nome comune e sinonimi anche
+   regionali, installate e riallineate dalla migrazione; voci proprie di ogni organizzazione). La logica
+   sta in `App\Services\Botanica\DizionarioSpecie` (`installaDiSerie`, `cerca` a parole su `search_text`
+   con in testa la voce esatta, poi parola intera, poi inizio di parola; `tutte`; `impara`). **Il
+   dizionario impara**: una specie binomiale salvata in una scheda (gestionale o campo) che non conosce
+   entra fra le voci dell'organizzazione; una parola sola ("aghifoglia") no. API `GET specie?q=` /
+   `?tutte=1` (assets.view), `POST specie`, `DELETE specie/{id}` solo voci proprie (assets.update).
+   In scheda `Components/CercaSpecie.vue` su Specie e Nome comune di `ModuloAlbero`: scelta una voce si
+   compilano genere, famiglia e nome comune ("pino romano" -> Pinus pinea). L'app di campo scarica il
+   dizionario nel bootstrap (tabella Dexie `specie`, v6), lo mette nelle proposte e compila da sola
+   genere e nome botanico quando il nome scritto e' una voce conosciuta. Prove: `DizionarioSpecieTest`.
 3. "Invia al gestionale" spegnibile per organizzazione, spento di serie per chi affitta: da fare.
 4. Zone (sedi distanti, accessi per zona): da fare, per ultimo.
 5. **Fatto**: bersagli della VTA anche dagli elementi censiti (`Components/CercaElemento.vue`, ricerca a

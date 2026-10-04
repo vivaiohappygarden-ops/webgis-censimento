@@ -42,5 +42,10 @@ export function openFieldDb(tenantId, userId) {
         inspection_templates: '&id, target, name',
     });
 
+    // v6: dizionario delle specie, per compilare genere e nome comune senza rete
+    db.version(6).stores({
+        specie: '&id, species',
+    });
+
     return db;
 }

@@ -1,0 +1,243 @@
+genere;specie;cultivar;famiglia;nome_comune;sinonimi
+Pinus;Pinus pinea;;Pinaceae;Pino domestico;pino da pinoli|pino romano|pino italico|pino a ombrello
+Pinus;Pinus pinaster;;Pinaceae;Pino marittimo;
+Pinus;Pinus halepensis;;Pinaceae;Pino d'Aleppo;
+Pinus;Pinus nigra;;Pinaceae;Pino nero;pino austriaco|pino laricio
+Pinus;Pinus sylvestris;;Pinaceae;Pino silvestre;
+Pinus;Pinus brutia;;Pinaceae;Pino calabro;pino di Calabria
+Pinus;Pinus radiata;;Pinaceae;Pino insigne;pino di Monterey
+Pinus;Pinus strobus;;Pinaceae;Pino strobo;pino bianco americano
+Pinus;Pinus wallichiana;;Pinaceae;Pino dell'Himalaya;pino excelsa
+Pinus;Pinus mugo;;Pinaceae;Pino mugo;
+Cedrus;Cedrus deodara;;Pinaceae;Cedro dell'Himalaya;cedro deodara
+Cedrus;Cedrus atlantica;;Pinaceae;Cedro dell'Atlante;
+Cedrus;Cedrus atlantica;Glauca;Pinaceae;Cedro dell'Atlante azzurro;cedro argentato
+Cedrus;Cedrus libani;;Pinaceae;Cedro del Libano;
+Picea;Picea abies;;Pinaceae;Abete rosso;peccio
+Picea;Picea pungens;;Pinaceae;Abete del Colorado;abete azzurro
+Abies;Abies alba;;Pinaceae;Abete bianco;
+Abies;Abies nordmanniana;;Pinaceae;Abete del Caucaso;
+Larix;Larix decidua;;Pinaceae;Larice;larice comune
+Pseudotsuga;Pseudotsuga menziesii;;Pinaceae;Douglasia;abete di Douglas
+Cupressus;Cupressus sempervirens;;Cupressaceae;Cipresso comune;cipresso italiano|cipresso mediterraneo
+Cupressus;Cupressus sempervirens;Stricta;Cupressaceae;Cipresso piramidale;cipresso colonnare
+Cupressus;Cupressus arizonica;;Cupressaceae;Cipresso dell'Arizona;cipresso glauco
+Cupressus;Cupressus macrocarpa;;Cupressaceae;Cipresso di Monterey;cipresso macrocarpa
+Cupressus;Cupressus x leylandii;;Cupressaceae;Cipresso di Leyland;leylandii|cupressocyparis
+Chamaecyparis;Chamaecyparis lawsoniana;;Cupressaceae;Cipresso di Lawson;
+Thuja;Thuja occidentalis;;Cupressaceae;Tuia occidentale;thuja
+Thuja;Thuja plicata;;Cupressaceae;Tuia gigante;cedro rosso del Pacifico
+Platycladus;Platycladus orientalis;;Cupressaceae;Tuia orientale;thuja orientalis|biota
+Juniperus;Juniperus communis;;Cupressaceae;Ginepro comune;
+Juniperus;Juniperus oxycedrus;;Cupressaceae;Ginepro rosso;ginepro coccolone
+Juniperus;Juniperus phoenicea;;Cupressaceae;Ginepro fenicio;
+Juniperus;Juniperus horizontalis;;Cupressaceae;Ginepro strisciante;
+Sequoia;Sequoia sempervirens;;Cupressaceae;Sequoia sempreverde;sequoia costiera
+Sequoiadendron;Sequoiadendron giganteum;;Cupressaceae;Sequoia gigante;wellingtonia
+Metasequoia;Metasequoia glyptostroboides;;Cupressaceae;Metasequoia;
+Taxodium;Taxodium distichum;;Cupressaceae;Cipresso calvo;cipresso delle paludi
+Cryptomeria;Cryptomeria japonica;;Cupressaceae;Criptomeria;cedro giapponese
+Taxus;Taxus baccata;;Taxaceae;Tasso;albero della morte
+Araucaria;Araucaria araucana;;Araucariaceae;Araucaria;pino del Cile
+Araucaria;Araucaria heterophylla;;Araucariaceae;Pino di Norfolk;araucaria excelsa
+Ginkgo;Ginkgo biloba;;Ginkgoaceae;Ginkgo;albero dei ventagli
+Cycas;Cycas revoluta;;Cycadaceae;Cicas;palma del sago
+Quercus;Quercus ilex;;Fagaceae;Leccio;elce|quercia sempreverde
+Quercus;Quercus robur;;Fagaceae;Farnia;quercia comune|quercia peduncolata
+Quercus;Quercus petraea;;Fagaceae;Rovere;
+Quercus;Quercus pubescens;;Fagaceae;Roverella;
+Quercus;Quercus cerris;;Fagaceae;Cerro;
+Quercus;Quercus suber;;Fagaceae;Sughera;quercia da sughero
+Quercus;Quercus rubra;;Fagaceae;Quercia rossa;quercia rossa americana
+Quercus;Quercus coccifera;;Fagaceae;Quercia spinosa;
+Quercus;Quercus frainetto;;Fagaceae;Farnetto;
+Quercus;Quercus trojana;;Fagaceae;Fragno;
+Fagus;Fagus sylvatica;;Fagaceae;Faggio;
+Fagus;Fagus sylvatica;Purpurea;Fagaceae;Faggio rosso;faggio purpureo
+Castanea;Castanea sativa;;Fagaceae;Castagno;
+Betula;Betula pendula;;Betulaceae;Betulla;betulla bianca
+Carpinus;Carpinus betulus;;Betulaceae;Carpino bianco;
+Carpinus;Carpinus betulus;Fastigiata;Betulaceae;Carpino piramidale;
+Ostrya;Ostrya carpinifolia;;Betulaceae;Carpino nero;
+Alnus;Alnus glutinosa;;Betulaceae;Ontano nero;
+Alnus;Alnus cordata;;Betulaceae;Ontano napoletano;
+Corylus;Corylus avellana;;Betulaceae;Nocciolo;
+Corylus;Corylus colurna;;Betulaceae;Nocciolo turco;nocciolo di Costantinopoli
+Platanus;Platanus x acerifolia;;Platanaceae;Platano comune;platano ibrido|platano
+Platanus;Platanus orientalis;;Platanaceae;Platano orientale;
+Platanus;Platanus occidentalis;;Platanaceae;Platano occidentale;platano americano
+Acer;Acer campestre;;Sapindaceae;Acero campestre;oppio|testucchio
+Acer;Acer platanoides;;Sapindaceae;Acero riccio;acero platanoide
+Acer;Acer pseudoplatanus;;Sapindaceae;Acero di monte;sicomoro|acero montano
+Acer;Acer negundo;;Sapindaceae;Acero americano;acero negundo
+Acer;Acer saccharinum;;Sapindaceae;Acero saccarino;acero argentato
+Acer;Acer monspessulanum;;Sapindaceae;Acero minore;acero trilobo
+Acer;Acer opalus;;Sapindaceae;Acero opalo;acero d'Italia
+Acer;Acer palmatum;;Sapindaceae;Acero giapponese;acero palmato
+Acer;Acer rubrum;;Sapindaceae;Acero rosso;
+Aesculus;Aesculus hippocastanum;;Sapindaceae;Ippocastano;castagno d'India
+Aesculus;Aesculus x carnea;;Sapindaceae;Ippocastano rosso;
+Koelreuteria;Koelreuteria paniculata;;Sapindaceae;Koelreuteria;albero delle lanterne
+Tilia;Tilia cordata;;Malvaceae;Tiglio selvatico;tiglio a foglie piccole|tiglio
+Tilia;Tilia platyphyllos;;Malvaceae;Tiglio nostrano;tiglio a foglie grandi
+Tilia;Tilia x europaea;;Malvaceae;Tiglio comune;tiglio ibrido|tiglio intermedio
+Tilia;Tilia tomentosa;;Malvaceae;Tiglio argentato;
+Tilia;Tilia americana;;Malvaceae;Tiglio americano;
+Hibiscus;Hibiscus syriacus;;Malvaceae;Ibisco;ibisco cinese
+Brachychiton;Brachychiton populneus;;Malvaceae;Brachichito;albero bottiglia
+Ulmus;Ulmus minor;;Ulmaceae;Olmo campestre;olmo
+Ulmus;Ulmus pumila;;Ulmaceae;Olmo siberiano;
+Ulmus;Ulmus glabra;;Ulmaceae;Olmo montano;
+Ulmus;Ulmus laevis;;Ulmaceae;Olmo ciliato;
+Zelkova;Zelkova serrata;;Ulmaceae;Zelkova giapponese;olmo giapponese
+Celtis;Celtis australis;;Cannabaceae;Bagolaro;spaccasassi|caccamo
+Morus;Morus alba;;Moraceae;Gelso bianco;gelso
+Morus;Morus alba;Pendula;Moraceae;Gelso piangente;
+Morus;Morus nigra;;Moraceae;Gelso nero;
+Ficus;Ficus carica;;Moraceae;Fico;
+Ficus;Ficus macrophylla;;Moraceae;Fico magnolioide;ficus magnolioide
+Ficus;Ficus microcarpa;;Moraceae;Fico indiano;ficus retusa
+Broussonetia;Broussonetia papyrifera;;Moraceae;Gelso da carta;moro da carta
+Maclura;Maclura pomifera;;Moraceae;Maclura;arancio degli Osagi
+Fraxinus;Fraxinus excelsior;;Oleaceae;Frassino maggiore;frassino comune
+Fraxinus;Fraxinus ornus;;Oleaceae;Orniello;frassino da manna|orno
+Fraxinus;Fraxinus angustifolia;;Oleaceae;Frassino meridionale;frassino ossifillo
+Fraxinus;Fraxinus americana;;Oleaceae;Frassino americano;
+Olea;Olea europaea;;Oleaceae;Olivo;ulivo
+Ligustrum;Ligustrum lucidum;;Oleaceae;Ligustro lucido;ligustro arboreo
+Ligustrum;Ligustrum japonicum;;Oleaceae;Ligustro giapponese;
+Ligustrum;Ligustrum vulgare;;Oleaceae;Ligustro comune;
+Ligustrum;Ligustrum ovalifolium;;Oleaceae;Ligustro ovalifoglio;ligustro da siepe
+Syringa;Syringa vulgaris;;Oleaceae;Lillà;serenella
+Phillyrea;Phillyrea latifolia;;Oleaceae;Ilatro;fillirea
+Osmanthus;Osmanthus fragrans;;Oleaceae;Osmanto;olea fragrans
+Forsythia;Forsythia x intermedia;;Oleaceae;Forsizia;
+Robinia;Robinia pseudoacacia;;Fabaceae;Robinia;acacia|falsa acacia
+Robinia;Robinia pseudoacacia;Umbraculifera;Fabaceae;Robinia a ombrello;robinia pallottolina
+Styphnolobium;Styphnolobium japonicum;;Fabaceae;Sofora;sophora japonica|albero dei pagoda
+Cercis;Cercis siliquastrum;;Fabaceae;Albero di Giuda;siliquastro
+Gleditsia;Gleditsia triacanthos;;Fabaceae;Spino di Giuda;gleditsia|triacanto
+Albizia;Albizia julibrissin;;Fabaceae;Albizia;acacia di Costantinopoli|gaggia arborea
+Ceratonia;Ceratonia siliqua;;Fabaceae;Carrubo;
+Acacia;Acacia dealbata;;Fabaceae;Mimosa;
+Acacia;Acacia saligna;;Fabaceae;Acacia saligna;acacia a foglie di salice
+Laburnum;Laburnum anagyroides;;Fabaceae;Maggiociondolo;
+Tipuana;Tipuana tipu;;Fabaceae;Tipuana;
+Parkinsonia;Parkinsonia aculeata;;Fabaceae;Parkinsonia;
+Wisteria;Wisteria sinensis;;Fabaceae;Glicine;
+Spartium;Spartium junceum;;Fabaceae;Ginestra odorosa;ginestra di Spagna
+Erythrina;Erythrina crista-galli;;Fabaceae;Eritrina;albero del corallo
+Prunus;Prunus avium;;Rosaceae;Ciliegio;ciliegio selvatico
+Prunus;Prunus cerasifera;;Rosaceae;Mirabolano;amolo|ciliegio-susino
+Prunus;Prunus cerasifera;Pissardii;Rosaceae;Mirabolano rosso;prugno rosso|ciliegio da fiore rosso
+Prunus;Prunus serrulata;;Rosaceae;Ciliegio giapponese;ciliegio da fiore
+Prunus;Prunus serrulata;Kanzan;Rosaceae;Ciliegio da fiore Kanzan;
+Prunus;Prunus domestica;;Rosaceae;Susino;prugno
+Prunus;Prunus dulcis;;Rosaceae;Mandorlo;
+Prunus;Prunus persica;;Rosaceae;Pesco;
+Prunus;Prunus armeniaca;;Rosaceae;Albicocco;
+Prunus;Prunus laurocerasus;;Rosaceae;Lauroceraso;lauro ceraso
+Prunus;Prunus lusitanica;;Rosaceae;Lauro del Portogallo;
+Prunus;Prunus spinosa;;Rosaceae;Prugnolo selvatico;
+Prunus;Prunus mahaleb;;Rosaceae;Ciliegio canino;magaleppo
+Pyrus;Pyrus calleryana;;Rosaceae;Pero da fiore;pero di Callery
+Pyrus;Pyrus calleryana;Chanticleer;Rosaceae;Pero da fiore Chanticleer;
+Pyrus;Pyrus communis;;Rosaceae;Pero;
+Malus;Malus domestica;;Rosaceae;Melo;
+Malus;Malus floribunda;;Rosaceae;Melo da fiore;
+Crataegus;Crataegus monogyna;;Rosaceae;Biancospino;
+Crataegus;Crataegus laevigata;;Rosaceae;Biancospino selvatico;
+Sorbus;Sorbus aucuparia;;Rosaceae;Sorbo degli uccellatori;
+Sorbus;Sorbus domestica;;Rosaceae;Sorbo domestico;
+Sorbus;Sorbus aria;;Rosaceae;Sorbo montano;farinaccio
+Sorbus;Sorbus torminalis;;Rosaceae;Ciavardello;
+Mespilus;Mespilus germanica;;Rosaceae;Nespolo comune;nespolo europeo
+Eriobotrya;Eriobotrya japonica;;Rosaceae;Nespolo del Giappone;nespolo giapponese
+Cydonia;Cydonia oblonga;;Rosaceae;Cotogno;melo cotogno
+Photinia;Photinia x fraseri;;Rosaceae;Fotinia;photinia
+Photinia;Photinia serratifolia;;Rosaceae;Fotinia serrulata;
+Pyracantha;Pyracantha coccinea;;Rosaceae;Agazzino;piracanta
+Cotoneaster;Cotoneaster lacteus;;Rosaceae;Cotoneaster;cotognastro
+Amelanchier;Amelanchier ovalis;;Rosaceae;Pero corvino;
+Rosa;Rosa canina;;Rosaceae;Rosa canina;rosa selvatica
+Populus;Populus nigra;;Salicaceae;Pioppo nero;
+Populus;Populus nigra;Italica;Salicaceae;Pioppo cipressino;pioppo italico
+Populus;Populus alba;;Salicaceae;Pioppo bianco;gattice
+Populus;Populus x canadensis;;Salicaceae;Pioppo ibrido;pioppo canadese|pioppo euroamericano
+Populus;Populus tremula;;Salicaceae;Pioppo tremulo;
+Salix;Salix alba;;Salicaceae;Salice bianco;salice comune
+Salix;Salix babylonica;;Salicaceae;Salice piangente;
+Salix;Salix caprea;;Salicaceae;Salicone;
+Salix;Salix fragilis;;Salicaceae;Salice fragile;
+Salix;Salix purpurea;;Salicaceae;Salice rosso;
+Salix;Salix viminalis;;Salicaceae;Salice da vimini;vimine
+Juglans;Juglans regia;;Juglandaceae;Noce;noce comune
+Juglans;Juglans nigra;;Juglandaceae;Noce nero;noce americano
+Carya;Carya illinoinensis;;Juglandaceae;Pecan;noce pecan
+Pterocarya;Pterocarya fraxinifolia;;Juglandaceae;Noce del Caucaso;
+Magnolia;Magnolia grandiflora;;Magnoliaceae;Magnolia sempreverde;magnolia
+Magnolia;Magnolia x soulangeana;;Magnoliaceae;Magnolia di Soulange;magnolia da fiore
+Magnolia;Magnolia stellata;;Magnoliaceae;Magnolia stellata;
+Liriodendron;Liriodendron tulipifera;;Magnoliaceae;Liriodendro;albero dei tulipani
+Liquidambar;Liquidambar styraciflua;;Altingiaceae;Liquidambar;storace americano
+Parrotia;Parrotia persica;;Hamamelidaceae;Parrotia;albero di ferro
+Cercidiphyllum;Cercidiphyllum japonicum;;Cercidiphyllaceae;Katsura;albero del caramello
+Catalpa;Catalpa bignonioides;;Bignoniaceae;Catalpa;albero dei sigari
+Jacaranda;Jacaranda mimosifolia;;Bignoniaceae;Jacaranda;
+Paulownia;Paulownia tomentosa;;Paulowniaceae;Paulonia;
+Lagerstroemia;Lagerstroemia indica;;Lythraceae;Lagerstroemia;albero di San Bartolomeo|mirto crespo
+Punica;Punica granatum;;Lythraceae;Melograno;
+Eucalyptus;Eucalyptus camaldulensis;;Myrtaceae;Eucalipto rosso;eucalipto
+Eucalyptus;Eucalyptus globulus;;Myrtaceae;Eucalipto azzurro;
+Myrtus;Myrtus communis;;Myrtaceae;Mirto;mortella
+Callistemon;Callistemon citrinus;;Myrtaceae;Callistemon;scovolino
+Acca;Acca sellowiana;;Myrtaceae;Feijoa;
+Schinus;Schinus molle;;Anacardiaceae;Falso pepe;pepe rosa|albero del pepe
+Pistacia;Pistacia lentiscus;;Anacardiaceae;Lentisco;
+Pistacia;Pistacia terebinthus;;Anacardiaceae;Terebinto;
+Cotinus;Cotinus coggygria;;Anacardiaceae;Scotano;albero della nebbia
+Rhus;Rhus typhina;;Anacardiaceae;Sommacco americano;sommacco maggiore
+Melia;Melia azedarach;;Meliaceae;Albero dei rosari;melia|albero dei paternostri
+Ailanthus;Ailanthus altissima;;Simaroubaceae;Ailanto;albero del paradiso
+Citrus;Citrus x sinensis;;Rutaceae;Arancio dolce;arancio
+Citrus;Citrus x aurantium;;Rutaceae;Arancio amaro;melangolo
+Citrus;Citrus limon;;Rutaceae;Limone;
+Citrus;Citrus reticulata;;Rutaceae;Mandarino;
+Laurus;Laurus nobilis;;Lauraceae;Alloro;lauro
+Cinnamomum;Cinnamomum camphora;;Lauraceae;Canforo;albero della canfora
+Nerium;Nerium oleander;;Apocynaceae;Oleandro;
+Phoenix;Phoenix canariensis;;Arecaceae;Palma delle Canarie;
+Phoenix;Phoenix dactylifera;;Arecaceae;Palma da datteri;
+Washingtonia;Washingtonia robusta;;Arecaceae;Washingtonia robusta;palma messicana
+Washingtonia;Washingtonia filifera;;Arecaceae;Washingtonia filifera;palma californiana
+Chamaerops;Chamaerops humilis;;Arecaceae;Palma nana;palma di San Pietro
+Trachycarpus;Trachycarpus fortunei;;Arecaceae;Palma cinese;palma di Fortune
+Butia;Butia capitata;;Arecaceae;Palma della gelatina;butia
+Syagrus;Syagrus romanzoffiana;;Arecaceae;Palma regina;
+Arbutus;Arbutus unedo;;Ericaceae;Corbezzolo;
+Diospyros;Diospyros kaki;;Ebenaceae;Cachi;kaki|loto
+Tamarix;Tamarix gallica;;Tamaricaceae;Tamerice;tamerice comune
+Elaeagnus;Elaeagnus angustifolia;;Elaeagnaceae;Olivagno;olivo di Boemia
+Elaeagnus;Elaeagnus x submacrophylla;;Elaeagnaceae;Eleagno;elaeagnus ebbingei|olivagno da siepe
+Pittosporum;Pittosporum tobira;;Pittosporaceae;Pitosforo;pittosporo
+Viburnum;Viburnum tinus;;Viburnaceae;Viburno;lentaggine|laurotino
+Viburnum;Viburnum opulus;;Viburnaceae;Pallon di maggio;viburno palla di neve
+Sambucus;Sambucus nigra;;Viburnaceae;Sambuco;
+Buxus;Buxus sempervirens;;Buxaceae;Bosso;
+Ilex;Ilex aquifolium;;Aquifoliaceae;Agrifoglio;
+Camellia;Camellia japonica;;Theaceae;Camelia;
+Hydrangea;Hydrangea macrophylla;;Hydrangeaceae;Ortensia;
+Lonicera;Lonicera japonica;;Caprifoliaceae;Caprifoglio giapponese;
+Abelia;Abelia x grandiflora;;Caprifoliaceae;Abelia;
+Berberis;Berberis thunbergii;;Berberidaceae;Crespino;
+Nandina;Nandina domestica;;Berberidaceae;Nandina;bambù sacro
+Euonymus;Euonymus japonicus;;Celastraceae;Evonimo;fusaggine giapponese
+Rhamnus;Rhamnus alaternus;;Rhamnaceae;Alaterno;ranno lanterno
+Ziziphus;Ziziphus jujuba;;Rhamnaceae;Giuggiolo;
+Hedera;Hedera helix;;Araliaceae;Edera;
+Fatsia;Fatsia japonica;;Araliaceae;Aralia;fatsia
+Yucca;Yucca gloriosa;;Asparagaceae;Yucca;
+Agave;Agave americana;;Asparagaceae;Agave;
+Phyllostachys;Phyllostachys aurea;;Poaceae;Bambù dorato;bambù
+Opuntia;Opuntia ficus-indica;;Cactaceae;Fico d'India;
+Strelitzia;Strelitzia reginae;;Strelitziaceae;Sterlizia;uccello del paradiso
