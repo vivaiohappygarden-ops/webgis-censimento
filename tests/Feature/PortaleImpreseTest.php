@@ -266,6 +266,8 @@ class PortaleImpreseTest extends TestCase
 
     public function test_il_rifiuto_non_tocca_le_date(): void
     {
+        // Orologio fermo come nelle altre prove: la data proposta deve restare nel futuro
+        $this->travelTo(now()->parse('2026-09-10 09:00'));
         [$teamId, $utente] = $this->creaImpresa();
         $ordine = $this->creaOrdine($teamId);
 
