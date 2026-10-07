@@ -87,6 +87,21 @@ class CronologiaElemento
                 );
             }
 
+            // Avvisi al committente (area da chiudere) nati dalle valutazioni
+            $avvisi = \App\Models\ClientAlert::query()->with('area:id,name')->where('asset_id', $asset->id)->orderByDesc('sent_at')->get();
+            foreach ($avvisi as $a) {
+                $eventi[] = $this->evento(
+                    $a->sent_at?->setTimezone(self::FUSO)->toDateString(),
+                    'avviso',
+                    'Avviso al committente'.($a->area ? ' · '.$a->area->name : ''),
+                    [$nome($a->sent_by),
+                        $a->inviati().' '.($a->inviati() === 1 ? 'indirizzo' : 'indirizzi'),
+                        $a->acknowledged_at ? 'presa d\'atto il '.$a->acknowledged_at->setTimezone(self::FUSO)->format('d/m/Y') : 'in attesa di presa d\'atto',
+                        $a->resolved_at ? 'rientrato il '.$a->resolved_at->setTimezone(self::FUSO)->format('d/m/Y') : null],
+                    ['href' => '/censimento/'.$asset->id.'?vta=1', 'id' => $a->id],
+                );
+            }
+
             if ($asset->tree->removed_on) {
                 $eventi[] = $this->evento(
                     Carbon::parse($asset->tree->removed_on)->toDateString(),
@@ -228,7 +243,7 @@ class CronologiaElemento
 
         // Dal piu' recente; a parita' di giorno prima quello che e' successo
         // dopo nella logica del lavoro (foto e lavori dopo il rilievo)
-        $ordine = ['rilievo' => 0, 'modifica' => 1, 'valutazione' => 2, 'segnalazione' => 3, 'lavoro' => 4, 'foto' => 5, 'foto_eliminata' => 6, 'abbattimento' => 7];
+        $ordine = ['rilievo' => 0, 'modifica' => 1, 'valutazione' => 2, 'avviso' => 3, 'segnalazione' => 4, 'lavoro' => 5, 'foto' => 6, 'foto_eliminata' => 7, 'abbattimento' => 8];
         usort($eventi, function ($a, $b) use ($ordine) {
             return [$b['data'] ?? '', $ordine[$b['tipo']]] <=> [$a['data'] ?? '', $ordine[$a['tipo']]];
         });

@@ -279,7 +279,7 @@ const removedOn = computed(() => {
 
 const TIPO_EVENTO = {
     rilievo: 'Rilievo', modifica: 'Modifica', valutazione: 'VTA', lavoro: 'Lavoro', segnalazione: 'Segnalazione',
-    foto: 'Foto', foto_eliminata: 'Foto', abbattimento: 'Abbattimento',
+    foto: 'Foto', foto_eliminata: 'Foto', abbattimento: 'Abbattimento', avviso: 'Avviso',
 };
 
 // --- Azioni -----------------------------------------------------------------
@@ -721,6 +721,10 @@ onBeforeUnmount(() => map?.remove());
                                             <button v-if="can('works.manage') && ! inArchivio(asset.status)" type="button" :class="BOTTONE_PICCOLO" :disabled="prescrizione.busy" data-test="scheda-crea-ordine-prescrizione" @click="creaOrdinePrescrizione">Crea l'ordine dalla prescrizione</button>
                                             <span v-if="prescrizione.errore" class="text-red-700">{{ prescrizione.errore }}</span>
                                         </template>
+                                    </p>
+                                    <p v-if="ultimaVta.avviso" class="mt-1 text-[13px]" :class="ultimaVta.avviso.resolved_at ? 'text-gray-600' : 'font-medium text-red-800'" data-test="scheda-avviso">
+                                        Avviso al committente inviato il {{ formatData(ultimaVta.avviso.sent_at) }}<template v-if="ultimaVta.avviso.area"> per l'area {{ ultimaVta.avviso.area.name }}</template>:
+                                        {{ ultimaVta.avviso.resolved_at ? `rientrato il ${formatData(ultimaVta.avviso.resolved_at)}` : (ultimaVta.avviso.acknowledged_at ? `presa d'atto il ${formatData(ultimaVta.avviso.acknowledged_at)}, in attesa del rientro` : 'in attesa della presa d\'atto') }}.
                                     </p>
                                     <p class="mt-1" :class="statoVta?.tono === 'errore' ? 'font-semibold text-red-800' : 'text-gray-700'">
                                         {{ statoVta?.testo.replace(/^VTA classe [^·]+ · /, '').replace(/^\w/, (c) => c.toUpperCase()) }}<template v-if="ricontrolloInAgenda"> · in agenda: <Link :href="ricontrolloInAgenda.href" class="text-green-800 underline-offset-2 hover:underline">{{ ricontrolloInAgenda.codice }}</Link></template><template v-else-if="statoVta?.tono === 'errore'"> · senza ordine in agenda</template>

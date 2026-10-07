@@ -59,14 +59,33 @@ const { avviso, riprovaInCorso, carica, riprova } = usaCaricamento();
 const riepilogo = ref(null);
 const richieste = ref([]);
 const documenti = ref(null);
+// Gli avvisi del tecnico (area da chiudere o interdire) con la presa d'atto
+const avvisi = ref([]);
+const noteAvvisi = reactive({});
+const presaAttoBusy = ref(null);
+const presaAttoErrore = ref('');
 
 async function caricaRiepilogo() {
     const { data } = await axios.get('/api/v1/portal/overview');
     riepilogo.value = data;
     if (data.linked) {
-        const [r, d] = await Promise.all([axios.get('/api/v1/portal/requests'), axios.get('/api/v1/portal/documenti')]);
+        const [r, d, a] = await Promise.all([axios.get('/api/v1/portal/requests'), axios.get('/api/v1/portal/documenti'), axios.get('/api/v1/portal/avvisi')]);
         richieste.value = r.data.data;
         documenti.value = d.data.data;
+        avvisi.value = a.data.data;
+    }
+}
+
+async function presaAtto(a) {
+    presaAttoBusy.value = a.id;
+    presaAttoErrore.value = '';
+    try {
+        const { data } = await axios.post(`/api/v1/portal/avvisi/${a.id}/presa-atto`, { nota: noteAvvisi[a.id] || null });
+        avvisi.value = avvisi.value.map((x) => (x.id === a.id ? data.data : x));
+    } catch (err) {
+        presaAttoErrore.value = err.response?.data?.message ?? `Presa d'atto non registrata (errore ${err.response?.status ?? 'di rete'}).`;
+    } finally {
+        presaAttoBusy.value = null;
     }
 }
 
@@ -318,6 +337,38 @@ const nomeComune = computed(() => riepilogo.value?.client?.name ?? page.props.au
                             <template v-else>{{ p.t }}</template>
                         </template>
                     </p>
+
+                    <!-- Gli avvisi del tecnico: un albero pericoloso in un'area frequentata, l'area va chiusa -->
+                    <section v-if="avvisi.length" :class="CARTA" class="border-red-300" data-test="portale-avvisi">
+                        <h2 class="border-b border-red-200 px-4 py-3 text-base font-bold text-red-900">Avvisi urgenti del tecnico</h2>
+                        <ul class="divide-y divide-gray-100">
+                            <li v-for="a in avvisi" :key="a.id" class="px-4 py-3" :data-test="`portale-avviso-${a.id}`">
+                                <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                                    <span class="font-semibold text-gray-900">{{ a.albero.cartellino ?? 'Albero senza cartellino' }}</span>
+                                    <span v-if="a.albero.specie" class="italic text-gray-700">{{ a.albero.specie }}</span>
+                                    <span v-if="a.area" class="text-gray-700">· {{ a.area }}</span>
+                                    <span v-if="a.classe" :class="CHIP.errore">classe {{ a.classe }}</span>
+                                    <span v-if="a.rientrato_il" :class="CHIP.neutra">rientrato</span>
+                                    <span v-else-if="a.presa_atto_il" :class="CHIP.ok">presa d'atto</span>
+                                    <span v-else :class="CHIP.errore">da prendere in carico</span>
+                                </div>
+                                <p class="mt-1 text-base text-gray-900">{{ a.testo }}</p>
+                                <p class="mt-1 text-[13px] text-gray-600">Inviato il {{ formatData(a.inviato_il) }}<template v-if="a.inviato_da"> da {{ a.inviato_da }}</template>.</p>
+                                <div v-if="! a.presa_atto_il" class="mt-2 flex flex-wrap items-end gap-2">
+                                    <label class="block min-w-0 flex-1 text-xs text-gray-600">
+                                        Nota per il tecnico (facoltativa: per esempio gli estremi dell'ordinanza di chiusura)
+                                        <input v-model="noteAvvisi[a.id]" maxlength="500" class="mt-1 min-h-11 w-full rounded-lg border border-gray-300 px-2.5 text-sm text-gray-900 md:min-h-9" :data-test="`portale-avviso-nota-${a.id}`">
+                                    </label>
+                                    <button type="button" :class="BOTTONE" :disabled="presaAttoBusy === a.id" data-test="portale-presa-atto" @click="presaAtto(a)">{{ presaAttoBusy === a.id ? 'Registrazione…' : 'Preso atto' }}</button>
+                                </div>
+                                <p v-else class="mt-1 text-[13px] text-green-800" data-test="portale-avviso-preso-atto">
+                                    Presa d'atto il {{ formatData(a.presa_atto_il) }}<template v-if="a.presa_atto_da"> da {{ a.presa_atto_da }}</template><template v-if="a.presa_atto_nota">: {{ a.presa_atto_nota }}</template>.
+                                    <template v-if="a.rientrato_il"> Rientrato il {{ formatData(a.rientrato_il) }}<template v-if="a.rientro_nota">: {{ a.rientro_nota }}</template>.</template>
+                                </p>
+                            </li>
+                        </ul>
+                        <p v-if="presaAttoErrore" class="px-4 pb-3 text-sm text-red-700">{{ presaAttoErrore }}</p>
+                    </section>
 
                     <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
                         <div class="flex min-w-0 flex-col gap-4">

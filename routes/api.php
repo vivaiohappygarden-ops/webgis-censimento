@@ -98,6 +98,9 @@ Route::prefix('v1')->group(function () {
         Route::get('portal/overview', [\App\Http\Controllers\Api\V1\PortalController::class, 'overview']);
         Route::get('portal/requests', [\App\Http\Controllers\Api\V1\PortalController::class, 'requests']);
         Route::post('portal/requests', [\App\Http\Controllers\Api\V1\PortalController::class, 'storeRequest'])->middleware('throttle:5,1');
+        // Gli avvisi del tecnico al committente (area da chiudere) e la presa d'atto dal portale riservato
+        Route::get('portal/avvisi', [\App\Http\Controllers\Api\V1\PortalController::class, 'avvisi']);
+        Route::post('portal/avvisi/{id}/presa-atto', [\App\Http\Controllers\Api\V1\PortalController::class, 'presaAtto'])->whereUuid('id');
         // Il portale del Comune (dal 26/09/2026): mappa, elementi, lavori e
         // documenti del proprio territorio, in sola lettura, col solo
         // permesso portal.view. I riquadri hanno il tetto della mappa
@@ -132,6 +135,8 @@ Route::prefix('v1')->group(function () {
         Route::post('assets/{asset}/assessments', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'store'])->whereUuid('asset');
         // I bersagli proposti dal censimento per la valutazione (aree in cui l'albero sta, elementi nel raggio di caduta)
         Route::get('assets/{asset}/bersagli-proposti', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'bersagliProposti'])->whereUuid('asset');
+        // L'avviso al committente (area da chiudere) rientra: intervento fatto, area riaperta
+        Route::post('avvisi/{id}/rientro', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'rientro'])->whereUuid('id');
         Route::patch('assessments/{id}', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'update'])->whereUuid('id');
         Route::delete('assessments/{id}', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'destroy'])->whereUuid('id');
         Route::post('assessments/{id}/valida', [\App\Http\Controllers\Api\V1\TreeAssessmentController::class, 'valida'])->whereUuid('id');

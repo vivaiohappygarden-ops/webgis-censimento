@@ -460,6 +460,48 @@ servizio" e l'import li rilegge. Il portale pubblico continua a mostrare i soli 
 attivo, come oggi un albero morto in piedi. Le **aree** del territorio hanno da sempre i loro stati
 (prevista, attiva, sospesa, dismessa). Prove: `StatiPerTipoTest`.
 
+## Avviso al committente dalla VTA (dal 07/10/2026)
+
+- Richiesta del committente: "se dentro un'area giochi ricade un albero con una propensione al
+  cedimento rischiosa, un avviso che va al Comune cosi' possa chiudere l'area, e se si spunta lo
+  scriviamo come prescrizione". Nella scheda VTA, scelta la classe **C/D o D**, si apre una
+  **finestra** (`TreeVtaPanel`, `vta-finestra-avviso`) che nomina l'area in cui sta l'albero e
+  il committente: "Sì, avvisa il committente" accende la spunta "Avvisa il committente: l'area va
+  chiusa o interdetta fino all'intervento" (disponibile anche a mano dalla classe C in su), con
+  l'area da chiudere (le aree proposte dai bersagli piu' quella della scheda), il testo
+  dell'avviso e i destinatari. **Il testo entra fra le prescrizioni** come una riga, che segue le
+  correzioni e sparisce se si toglie la spunta; in correzione di una valutazione la finestra non
+  si apre da sola.
+- La logica sta **una volta sola in `App\Services\Vta\AvvisoCommittente`**: `destinatari` (gli
+  utenti del portale riservato del committente `users.client_id`, la PEC `clients.pec`, i
+  `contacts` con un'email; senza doppioni), `testoProposto`, `conPrescrizione` (una riga sola),
+  `invia`. La valutazione si salva **prima** e l'avviso parte dopo
+  (`TreeAssessmentController::store/update`, blocco `avviso_committente` {attivo, testo, area_id};
+  **un avviso per valutazione**, la correzione non rimanda): un'email per destinatario a nome
+  dell'organizzazione (`AvvisoCommittenteMail`, vista `emails.avviso-committente`, invio
+  sincrono, un rifiuto non ferma gli altri e l'esito di ognuno resta in `recipients`), piu' la
+  **copia a chi avvisa** con l'elenco degli indirizzi. **Senza indirizzi non si finge**: l'avviso
+  resta nel portale riservato e la scheda dice di aggiungere PEC, contatto o utente del portale
+  in Committenti. Tabella `client_alerts` (modello `ClientAlert`, perimetro di zona `client_id`,
+  `assessment_id` unico): messaggio, classe, inviato da/il, destinatari con esito, **presa
+  d'atto** (`acknowledged_*`) e **rientro** (`resolved_*`). Registro: `avviso.committente_inviato`,
+  `avviso.presa_atto`, `avviso.committente_rientrato`.
+- **Il Comune** lo vede in testa alla Panoramica del portale riservato (`GET portal/avvisi`,
+  `Pages/Nuovo/Portale.vue`, `portale-avvisi`) e ne prende atto con una nota facoltativa (gli
+  estremi dell'ordinanza, `POST portal/avvisi/{id}/presa-atto`, solo il proprio committente);
+  gli avvisi rientrati restano visibili 60 giorni. **Il tecnico** legge presa d'atto e nota nella
+  riga della valutazione e nella carta Stabilita' della scheda, e segna il rientro (`POST
+  avvisi/{id}/rientro`, `assets.update`) quando l'intervento e' fatto e l'area riapre.
+  **Oggi** elenca gli avvisi non rientrati (`CoseDaFare::avvisiCommittente`, tipo `avviso`,
+  famiglia segnalazioni: senza presa d'atto "presto", oltre due giorni "ritardo", dopo la presa
+  d'atto "programma"); la **cronologia** dell'elemento ha la riga `avviso`; la **perizia** scrive
+  "Avviso al committente: trasmesso il ..." fra le prescrizioni (data e testo di allora, che non
+  cambiano: la perizia validata resta uguale). Prove: `AvvisoCommittenteTest`; collaudo nel
+  browser in `scratchpad/verifica-bersagli/verifica-avviso.mjs` (in locale `MAIL_MAILER=log`).
+- L'avviso e' una misura cautelare che il tecnico propone: la chiusura dell'area resta una
+  decisione dell'ente, e l'email lo dice. La pagina di prima del portale (`?precedente=1`) non
+  mostra gli avvisi.
+
 ## Marche temporali (dal 28/09/2026)
 
 - La marca temporale certifica che un documento esisteva cosi' com'e' a un istante certo:

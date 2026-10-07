@@ -61,6 +61,7 @@ class OggiController extends Controller
             'irrigazione' => 0,
             'prescrizioni_aperte' => 0, 'prescrizioni_scadute' => 0,
             'trattamenti_scaduti' => 0, 'trattamenti_in_scadenza' => 0,
+            'avvisi_aperti' => 0, 'avvisi_senza_presa_atto' => 0,
         ];
 
         if ($user->can('works.view')) {
@@ -167,6 +168,25 @@ class OggiController extends Controller
                         'dalla VTA del '.$this->data($r['assessed_on']).($r['failure_class'] ? ' (classe '.$r['failure_class'].')' : '').' · senza ordine'],
                     $scaduta ? 'ritardo' : ($entro ? 'presto' : 'programma'), $entro ? abs($this->giorniA($entro, $today)) : 0,
                     [['label' => 'Crea l\'ordine', 'href' => '/vta?prescrizioni=1'], ['label' => 'Scheda', 'href' => '/censimento/'.$r['asset_id']]]);
+            }
+        }
+
+        // Avvisi al committente (area da chiudere) non ancora rientrati: senza presa
+        // d'atto sono una cosa da sollecitare, dopo la presa d'atto restano in attesa del rientro
+        if ($user->can('assets.view')) {
+            $avvisi = $cose->avvisiCommittente();
+            $conteggi['avvisi_aperti'] = $avvisi['count'];
+            $conteggi['avvisi_senza_presa_atto'] = $avvisi['without_ack_count'];
+            foreach ($avvisi['rows'] as $a) {
+                $giorni = $this->giorniDa(substr((string) $a['sent_at'], 0, 10), $today);
+                $presoAtto = $a['acknowledged_at'] !== null;
+                $voci[] = $this->voce('avviso', 'segnalazioni', $a['id'],
+                    ($a['census_code'] ?: 'Albero senza cartellino').' · avviso al committente'.($a['client'] ? ' '.$a['client'] : ''),
+                    [$a['area'] ? 'area '.$a['area'] : null, $a['failure_class'] ? 'classe '.$a['failure_class'] : null,
+                        'inviato il '.$this->data(substr((string) $a['sent_at'], 0, 10)).' a '.$a['inviati'].' '.($a['inviati'] === 1 ? 'indirizzo' : 'indirizzi'),
+                        $presoAtto ? 'presa d\'atto il '.$this->data(substr((string) $a['acknowledged_at'], 0, 10)).', in attesa del rientro' : 'senza presa d\'atto'],
+                    $presoAtto ? 'programma' : ($giorni > 2 ? 'ritardo' : 'presto'), $giorni,
+                    [['label' => 'Scheda', 'href' => '/censimento/'.$a['asset_id'].'?vta=1']]);
             }
         }
 

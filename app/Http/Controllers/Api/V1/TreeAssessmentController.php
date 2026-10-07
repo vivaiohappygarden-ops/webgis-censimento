@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use App\Models\TreeAssessment;
+use App\Models\ClientAlert;
+use App\Services\Vta\AvvisoCommittente;
 use App\Services\Vta\BersagliProposti;
 use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +24,7 @@ class TreeAssessmentController extends Controller implements HasMiddleware
     {
         return [
             new Middleware('can:assets.view', only: ['index', 'bersagliProposti']),
-            new Middleware('can:assets.update', only: ['store', 'update']),
+            new Middleware('can:assets.update', only: ['store', 'update', 'rientro']),
             new Middleware('can:assets.delete', only: ['destroy']),
             new Middleware('can:assets.update', only: ['valida']),
             // Gli intervalli valgono per tutta l'organizzazione: li tocca
@@ -105,7 +107,7 @@ class TreeAssessmentController extends Controller implements HasMiddleware
 
         return response()->json([
             'data' => $asset->tree->assessments()
-                ->with(['assessor:id,name', 'validator:id,name'])
+                ->with(['assessor:id,name', 'validator:id,name', 'avviso.area:id,name', 'avviso.acknowledger:id,name', 'avviso.resolver:id,name'])
                 ->withCount('instrumentalAnalyses')
                 ->orderByDesc('assessed_on')
                 ->get(),
@@ -124,7 +126,11 @@ class TreeAssessmentController extends Controller implements HasMiddleware
         ]);
         $asset = Asset::with('tree')->findOrFail($assetId);
 
-        return response()->json(['data' => $proposte->per($asset, isset($dati['raggio']) ? (float) $dati['raggio'] : null)]);
+        return response()->json(['data' => [
+            ...$proposte->per($asset, isset($dati['raggio']) ? (float) $dati['raggio'] : null),
+            // Il committente e i suoi indirizzi: la scheda VTA li mostra prima di mandare l'avviso
+            'committente' => AvvisoCommittente::committentePer($asset),
+        ]]);
     }
 
     public function store(Request $request, string $assetId): JsonResponse
@@ -137,6 +143,7 @@ class TreeAssessmentController extends Controller implements HasMiddleware
         }
 
         $data = $request->validate($this->rules(), $this->messages());
+        $avviso = $this->avvisoRichiesto($data, $asset);
 
         if (isset($data['survey']['difetti'])) {
             // Solo le parti previste dalla scheda: niente chiavi arbitrarie
@@ -169,9 +176,15 @@ class TreeAssessmentController extends Controller implements HasMiddleware
             'failure_class' => $assessment->failure_class,
         ]);
 
+        // L'avviso al committente parte dopo che la valutazione e' salva: la
+        // valutazione non si perde se la posta non risponde
+        if ($avviso !== null) {
+            app(AvvisoCommittente::class)->invia($assessment, $asset, $request->user(), $avviso['testo'], $avviso['area_id']);
+        }
+
         // refresh: version e i valori con default lato database servono
         // subito a chi correggerà la valutazione (blocco ottimistico)
-        return response()->json(['data' => $assessment->refresh()->load('assessor:id,name')], 201);
+        return response()->json(['data' => $assessment->refresh()->load('assessor:id,name', 'avviso.area:id,name')], 201);
     }
 
     /**
@@ -189,9 +202,19 @@ class TreeAssessmentController extends Controller implements HasMiddleware
             ...$this->rules(perTutti: false),
             'version' => ['sometimes', 'integer'],
         ], $this->messages());
+        $avvisoRichiesto = $data['avviso_committente'] ?? null;
+        unset($data['avviso_committente']);
+        $avviso = null;
 
-        $assessment = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $id, $data) {
+        $assessment = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $id, $data, $avvisoRichiesto, &$avviso) {
             $assessment = TreeAssessment::query()->lockForUpdate()->findOrFail($id);
+            // Un avviso per valutazione: se c'e' gia', la correzione non lo rimanda
+            if (($avvisoRichiesto['attivo'] ?? false) && $assessment->avviso()->doesntExist()) {
+                $asset = Asset::query()->findOrFail($assessment->tree_id);
+                $avviso = $this->avvisoRichiesto(['avviso_committente' => $avvisoRichiesto], $asset);
+                $prescrizioni = array_key_exists('prescriptions', $data) ? $data['prescriptions'] : $assessment->prescriptions;
+                $data['prescriptions'] = AvvisoCommittente::conPrescrizione($prescrizioni, $avviso['testo']);
+            }
 
             // Una perizia validata e' un atto chiuso. Il messaggio dice anche
             // cosa fare al suo posto, perche' il tecnico che arriva qui ha un
@@ -266,7 +289,11 @@ class TreeAssessmentController extends Controller implements HasMiddleware
             return $assessment;
         });
 
-        return response()->json(['data' => $assessment->load('assessor:id,name')]);
+        if ($avviso !== null) {
+            app(AvvisoCommittente::class)->invia($assessment, Asset::query()->findOrFail($assessment->tree_id), $request->user(), $avviso['testo'], $avviso['area_id']);
+        }
+
+        return response()->json(['data' => $assessment->load('assessor:id,name', 'avviso.area:id,name')]);
     }
 
     /**
@@ -304,6 +331,47 @@ class TreeAssessmentController extends Controller implements HasMiddleware
      *
      * @return array<string, array<int, mixed>>
      */
+    /**
+     * L'avviso al committente chiesto insieme alla valutazione: toglie il blocco
+     * dai dati della valutazione, mette il testo fra le prescrizioni e lo
+     * restituisce pronto per l'invio (null se non richiesto).
+     *
+     * @return array{testo: string, area_id: ?string}|null
+     */
+    private function avvisoRichiesto(array &$data, Asset $asset): ?array
+    {
+        $richiesta = $data['avviso_committente'] ?? null;
+        unset($data['avviso_committente']);
+        if (! ($richiesta['attivo'] ?? false)) {
+            return null;
+        }
+        $areaId = $richiesta['area_id'] ?? null;
+        $area = $areaId ? \App\Models\Area::query()->find($areaId) : null;
+        $testo = trim((string) ($richiesta['testo'] ?? '')) !== ''
+            ? trim((string) $richiesta['testo'])
+            : AvvisoCommittente::testoProposto($asset, $area);
+        $data['prescriptions'] = AvvisoCommittente::conPrescrizione($data['prescriptions'] ?? null, $testo);
+
+        return ['testo' => $testo, 'area_id' => $area?->id];
+    }
+
+    /** Il tecnico segna che l'avviso e' rientrato: intervento fatto, area riaperta. */
+    public function rientro(Request $request, string $id): JsonResponse
+    {
+        $dati = $request->validate(['nota' => ['nullable', 'string', 'max:500']]);
+        $avviso = ClientAlert::query()->findOrFail($id);
+        if ($avviso->resolved_at === null) {
+            $avviso->forceFill([
+                'resolved_at' => now(),
+                'resolved_by' => $request->user()->id,
+                'resolved_note' => $dati['nota'] ?? null,
+            ])->save();
+            Audit::log('avviso.committente_rientrato', $avviso, ['asset_id' => $avviso->asset_id, 'nota' => $dati['nota'] ?? null]);
+        }
+
+        return response()->json(['data' => $avviso->fresh(['area:id,name', 'acknowledger:id,name', 'resolver:id,name'])]);
+    }
+
     private function rules(bool $perTutti = true): array
     {
         $obbligatorio = $perTutti ? 'required' : 'sometimes';
@@ -328,6 +396,11 @@ class TreeAssessmentController extends Controller implements HasMiddleware
             'failure_class' => ['nullable', Rule::in(TreeAssessment::FAILURE_CLASSES)],
             'outcome' => ['nullable', 'in:ok,monitor,prescriptions,fell'],
             'prescriptions' => ['nullable', 'string'],
+            // L'avviso al committente (area da chiudere): testo che entra fra le prescrizioni e parte via email
+            'avviso_committente' => ['nullable', 'array'],
+            'avviso_committente.attivo' => ['sometimes', 'boolean'],
+            'avviso_committente.testo' => ['nullable', 'string', 'max:1000'],
+            'avviso_committente.area_id' => ['nullable', 'uuid'],
             // Entro quando fare quello che si prescrive: diventa la data dell'ordine (GeneratorePrescrizioniVta)
             'prescriptions_due_on' => ['nullable', 'date'],
             // Pubblicazione della relazione come atto sul portale

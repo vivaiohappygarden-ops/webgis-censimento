@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Area;
+use App\Models\ClientAlert;
 use App\Models\Issue;
 use App\Models\Organization;
 use App\Models\Photo;
@@ -236,6 +237,68 @@ class PortalController extends Controller implements HasMiddleware
             'email' => SitoDati::testo('contatti.email'),
             'pec' => SitoDati::testo('contatti.pec'),
         ], fn ($v) => $v !== null);
+    }
+
+    /**
+     * Gli avvisi del tecnico al committente (area da chiudere o interdire):
+     * quelli aperti e quelli rientrati di recente. Appartengono al cliente
+     * dell'utente, come le richieste.
+     */
+    public function avvisi(Request $request): JsonResponse
+    {
+        [$client] = $this->linkedAreas($request);
+
+        $avvisi = ClientAlert::query()
+            ->with(['asset:id,census_code', 'asset.tree:asset_id,species,common_name', 'area:id,name', 'sender:id,name', 'acknowledger:id,name'])
+            ->where('client_id', $client->id)
+            ->where(fn ($q) => $q->whereNull('resolved_at')->orWhere('resolved_at', '>=', now()->subDays(60)))
+            ->orderByRaw('acknowledged_at IS NULL DESC')
+            ->orderByDesc('sent_at')
+            ->limit(50)
+            ->get();
+
+        return response()->json(['data' => $avvisi->map(fn (ClientAlert $a) => $this->presentAlert($a))]);
+    }
+
+    /** Il committente prende atto dell'avviso, con una nota facoltativa (per esempio gli estremi dell'ordinanza). */
+    public function presaAtto(Request $request, string $id): JsonResponse
+    {
+        [$client] = $this->linkedAreas($request);
+        $dati = $request->validate(['nota' => ['nullable', 'string', 'max:500']]);
+
+        $avviso = ClientAlert::query()->where('client_id', $client->id)->findOrFail($id);
+        if ($avviso->acknowledged_at === null) {
+            $avviso->forceFill([
+                'acknowledged_at' => now(),
+                'acknowledged_by' => $request->user()->id,
+                'acknowledged_note' => $dati['nota'] ?? null,
+            ])->save();
+            Audit::log('avviso.presa_atto', $avviso, ['asset_id' => $avviso->asset_id, 'nota' => $dati['nota'] ?? null]);
+        }
+
+        return response()->json(['data' => $this->presentAlert($avviso->fresh(['asset:id,census_code', 'asset.tree:asset_id,species,common_name', 'area:id,name', 'sender:id,name', 'acknowledger:id,name']))]);
+    }
+
+    private function presentAlert(ClientAlert $a): array
+    {
+        return [
+            'id' => $a->id,
+            'testo' => $a->message,
+            'classe' => $a->failure_class,
+            'albero' => [
+                'id' => $a->asset_id,
+                'cartellino' => $a->asset?->census_code,
+                'specie' => $a->asset?->tree?->species ?: $a->asset?->tree?->common_name,
+            ],
+            'area' => $a->area?->name,
+            'inviato_il' => $a->sent_at?->toIso8601String(),
+            'inviato_da' => $a->sender?->name,
+            'presa_atto_il' => $a->acknowledged_at?->toIso8601String(),
+            'presa_atto_da' => $a->acknowledger?->name,
+            'presa_atto_nota' => $a->acknowledged_note,
+            'rientrato_il' => $a->resolved_at?->toIso8601String(),
+            'rientro_nota' => $a->resolved_note,
+        ];
     }
 
     /** Le aree del cliente collegato, o l'errore del portale se il collegamento manca. */

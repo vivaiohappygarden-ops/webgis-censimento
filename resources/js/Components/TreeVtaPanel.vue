@@ -204,7 +204,120 @@ const spiegaRaggio = computed(() => {
 });
 watch(showVtaForm, (aperto) => {
     if (aperto && proposte.value === null && ! proposteBusy.value) caricaProposte();
+    if (! aperto) azzeraAvviso();
 });
+
+// --- Avviso al committente (richiesta del committente 07/10/2026) -------------
+// Con una propensione al cedimento elevata o estrema (C/D, D) il programma
+// chiede, in una finestra, se avvisare chi gestisce l'area perche' la chiuda
+// o la interdica fino all'intervento. La richiesta entra fra le prescrizioni
+// e l'email parte alla registrazione della valutazione (una per destinatario,
+// con copia al tecnico); poi la riga della valutazione dice a che punto e'
+// (presa d'atto dal portale riservato, rientro segnato qui).
+const CLASSI_RISCHIOSE = ['C/D', 'D'];
+const avvisoCommittente = reactive({ attivo: false, testo: '', area_id: '' });
+const finestraAvviso = ref(false);
+const bottoneAvvisoSi = ref(null);
+const rientroBusy = ref(null);
+let finestraGiaMostrata = false;
+let rigaPrescrizioneAvviso = '';
+let ultimoTestoProposto = '';
+const committente = computed(() => proposte.value?.committente ?? null);
+const areeAvviso = computed(() => {
+    const lista = (proposte.value?.aree ?? []).map((a) => ({ id: a.id, nome: a.nome }));
+    if (props.asset.area?.id && ! lista.some((a) => a.id === props.asset.area.id)) lista.push({ id: props.asset.area.id, nome: props.asset.area.name });
+
+    return lista;
+});
+const avvisoEsistente = computed(() => (vta.id ? (assessments.value.find((a) => a.id === vta.id)?.avviso ?? null) : null));
+const inviati = (a) => (a?.recipients ?? []).filter((d) => d.esito === 'inviata').length;
+function statoAvviso(a) {
+    if (! a) return '';
+    if (a.resolved_at) return `Rientrato il ${fmtOra(a.resolved_at)}${a.resolver?.name ? ` (${a.resolver.name})` : ''}.`;
+    if (a.acknowledged_at) return `Presa d'atto del committente il ${fmtOra(a.acknowledged_at)}${a.acknowledger?.name ? ` (${a.acknowledger.name})` : ''}${a.acknowledged_note ? `: ${a.acknowledged_note}` : ''}. In attesa del rientro.`;
+
+    return 'In attesa della presa d\'atto del committente.';
+}
+function testoAvvisoProposto() {
+    const area = areeAvviso.value.find((a) => a.id === avvisoCommittente.area_id)?.nome;
+    const dove = area ? `all'area "${area}"` : 'all\'area attorno all\'albero';
+
+    return `Interdire l'accesso ${dove} nel raggio di caduta dell'albero ${props.asset.census_code || 'senza cartellino'} fino all'esecuzione degli interventi prescritti.`;
+}
+// La riga dell'avviso fra le prescrizioni: una sola, che segue il testo finche' lo si corregge
+function scriviPrescrizioneAvviso(nuova) {
+    let righe = vta.prescriptions.split('\n').map((r) => r.trim()).filter(Boolean);
+    if (rigaPrescrizioneAvviso) righe = righe.filter((r) => r !== rigaPrescrizioneAvviso);
+    const testo = (nuova ?? '').trim();
+    if (testo && ! righe.includes(testo)) righe.push(testo);
+    rigaPrescrizioneAvviso = testo;
+    vta.prescriptions = righe.join('\n');
+}
+const fraseFinestra = computed(() => {
+    const area = areeAvviso.value[0]?.nome;
+    const chi = committente.value?.nome || 'il committente';
+
+    return (area ? `L'albero ${props.asset.census_code || 'senza cartellino'} sta in "${area}". ` : '')
+        + `Vuoi avvisare ${chi} perché chiuda o interdica l'area fino all'intervento? L'avviso parte via email quando registri la valutazione e la richiesta entra fra le prescrizioni.`;
+});
+function attivaAvviso() {
+    finestraAvviso.value = false;
+    avvisoCommittente.attivo = true;
+}
+function rifiutaAvviso() {
+    finestraAvviso.value = false;
+}
+function azzeraAvviso() {
+    avvisoCommittente.attivo = false;
+    avvisoCommittente.testo = '';
+    avvisoCommittente.area_id = '';
+    rigaPrescrizioneAvviso = '';
+    ultimoTestoProposto = '';
+    finestraAvviso.value = false;
+    finestraGiaMostrata = false;
+}
+watch(() => avvisoCommittente.attivo, (acceso) => {
+    if (acceso) {
+        if (! avvisoCommittente.area_id && areeAvviso.value.length) avvisoCommittente.area_id = areeAvviso.value[0].id;
+        if (! avvisoCommittente.testo.trim()) {
+            ultimoTestoProposto = testoAvvisoProposto();
+            avvisoCommittente.testo = ultimoTestoProposto;
+        }
+        scriviPrescrizioneAvviso(avvisoCommittente.testo);
+    } else {
+        scriviPrescrizioneAvviso('');
+    }
+});
+watch(() => avvisoCommittente.testo, (testo) => {
+    if (avvisoCommittente.attivo) scriviPrescrizioneAvviso(testo);
+});
+watch(() => avvisoCommittente.area_id, () => {
+    // Cambiando area il testo proposto si rifa', ma solo se il tecnico non l'aveva gia' corretto
+    if (avvisoCommittente.attivo && avvisoCommittente.testo.trim() === ultimoTestoProposto) {
+        ultimoTestoProposto = testoAvvisoProposto();
+        avvisoCommittente.testo = ultimoTestoProposto;
+    }
+});
+watch(() => vta.failure_class, (classe) => {
+    if (! props.canUpdate || ! CLASSI_RISCHIOSE.includes(classe) || avvisoCommittente.attivo || avvisoEsistente.value || finestraGiaMostrata) return;
+    finestraGiaMostrata = true;
+    finestraAvviso.value = true;
+    nextTick(() => bottoneAvvisoSi.value?.focus());
+});
+async function segnaRientro(a) {
+    if (! window.confirm('Segnare l\'avviso come rientrato? Vuol dire che l\'intervento è stato fatto e l\'area può riaprire.')) return;
+    rientroBusy.value = a.avviso.id;
+    vtaError.value = '';
+    try {
+        await axios.post(`/api/v1/avvisi/${a.avviso.id}/rientro`);
+        await loadAssessments();
+        emit('saved');
+    } catch (err) {
+        vtaError.value = err.response?.data?.message ?? `Rientro non registrato (errore ${err.response?.status ?? 'di rete'}).`;
+    } finally {
+        rientroBusy.value = null;
+    }
+}
 
 // Rilevatori abilitati dell'organizzazione (Utenti > Chi firma > Rilevatori abilitati)
 const rilevatori = ref([]);
@@ -220,6 +333,9 @@ async function caricaRilevatori() {
 
 /** Riapre una valutazione già registrata per correggerla. */
 function editAssessment(a) {
+    azzeraAvviso();
+    // In correzione la finestra non si apre da sola: la spunta resta a disposizione
+    finestraGiaMostrata = true;
     Object.assign(vta, blankVta(), {
         id: a.id,
         version: a.version,
@@ -442,6 +558,10 @@ async function saveVta() {
                 : null,
             targets: vta.bersagli.split('\n').map((r) => r.trim()).filter(Boolean),
             survey: vta.survey,
+            // L'avviso al committente parte una volta sola per valutazione
+            avviso_committente: avvisoCommittente.attivo && ! avvisoEsistente.value
+                ? { attivo: true, testo: avvisoCommittente.testo || null, area_id: avvisoCommittente.area_id || null }
+                : null,
         };
         if (vta.id) {
             await axios.patch(`/api/v1/assessments/${vta.id}`, { ...payload, version: vta.version });
@@ -854,6 +974,46 @@ watch(() => props.apriValutazione, (apri) => {
                         <span v-else-if="! rilevatori.length && vta.rilevatore_id !== 'altro'" class="mt-1 block text-gray-500">Agronomi esterni e operatori abilitati si registrano in Utenti, sotto "Chi firma": qui si scelgono con albo e partita IVA.</span>
                     </div>
                 </div>
+                <!-- Avviso al committente: con propensione al cedimento elevata o estrema il programma
+                     propone di avvisare chi gestisce l'area perche' la chiuda; la richiesta entra fra le prescrizioni -->
+                <div
+                    v-if="props.canUpdate && (avvisoEsistente || avvisoCommittente.attivo || ['C', 'C/D', 'D'].includes(vta.failure_class))"
+                    class="rounded-lg border px-3 py-2 text-xs"
+                    :class="avvisoCommittente.attivo || (avvisoEsistente && ! avvisoEsistente.resolved_at) ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'"
+                    data-test="vta-avviso"
+                >
+                    <template v-if="avvisoEsistente">
+                        <p class="font-medium text-gray-900">Avviso al committente inviato il {{ fmtOra(avvisoEsistente.sent_at) }} a {{ inviati(avvisoEsistente) }} {{ inviati(avvisoEsistente) === 1 ? 'indirizzo' : 'indirizzi' }}<template v-if="avvisoEsistente.area"> · area {{ avvisoEsistente.area.name }}</template>.</p>
+                        <p class="text-gray-700">{{ statoAvviso(avvisoEsistente) }}</p>
+                    </template>
+                    <template v-else>
+                        <label class="flex min-h-11 cursor-pointer items-start gap-2 md:min-h-0">
+                            <input v-model="avvisoCommittente.attivo" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-gray-300" data-test="vta-avviso-spunta">
+                            <span>
+                                <span class="font-medium text-gray-900">Avvisa il committente: l'area va chiusa o interdetta fino all'intervento.</span>
+                                <span class="text-gray-600"> L'email parte quando registri la valutazione, a nome dell'organizzazione e con copia a te; la richiesta entra fra le prescrizioni.</span>
+                            </span>
+                        </label>
+                        <div v-if="avvisoCommittente.attivo" class="mt-2 grid gap-2 md:grid-cols-2">
+                            <label class="block">
+                                <span class="text-gray-500">Area da chiudere</span>
+                                <select v-model="avvisoCommittente.area_id" data-test="vta-avviso-area" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm">
+                                    <option v-for="a in areeAvviso" :key="a.id" :value="a.id">{{ a.nome }}</option>
+                                    <option value="">(senza indicare un'area)</option>
+                                </select>
+                            </label>
+                            <div class="block">
+                                <span class="text-gray-500">Destinatari</span>
+                                <p v-if="committente?.destinatari?.length" class="mt-1 break-words text-gray-900" data-test="vta-avviso-destinatari">{{ committente.destinatari.map((d) => d.email).join(', ') }}</p>
+                                <p v-else class="mt-1 text-amber-900" data-test="vta-avviso-destinatari">{{ committente ? `${committente.nome} non ha indirizzi email nel programma: l'avviso resterà nel suo portale riservato. Aggiungi una PEC, un contatto o un utente del portale in Committenti.` : 'Committente non trovato.' }}</p>
+                            </div>
+                            <label class="block md:col-span-2">
+                                <span class="text-gray-500">Testo dell'avviso (entra anche fra le prescrizioni)</span>
+                                <textarea v-model="avvisoCommittente.testo" rows="2" maxlength="1000" data-test="vta-avviso-testo" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" />
+                            </label>
+                        </div>
+                    </template>
+                </div>
                 <div class="block text-xs">
                     <label class="block">
                         <span class="text-gray-500">Prescrizioni (una per riga)</span>
@@ -1014,6 +1174,22 @@ watch(() => props.apriValutazione, (apri) => {
                     </div>
 
                     <p
+                        v-if="a.avviso"
+                        class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg px-2.5 py-1.5 text-xs"
+                        :class="a.avviso.resolved_at ? 'bg-gray-50 text-gray-600' : 'bg-red-50 text-red-900'"
+                        data-test="vta-riga-avviso"
+                    >
+                        <span>Avviso al committente inviato il {{ fmtOra(a.avviso.sent_at) }} a {{ inviati(a.avviso) }} {{ inviati(a.avviso) === 1 ? 'indirizzo' : 'indirizzi' }}<template v-if="a.avviso.area"> · area {{ a.avviso.area.name }}</template>. {{ statoAvviso(a.avviso) }}</span>
+                        <button
+                            v-if="canUpdate && ! a.avviso.resolved_at"
+                            type="button"
+                            class="min-h-9 rounded-lg border border-gray-300 bg-white px-2.5 font-medium text-gray-900 hover:bg-gray-50 disabled:opacity-50 md:min-h-7"
+                            :disabled="rientroBusy === a.avviso.id"
+                            data-test="vta-avviso-rientro"
+                            @click="segnaRientro(a)"
+                        >{{ rientroBusy === a.avviso.id ? 'Registrazione…' : 'Segna rientrato' }}</button>
+                    </p>
+                    <p
                         v-if="a.validated_at"
                         data-test="vta-validata"
                         class="mt-1.5 rounded-lg bg-gray-50 px-2.5 py-1.5 text-xs text-gray-600"
@@ -1138,5 +1314,26 @@ watch(() => props.apriValutazione, (apri) => {
                 <li v-if="! assessments.length" class="py-2 text-sm text-gray-400">Nessuna valutazione registrata.</li>
             </ul>
         </div>
-    </div>
+    
+        <!-- La finestra dell'avviso: si apre da sola quando la classe scelta e' C/D o D -->
+        <div
+            v-if="finestraAvviso"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="vta-avviso-titolo"
+            data-test="vta-finestra-avviso"
+            @keydown.escape.prevent="rifiutaAvviso"
+        >
+            <div class="w-full max-w-md rounded-xl border border-gray-200 bg-white p-5 shadow-xl">
+                <h3 id="vta-avviso-titolo" class="text-base font-bold text-gray-900">Propensione al cedimento {{ vta.failure_class === 'D' ? 'estrema' : 'elevata' }} (classe {{ vta.failure_class }})</h3>
+                <p class="mt-2 text-sm text-gray-700">{{ fraseFinestra }}</p>
+                <p v-if="committente && ! committente.destinatari.length" class="mt-2 text-sm text-amber-900">{{ committente.nome }} non ha indirizzi email nel programma: l'avviso resterebbe nel suo portale riservato.</p>
+                <div class="mt-4 flex flex-wrap justify-end gap-2">
+                    <button type="button" class="min-h-11 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-50 md:min-h-9" data-test="vta-avviso-no" @click="rifiutaAvviso">No, solo la valutazione</button>
+                    <button ref="bottoneAvvisoSi" type="button" class="min-h-11 rounded-lg bg-green-700 px-3 text-sm font-semibold text-white hover:bg-green-800 md:min-h-9" data-test="vta-avviso-si" @click="attivaAvviso">Sì, avvisa il committente</button>
+                </div>
+            </div>
+        </div>
+</div>
 </template>

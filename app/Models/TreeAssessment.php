@@ -50,6 +50,12 @@ class TreeAssessment extends Model
         ];
     }
 
+    /** L'avviso al committente nato da questa valutazione (area da chiudere), se c'e' stato. */
+    public function avviso()
+    {
+        return $this->hasOne(ClientAlert::class, 'assessment_id');
+    }
+
     /** Chi ha validato la perizia, quando c'e' stata la validazione. */
     public function validator()
     {

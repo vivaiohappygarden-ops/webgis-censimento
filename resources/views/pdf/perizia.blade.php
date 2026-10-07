@@ -242,6 +242,11 @@
         <tr><th>Priorità</th><td>
             @if ($vuoto($prioritaIntervento))<span class="vuoto">Non indicata</span>@else{{ $prioritaIntervento }}@endif
         </td></tr>
+        @if (! empty($avvisoCommittente))
+        <tr><th>Avviso al committente</th><td>
+            Trasmesso il {{ $avvisoCommittente->sent_at?->timezone('Europe/Rome')->format('d/m/Y') }} per la chiusura o l'interdizione dell'area: {{ $avvisoCommittente->message }}
+        </td></tr>
+        @endif
         <tr><th>Prossimo controllo entro</th><td>
             @if ($assessment->next_check_due)
                 {{ $assessment->next_check_due->format('d/m/Y') }}

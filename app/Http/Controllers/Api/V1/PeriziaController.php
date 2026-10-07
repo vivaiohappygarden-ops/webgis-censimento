@@ -218,6 +218,8 @@ class PeriziaController extends Controller implements HasMiddleware
                 : 'non disponibili',
             'contesto' => $survey['contesto'] ?? [],
             'bersagli' => $this->joinList($assessment->targets),
+            // L'avviso al committente (area da chiudere), se e' partito: data e testo di allora, che non cambiano
+            'avvisoCommittente' => $assessment->avviso,
             'interferenze' => $survey['interferenze'] ?? null,
             // Lo stato vegetativo si può indicare nella scheda albero o nella
             // scheda della perizia: nel documento ne compare uno solo, quello

@@ -115,6 +115,42 @@ class CoseDaFare
         ];
     }
 
+    /**
+     * Gli avvisi al committente (area da chiudere) non ancora rientrati:
+     * prima quelli senza presa d'atto, poi dal piu' vecchio. Restano in Oggi
+     * finche' il tecnico non segna il rientro.
+     */
+    public function avvisiCommittente(): array
+    {
+        $query = \App\Models\ClientAlert::query()
+            ->with(['asset:id,census_code', 'client:id,name', 'area:id,name'])
+            ->whereNull('resolved_at');
+
+        $rows = (clone $query)
+            ->orderByRaw('acknowledged_at IS NULL DESC')
+            ->orderBy('sent_at')
+            ->limit(self::LIMIT)
+            ->get()
+            ->map(fn (\App\Models\ClientAlert $a) => [
+                'id' => $a->id,
+                'asset_id' => $a->asset_id,
+                'census_code' => $a->asset?->census_code,
+                'client' => $a->client?->name,
+                'area' => $a->area?->name,
+                'failure_class' => $a->failure_class,
+                'sent_at' => $a->sent_at?->toIso8601String(),
+                'acknowledged_at' => $a->acknowledged_at?->toIso8601String(),
+                'destinatari' => count($a->recipients ?? []),
+                'inviati' => $a->inviati(),
+            ]);
+
+        return [
+            'count' => $query->count(),
+            'without_ack_count' => (clone $query)->whereNull('acknowledged_at')->count(),
+            'rows' => $rows,
+        ];
+    }
+
     /** Segnalazioni aperte con SLA fuori tempo o in scadenza entro 3 giorni. */
     public function issues(): array
     {
