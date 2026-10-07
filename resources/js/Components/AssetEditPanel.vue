@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import axios from 'axios';
 import ScegliVoce from '@/Components/ScegliVoce.vue';
+import { STATUS_LABELS, statiProponibili } from '@/assetStatus';
 
 const props = defineProps({ asset: { type: Object, required: true } });
 const emit = defineEmits(['saved', 'close']);
@@ -21,6 +22,13 @@ const form = reactive({
     area_id: props.asset.area_id,
     attributes: { ...(props.asset.attributes ?? {}) },
 });
+
+// Gli stati della tendina seguono il tipo dell'elemento: "morto in piedi" e
+// "ceppaia" solo per la vegetazione (una panchina non muore in piedi), e
+// "abbattuto/rimosso" si legge soltanto, perche' si entra e si esce con il
+// suo flusso in fondo alla scheda
+const statiTendina = computed(() => statiProponibili(props.asset.object_type?.code, form.status)
+    .filter((s) => s !== 'removed' || form.status === 'removed'));
 
 // Tutte le aree, per lo spostamento: l'elemento porta con se' la sua storia
 // (perizie, foto, versioni) e nello storico resta scritto il cambio di area
@@ -121,11 +129,7 @@ async function save() {
                     data-test="stato-scheda"
                     class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100 disabled:text-gray-500"
                 >
-                    <option value="active">Attivo</option>
-                    <option value="dead">Morto in piedi</option>
-                    <option value="stump">Ceppaia</option>
-                    <option value="dismissed">Dismesso</option>
-                    <option v-if="form.status === 'removed'" value="removed">Abbattuto/Rimosso</option>
+                    <option v-for="s in statiTendina" :key="s" :value="s">{{ STATUS_LABELS[s] }}</option>
                 </select>
                 <!-- La dismissione non ha finestre di conferma: basta dire
                      chiaramente che cosa comporta, ed è sempre reversibile -->

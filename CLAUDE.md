@@ -365,7 +365,18 @@ Stato per punto; i dettagli stanno nelle sezioni che seguono.
    trova sulla mappa, non esporta, non scarica sul telefono e non scrive niente del Sud).
 5. **Fatto**: bersagli della VTA anche dagli elementi censiti (`Components/CercaElemento.vue`, ricerca a
    parole su `GET assets?q=`; il bersaglio entra come riga "CARTELLINO · descrizione", i `targets`
-   restano stringhe).
+   restano stringhe). **Proposti da soli (dal 07/10/2026**, richiesta "un albero che sta dentro a un
+   parco giochi, quel parco giochi lo deve consigliare in automatico"): all'apertura del modulo la
+   scheda VTA chiede `GET assets/{id}/bersagli-proposti` (`TreeAssessmentController::bersagliProposti`,
+   `App\Services\Vta\BersagliProposti`, permesso `assets.view`) e mostra sotto il campo le **aree in
+   cui l'albero sta** (poligono che lo contiene, oppure area della scheda) e gli **elementi censiti nel
+   raggio di caduta**: il raggio e' l'altezza dell'albero (minimo 5 m, 15 m se l'altezza manca,
+   `?raggio=` per cambiarlo dalla pagina). Fuori la vegetazione, l'archivio, le aree di gestione
+   (325), le informazioni geodetiche (399) e i fattori ambientali salvo le infrastrutture (441),
+   letti dal codice del catalogo; prima chi contiene l'albero, poi per distanza, tetto `LIMITE` con
+   il conto di quanti restano. Le interrogazioni passano dai modelli, cosi' valgono organizzazione e
+   zona. Ogni proposta e' un pulsante (44 px sul telefono), "Aggiungi tutti" le porta in una volta,
+   il testo resta libero. Prove: `BersagliPropostiTest`.
 6. **Fatto**: prescrizioni da un elenco predefinito con ricerca a parole (`config/agronomia.php`,
    chiave `prescrizioni_vta`, 38 formule d'uso) piu' il testo libero, che resta la prescrizione vera.
 7. **Fatto**: la valutazione VTA porta la data entro cui fare gli interventi prescritti
@@ -430,6 +441,17 @@ Stato per punto; i dettagli stanno nelle sezioni che seguono.
 12. **Fatto**: le pagine di prima montate nelle sezioni nuove hanno tutte lo stesso involucro
     (`mx-auto max-w-[1640px] p-4 md:p-6 lg:px-7`, lo stesso delle pagine nuove) e il titolo delle
     testate sta in una riga da 36 px (`min-h-9`): cambiando scheda il titolo non si sposta.
+
+**Stati per tipo di elemento (07/10/2026)**, domanda del committente "i parchi e le attrezzature hanno
+gli stessi stati delle alberature?": gli stati di `assets.status` sono gli stessi per tutto il
+patrimonio, ma **"morto in piedi" e "ceppaia" valgono solo per la vegetazione** (tipo principale 1
+del catalogo, seconda lettera del codice): `AssetStatus::SOLO_VEGETAZIONE`, `eVegetazione`,
+`ammessoPer`, `motivoNonAmmesso` (un posto solo; gemello `statiProponibili` in
+`resources/js/assetStatus.js`). La tendina di `AssetEditPanel` li toglie per arredi, giochi,
+percorsi e impianti (restano attivo e dismesso, piu' l'abbattuto/rimosso dal suo flusso) e il
+server rifiuta con 422 in `AssetController` (creazione e modifica) e nel sync di campo
+(`CommandApplier`, creazione e `asset.change_status`). Le **aree** del territorio hanno da sempre i
+loro stati (prevista, attiva, sospesa, dismessa). Prove: `StatiPerTipoTest`.
 
 ## Marche temporali (dal 28/09/2026)
 

@@ -137,6 +137,10 @@ class AssetController extends Controller implements HasMiddleware
         $data = $request->validated();
 
         $type = CatalogObjectType::findOrFail($data['object_type_id']);
+        // Morto in piedi e ceppaia valgono solo per la vegetazione (AssetStatus::SOLO_VEGETAZIONE)
+        if (! \App\Support\AssetStatus::ammessoPer($data['status'] ?? 'active', $type->code)) {
+            throw ValidationException::withMessages(['status' => \App\Support\AssetStatus::motivoNonAmmesso($data['status'] ?? null)]);
+        }
         Area::findOrFail($data['area_id']);
         $this->assertGeometryMatchesType($data['geometry']['type'], $type);
         $data['attributes'] = app(AttributeValidator::class)
@@ -277,6 +281,12 @@ class AssetController extends Controller implements HasMiddleware
             $type = isset($data['object_type_id'])
                 ? CatalogObjectType::findOrFail($data['object_type_id'])
                 : $asset->objectType;
+            // Uno stato nuovo deve valere per il tipo dell'elemento (quello nuovo, se cambia
+            // insieme): una panchina non diventa "morta in piedi" (AssetStatus::SOLO_VEGETAZIONE)
+            if (array_key_exists('status', $data) && $data['status'] !== $asset->status
+                && ! \App\Support\AssetStatus::ammessoPer($data['status'], $type->code)) {
+                throw ValidationException::withMessages(['status' => \App\Support\AssetStatus::motivoNonAmmesso($data['status'])]);
+            }
 
             if (array_key_exists('geometry', $data)) {
                 $this->assertGeometryMatchesType($data['geometry']['type'], $type);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use App\Models\TreeAssessment;
+use App\Services\Vta\BersagliProposti;
 use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ class TreeAssessmentController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:assets.view', only: ['index']),
+            new Middleware('can:assets.view', only: ['index', 'bersagliProposti']),
             new Middleware('can:assets.update', only: ['store', 'update']),
             new Middleware('can:assets.delete', only: ['destroy']),
             new Middleware('can:assets.update', only: ['valida']),
@@ -109,6 +110,21 @@ class TreeAssessmentController extends Controller implements HasMiddleware
                 ->orderByDesc('assessed_on')
                 ->get(),
         ]);
+    }
+
+    /**
+     * I bersagli che il censimento propone per la valutazione: le aree in cui
+     * l'albero sta e gli elementi censiti nel suo raggio di caduta
+     * (App\Services\Vta\BersagliProposti). `raggio` in metri per allargarlo o stringerlo.
+     */
+    public function bersagliProposti(Request $request, string $assetId, BersagliProposti $proposte): JsonResponse
+    {
+        $dati = $request->validate([
+            'raggio' => ['nullable', 'numeric', 'min:1', 'max:'.BersagliProposti::RAGGIO_MASSIMO],
+        ]);
+        $asset = Asset::with('tree')->findOrFail($assetId);
+
+        return response()->json(['data' => $proposte->per($asset, isset($dati['raggio']) ? (float) $dati['raggio'] : null)]);
     }
 
     public function store(Request $request, string $assetId): JsonResponse

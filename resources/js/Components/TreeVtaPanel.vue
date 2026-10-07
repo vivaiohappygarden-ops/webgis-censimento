@@ -134,12 +134,77 @@ function aggiungiPrescrizione(id) {
     nextTick(() => { prescrizioneScelta.value = ''; });
 }
 
+const righeBersagli = () => vta.bersagli.split('\n').map((r) => r.trim()).filter(Boolean);
+const giaBersaglio = (etichetta) => righeBersagli().includes(etichetta);
+
 // Un elemento censito come bersaglio: entra con il suo cartellino, che e' il suo nome
 function aggiungiBersaglio(elemento) {
-    const righe = vta.bersagli.split('\n').map((r) => r.trim()).filter(Boolean);
+    const righe = righeBersagli();
     if (! righe.includes(elemento.etichetta)) righe.push(elemento.etichetta);
     vta.bersagli = righe.join('\n');
 }
+
+// Bersagli proposti dal censimento (richiesta del committente 07/10/2026: "un
+// albero che sta dentro a un parco giochi, quel parco giochi lo deve
+// consigliare in automatico"): le aree in cui l'albero sta e gli elementi
+// censiti nel suo raggio di caduta arrivano da soli all'apertura del modulo
+// (GET assets/{id}/bersagli-proposti), si aggiungono con un clic e restano una
+// proposta: il testo si corregge a mano
+const proposte = ref(null);
+const proposteBusy = ref(false);
+const proposteErrore = ref('');
+const raggioRichiesto = ref('');
+async function caricaProposte() {
+    proposteBusy.value = true;
+    proposteErrore.value = '';
+    try {
+        const params = raggioRichiesto.value ? { raggio: raggioRichiesto.value } : {};
+        proposte.value = (await axios.get(`/api/v1/assets/${props.asset.id}/bersagli-proposti`, { params })).data.data;
+    } catch (err) {
+        proposteErrore.value = `Proposte dal censimento non caricate (${err.response?.status ?? 'rete assente'}).`;
+    } finally {
+        proposteBusy.value = false;
+    }
+}
+function cambiaRaggio(valore) {
+    const n = Number(valore);
+    raggioRichiesto.value = Number.isFinite(n) && n >= 1 ? Math.min(100, Math.round(n)) : '';
+    caricaProposte();
+}
+const propostePiatte = computed(() => {
+    if (! proposte.value) return [];
+    const aree = (proposte.value.aree ?? []).map((a) => ({
+        chiave: `area-${a.id}`,
+        etichetta: a.etichetta,
+        dettaglio: a.relazione === 'contiene' ? "area: l'albero sta dentro" : 'area della scheda',
+    }));
+    const elementi = (proposte.value.elementi ?? []).map((e) => ({
+        chiave: `el-${e.id}`,
+        etichetta: e.etichetta,
+        dettaglio: e.contiene ? "l'albero sta dentro" : `a ${num(e.distanza_m, 0, 1)} m`,
+    }));
+
+    return [...aree, ...elementi];
+});
+const proposteDaAggiungere = computed(() => propostePiatte.value.filter((p) => ! giaBersaglio(p.etichetta)));
+function aggiungiTuttiProposti() {
+    const righe = righeBersagli();
+    for (const p of proposteDaAggiungere.value) {
+        if (! righe.includes(p.etichetta)) righe.push(p.etichetta);
+    }
+    vta.bersagli = righe.join('\n');
+}
+const spiegaRaggio = computed(() => {
+    const p = proposte.value;
+    if (! p) return '';
+    if (p.raggio_origine === 'altezza') return `fin dove arriva l'albero se cade: altezza ${num(p.altezza_m, 0, 1)} m`;
+    if (p.raggio_origine === 'predefinito') return 'altezza dell\'albero non nota';
+
+    return 'raggio scelto a mano';
+});
+watch(showVtaForm, (aperto) => {
+    if (aperto && proposte.value === null && ! proposteBusy.value) caricaProposte();
+});
 
 // Rilevatori abilitati dell'organizzazione (Utenti > Chi firma > Rilevatori abilitati)
 const rilevatori = ref([]);
@@ -721,6 +786,57 @@ watch(() => props.apriValutazione, (apri) => {
                                 class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
                             />
                         </label>
+                        <!-- Proposti dal censimento: le aree in cui l'albero sta e gli elementi nel suo
+                             raggio di caduta, un clic per aggiungerli (il testo sopra resta libero) -->
+                        <div v-if="proposte || proposteBusy || proposteErrore" class="mt-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2" data-test="vta-bersagli-proposti">
+                            <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span class="font-medium text-gray-700">Proposti dal censimento</span>
+                                <template v-if="proposte && ! proposte.senza_posizione">
+                                    <label class="flex items-center gap-1 text-gray-500">
+                                        entro
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="100"
+                                            step="1"
+                                            :value="raggioRichiesto || proposte.raggio_m"
+                                            data-test="vta-bersagli-raggio"
+                                            aria-label="Raggio in metri"
+                                            class="min-h-9 w-16 rounded border border-gray-300 px-1.5 text-right text-xs md:min-h-7"
+                                            @change="cambiaRaggio($event.target.value)"
+                                        >
+                                        m
+                                    </label>
+                                    <span class="text-gray-500">({{ spiegaRaggio }})</span>
+                                </template>
+                                <span v-if="proposteBusy" class="text-gray-400">Cerco…</span>
+                                <button v-if="proposteDaAggiungere.length" type="button" class="ml-auto min-h-9 rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-medium hover:bg-green-50 md:min-h-7" data-test="vta-bersagli-aggiungi-tutti" @click="aggiungiTuttiProposti">
+                                    Aggiungi tutti ({{ proposteDaAggiungere.length }})
+                                </button>
+                            </div>
+                            <p v-if="proposteErrore" class="mt-1 text-red-700">{{ proposteErrore }}</p>
+                            <template v-else-if="proposte">
+                                <p v-if="proposte.senza_posizione" class="mt-1 text-gray-500">L'albero non ha una posizione: niente da proporre.</p>
+                                <ul v-else-if="propostePiatte.length" class="mt-1.5 flex flex-wrap gap-1.5">
+                                    <li v-for="p in propostePiatte" :key="p.chiave">
+                                        <button
+                                            type="button"
+                                            :disabled="giaBersaglio(p.etichetta)"
+                                            :data-test="`vta-proposta-${p.chiave}`"
+                                            class="min-h-11 rounded-lg border px-2.5 py-1 text-left text-xs md:min-h-8"
+                                            :class="giaBersaglio(p.etichetta) ? 'cursor-default border-green-200 bg-green-50 text-green-900' : 'border-gray-300 bg-white hover:bg-green-50'"
+                                            @click="aggiungiBersaglio(p)"
+                                        >
+                                            <span class="font-semibold">{{ p.etichetta }}</span>
+                                            <span class="text-gray-500"> · {{ p.dettaglio }}</span>
+                                            <span v-if="giaBersaglio(p.etichetta)" class="text-green-700"> · aggiunto</span>
+                                        </button>
+                                    </li>
+                                </ul>
+                                <p v-else class="mt-1 text-gray-500">Nessuna area e nessun elemento censito entro {{ num(proposte.raggio_m, 0, 1) }} m: allarga il raggio, cerca qui sotto o scrivi a mano.</p>
+                                <p v-if="proposte.altri" class="mt-1 text-gray-500">Ne restano altri {{ proposte.altri }} entro il raggio, non in elenco: stringi il raggio o cercali qui sotto.</p>
+                            </template>
+                        </div>
                         <!-- Un bersaglio puo' essere un altro elemento censito: entra con il suo cartellino -->
                         <CercaElemento class="mt-1" segnaposto="Aggiungi un elemento censito come bersaglio (cartellino, tipo, area)…" :escludi="[props.asset.id]" @scelto="aggiungiBersaglio" />
                     </div>

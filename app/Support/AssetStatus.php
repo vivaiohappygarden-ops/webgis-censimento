@@ -27,6 +27,16 @@ final class AssetStatus
     /** Gli stati che compongono l'archivio del censimento. */
     public const ARCHIVIO = ['removed', 'dismissed'];
 
+    /**
+     * Gli stati che hanno senso solo per la vegetazione (tipo principale 1
+     * del catalogo: alberi, arbusti, siepi, prati, aiuole): una panchina o
+     * un gioco non muoiono in piedi e non lasciano una ceppaia. Per il resto
+     * del patrimonio restano attivo e dismesso (piu' l'abbattuto/rimosso dal
+     * suo flusso). Domanda del committente 07/10/2026: "i parchi e le
+     * attrezzature hanno gli stessi stati delle alberature?".
+     */
+    public const SOLO_VEGETAZIONE = ['dead', 'stump'];
+
     public static function label(?string $status): string
     {
         return self::LABELS[$status] ?? (string) $status;
@@ -35,6 +45,25 @@ final class AssetStatus
     public static function inArchivio(?string $status): bool
     {
         return in_array($status, self::ARCHIVIO, true);
+    }
+
+    /** Il codice del catalogo porta il tipo principale in seconda posizione ("P103108": 1 = vegetazione). */
+    public static function eVegetazione(?string $codiceTipo): bool
+    {
+        return substr((string) $codiceTipo, 1, 1) === '1';
+    }
+
+    /** Uno stato vale per questo tipo di elemento? (morto in piedi e ceppaia solo per la vegetazione). */
+    public static function ammessoPer(?string $status, ?string $codiceTipo): bool
+    {
+        return ! in_array($status, self::SOLO_VEGETAZIONE, true) || self::eVegetazione($codiceTipo);
+    }
+
+    /** Il messaggio del 422 quando uno stato non vale per il tipo: una frase sola, usata ovunque. */
+    public static function motivoNonAmmesso(?string $status): string
+    {
+        return '"'.ucfirst(self::label($status)).'" vale solo per la vegetazione (alberi, arbusti, siepi):'
+            .' per arredi, giochi, percorsi e impianti gli stati sono attivo e dismesso.';
     }
 
     /**

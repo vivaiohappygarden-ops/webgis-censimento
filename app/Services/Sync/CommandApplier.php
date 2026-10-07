@@ -163,6 +163,9 @@ class CommandApplier
         if (! $type || ! $area) {
             return $this->rejected($command, 'VALIDATION_FAILED', 'Area o tipo oggetto inesistente per questa organizzazione.');
         }
+        if (! AssetStatus::ammessoPer($payload['status'] ?? 'active', $type->code)) {
+            return $this->rejected($command, 'VALIDATION_FAILED', AssetStatus::motivoNonAmmesso($payload['status'] ?? null));
+        }
 
         $allowed = array_map('strtoupper', $type->allowedGeometryTypes());
         if (! in_array(strtoupper($geom['type']), $allowed, true)) {
@@ -258,6 +261,11 @@ class CommandApplier
                 || AssetStatus::inArchivio($asset->status))) {
             return $this->rejected($command, 'VALIDATION_FAILED',
                 'Abbattimento e dismissione (e i loro annullamenti) si registrano dal gestionale, non dal campo.');
+        }
+        // Morto in piedi e ceppaia solo per la vegetazione, come in AssetController::update
+        if (array_key_exists('status', $payload) && $payload['status'] !== $asset->status
+            && ! AssetStatus::ammessoPer($payload['status'], $asset->objectType?->code)) {
+            return $this->rejected($command, 'VALIDATION_FAILED', AssetStatus::motivoNonAmmesso($payload['status']));
         }
 
         if (array_key_exists('attributes', $payload)) {
