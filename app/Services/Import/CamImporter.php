@@ -46,6 +46,8 @@ class CamImporter
         'pianta viva' => 'active',
         'pianta morta' => 'dead',
         'ceppaia' => 'stump',
+        'danneggiata' => 'damaged',
+        'fuori servizio' => 'out_of_service',
         'abbattuta' => 'removed',
         'rimossa' => 'dismissed',
     ];

@@ -26,7 +26,8 @@ class StoreAssetRequest extends FormRequest
             // Una scheda non nasce in archivio: abbattuti e dismessi si
             // registrano dai loro flussi su schede esistenti (l'import CAM,
             // che può portare storici, non passa da questa richiesta)
-            'status' => ['nullable', 'string', Rule::in(['active', 'dead', 'stump'])],
+            // Una scheda non nasce in archivio: abbattimento e dismissione hanno i loro flussi
+            'status' => ['nullable', 'string', Rule::in(\App\Support\AssetStatus::allaNascita())],
             'survey_method' => ['nullable', 'in:gps,gps_rtk,digitized,cad_import,shapefile_import,manual_map,estimated'],
             'gps_accuracy_m' => ['nullable', 'numeric', 'min:0'],
             'surveyed_at' => ['nullable', 'date'],

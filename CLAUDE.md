@@ -443,15 +443,22 @@ Stato per punto; i dettagli stanno nelle sezioni che seguono.
     testate sta in una riga da 36 px (`min-h-9`): cambiando scheda il titolo non si sposta.
 
 **Stati per tipo di elemento (07/10/2026)**, domanda del committente "i parchi e le attrezzature hanno
-gli stessi stati delle alberature?": gli stati di `assets.status` sono gli stessi per tutto il
-patrimonio, ma **"morto in piedi" e "ceppaia" valgono solo per la vegetazione** (tipo principale 1
-del catalogo, seconda lettera del codice): `AssetStatus::SOLO_VEGETAZIONE`, `eVegetazione`,
-`ammessoPer`, `motivoNonAmmesso` (un posto solo; gemello `statiProponibili` in
-`resources/js/assetStatus.js`). La tendina di `AssetEditPanel` li toglie per arredi, giochi,
-percorsi e impianti (restano attivo e dismesso, piu' l'abbattuto/rimosso dal suo flusso) e il
+gli stessi stati delle alberature?": la colonna `assets.status` e' una per tutto il patrimonio (testo
+senza vincolo sul DB, il vocabolario e' `AssetStatus::LABELS`), ma **"morto in piedi" e "ceppaia"
+valgono solo per la vegetazione** (tipo principale 1 del catalogo, seconda lettera del codice) e
+**"danneggiato" e "fuori servizio" solo per il resto** (arredi, giochi, percorsi, impianti; richiesta
+del committente dello stesso giorno). Tutti e quattro restano **in gestione, non in archivio**: una
+panchina rotta va riparata come un morto in piedi va abbattuto. La regola sta in un posto solo:
+`AssetStatus::SOLO_VEGETAZIONE`, `SOLO_ATTREZZATURE`, `eVegetazione`, `ammessoPer`,
+`motivoNonAmmesso`, `allaNascita` (gli stati con cui una scheda puo' nascere: tutti meno l'archivio;
+li usano `StoreAssetRequest` e il sync), gemello `statiProponibili`/`statoAmmesso` in
+`resources/js/assetStatus.js`. La tendina di `AssetEditPanel` mostra solo gli stati del tipo e il
 server rifiuta con 422 in `AssetController` (creazione e modifica) e nel sync di campo
-(`CommandApplier`, creazione e `asset.change_status`). Le **aree** del territorio hanno da sempre i
-loro stati (prevista, attiva, sospesa, dismessa). Prove: `StatiPerTipoTest`.
+(`CommandApplier`, creazione e `asset.change_status`). L'export CAM scrive "Danneggiata" e "Fuori
+servizio" e l'import li rilegge. Il portale pubblico continua a mostrare i soli elementi `active`
+(`PortalQuery`): un gioco segnato fuori servizio sparisce dalla mappa pubblica finche' non torna
+attivo, come oggi un albero morto in piedi. Le **aree** del territorio hanno da sempre i loro stati
+(prevista, attiva, sospesa, dismessa). Prove: `StatiPerTipoTest`.
 
 ## Marche temporali (dal 28/09/2026)
 

@@ -48,7 +48,7 @@ class StatiPerTipoTest extends TestCase
         $this->assertTrue(AssetStatus::eVegetazione('S101016'));
         $this->assertFalse(AssetStatus::eVegetazione('P219012'));
         $this->assertFalse(AssetStatus::eVegetazione(null));
-        foreach (array_keys(AssetStatus::LABELS) as $stato) {
+        foreach (array_diff(array_keys(AssetStatus::LABELS), AssetStatus::SOLO_ATTREZZATURE) as $stato) {
             $this->assertTrue(AssetStatus::ammessoPer($stato, 'P103108'), "per un albero vale {$stato}");
         }
         $this->assertTrue(AssetStatus::ammessoPer('active', 'P219012'));
@@ -57,6 +57,17 @@ class StatiPerTipoTest extends TestCase
         $this->assertFalse(AssetStatus::ammessoPer('dead', 'P219012'));
         $this->assertFalse(AssetStatus::ammessoPer('stump', 'P214250'));
         $this->assertStringContainsString('vale solo per la vegetazione', AssetStatus::motivoNonAmmesso('dead'));
+
+        // Danneggiato e fuori servizio: attrezzature si', vegetazione no; e non sono archivio
+        $this->assertTrue(AssetStatus::ammessoPer('damaged', 'P219012'));
+        $this->assertTrue(AssetStatus::ammessoPer('out_of_service', 'P214250'));
+        $this->assertFalse(AssetStatus::ammessoPer('damaged', 'P103108'));
+        $this->assertFalse(AssetStatus::ammessoPer('out_of_service', 'S101016'));
+        $this->assertFalse(AssetStatus::inArchivio('damaged'));
+        $this->assertFalse(AssetStatus::inArchivio('out_of_service'));
+        $this->assertStringContainsString('vale solo per arredi, giochi, percorsi e impianti', AssetStatus::motivoNonAmmesso('out_of_service'));
+        $this->assertSame('fuori servizio', AssetStatus::label('out_of_service'));
+        $this->assertSame(['active', 'dead', 'stump', 'damaged', 'out_of_service'], AssetStatus::allaNascita());
     }
 
     public function test_una_panchina_non_diventa_morta_in_piedi_ne_ceppaia_mentre_un_albero_si(): void
@@ -84,6 +95,31 @@ class StatiPerTipoTest extends TestCase
         $this->patchJson('/api/v1/assets/'.$albero->json('data.id'), ['version' => $albero->json('data.version'), 'status' => 'dead'])->assertOk();
     }
 
+    public function test_una_panchina_si_danneggia_o_va_fuori_servizio_e_resta_in_gestione_un_albero_no(): void
+    {
+        [, $panchina] = $this->crea('P219012');
+        $id = $panchina->json('data.id');
+
+        $this->patchJson("/api/v1/assets/{$id}", ['version' => $panchina->json('data.version'), 'status' => 'damaged'])->assertOk();
+        $this->assertSame('damaged', Asset::query()->findOrFail($id)->status);
+        $this->patchJson("/api/v1/assets/{$id}", ['version' => Asset::query()->findOrFail($id)->version, 'status' => 'out_of_service'])->assertOk();
+        $this->assertSame('out_of_service', Asset::query()->findOrFail($id)->status);
+
+        // Resta nel lavoro di tutti i giorni, non in archivio
+        $this->assertContains($id, array_column($this->getJson('/api/v1/assets?per_page=100')->assertOk()->json('data'), 'id'));
+        $this->assertSame(0, Asset::query()->inArchivio()->whereKey($id)->count());
+        $this->assertSame('fuori servizio', \App\Support\AssetStatus::label(Asset::query()->findOrFail($id)->status));
+
+        // Un gioco puo' nascere gia' danneggiato (si censisce quello che c'e')
+        $this->crea('P214250', ['status' => 'damaged'])[1]->assertCreated()->assertJsonPath('data.status', 'damaged');
+
+        // Un albero no: la sua salute sta nella scheda e nella VTA
+        [, $albero] = $this->crea('P103108');
+        $this->patchJson('/api/v1/assets/'.$albero->json('data.id'), ['version' => $albero->json('data.version'), 'status' => 'damaged'])
+            ->assertStatus(422)->assertJsonPath('errors.status.0', \App\Support\AssetStatus::motivoNonAmmesso('damaged'));
+        $this->crea('P103109', ['status' => 'out_of_service'])[1]->assertStatus(422);
+    }
+
     public function test_dal_campo_vale_la_stessa_regola(): void
     {
         $gioco = $this->makeObjectType($this->organizzazione, 'P', 'P214250');
@@ -96,6 +132,9 @@ class StatiPerTipoTest extends TestCase
 
         $this->postJson('/api/v1/sync/batch', $lotto([$comando(['status' => 'dead'])]))
             ->assertOk()->assertJsonPath('results.0.status', 'rejected');
+        // Dal campo un gioco puo' arrivare gia' fuori servizio
+        $this->postJson('/api/v1/sync/batch', $lotto([$comando(['status' => 'out_of_service'])]))
+            ->assertOk()->assertJsonPath('results.0.status', 'applied');
         $risposta = $this->postJson('/api/v1/sync/batch', $lotto([$comando(['status' => 'active'])]))
             ->assertOk()->assertJsonPath('results.0.status', 'applied');
         $id = $risposta->json('results.0.entity_id');

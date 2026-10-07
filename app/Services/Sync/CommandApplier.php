@@ -140,7 +140,7 @@ class CommandApplier
             'census_code' => ['nullable', 'string', 'max:80'],
             // Dal campo una scheda non nasce in archivio: abbattimento e
             // dismissione passano dai loro flussi nel gestionale
-            'status' => ['nullable', 'string', Rule::in(['active', 'dead', 'stump'])],
+            'status' => ['nullable', 'string', Rule::in(AssetStatus::allaNascita())],
             'attributes' => ['sometimes', 'array'],
             'notes' => ['nullable', 'string'],
             // Specie e misure arrivano insieme al rilievo (decisione committente

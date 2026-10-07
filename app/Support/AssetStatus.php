@@ -20,6 +20,8 @@ final class AssetStatus
         'active' => 'attivo',
         'dead' => 'morto in piedi',
         'stump' => 'ceppaia',
+        'damaged' => 'danneggiato',
+        'out_of_service' => 'fuori servizio',
         'removed' => 'abbattuto/rimosso',
         'dismissed' => 'dismesso',
     ];
@@ -37,6 +39,15 @@ final class AssetStatus
      */
     public const SOLO_VEGETAZIONE = ['dead', 'stump'];
 
+    /**
+     * Gli stati delle attrezzature (richiesta del committente 07/10/2026,
+     * "metti anche danneggiata e fuori servizio per le attrezzature"): una
+     * panchina rotta o un gioco chiuso restano in gestione, come un albero
+     * morto in piedi, e non sono archivio. Alla vegetazione non si applicano:
+     * la salute di un albero sta nella scheda e nelle valutazioni di stabilita'.
+     */
+    public const SOLO_ATTREZZATURE = ['damaged', 'out_of_service'];
+
     public static function label(?string $status): string
     {
         return self::LABELS[$status] ?? (string) $status;
@@ -53,17 +64,44 @@ final class AssetStatus
         return substr((string) $codiceTipo, 1, 1) === '1';
     }
 
-    /** Uno stato vale per questo tipo di elemento? (morto in piedi e ceppaia solo per la vegetazione). */
+    /**
+     * Uno stato vale per questo tipo di elemento? Morto in piedi e ceppaia
+     * solo per la vegetazione; danneggiato e fuori servizio solo per il resto.
+     */
     public static function ammessoPer(?string $status, ?string $codiceTipo): bool
     {
-        return ! in_array($status, self::SOLO_VEGETAZIONE, true) || self::eVegetazione($codiceTipo);
+        if (in_array($status, self::SOLO_VEGETAZIONE, true)) {
+            return self::eVegetazione($codiceTipo);
+        }
+        if (in_array($status, self::SOLO_ATTREZZATURE, true)) {
+            return ! self::eVegetazione($codiceTipo);
+        }
+
+        return true;
     }
 
     /** Il messaggio del 422 quando uno stato non vale per il tipo: una frase sola, usata ovunque. */
     public static function motivoNonAmmesso(?string $status): string
     {
-        return '"'.ucfirst(self::label($status)).'" vale solo per la vegetazione (alberi, arbusti, siepi):'
-            .' per arredi, giochi, percorsi e impianti gli stati sono attivo e dismesso.';
+        $etichetta = '"'.ucfirst(self::label($status)).'"';
+        if (in_array($status, self::SOLO_ATTREZZATURE, true)) {
+            return $etichetta.' vale solo per arredi, giochi, percorsi e impianti:'
+                .' lo stato di salute della vegetazione si registra nella scheda dell\'albero e nelle valutazioni di stabilita\'.';
+        }
+
+        return $etichetta.' vale solo per la vegetazione (alberi, arbusti, siepi):'
+            .' per arredi, giochi, percorsi e impianti gli stati sono attivo, danneggiato, fuori servizio e dismesso.';
+    }
+
+    /**
+     * Gli stati con cui una scheda puo' nascere: tutti meno l'archivio
+     * (abbattimento e dismissione hanno i loro flussi, dal gestionale).
+     *
+     * @return list<string>
+     */
+    public static function allaNascita(): array
+    {
+        return array_values(array_diff(array_keys(self::LABELS), self::ARCHIVIO));
     }
 
     /**

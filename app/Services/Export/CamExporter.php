@@ -310,6 +310,8 @@ class CamExporter
             'active' => 'Pianta viva',
             'dead' => 'Pianta morta',
             'stump' => 'Ceppaia',
+            'damaged' => 'Danneggiata',
+            'out_of_service' => 'Fuori servizio',
             'removed', 'felled' => 'Abbattuta',
             'dismissed' => 'Rimossa',
             default => $status ?? 'n.d.',
