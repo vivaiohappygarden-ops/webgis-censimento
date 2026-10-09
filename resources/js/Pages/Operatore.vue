@@ -1677,7 +1677,7 @@ onBeforeUnmount(() => {
                     <div class="truncate text-xs text-gray-500">{{ user.name }}</div>
                 </div>
                 <div class="flex shrink-0 items-center gap-2">
-                    <span class="rounded-full px-3 py-1 text-xs font-medium" :class="badge.cls" data-test="sync-badge">
+                    <span class="rounded-sm px-3 py-1 text-xs font-medium" :class="badge.cls" data-test="sync-badge">
                         {{ badge.text }}
                     </span>
                     <!-- Ritorno al programma completo: in campo si passa
@@ -2122,7 +2122,7 @@ onBeforeUnmount(() => {
                         </div>
                         <span
                             v-if="a.dirty"
-                            class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                            class="rounded-sm bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
                         >da inviare</span>
                         <span v-else class="text-xs text-gray-400">v{{ a.version }}</span>
                     </li>
@@ -2315,10 +2315,10 @@ onBeforeUnmount(() => {
                                 <span class="flex items-center gap-1.5">
                                     <span
                                         v-if="riga.ordine.dirty"
-                                        class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                                        class="rounded-sm bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
                                     >da inviare</span>
                                     <span
-                                        class="rounded-full px-2 py-0.5 text-xs font-medium"
+                                        class="rounded-sm px-2 py-0.5 text-xs font-medium"
                                         :class="WO_STATUS[riga.ordine.status]?.cls"
                                     >{{ WO_STATUS[riga.ordine.status]?.label ?? riga.ordine.status }}</span>
                                 </span>
@@ -2452,7 +2452,7 @@ onBeforeUnmount(() => {
                     </div>
                     <span
                         v-if="selected.asset.dirty"
-                        class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                        class="rounded-sm bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
                     >da inviare</span>
                     <span v-else class="text-xs text-gray-400">v{{ selected.asset.version }}</span>
                 </div>
@@ -2658,7 +2658,7 @@ onBeforeUnmount(() => {
                         <div class="text-xs text-gray-500">{{ selectedOrder.title }}</div>
                     </div>
                     <span
-                        class="rounded-full px-2 py-0.5 text-xs font-medium"
+                        class="rounded-sm px-2 py-0.5 text-xs font-medium"
                         :class="WO_STATUS[selectedOrder.status]?.cls"
                         data-test="wo-detail-status"
                     >{{ WO_STATUS[selectedOrder.status]?.label ?? selectedOrder.status }}</span>

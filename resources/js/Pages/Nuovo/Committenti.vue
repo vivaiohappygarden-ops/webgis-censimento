@@ -4,6 +4,7 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import Icona from '@/Components/Nuovo/Icona.vue';
 import TestataSezione from '@/Components/Nuovo/TestataSezione.vue';
 import { SCHEDE_COMMITTENTI } from '@/nuovo/sezioni';
 import { usaCaricamento } from '@/caricamento';
@@ -75,7 +76,7 @@ const indirizzo = (c) => [c.indirizzo?.street ?? c.indirizzo?.via, c.indirizzo?.
     <AppLayout>
         <div class="mx-auto flex max-w-[1640px] flex-col gap-4 p-4 md:p-6 lg:px-7">
             <TestataSezione titolo="Committenti" :sottotitolo="`${committenti.length} ${plurale(committenti.length, 'committente', 'committenti')} · anagrafica, territorio, portale e imprese di ciascuno`" attiva="committenti" :schede="SCHEDE_COMMITTENTI">
-                <Link v-if="can('clients.manage')" href="/territorio?nuovo=1" :class="BOTTONE" data-test="nuovo-committente">Nuovo committente</Link>
+                <Link v-if="can('clients.manage')" href="/territorio?nuovo=1" :class="BOTTONE" data-test="nuovo-committente"><Icona nome="nuovo" :size="16" />Nuovo committente</Link>
                 <Link href="/territorio" :class="BOTTONE_SECONDARIO">Albero del territorio</Link>
             </TestataSezione>
 
@@ -84,7 +85,7 @@ const indirizzo = (c) => [c.indirizzo?.street ?? c.indirizzo?.via, c.indirizzo?.
             <div class="flex flex-wrap items-center gap-2">
                 <label class="relative min-w-0 flex-1 basis-72"><span class="sr-only">Cerca</span><input v-model="filtro.q" type="search" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:border-green-700 focus:outline-none focus:ring-1 focus:ring-green-700" placeholder="Cerca per nome, codice, partita IVA, codice fiscale" data-test="committenti-ricerca"></label>
                 <div class="flex flex-wrap gap-2">
-                    <button v-for="[chiave, etichetta] in GRUPPI" :key="chiave" type="button" class="inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition" :class="filtro.gruppo === chiave ? 'border-green-800 bg-green-800 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'" :aria-pressed="filtro.gruppo === chiave" :data-test="`committenti-gruppo-${chiave}`" @click="filtro.gruppo = chiave">{{ etichetta }} <span>{{ perGruppo[chiave] }}</span></button>
+                    <button v-for="[chiave, etichetta] in GRUPPI" :key="chiave" type="button" class="inline-flex min-h-11 items-center gap-1.5 rounded-sm border px-3 text-[13px] font-semibold transition md:min-h-9" :class="filtro.gruppo === chiave ? 'border-green-800 bg-green-800 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'" :aria-pressed="filtro.gruppo === chiave" :data-test="`committenti-gruppo-${chiave}`" @click="filtro.gruppo = chiave">{{ etichetta }} <span>{{ perGruppo[chiave] }}</span></button>
                 </div>
             </div>
 

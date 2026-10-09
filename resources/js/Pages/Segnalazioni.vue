@@ -308,12 +308,12 @@ onMounted(async () => {
                             <td class="px-4 py-2 font-medium">{{ issue.code }}</td>
                             <td class="px-4 py-2 text-gray-600">{{ SEVERITY[issue.severity] }}</td>
                             <td class="px-4 py-2">
-                                <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="STATUS[issue.status]?.cls">
+                                <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="STATUS[issue.status]?.cls">
                                     {{ STATUS[issue.status]?.label ?? issue.status }}
                                 </span>
                             </td>
                             <td class="px-4 py-2" data-test="issue-sla">
-                                <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="slaBadge(issue).cls">
+                                <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="slaBadge(issue).cls">
                                     {{ slaBadge(issue).label }}
                                 </span>
                             </td>
@@ -438,7 +438,7 @@ onMounted(async () => {
                         </div>
 
                         <div class="mt-3 flex flex-wrap items-center gap-2">
-                            <span class="rounded-full px-3 py-1 text-xs font-medium" :class="STATUS[detail.status]?.cls" data-test="issue-status">
+                            <span class="rounded-sm px-3 py-1 text-xs font-medium" :class="STATUS[detail.status]?.cls" data-test="issue-status">
                                 {{ STATUS[detail.status]?.label ?? detail.status }}
                             </span>
                             <span class="text-xs text-gray-500">Gravità: {{ SEVERITY[detail.severity] }}</span>

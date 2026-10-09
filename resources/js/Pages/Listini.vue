@@ -228,7 +228,7 @@ onMounted(() => carica(load));
                             <td class="px-4 py-2 text-gray-600">{{ l.source ?? '—' }}</td>
                             <td class="px-4 py-2 text-right">{{ l.items_count }}</td>
                             <td class="px-4 py-2">
-                                <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="l.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-500'">
+                                <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="l.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-500'">
                                     {{ l.is_active ? 'Attivo' : 'Disattivato' }}
                                 </span>
                             </td>
@@ -285,7 +285,7 @@ onMounted(() => carica(load));
                             <div>
                                 <div class="text-xs uppercase tracking-wide text-gray-400">
                                     {{ detail.code }} <template v-if="detail.year">· {{ detail.year }}</template>
-                                    <span v-if="! detail.is_active" class="ml-1 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-600">Disattivato</span>
+                                    <span v-if="! detail.is_active" class="ml-1 rounded-sm bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-600">Disattivato</span>
                                 </div>
                                 <h2 class="text-lg font-semibold">{{ detail.name }}</h2>
                                 <p v-if="detail.source" class="text-xs text-gray-500">Fonte: {{ detail.source }}</p>

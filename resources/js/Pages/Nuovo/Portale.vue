@@ -380,7 +380,7 @@ const nomeComune = computed(() => riepilogo.value?.client?.name ?? page.props.au
 
                             <div class="grid gap-4 md:grid-cols-2">
                                 <section :class="CARTA" data-test="portale-prossimi">
-                                    <h2 class="border-b border-gray-200 px-4 py-3 text-base font-bold text-gray-900">Prossimi lavori</h2>
+                                    <h2 class="border-b border-gray-200 px-4 py-3 text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Prossimi lavori</h2>
                                     <ul v-if="riepilogo.prossimi.length" class="divide-y divide-gray-100 text-sm">
                                         <li v-for="l in riepilogo.prossimi" :key="l.id" class="px-4 py-2.5">
                                             <button type="button" :class="VOCE" @click="apriLavoro(l.id)">{{ l.title }}</button>
@@ -395,7 +395,7 @@ const nomeComune = computed(() => riepilogo.value?.client?.name ?? page.props.au
                                     <div class="border-t border-gray-100 px-4 py-2"><button type="button" class="min-h-11 text-[13px] font-semibold text-green-800 underline-offset-2 hover:underline md:min-h-9" @click="scheda = 'lavori'">Tutti i lavori</button></div>
                                 </section>
                                 <section :class="CARTA" data-test="portale-fatti">
-                                    <h2 class="border-b border-gray-200 px-4 py-3 text-base font-bold text-gray-900">Ultimi lavori fatti</h2>
+                                    <h2 class="border-b border-gray-200 px-4 py-3 text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Ultimi lavori fatti</h2>
                                     <ul v-if="riepilogo.orders.length" class="divide-y divide-gray-100 text-sm">
                                         <li v-for="o in riepilogo.orders.slice(0, 6)" :key="o.code" class="px-4 py-2.5">
                                             <button type="button" :class="VOCE" @click="apriLavoro(o.id)">{{ o.title }}</button>
@@ -410,7 +410,7 @@ const nomeComune = computed(() => riepilogo.value?.client?.name ?? page.props.au
 
                         <div class="flex min-w-0 flex-col gap-4">
                             <section :class="CARTA" class="p-4" data-test="portale-novita">
-                                <h2 class="text-base font-bold text-gray-900">Ultimi {{ riepilogo.recenti.giorni }} giorni</h2>
+                                <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Ultimi {{ riepilogo.recenti.giorni }} giorni</h2>
                                 <ul v-if="novita.length" class="mt-2 space-y-1 text-sm text-gray-900">
                                     <li v-for="(n, i) in novita" :key="i">{{ n }}</li>
                                 </ul>
@@ -418,7 +418,7 @@ const nomeComune = computed(() => riepilogo.value?.client?.name ?? page.props.au
                             </section>
 
                             <section :class="CARTA" data-test="portale-richieste-aperte">
-                                <h2 class="border-b border-gray-200 px-4 py-3 text-base font-bold text-gray-900">Le vostre richieste aperte</h2>
+                                <h2 class="border-b border-gray-200 px-4 py-3 text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Le vostre richieste aperte</h2>
                                 <ul v-if="richiesteAperte.length" class="divide-y divide-gray-100 text-sm">
                                     <li v-for="r in richiesteAperte.slice(0, 5)" :key="r.id" class="px-4 py-2.5">
                                         <div class="flex flex-wrap items-center gap-2"><span class="font-semibold text-gray-900">{{ r.code }}</span><span :class="STATO_RICHIESTA[r.status]?.chip">{{ STATO_RICHIESTA[r.status]?.etichetta }}</span></div>
@@ -431,7 +431,7 @@ const nomeComune = computed(() => riepilogo.value?.client?.name ?? page.props.au
                             </section>
 
                             <section :class="CARTA" data-test="portale-documenti-recenti">
-                                <h2 class="border-b border-gray-200 px-4 py-3 text-base font-bold text-gray-900">Ultimi documenti</h2>
+                                <h2 class="border-b border-gray-200 px-4 py-3 text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Ultimi documenti</h2>
                                 <ul v-if="documenti?.perizie?.length" class="divide-y divide-gray-100 text-sm">
                                     <li v-for="d in documenti.perizie.slice(0, 4)" :key="d.id" class="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
                                         <div class="min-w-0">
@@ -446,7 +446,7 @@ const nomeComune = computed(() => riepilogo.value?.client?.name ?? page.props.au
                             </section>
 
                             <section :class="CARTA" class="p-4" data-test="portale-aree">
-                                <h2 class="text-base font-bold text-gray-900">Le aree</h2>
+                                <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Le aree</h2>
                                 <ul v-if="riepilogo.areas.length" class="mt-2 divide-y divide-gray-100 text-sm">
                                     <li v-for="a in riepilogo.areas" :key="a.id" class="flex flex-wrap items-center justify-between gap-x-3 py-1.5">
                                         <button type="button" :class="VOCE" class="font-medium" @click="azzeraFiltri(); filtri.area_id = a.id; scheda = 'patrimonio'">{{ a.name }}</button>
@@ -457,7 +457,7 @@ const nomeComune = computed(() => riepilogo.value?.client?.name ?? page.props.au
                             </section>
 
                             <section v-if="Object.keys(contatti).length" :class="CARTA" class="p-4" data-test="portale-contatti">
-                                <h2 class="text-base font-bold text-gray-900">Chi si occupa del vostro verde</h2>
+                                <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Chi si occupa del vostro verde</h2>
                                 <dl class="mt-2 space-y-1 text-sm text-gray-900">
                                     <div v-if="contatti.studio"><dt class="sr-only">Studio</dt><dd class="font-semibold">{{ contatti.studio }}</dd></div>
                                     <div v-if="contatti.professionista"><dt class="sr-only">Professionista</dt><dd>{{ contatti.professionista }}<template v-if="contatti.titolo">, {{ contatti.titolo }}</template></dd></div>
@@ -528,7 +528,7 @@ const nomeComune = computed(() => riepilogo.value?.client?.name ?? page.props.au
                         </select>
                         <button
                             type="button"
-                            class="inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition md:min-h-9"
+                            class="inline-flex min-h-11 items-center gap-1.5 rounded-sm border px-3 text-[13px] font-semibold transition md:min-h-9"
                             :class="filtri.vta === 'scaduta' ? 'border-red-800 bg-red-800 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-red-300'"
                             :aria-pressed="filtri.vta === 'scaduta'"
                             data-test="portale-scorciatoia-vta"
@@ -689,7 +689,7 @@ const nomeComune = computed(() => riepilogo.value?.client?.name ?? page.props.au
                     <div v-else><button type="button" :class="BOTTONE" @click="moduloAperto = true">Nuova richiesta</button></div>
 
                     <section :class="CARTA">
-                        <h2 class="border-b border-gray-200 px-4 py-3 text-base font-bold text-gray-900">Le vostre richieste</h2>
+                        <h2 class="border-b border-gray-200 px-4 py-3 text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Le vostre richieste</h2>
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm" data-test="portal-requests">
                                 <thead>
@@ -718,7 +718,7 @@ const nomeComune = computed(() => riepilogo.value?.client?.name ?? page.props.au
                     </section>
 
                     <section :class="CARTA" data-test="portal-issues">
-                        <h2 class="border-b border-gray-200 px-4 py-3 text-base font-bold text-gray-900">Altre segnalazioni sul territorio</h2>
+                        <h2 class="border-b border-gray-200 px-4 py-3 text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Altre segnalazioni sul territorio</h2>
                         <p class="px-4 pt-3 text-[13px] text-gray-500">Segnalazioni arrivate dai cittadini, dal portale pubblico o dal personale in campo sulle vostre aree.</p>
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
@@ -753,7 +753,7 @@ const nomeComune = computed(() => riepilogo.value?.client?.name ?? page.props.au
                         delle ispezioni. Una perizia <b>validata</b> è un atto chiuso: non si corregge e ristampata è identica.
                     </p>
                     <section :class="CARTA" data-test="portale-perizie">
-                        <h2 class="border-b border-gray-200 px-4 py-3 text-base font-bold text-gray-900">Perizie di stabilità<template v-if="documenti"> · {{ documenti.perizie.length }}</template></h2>
+                        <h2 class="border-b border-gray-200 px-4 py-3 text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Perizie di stabilità<template v-if="documenti"> · {{ documenti.perizie.length }}</template></h2>
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
                                 <thead>
@@ -781,7 +781,7 @@ const nomeComune = computed(() => riepilogo.value?.client?.name ?? page.props.au
                         </div>
                     </section>
                     <section :class="CARTA" data-test="portale-verbali">
-                        <h2 class="border-b border-gray-200 px-4 py-3 text-base font-bold text-gray-900">Verbali di ispezione<template v-if="documenti"> · {{ documenti.verbali.length }}</template></h2>
+                        <h2 class="border-b border-gray-200 px-4 py-3 text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Verbali di ispezione<template v-if="documenti"> · {{ documenti.verbali.length }}</template></h2>
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
                                 <thead>

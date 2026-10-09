@@ -4,6 +4,7 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import Icona from '@/Components/Nuovo/Icona.vue';
 import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import VisteSalvate from '@/Components/VisteSalvate.vue';
 import WorkAgenda from '@/Components/WorkAgenda.vue';
@@ -310,10 +311,10 @@ onMounted(async () => {
     <AppLayout>
         <div class="mx-auto flex max-w-[1640px] flex-col gap-4 p-4 md:p-6 lg:px-7">
             <TestataLavori :attiva="vista === 'ordini' || ! ['agenda', 'gantt'].includes(vista) ? (['agenda', 'gantt'].includes(vista) ? vista : 'ordini') : vista" :conteggi="vista === 'ordini' && meta.total ? { ordini: meta.total } : {}">
-                <button v-if="canManage" type="button" :class="BOTTONE" data-test="nuovo-ordine-apri" @click="nuovo.aperto = true">Nuovo ordine</button>
-                <Link href="/segnalazioni?nuova=1" :class="BOTTONE_SECONDARIO">Nuova segnalazione</Link>
+                <button v-if="canManage" type="button" :class="BOTTONE" data-test="nuovo-ordine-apri" @click="nuovo.aperto = true"><Icona nome="nuovo" :size="16" />Nuovo ordine</button>
+                <Link href="/segnalazioni?nuova=1" :class="BOTTONE_SECONDARIO"><Icona nome="segnalazione" :size="16" />Nuova segnalazione</Link>
                 <details class="relative">
-                    <summary :class="BOTTONE_SECONDARIO" class="cursor-pointer list-none">Altro</summary>
+                    <summary :class="BOTTONE_SECONDARIO" class="cursor-pointer list-none"><Icona nome="altro" :size="16" />Altro</summary>
                     <div :class="CARTA" class="absolute right-0 z-20 mt-1 w-72 p-2 text-sm shadow-lg" data-test="menu-altro-lavori">
                         <Link href="/lavori?vista=qualita" class="flex min-h-11 items-center rounded-lg px-3 hover:bg-gray-50 md:min-h-9">Qualità e non conformità</Link>
                         <Link href="/lavori?vista=preventivi" class="flex min-h-11 items-center rounded-lg px-3 hover:bg-gray-50 md:min-h-9">Preventivi</Link>
@@ -352,7 +353,7 @@ onMounted(async () => {
                     <ul class="mt-2 space-y-2">
                         <li v-for="r in richieste" :key="r.id" class="rounded-lg bg-white p-3 text-sm">
                             <div class="flex flex-wrap items-center gap-2">
-                                <Link v-if="r.ordine" :href="`/lavori/${r.ordine.id}`" class="font-semibold text-green-800 hover:underline">{{ r.ordine.code }}</Link>
+                                <Link v-if="r.ordine" :href="`/lavori/${r.ordine.id}`" class="font-mono font-medium text-green-800 hover:underline">{{ r.ordine.code }}</Link>
                                 <span v-else class="text-xs text-gray-500">ordine eliminato</span>
                                 <span class="font-semibold">{{ r.ordine?.title }}</span>
                                 <span class="text-gray-600">— {{ r.impresa }}</span>
@@ -393,7 +394,7 @@ onMounted(async () => {
                         <button
                             v-if="inRitardo !== null"
                             type="button"
-                            class="inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition md:min-h-9"
+                            class="inline-flex min-h-11 items-center gap-1.5 rounded-sm border px-3 text-[13px] font-semibold transition md:min-h-9"
                             :class="filtri.soloRitardo ? 'border-red-800 bg-red-800 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-red-300'"
                             :aria-pressed="filtri.soloRitardo"
                             data-test="scorciatoia-ritardo"
@@ -435,7 +436,7 @@ onMounted(async () => {
                                 <tbody class="divide-y divide-gray-100">
                                     <tr v-for="r in righe" :key="r.id" class="cursor-pointer transition hover:bg-gray-50" :class="anteprima.id === r.id ? 'bg-green-50' : ''" data-test="lavori-riga" @click="apriAnteprima(r.id)">
                                         <td v-if="canManage" class="px-3 py-2.5" @click.stop><input v-model="selezionati" type="checkbox" :value="r.id" class="rounded border-gray-300" :aria-label="`Seleziona ${r.code}`" data-test="lavoro-casella"></td>
-                                        <td class="whitespace-nowrap px-3 py-2.5"><Link :href="`/lavori/${r.id}`" class="font-semibold text-gray-900 underline-offset-2 hover:underline" @click.stop>{{ r.code }}</Link></td>
+                                        <td class="whitespace-nowrap px-3 py-2.5"><Link :href="`/lavori/${r.id}`" class="font-mono font-medium text-gray-900 underline-offset-2 hover:underline" @click.stop>{{ r.code }}</Link></td>
                                         <td class="min-w-[12rem] px-3 py-2.5 text-gray-900">{{ r.title }}<div v-if="r.work_type" class="text-xs text-gray-500">{{ r.work_type.name }}</div></td>
                                         <td class="min-w-[12rem] px-3 py-2.5 text-gray-700">{{ r.client?.name ?? '' }}<div v-if="r.area" class="text-xs text-gray-500">{{ r.area.name }}</div><template v-if="! r.client && ! r.area">—</template></td>
                                         <td class="px-3 py-2.5"><span :class="CHIP[TONO_STATO[r.status] ?? 'neutra']">{{ WORK_STATUS_LABELS[r.status] ?? r.status }}</span></td>
@@ -464,7 +465,7 @@ onMounted(async () => {
                             <AvvisoErrore :messaggio="anteprima.errore" @riprova="() => { const id = anteprima.id; anteprima.id = null; apriAnteprima(id); }" />
                             <p v-if="anteprima.caricamento" class="text-sm text-gray-500">Carico l'ordine…</p>
                             <template v-if="anteprima.ordine">
-                                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Ordine di lavoro {{ anteprima.ordine.code }}</div>
+                                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Ordine di lavoro <span class="font-mono">{{ anteprima.ordine.code }}</span></div>
                                 <div class="text-lg font-bold text-gray-900">{{ anteprima.ordine.title }}</div>
                                 <div class="mt-1 flex flex-wrap items-center gap-2 text-[13px]">
                                     <span :class="CHIP[TONO_STATO[anteprima.ordine.status] ?? 'neutra']">{{ WORK_STATUS_LABELS[anteprima.ordine.status] }}</span>
@@ -488,7 +489,7 @@ onMounted(async () => {
                                     <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Cronologia</h2>
                                     <ul v-if="anteprima.cronologia.eventi.length" class="mt-1 divide-y divide-gray-100">
                                         <li v-for="(e, i) in anteprima.cronologia.eventi.slice(0, 6)" :key="i" class="flex gap-3 py-2">
-                                            <span class="w-14 shrink-0 pt-0.5 text-xs text-gray-500">{{ formatData(e.data, false) }}</span>
+                                            <span class="w-14 shrink-0 pt-0.5 font-mono text-xs text-gray-500">{{ formatData(e.data, false) }}</span>
                                             <div class="min-w-0"><div class="text-sm font-semibold text-gray-900">{{ e.titolo }}</div><div class="text-[13px] text-gray-500">{{ e.dettaglio }}</div></div>
                                         </li>
                                     </ul>

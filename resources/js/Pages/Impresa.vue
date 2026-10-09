@@ -99,7 +99,7 @@ onMounted(() => carica(caricaOrdini));
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="font-mono text-xs text-gray-500">{{ ordine.code }}</span>
                         <span class="font-semibold">{{ ordine.title }}</span>
-                        <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="CLASSI_STATO[ordine.status] ?? 'bg-gray-100 text-gray-600'">
+                        <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="CLASSI_STATO[ordine.status] ?? 'bg-gray-100 text-gray-600'">
                             {{ dati.stati[ordine.status] ?? ordine.status }}
                         </span>
                     </div>

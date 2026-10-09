@@ -4,6 +4,7 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import Icona from '@/Components/Nuovo/Icona.vue';
 import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import TestataSezione from '@/Components/Nuovo/TestataSezione.vue';
 import { SCHEDE_DOCUMENTI } from '@/nuovo/sezioni';
@@ -240,7 +241,7 @@ const anniProducibili = computed(() => Array.from({ length: 6 }, (_, i) => annoC
         <div class="mx-auto flex max-w-[1640px] flex-col gap-4 p-4 md:p-6 lg:px-7">
             <TestataSezione titolo="Documenti" attiva="documenti" :schede="SCHEDE_DOCUMENTI">
                 <details class="relative">
-                    <summary :class="BOTTONE" class="cursor-pointer list-none">Nuovo documento</summary>
+                    <summary :class="BOTTONE" class="cursor-pointer list-none"><Icona nome="nuovo" :size="16" />Nuovo documento</summary>
                     <div :class="CARTA" class="absolute right-0 z-20 mt-1 w-72 p-2 text-sm shadow-lg" data-test="menu-nuovo-documento">
                         <Link v-if="can('assets.view')" href="/vta" class="flex min-h-11 items-center rounded-lg px-3 hover:bg-gray-50 md:min-h-9">Perizia di stabilità (dallo scadenzario VTA)</Link>
                         <Link v-if="can('works.view')" href="/lavori?vista=preventivi" class="flex min-h-11 items-center rounded-lg px-3 hover:bg-gray-50 md:min-h-9">Preventivo</Link>
@@ -285,7 +286,7 @@ const anniProducibili = computed(() => Array.from({ length: 6 }, (_, i) => annoC
                     <button
                         v-if="conteggi"
                         type="button"
-                        class="inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition"
+                        class="inline-flex min-h-11 items-center gap-1.5 rounded-sm border px-3 text-[13px] font-semibold transition md:min-h-9"
                         :class="filtri.daValidare ? 'border-red-800 bg-red-800 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-red-300'"
                         :aria-pressed="filtri.daValidare"
                         data-test="documenti-da-validare"
@@ -294,7 +295,7 @@ const anniProducibili = computed(() => Array.from({ length: 6 }, (_, i) => annoC
                     <button
                         v-if="conteggi"
                         type="button"
-                        class="inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition"
+                        class="inline-flex min-h-11 items-center gap-1.5 rounded-sm border px-3 text-[13px] font-semibold transition md:min-h-9"
                         :class="filtri.marcati ? 'border-green-800 bg-green-800 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-green-300'"
                         :aria-pressed="filtri.marcati"
                         data-test="documenti-marcati"
@@ -355,7 +356,7 @@ const anniProducibili = computed(() => Array.from({ length: 6 }, (_, i) => annoC
 
                 <aside class="flex min-w-0 flex-col gap-4">
                     <section :class="CARTA" class="p-4" data-test="documenti-da-produrre">
-                        <h2 class="text-base font-bold text-gray-900">Da produrre</h2>
+                        <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Da produrre</h2>
                         <div v-if="can('assets.view')" class="mt-3">
                             <div :class="ETICHETTA">Bilancio arboreo (L. 10/2013)</div>
                             <div class="mt-1 flex flex-wrap items-center gap-2">
@@ -386,7 +387,7 @@ const anniProducibili = computed(() => Array.from({ length: 6 }, (_, i) => annoC
                     </section>
 
                     <section id="marche" :class="CARTA" class="p-4" data-test="documenti-marche">
-                        <h2 class="text-base font-bold text-gray-900">Marche temporali</h2>
+                        <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Marche temporali</h2>
                         <p class="mt-1 text-sm text-gray-700">La marca temporale certifica che un documento esisteva, così com'è, a un istante certo: la rilascia un servizio accreditato (TSA) e vale come prova. Si appone alle perizie validate, ai verbali di ispezione chiusi e ai registri; il programma conserva il PDF esatto e il gettone della marca.</p>
                         <template v-if="marche.stato">
                             <dl v-if="marche.stato.attiva" class="mt-3 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]" data-test="marche-stato">
@@ -425,7 +426,7 @@ const anniProducibili = computed(() => Array.from({ length: 6 }, (_, i) => annoC
                     </section>
 
                     <section :class="CARTA" class="p-4">
-                        <h2 class="text-base font-bold text-gray-900">Che cosa sta qui</h2>
+                        <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Che cosa sta qui</h2>
                         <p class="mt-1 text-sm text-gray-700">Perizie emesse, verbali di ispezione chiusi, preventivi, SAL e le esportazioni già fatte, in ordine di data. I registri (fitosanitari, patentini) e le statistiche hanno la loro scheda qui sopra; le esportazioni nuove si fanno da Patrimonio.</p>
                     </section>
                 </aside>

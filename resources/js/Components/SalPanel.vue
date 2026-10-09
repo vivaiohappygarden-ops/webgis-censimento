@@ -343,7 +343,7 @@ onMounted(() => carica(caricaTutto));
                         <td class="px-4 py-2 font-mono text-xs">{{ s.code ?? '(bozza)' }}</td>
                         <td class="px-4 py-2">{{ s.client?.name }}</td>
                         <td class="px-4 py-2 text-gray-600">{{ dataIt(s.period_from) }} – {{ dataIt(s.period_to) }}</td>
-                        <td class="px-4 py-2"><span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="STATI[s.status]?.cls">{{ STATI[s.status]?.label ?? s.status }}</span></td>
+                        <td class="px-4 py-2"><span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="STATI[s.status]?.cls">{{ STATI[s.status]?.label ?? s.status }}</span></td>
                         <td class="px-4 py-2 text-xs text-gray-600">
                             <template v-if="s.status === 'fatturato'">{{ s.invoice_ref || dataIt(s.invoiced_at) }}</template>
                             <template v-else>—</template>
@@ -371,7 +371,7 @@ onMounted(() => carica(caricaTutto));
                 <h3 class="text-sm font-semibold">
                     {{ aperto.code ?? 'SAL in bozza' }} — {{ aperto.client?.name }}
                 </h3>
-                <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="STATI[aperto.status]?.cls">{{ STATI[aperto.status]?.label }}</span>
+                <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="STATI[aperto.status]?.cls">{{ STATI[aperto.status]?.label }}</span>
                 <span class="text-xs text-gray-500">{{ dataIt(aperto.period_from) }} – {{ dataIt(aperto.period_to) }}</span>
                 <span v-if="aperto.validated_at" class="text-xs text-gray-400">validato il {{ aperto.validated_at.slice(0, 10).split('-').reverse().join('/') }}<template v-if="aperto.validator"> da {{ aperto.validator.name }}</template></span>
                 <span v-if="aperto.status === 'fatturato'" class="text-xs text-gray-400" data-test="sal-estremi-fattura">

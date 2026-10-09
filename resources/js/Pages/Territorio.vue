@@ -1545,7 +1545,7 @@ onMounted(async () => {
                                                 </td>
                                                 <td class="py-2 pr-3">
                                                     <span
-                                                        class="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                                                        class="rounded-sm px-2 py-0.5 text-[11px] font-semibold"
                                                         :class="a.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'"
                                                     >{{ STATO_AREA[a.status] ?? a.status }}</span>
                                                 </td>

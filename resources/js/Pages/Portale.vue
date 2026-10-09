@@ -177,7 +177,7 @@ onMounted(load);
                                 <td class="px-4 py-2 font-medium">{{ r.code }}</td>
                                 <td class="px-4 py-2 text-gray-600">{{ fmtDate(r.created_at) }}</td>
                                 <td class="px-4 py-2">
-                                    <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="STATUS[r.status]?.cls">
+                                    <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="STATUS[r.status]?.cls">
                                         {{ STATUS[r.status]?.label ?? r.status }}
                                     </span>
                                 </td>
@@ -233,7 +233,7 @@ onMounted(load);
                             <tr v-for="i in data.issues" :key="i.code">
                                 <td class="px-4 py-2 font-medium">{{ i.code }}</td>
                                 <td class="px-4 py-2">
-                                    <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="STATUS[i.status]?.cls">
+                                    <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="STATUS[i.status]?.cls">
                                         {{ STATUS[i.status]?.label ?? i.status }}
                                     </span>
                                 </td>

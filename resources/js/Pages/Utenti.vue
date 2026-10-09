@@ -713,17 +713,17 @@ onMounted(() => {
                         <tr v-for="u in users" :key="u.id" data-test="usr-row" :class="u.is_active ? '' : 'opacity-60'">
                             <td class="px-4 py-2 font-medium">
                                 {{ u.name }}
-                                <span v-if="u.id === myId" class="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500">tu</span>
+                                <span v-if="u.id === myId" class="ml-1 rounded-sm bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500">tu</span>
                             </td>
                             <td class="px-4 py-2 text-gray-600">{{ u.email }}</td>
                             <td class="px-4 py-2">{{ ROLE_LABELS[u.role] ?? u.role ?? '—' }}</td>
                             <td class="px-4 py-2 text-gray-600">{{ u.client?.name ?? '—' }}</td>
                             <td class="px-4 py-2 text-gray-600">{{ formatDate(u.last_login_at) }}</td>
                             <td class="px-4 py-2">
-                                <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="u.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-500'">
+                                <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="u.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-500'">
                                     {{ u.is_active ? 'Attivo' : 'Disattivato' }}
                                 </span>
-                                <span v-if="u.mfa_enabled" class="ml-1 whitespace-nowrap rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-800" data-test="usr-due-fattori">verifica in due passaggi</span>
+                                <span v-if="u.mfa_enabled" class="ml-1 whitespace-nowrap rounded-sm bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-800" data-test="usr-due-fattori">verifica in due passaggi</span>
                             </td>
                             <td class="px-4 py-2 text-right text-xs">
                                 <button class="font-medium text-gray-700 hover:underline" data-test="usr-edit" @click="openEditor(u)">Modifica</button>
@@ -777,7 +777,7 @@ onMounted(() => {
                             <tr v-for="r in ruoli" :key="r.id" data-test="ruolo-riga">
                                 <td class="py-2 pr-3 font-medium">
                                     {{ ROLE_LABELS[r.nome] ?? r.nome }}
-                                    <span v-if="r.di_sistema" class="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500">di serie</span>
+                                    <span v-if="r.di_sistema" class="ml-1 rounded-sm bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500">di serie</span>
                                 </td>
                                 <td class="py-2 pr-3 text-gray-600">{{ r.utenti }}</td>
                                 <td class="py-2 pr-3">
@@ -786,7 +786,7 @@ onMounted(() => {
                                         <span
                                             v-for="p in r.permessi"
                                             :key="p"
-                                            class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-700"
+                                            class="rounded-sm bg-gray-100 px-2 py-0.5 text-[11px] text-gray-700"
                                         >{{ nomePermesso(p) }}</span>
                                         <span v-if="! r.permessi.length" class="text-xs text-gray-400">nessuno</span>
                                     </span>

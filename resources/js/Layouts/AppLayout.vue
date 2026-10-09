@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import SearchPalette from '@/Components/SearchPalette.vue';
+import Icona from '@/Components/Nuovo/Icona.vue';
 
 const page = usePage();
 // Sul telefono il menu è a scomparsa: lasciarlo fisso mangerebbe metà schermo
@@ -88,9 +89,10 @@ const isActive = (href) => page.url === href || page.url.startsWith(`${href}/`) 
 // spariranno da qui man mano che i blocchi nuovi le sostituiscono
 const sezioni = computed(() =>
     [
-        { label: 'Oggi', href: '/oggi', show: can('assets.view') || can('works.view') },
+        { label: 'Oggi', icona: 'oggi', href: '/oggi', show: can('assets.view') || can('works.view') },
         {
             label: 'Patrimonio',
+            icona: 'patrimonio',
             // Le sue schede stanno nella testata della pagina (blocco 2):
             // qui servono solo a capire quando la voce e' attiva
             schede: true,
@@ -104,6 +106,7 @@ const sezioni = computed(() =>
         },
         {
             label: 'Lavori',
+            icona: 'lavori',
             // Le schede (ordini, agenda, gantt, segnalazioni, ispezioni) stanno
             // nella testata della pagina (blocco 4)
             schede: true,
@@ -116,6 +119,7 @@ const sezioni = computed(() =>
         },
         {
             label: 'Documenti',
+            icona: 'documenti',
             schede: true,
             voci: [
                 { label: 'Documenti', href: '/documenti', show: can('works.view') || can('assets.view') },
@@ -126,6 +130,7 @@ const sezioni = computed(() =>
         },
         {
             label: 'Committenti',
+            icona: 'committenti',
             schede: true,
             voci: [
                 { label: 'Committenti', href: '/committenti', show: can('clients.view') },
@@ -138,6 +143,7 @@ const sezioni = computed(() =>
         },
         {
             label: 'Impostazioni',
+            icona: 'impostazioni',
             schede: true,
             voci: [
                 { label: 'Impostazioni', href: '/impostazioni', show: can('assets.view') || can('works.view') || can('clients.view') || can('users.manage') || can('catalog.view') },
@@ -147,9 +153,9 @@ const sezioni = computed(() =>
             ],
         },
         // La console di chi gestisce la piattaforma: tutte le organizzazioni
-        { label: 'Piattaforma', href: '/piattaforma', show: !! user.value?.piattaforma },
-        { label: 'Portale', href: '/portale', show: can('portal.view') && ! can('clients.view') },
-        { label: 'I lavori affidati', href: '/impresa', show: can('impresa.view') && ! can('clients.view') },
+        { label: 'Piattaforma', icona: 'piattaforma', href: '/piattaforma', show: !! user.value?.piattaforma },
+        { label: 'Portale', icona: 'portale', href: '/portale', show: can('portal.view') && ! can('clients.view') },
+        { label: 'I lavori affidati', icona: 'impresa', href: '/impresa', show: can('impresa.view') && ! can('clients.view') },
     ]
         .map((s) => {
             const voci = (s.voci ?? []).filter((v) => v.show);
@@ -188,140 +194,147 @@ const logout = async () => {
 </script>
 
 <template>
-    <div class="flex h-screen overflow-hidden" :class="nuova ? 'bg-[#f4f5f4]' : ''">
+    <!--
+        Veste "Lo strumento" (bozza B, 09/10/2026): menu scuro con le icone e la
+        voce attiva segnata dalla riga ocra, campo di ricerca nel menu, fondo
+        grigio freddo. Le classi sono le stesse per le due interfacce (nuova e
+        precedente): cambia l'elenco delle voci, non la veste.
+    -->
+    <div class="flex h-screen overflow-hidden bg-gray-100">
         <!-- Barra superiore: solo su schermo piccolo, per aprire il menu -->
-        <div class="fixed inset-x-0 top-0 z-30 flex items-center gap-3 border-b border-gray-200 bg-white px-3 py-2 md:hidden">
+        <div class="fixed inset-x-0 top-0 z-30 flex items-center gap-3 bg-gray-800 px-3 py-2 text-white md:hidden">
             <button
-                class="min-h-10 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700"
+                class="inline-flex min-h-11 items-center gap-2 rounded-sm border border-[#4a5a53] px-3 text-sm font-medium text-white"
                 data-test="apri-menu"
                 @click="menuAperto = true"
-            >Menu</button>
+            ><Icona nome="menu" :size="16" />Menu</button>
             <div class="min-w-0">
-                <div class="truncate text-sm font-semibold leading-tight">WebGIS Censimento</div>
-                <div class="truncate text-xs text-gray-500">{{ user?.organization?.name }}</div>
-                <div v-if="user?.zone?.length" class="truncate text-xs text-green-800" data-test="menu-zona">Zona: {{ user.zone.map((z) => z.name).join(', ') }}</div>
+                <div class="truncate text-sm font-semibold leading-tight">{{ user?.organization?.name || 'WebGIS Censimento' }}</div>
+                <div v-if="user?.zone?.length" class="truncate text-xs text-[#b9c4bd]" data-test="menu-zona">Zona: {{ user.zone.map((z) => z.name).join(', ') }}</div>
             </div>
         </div>
 
         <!-- Sfondo scuro dietro il menu aperto: toccandolo si chiude -->
         <div
             v-if="menuAperto"
-            class="fixed inset-0 z-40 bg-black/30 md:hidden"
+            class="fixed inset-0 z-40 bg-black/40 md:hidden"
             @click="menuAperto = false"
         />
 
         <aside
-            class="fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-gray-200 bg-white transition-transform md:static md:z-auto md:translate-x-0"
+            class="fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col bg-gray-800 text-[#dfe6e1] transition-transform md:static md:z-auto md:translate-x-0"
             :class="[menuAperto ? 'translate-x-0' : '-translate-x-full', nuova ? 'md:w-60' : 'md:w-56']"
             data-test="menu-laterale"
         >
             <button
-                class="absolute right-3 top-3 text-gray-400 md:hidden"
+                class="absolute right-2 top-2 inline-flex h-11 w-11 items-center justify-center text-[#b9c4bd] hover:text-white md:hidden"
                 data-test="chiudi-menu"
+                aria-label="Chiudi il menu"
                 @click="menuAperto = false"
-            >✕</button>
-            <div class="border-b border-gray-100 px-4 py-4">
-                <div class="text-sm font-semibold leading-tight" :class="nuova ? 'text-base font-bold' : ''">WebGIS Censimento</div>
-                <div class="text-xs text-gray-500" :class="nuova ? 'text-[13px]' : ''">{{ user?.organization?.name }}</div>
+            ><Icona nome="chiudi" :size="18" /></button>
+            <div class="px-4 pb-3 pt-4">
+                <div class="text-[11px] font-medium uppercase tracking-[0.08em] text-[#b9c4bd]">WebGIS Censimento</div>
+                <div class="mt-0.5 truncate text-[15px] font-semibold text-white">{{ user?.organization?.name }}</div>
                 <!-- Chi e' di zona lo legge qui: vede solo il territorio delle sue zone -->
-                <div v-if="user?.zone?.length" class="text-xs text-green-800" :class="nuova ? 'text-[13px]' : ''" data-test="menu-zona">Zona: {{ user.zone.map((z) => z.name).join(', ') }}</div>
+                <div v-if="user?.zone?.length" class="mt-0.5 text-[13px] text-[#b9c4bd]" data-test="menu-zona">Zona: {{ user.zone.map((z) => z.name).join(', ') }}</div>
             </div>
 
-            <div v-if="can('assets.view')" class="px-3 pt-3">
+            <div v-if="can('assets.view')" class="px-3 pb-2">
                 <button
-                    class="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400 transition hover:border-green-600 hover:text-gray-600"
-                    :class="nuova ? 'min-h-[38px] border-gray-300 text-gray-500' : ''"
+                    type="button"
+                    class="flex min-h-11 w-full items-center gap-2 rounded-sm border border-[#4a5a53] bg-[#162220] px-3 text-left text-sm text-[#b9c4bd] transition hover:border-[#8a948e] hover:text-white md:min-h-9"
+                    title="Cerca nel programma (Ctrl K)"
                     @click="palette?.toggle(true)"
                 >
-                    <span>Cerca…</span>
-                    <kbd class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">Ctrl K</kbd>
+                    <Icona nome="cerca" :size="16" />
+                    <span>Cerca nel programma</span>
                 </button>
             </div>
 
             <!-- Veste nuova: sei voci per compiti -->
-            <nav v-if="nuova" class="flex-1 overflow-y-auto p-3" data-test="menu-nuovo">
+            <nav v-if="nuova" class="flex-1 overflow-y-auto py-1" data-test="menu-nuovo">
                 <template v-for="sezione in sezioni" :key="sezione.label">
                     <Link
                         :href="sezione.href"
-                        class="flex min-h-10 items-center rounded-lg px-3 text-[15px] transition"
+                        class="flex min-h-11 items-center gap-2.5 border-l-[3px] pl-3 pr-4 text-[14.5px] transition md:min-h-10"
                         :class="sezione.attiva
-                            ? 'bg-green-100 font-semibold text-green-900'
-                            : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'"
+                            ? 'border-amber-500 bg-[#2a3b34] font-medium text-white'
+                            : 'border-transparent text-[#dfe6e1] hover:bg-[#243530] hover:text-white'"
                         :aria-current="sezione.attiva ? 'page' : undefined"
-                    >{{ sezione.label }}</Link>
+                    ><Icona v-if="sezione.icona" :nome="sezione.icona" :size="18" :class="sezione.attiva ? 'text-white' : 'text-[#b9c4bd]'" />{{ sezione.label }}</Link>
                     <div v-if="sezione.attiva && sezione.voci.length" class="mb-1 mt-0.5" data-test="menu-sottovoci">
                         <Link
                             v-for="voce in sezione.voci"
                             :key="voce.href"
                             :href="voce.href"
-                            class="flex min-h-9 items-center rounded-lg py-1 pl-7 pr-3 text-sm transition"
+                            class="flex min-h-10 items-center py-1 pl-11 pr-3 text-sm transition md:min-h-9"
                             :class="isActive(voce.href)
-                                ? 'font-semibold text-green-900'
-                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+                                ? 'font-medium text-white'
+                                : 'text-[#b9c4bd] hover:text-white'"
                         >{{ voce.label }}</Link>
                     </div>
                 </template>
+                <div class="mx-4 my-2 h-px bg-[#3a4a43]" />
                 <Link
                     href="/guida"
-                    class="mt-2 flex min-h-10 items-center rounded-lg border-t border-gray-100 px-3 pt-2 text-sm font-medium transition"
-                    :class="isActive('/guida') ? 'text-green-900' : 'text-gray-600 hover:text-gray-900'"
-                >Guida</Link>
+                    class="flex min-h-11 items-center gap-2.5 border-l-[3px] pl-3 pr-4 text-[14.5px] transition md:min-h-10"
+                    :class="isActive('/guida') ? 'border-amber-500 bg-[#2a3b34] font-medium text-white' : 'border-transparent text-[#dfe6e1] hover:bg-[#243530] hover:text-white'"
+                ><Icona nome="guida" :size="18" :class="isActive('/guida') ? 'text-white' : 'text-[#b9c4bd]'" />Guida</Link>
             </nav>
 
             <!-- Veste precedente: le pagine raggruppate -->
-            <nav v-else class="flex-1 overflow-y-auto p-3">
-                <div v-for="gruppo in gruppi" :key="gruppo.titolo" class="mb-3">
-                    <div class="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+            <nav v-else class="flex-1 overflow-y-auto py-1">
+                <div v-for="gruppo in gruppi" :key="gruppo.titolo" class="mb-2">
+                    <div class="px-4 pb-0.5 pt-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-[#8a948e]">
                         {{ gruppo.titolo }}
                     </div>
                     <Link
                         v-for="item in gruppo.voci"
                         :key="item.href"
                         :href="item.href"
-                        class="block rounded-lg px-3 py-1.5 text-sm font-medium transition"
+                        class="flex min-h-10 items-center border-l-[3px] pl-3 pr-4 text-sm transition md:min-h-9"
                         :class="isActive(item.href)
-                            ? 'bg-green-50 text-green-800'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+                            ? 'border-amber-500 bg-[#2a3b34] font-medium text-white'
+                            : 'border-transparent text-[#dfe6e1] hover:bg-[#243530] hover:text-white'"
                     >{{ item.label }}</Link>
                 </div>
+                <div class="mx-4 my-1 h-px bg-[#3a4a43]" />
                 <Link
                     href="/guida"
-                    class="mt-1 block rounded-lg border-t border-gray-100 px-3 pb-1.5 pt-3 text-sm font-medium transition"
+                    class="flex min-h-10 items-center border-l-[3px] pl-3 pr-4 text-sm transition md:min-h-9"
                     :class="isActive('/guida')
-                        ? 'text-green-800'
-                        : 'text-gray-600 hover:text-gray-900'"
+                        ? 'border-amber-500 bg-[#2a3b34] font-medium text-white'
+                        : 'border-transparent text-[#dfe6e1] hover:bg-[#243530] hover:text-white'"
                 >Guida</Link>
             </nav>
 
-            <div class="border-t border-gray-100 p-3">
+            <div class="border-t border-[#3a4a43] px-3 pb-3 pt-3">
                 <Link
                     v-if="nuova && can('assets.create')"
                     href="/operatore"
-                    class="mb-2 flex min-h-[38px] items-center rounded-lg border border-gray-300 px-3 text-sm font-semibold text-gray-900 transition hover:bg-gray-50"
+                    class="mb-3 flex min-h-11 items-center gap-2 rounded-sm border border-[#4a5a53] px-3 text-sm font-medium text-white transition hover:border-[#8a948e] hover:bg-[#243530] md:min-h-9"
                     data-test="app-di-campo"
-                >App di campo</Link>
-                <div class="px-2 pb-2">
-                    <div class="truncate text-sm font-medium">{{ user?.name }}</div>
-                    <div class="truncate text-xs text-gray-500">{{ user?.email }}</div>
+                ><Icona nome="campo" :size="18" />App di campo</Link>
+                <div class="px-1 pb-1">
+                    <div class="truncate text-sm font-medium text-white">{{ user?.name }}</div>
+                    <div class="truncate font-mono text-[12px] text-[#b9c4bd]">{{ user?.email }}</div>
                 </div>
                 <Link
                     href="/sicurezza"
-                    class="block w-full rounded-lg px-3 py-2 text-left text-sm transition hover:bg-gray-50 hover:text-gray-900"
-                    :class="isActive('/sicurezza') ? 'font-semibold text-gray-900' : 'text-gray-600'"
+                    class="flex min-h-11 w-full items-center gap-2 px-1 text-left text-[13.5px] transition hover:text-white md:min-h-8"
+                    :class="isActive('/sicurezza') ? 'font-medium text-white' : 'text-[#b9c4bd]'"
                     data-test="il-mio-accesso"
-                >Il mio accesso</Link>
+                ><Icona nome="accesso" :size="15" />Il mio accesso</Link>
                 <button
                     type="button"
-                    class="w-full rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                    class="flex min-h-11 w-full items-center px-1 text-left text-[13.5px] text-[#b9c4bd] transition hover:text-white md:min-h-8"
                     data-test="cambia-interfaccia"
                     @click="cambiaInterfaccia"
                 >{{ nuova ? 'Torna all\'interfaccia precedente' : 'Prova la nuova interfaccia' }}</button>
                 <button
-                    class="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-600 transition hover:bg-red-50 hover:text-red-700"
+                    class="flex min-h-11 w-full items-center gap-2 px-1 text-left text-[13.5px] text-[#b9c4bd] transition hover:text-white md:min-h-8"
                     @click="logout"
-                >
-                    Esci
-                </button>
+                ><Icona nome="esci" :size="15" />Esci</button>
             </div>
         </aside>
 
@@ -338,7 +351,7 @@ const logout = async () => {
                 </span>
                 <button
                     type="button"
-                    class="inline-flex min-h-11 items-center rounded-lg border border-amber-700 bg-white px-3 text-sm font-semibold text-amber-900 hover:bg-amber-100 md:min-h-[34px]"
+                    class="inline-flex min-h-11 items-center rounded-sm border border-amber-700 bg-white px-3 text-sm font-medium text-amber-900 hover:bg-amber-100 md:min-h-[34px]"
                     data-test="termina-assistenza"
                     @click="terminaAssistenza"
                 >Termina e torna alla console</button>

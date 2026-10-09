@@ -704,7 +704,7 @@ onMounted(async () => {
                                  lo spostamento non è più possibile -->
                             <span
                                 v-if="r.ordine && ['completed', 'cancelled'].includes(r.ordine.status)"
-                                class="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-700"
+                                class="rounded-sm bg-gray-200 px-2 py-0.5 text-xs text-gray-700"
                                 data-test="richiesta-ordine-chiuso"
                             >{{ WORK_STATUS_LABELS[r.ordine.status] ?? r.ordine.status }}</span>
                         </div>
@@ -904,7 +904,7 @@ onMounted(async () => {
                             <td class="px-4 py-2 font-medium">{{ row.code }}</td>
                             <td class="max-w-xs truncate px-4 py-2">{{ row.title }}</td>
                             <td class="px-4 py-2">
-                                <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="STATUS_COLORS[row.status]">
+                                <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="STATUS_COLORS[row.status]">
                                     {{ STATUS_LABELS[row.status] ?? row.status }}
                                 </span>
                             </td>
@@ -1100,7 +1100,7 @@ onMounted(async () => {
                         </div>
 
                         <div class="mt-3 flex flex-wrap items-center gap-2">
-                            <span class="rounded-full px-3 py-1 text-xs font-medium" :class="STATUS_COLORS[detail.status]" data-test="wo-status">
+                            <span class="rounded-sm px-3 py-1 text-xs font-medium" :class="STATUS_COLORS[detail.status]" data-test="wo-status">
                                 {{ STATUS_LABELS[detail.status] ?? detail.status }}
                             </span>
                             <span class="text-xs text-gray-500">Priorità: {{ PRIORITY_LABELS[detail.priority] }}</span>
@@ -1299,7 +1299,7 @@ onMounted(async () => {
                             <li v-for="check in detail.checks" :key="check.id" class="px-3 py-2 text-sm">
                                 <div class="flex items-center justify-between gap-2">
                                     <span
-                                        class="rounded-full px-2 py-0.5 text-xs font-medium"
+                                        class="rounded-sm px-2 py-0.5 text-xs font-medium"
                                         :class="check.outcome === 'passed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'"
                                     >{{ check.outcome === 'passed' ? 'Positivo' : 'Negativo' }}</span>
                                     <span class="text-xs text-gray-500">{{ check.checker?.name ?? '—' }} · {{ fmtDateTime(check.checked_at) }}</span>

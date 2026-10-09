@@ -86,7 +86,7 @@ const CRONOLOGIA = { rilievo: 'Rilievo', valutazione: 'Stabilità', lavoro: 'Lav
                     <div class="flex flex-wrap items-center gap-2">
                         <h2 class="text-xl font-bold text-gray-900" data-test="portale-scheda-titolo">{{ titolo }}</h2>
                         <span v-if="stato" :class="stato.chip">{{ stato.etichetta }}</span>
-                        <span v-if="albero?.removed_on" class="inline-flex min-h-6 items-center rounded-full bg-gray-800 px-2.5 text-xs font-semibold text-white">Abbattuto</span>
+                        <span v-if="albero?.removed_on" class="inline-flex min-h-6 items-center rounded-sm bg-gray-800 px-2.5 text-xs font-semibold text-white">Abbattuto</span>
                     </div>
                     <p class="text-sm text-gray-700">
                         <template v-if="albero?.species"><i>{{ albero.species }}</i><template v-if="albero.common_name"> · {{ albero.common_name }}</template></template>

@@ -3,26 +3,149 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
-/* Carattere dell'interfaccia (decisione committente 15/08/2026, sostituisce
-   Courier New): caratteri di sistema, niente webfont esterni, quindi si vede
-   uguale anche senza rete. Il monospazio resta per codici e misure, dove le
-   colonne devono restare allineate. Le stampe PDF non seguono questo foglio
-   di stile: mantengono DejaVu Sans Mono. */
+/* Caratteri della veste "Lo strumento" (bozza B, scelta dal committente il
+   09/10/2026, sostituisce i caratteri di sistema del 15/08/2026): IBM Plex Sans
+   per titoli e testo, IBM Plex Mono per cartellini, codici, date e misure.
+   Licenza libera (SIL Open Font License), file serviti dal nostro dominio:
+   nessuna richiesta a server esterni. Solo i sottoinsiemi latini: bastano per
+   l'italiano e i nomi botanici. Le stampe PDF non seguono questo foglio di
+   stile: mantengono DejaVu Sans Mono. */
+@import '@fontsource/ibm-plex-sans/latin-400.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-400.css';
+@import '@fontsource/ibm-plex-sans/latin-400-italic.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-400-italic.css';
+@import '@fontsource/ibm-plex-sans/latin-500.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-500.css';
+@import '@fontsource/ibm-plex-sans/latin-600.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-600.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-ext-400.css';
+@import '@fontsource/ibm-plex-mono/latin-500.css';
+@import '@fontsource/ibm-plex-mono/latin-ext-500.css';
+
+/* La veste B in un posto solo: i nomi delle classi Tailwind restano quelli di
+   sempre (bg-green-700, text-gray-500, rounded-lg...), ma qui si decide che
+   cosa valgono. Cosi' tutte le pagine, nuove e di prima, cambiano insieme e
+   per tornare alla veste di prima basta questo blocco. */
 @theme {
-    --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
-        Arial, 'Noto Sans', sans-serif;
-    --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Consolas,
+    --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto,
+        'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Consolas,
         'Liberation Mono', monospace;
+
+    /* Il grassetto e' il 600 di Plex: il 700 non si carica e non si finge */
+    --font-weight-bold: 600;
+    --font-weight-extrabold: 600;
+    --font-weight-black: 600;
+
+    /* Angoli di 2 px dappertutto: carte, pulsanti, campi, menu */
+    --radius-xs: 2px;
+    --radius-sm: 2px;
+    --radius-md: 2px;
+    --radius-lg: 2px;
+    --radius-xl: 2px;
+    --radius-2xl: 2px;
+    --radius-3xl: 2px;
+    --radius-4xl: 2px;
+
+    /* Niente ombre sulle carte; i pannelli sopra la pagina si staccano con
+       un bordo e un'ombra discreta */
+    --shadow-2xs: 0 0 0 1px rgb(20 26 23 / 0.06);
+    --shadow-xs: 0 0 0 1px rgb(20 26 23 / 0.06);
+    --shadow-sm: 0 0 0 1px rgb(20 26 23 / 0.08);
+    --shadow-md: 0 0 0 1px rgb(20 26 23 / 0.1), 0 4px 12px rgb(20 26 23 / 0.1);
+    --shadow-lg: 0 0 0 1px rgb(20 26 23 / 0.12), 0 8px 24px rgb(20 26 23 / 0.14);
+    --shadow-xl: 0 0 0 1px rgb(20 26 23 / 0.12), 0 12px 32px rgb(20 26 23 / 0.16);
+    --shadow-2xl: 0 0 0 1px rgb(20 26 23 / 0.14), 0 16px 40px rgb(20 26 23 / 0.2);
+
+    /* Grigio freddo, leggermente verde: fondo #eceeeb, bordi #c6cdc8,
+       testo secondario #55605b, testo #141a17, menu #1d2b26 */
+    --color-gray-50: #f5f6f4;
+    --color-gray-100: #eceeeb;
+    --color-gray-200: #dfe3df;
+    --color-gray-300: #c6cdc8;
+    --color-gray-400: #8a948e;
+    --color-gray-500: #55605b;
+    --color-gray-600: #46514c;
+    --color-gray-700: #2f3a35;
+    --color-gray-800: #1d2b26;
+    --color-gray-900: #141a17;
+    --color-gray-950: #0d1210;
+
+    /* Verde tecnico #2d5c46 per azioni e collegamenti */
+    --color-green-50: #eef3ef;
+    --color-green-100: #dde8e1;
+    --color-green-200: #b9cfc2;
+    --color-green-300: #8fb3a0;
+    --color-green-400: #5f8f78;
+    --color-green-500: #4d8468;
+    --color-green-600: #3a6f55;
+    --color-green-700: #2d5c46;
+    --color-green-800: #27503d;
+    --color-green-900: #1f4232;
+    --color-green-950: #13291f;
+
+    /* Ocra #b8862b per la voce attiva e le scadenze vicine */
+    --color-amber-50: #f8f2e4;
+    --color-amber-100: #f1e6cf;
+    --color-amber-200: #e6d3a6;
+    --color-amber-300: #d9bb78;
+    --color-amber-400: #c9a04a;
+    --color-amber-500: #b8862b;
+    --color-amber-600: #a67724;
+    --color-amber-700: #8a6218;
+    --color-amber-800: #6e4e12;
+    --color-amber-900: #553c0e;
+    --color-amber-950: #3a290a;
+
+    /* Rosso #b3261e per ritardi ed errori */
+    --color-red-50: #faf0ef;
+    --color-red-100: #f3dcda;
+    --color-red-200: #e8bcb8;
+    --color-red-300: #dc9a94;
+    --color-red-400: #cc6a62;
+    --color-red-500: #c04036;
+    --color-red-600: #b3261e;
+    --color-red-700: #991f19;
+    --color-red-800: #7f1a15;
+    --color-red-900: #661410;
+    --color-red-950: #450d0b;
+
+    /* Azzurro grigio #3d6a8a per le informazioni */
+    --color-blue-50: #eef3f6;
+    --color-blue-100: #dbe5ec;
+    --color-blue-200: #b9cbd8;
+    --color-blue-300: #93afc3;
+    --color-blue-400: #6a92ad;
+    --color-blue-500: #4e7d9c;
+    --color-blue-600: #3d6a8a;
+    --color-blue-700: #345b77;
+    --color-blue-800: #2b4c63;
+    --color-blue-900: #223c4f;
+    --color-blue-950: #16293a;
 }
 
 body {
     /* Cifre di uguale larghezza: le colonne dei numeri restano incolonnate
        anche con un carattere proporzionale */
     font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Il grassetto del testo corrente e' il 600 di Plex (vedi sopra) */
+b,
+strong {
+    font-weight: 600;
+}
+
+h1,
+h2,
+h3 {
+    letter-spacing: -0.01em;
 }
 
 /* Anche i controlli della mappa (MapLibre usa una propria famiglia) */
 .maplibregl-map {
-    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
-        Arial, 'Noto Sans', sans-serif;
+    font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto,
+        'Helvetica Neue', Arial, sans-serif;
 }

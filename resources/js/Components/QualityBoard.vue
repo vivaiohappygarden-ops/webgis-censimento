@@ -184,7 +184,7 @@ onMounted(reload);
                             <td class="cursor-pointer px-4 py-2 font-medium" @click="toggleExpand(nc)">{{ nc.code }}</td>
                             <td class="px-4 py-2">{{ NC_SEVERITY[nc.severity] }}</td>
                             <td class="px-4 py-2">
-                                <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="NC_STATUS[nc.status]?.cls">
+                                <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="NC_STATUS[nc.status]?.cls">
                                     {{ NC_STATUS[nc.status]?.label ?? nc.status }}
                                 </span>
                             </td>

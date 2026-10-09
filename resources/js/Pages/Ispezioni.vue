@@ -481,7 +481,7 @@ onMounted(async () => {
                             <td class="px-4 py-2 text-right">{{ t.items_count }}</td>
                             <td class="px-4 py-2 text-right">{{ t.inspections_count }}</td>
                             <td class="px-4 py-2">
-                                <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="t.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-500'">
+                                <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="t.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-500'">
                                     {{ t.is_active ? 'Attivo' : 'Disattivato' }}
                                 </span>
                             </td>
@@ -529,7 +529,7 @@ onMounted(async () => {
                                 <td class="px-4 py-2 text-gray-600">{{ fmtDateTime(d.last_completed_at) }}</td>
                                 <td class="px-4 py-2">{{ fmtDate(d.due_date) }}</td>
                                 <td class="px-4 py-2">
-                                    <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="deadlineBadge(d).cls" data-test="deadline-state">
+                                    <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="deadlineBadge(d).cls" data-test="deadline-state">
                                         {{ deadlineBadge(d).label }}
                                     </span>
                                 </td>
@@ -582,7 +582,7 @@ onMounted(async () => {
                                 <td class="px-4 py-2 text-gray-600">{{ i.asset?.census_code ?? i.area?.name ?? '—' }}</td>
                                 <td class="px-4 py-2 text-gray-600">{{ i.inspector?.name ?? '—' }}</td>
                                 <td class="px-4 py-2">
-                                    <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="OUTCOMES[i.outcome]?.cls">
+                                    <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="OUTCOMES[i.outcome]?.cls">
                                         {{ OUTCOMES[i.outcome]?.label ?? i.outcome }}
                                     </span>
                                 </td>
@@ -807,7 +807,7 @@ onMounted(async () => {
                         <p v-if="pdfError" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{{ pdfError }}</p>
 
                         <div class="mt-3 flex flex-wrap items-center gap-2">
-                            <span class="rounded-full px-3 py-1 text-xs font-medium" :class="OUTCOMES[detail.outcome]?.cls" data-test="inspection-outcome">
+                            <span class="rounded-sm px-3 py-1 text-xs font-medium" :class="OUTCOMES[detail.outcome]?.cls" data-test="inspection-outcome">
                                 {{ OUTCOMES[detail.outcome]?.label ?? detail.outcome }}
                             </span>
                             <span class="text-xs text-gray-500">{{ detail.asset?.census_code ?? detail.area?.name }}</span>
@@ -819,7 +819,7 @@ onMounted(async () => {
                                 <div class="flex items-start justify-between gap-3">
                                     <span>{{ answer.question }}</span>
                                     <span
-                                        class="rounded-full px-2 py-0.5 text-xs font-semibold"
+                                        class="rounded-sm px-2 py-0.5 text-xs font-semibold"
                                         :class="answer.value === 'ko' ? 'bg-red-100 text-red-800' : answer.value === 'ok' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'"
                                     >{{ answerLabel(answer) }}</span>
                                 </div>

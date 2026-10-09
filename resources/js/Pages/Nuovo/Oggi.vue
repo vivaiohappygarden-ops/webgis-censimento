@@ -4,6 +4,7 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import Icona from '@/Components/Nuovo/Icona.vue';
 import { usaCaricamento } from '@/caricamento';
 import { BOTTONE, BOTTONE_PICCOLO, BOTTONE_SECONDARIO, CARTA, CHIP, plurale } from '@/nuovo/stile';
 
@@ -158,9 +159,9 @@ function dettagliPortale(p) {
                     <div class="mt-0.5 text-[13px] text-gray-500" data-test="oggi-giorno">{{ dati?.giorno ?? '' }}</div>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                    <Link v-if="can('works.manage')" href="/lavori?nuovo=1" :class="BOTTONE">Nuovo lavoro</Link>
-                    <Link v-if="can('works.view')" href="/segnalazioni?nuova=1" :class="BOTTONE_SECONDARIO">Nuova segnalazione</Link>
-                    <Link v-if="can('assets.create')" href="/mappa" :class="BOTTONE_SECONDARIO">Nuovo rilievo dalla mappa</Link>
+                    <Link v-if="can('works.manage')" href="/lavori?nuovo=1" :class="BOTTONE"><Icona nome="nuovo" :size="16" />Nuovo lavoro</Link>
+                    <Link v-if="can('works.view')" href="/segnalazioni?nuova=1" :class="BOTTONE_SECONDARIO"><Icona nome="segnalazione" :size="16" />Nuova segnalazione</Link>
+                    <Link v-if="can('assets.create')" href="/mappa" :class="BOTTONE_SECONDARIO"><Icona nome="mappa" :size="16" />Nuovo rilievo dalla mappa</Link>
                 </div>
             </div>
 
@@ -179,7 +180,7 @@ function dettagliPortale(p) {
                 <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
                     <section :class="CARTA" class="min-w-0" data-test="oggi-lista">
                         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
-                            <h2 class="text-base font-bold text-gray-900">Da fare, nell'ordine in cui conviene farle</h2>
+                            <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Da fare, nell'ordine in cui conviene farle</h2>
                             <div v-if="voci.length" class="flex flex-wrap gap-2 md:inline-flex md:gap-0 md:overflow-hidden md:rounded-lg md:border md:border-gray-300 md:bg-white" role="group" aria-label="Filtra per famiglia">
                                 <button
                                     v-for="[chiave, etichetta] in filtri"
@@ -221,11 +222,11 @@ function dettagliPortale(p) {
 
                     <aside class="flex min-w-0 flex-col gap-4">
                         <section v-if="dati.campo" :class="CARTA" class="p-4" data-test="oggi-campo">
-                            <h2 class="text-[15px] font-bold text-gray-900">Arrivato dal campo oggi</h2>
+                            <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Arrivato dal campo oggi</h2>
                             <p class="mt-0.5 text-[13px] text-gray-500">{{ riepilogoCampo || 'Niente, per ora.' }}</p>
                             <ul v-if="dati.campo.righe.length" class="mt-2 divide-y divide-gray-100">
                                 <li v-for="(r, i) in dati.campo.righe" :key="i" class="flex gap-3 py-2">
-                                    <span class="w-12 shrink-0 pt-0.5 text-xs text-gray-500">{{ r.ora }}</span>
+                                    <span class="w-12 shrink-0 pt-0.5 font-mono text-xs text-gray-500">{{ r.ora }}</span>
                                     <div class="min-w-0">
                                         <div class="truncate font-semibold text-gray-900">{{ r.cosa ?? r.tipo }}</div>
                                         <div class="text-[13px] text-gray-500">{{ r.cosa ? r.tipo : '' }}{{ r.cosa && r.utente ? ' · ' : '' }}{{ r.utente ?? '' }}</div>
@@ -235,7 +236,7 @@ function dettagliPortale(p) {
                         </section>
 
                         <section v-if="dati.documenti" :class="CARTA" class="p-4" data-test="oggi-documenti">
-                            <h2 class="text-[15px] font-bold text-gray-900">Documenti da chiudere</h2>
+                            <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Documenti da chiudere</h2>
                             <ul v-if="dati.documenti.righe.length" class="mt-1 divide-y divide-gray-100">
                                 <li v-for="d in dati.documenti.righe" :key="d.id" class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
                                     <div class="min-w-0 flex-1 basis-40">
@@ -252,7 +253,7 @@ function dettagliPortale(p) {
                         </section>
 
                         <section v-if="dati.portali" :class="CARTA" class="p-4" data-test="oggi-portali">
-                            <h2 class="text-[15px] font-bold text-gray-900">Portali pubblici</h2>
+                            <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Portali pubblici</h2>
                             <ul v-if="dati.portali.length" class="mt-1 divide-y divide-gray-100">
                                 <li v-for="p in dati.portali" :key="p.id" class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
                                     <div class="min-w-0 flex-1 basis-40">

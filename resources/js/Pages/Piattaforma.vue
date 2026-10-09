@@ -279,7 +279,7 @@ onMounted(() => { if (props.dueFattoriAttiva) carica(caricaElenco); });
                                     @click="scegli(o)"
                                 >
                                     <td class="px-3 py-2">
-                                        <div class="font-semibold text-gray-900">{{ o.name }}<span v-if="o.id === mioTenant" class="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">la tua</span></div>
+                                        <div class="font-semibold text-gray-900">{{ o.name }}<span v-if="o.id === mioTenant" class="ml-1 rounded-sm bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">la tua</span></div>
                                         <div class="font-mono text-xs text-gray-500">{{ o.slug }}</div>
                                     </td>
                                     <td class="px-3 py-2">

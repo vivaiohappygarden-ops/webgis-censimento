@@ -974,7 +974,7 @@ const dataAbbattimento = (row) => {
                             </td>
                             <td class="px-4 py-3">
                                 <span
-                                    class="rounded-full px-2 py-0.5 text-xs font-medium"
+                                    class="rounded-sm px-2 py-0.5 text-xs font-medium"
                                     :class="{
                                         'bg-green-100 text-green-800': row.status === 'active',
                                         'bg-amber-100 text-amber-900': row.status === 'removed',

@@ -60,7 +60,7 @@ async function save() {
     <div class="mt-6 rounded-xl border border-gray-200 bg-white p-6">
         <div class="flex items-center justify-between">
             <h2 class="text-sm font-semibold">Posto libero (sede di impianto)</h2>
-            <span class="rounded-full px-3 py-1 text-xs font-medium" :class="STATUS_COLORS[site.status] ?? 'bg-gray-100'">
+            <span class="rounded-sm px-3 py-1 text-xs font-medium" :class="STATUS_COLORS[site.status] ?? 'bg-gray-100'">
                 {{ STATUSES[site.status] ?? site.status }}
             </span>
         </div>

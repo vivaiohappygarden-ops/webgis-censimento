@@ -4,6 +4,7 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import Icona from '@/Components/Nuovo/Icona.vue';
 import ScegliCommittente from '@/Components/ScegliCommittente.vue';
 import ScegliVoce from '@/Components/ScegliVoce.vue';
 import VisteSalvate from '@/Components/VisteSalvate.vue';
@@ -473,11 +474,11 @@ const TIPO_EVENTO = {
     <AppLayout>
         <div class="mx-auto flex max-w-[1640px] flex-col gap-4 p-4 md:p-6 lg:px-7">
             <TestataPatrimonio attiva="elenco">
-                <Link v-if="can('assets.create')" href="/mappa" :class="BOTTONE">Nuovo elemento</Link>
+                <Link v-if="can('assets.create')" href="/mappa" :class="BOTTONE"><Icona nome="nuovo" :size="16" />Nuovo elemento</Link>
                 <!-- Sul telefono il menu si stende su tutta la testata (details e' static, la testata e' relative):
                      agganciato al pulsante uscirebbe dallo schermo a 390 px -->
                 <details class="static sm:relative">
-                    <summary :class="BOTTONE_SECONDARIO" class="cursor-pointer list-none">Esporta</summary>
+                    <summary :class="BOTTONE_SECONDARIO" class="cursor-pointer list-none"><Icona nome="esporta" :size="16" />Esporta</summary>
                     <div :class="CARTA" class="absolute left-0 right-0 z-20 mt-1 w-auto p-3 text-sm shadow-lg sm:left-auto sm:right-0 sm:w-80" data-test="menu-esporta">
                         <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">L'elenco filtrato</div>
                         <div class="mt-1 flex flex-wrap gap-2">
@@ -559,7 +560,7 @@ const TIPO_EVENTO = {
                     <button
                         v-if="riepilogo"
                         type="button"
-                        class="inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition md:min-h-9"
+                        class="inline-flex min-h-11 items-center gap-1.5 rounded-sm border px-3 text-[13px] font-semibold transition md:min-h-9"
                         :class="filtri.vta === 'scaduta' ? 'border-red-800 bg-red-800 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-red-300'"
                         :aria-pressed="filtri.vta === 'scaduta'"
                         data-test="scorciatoia-vta"
@@ -568,7 +569,7 @@ const TIPO_EVENTO = {
                     <button
                         v-if="riepilogo"
                         type="button"
-                        class="inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition md:min-h-9"
+                        class="inline-flex min-h-11 items-center gap-1.5 rounded-sm border px-3 text-[13px] font-semibold transition md:min-h-9"
                         :class="filtri.vta === 'mai' ? 'border-green-800 bg-green-800 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'"
                         :aria-pressed="filtri.vta === 'mai'"
                         data-test="scorciatoia-mai"
@@ -577,7 +578,7 @@ const TIPO_EVENTO = {
                     <button
                         v-if="riepilogo"
                         type="button"
-                        class="inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition md:min-h-9"
+                        class="inline-flex min-h-11 items-center gap-1.5 rounded-sm border px-3 text-[13px] font-semibold transition md:min-h-9"
                         :class="filtri.senzaSpecie ? 'border-green-800 bg-green-800 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'"
                         :aria-pressed="filtri.senzaSpecie"
                         data-test="scorciatoia-specie"
@@ -687,8 +688,8 @@ const TIPO_EVENTO = {
                                         <input v-model="selezionati" type="checkbox" :value="r.id" class="rounded border-gray-300" :aria-label="`Seleziona ${r.census_code ?? 'elemento'}`" data-test="elemento-casella">
                                     </td>
                                     <td class="px-3 py-2.5">
-                                        <button type="button" class="font-semibold text-gray-900 underline-offset-2 hover:underline" :aria-pressed="anteprima.id === r.id" @click.stop="apriAnteprima(r.id)">{{ r.census_code ?? 'senza cartellino' }}</button>
-                                        <div class="text-xs text-gray-500">{{ r.object_type?.code }}</div>
+                                        <button type="button" class="font-mono font-medium text-gray-900 underline-offset-2 hover:underline" :aria-pressed="anteprima.id === r.id" @click.stop="apriAnteprima(r.id)">{{ r.census_code ?? 'senza cartellino' }}</button>
+                                        <div class="font-mono text-xs text-gray-500">{{ r.object_type?.code }}</div>
                                     </td>
                                     <td class="px-3 py-2.5" :class="r.tree && ! r.tree.species ? 'text-amber-800' : 'text-gray-900'">{{ specie(r) }}</td>
                                     <td class="px-3 py-2.5 text-gray-700">
@@ -744,7 +745,7 @@ const TIPO_EVENTO = {
                             </p>
                             <div class="mt-3">
                                 <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Cartellino</div>
-                                <div class="text-xl font-bold text-gray-900">{{ anteprima.dettaglio.census_code ?? 'senza cartellino' }}</div>
+                                <div class="font-mono text-2xl font-medium text-gray-900">{{ anteprima.dettaglio.census_code ?? 'senza cartellino' }}</div>
                                 <div class="text-sm text-gray-900">
                                     <template v-if="anteprima.dettaglio.tree">
                                         <i v-if="anteprima.dettaglio.tree.species">{{ anteprima.dettaglio.tree.species }}</i><span v-else class="text-amber-800">specie da indicare</span>

@@ -156,7 +156,7 @@ onMounted(load);
                     <td class="max-w-48 truncate py-1.5 pr-2" :title="d.title">{{ d.title }}</td>
                     <td class="py-1.5 pr-2 text-gray-600">{{ formatDate(d.created_at) }}</td>
                     <td class="py-1.5 pr-2">
-                        <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="STATUS[d.status]?.cls" :data-test="`gest-state-${d.status}`">
+                        <span class="rounded-sm px-2 py-0.5 text-xs font-medium" :class="STATUS[d.status]?.cls" :data-test="`gest-state-${d.status}`">
                             {{ STATUS[d.status]?.label ?? d.status }}
                         </span>
                         <span v-if="d.is_duplicate" class="ml-1 text-xs text-gray-500">(già presente)</span>

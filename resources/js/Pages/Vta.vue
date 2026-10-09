@@ -592,7 +592,7 @@ onMounted(async () => {
                                     :key="cls"
                                     type="button"
                                     :data-test="`classe-${cls === 'n.d.' ? 'nd' : cls.replace('/', '-')}`"
-                                    class="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                                    class="rounded-sm px-2.5 py-0.5 text-xs font-semibold"
                                     :class="[
                                         CLASS_COLORS[cls] ?? 'bg-gray-100',
                                         filtri.class === (cls === 'n.d.' ? 'nd' : cls) ? 'ring-2 ring-gray-500' : '',
@@ -630,7 +630,7 @@ onMounted(async () => {
                                         <td class="px-4 py-2">{{ specie(r) }}</td>
                                         <td class="max-w-64 truncate px-4 py-2 text-gray-500">{{ posizione(r) }}</td>
                                         <td class="px-4 py-2">
-                                            <span v-if="r.failure_class" class="rounded-full px-2 py-0.5 text-xs font-bold" :class="CLASS_COLORS[r.failure_class]">{{ r.failure_class }}</span>
+                                            <span v-if="r.failure_class" class="rounded-sm px-2 py-0.5 text-xs font-bold" :class="CLASS_COLORS[r.failure_class]">{{ r.failure_class }}</span>
                                         </td>
                                         <td class="whitespace-nowrap px-4 py-2">
                                             <span v-if="r.stato === 'scaduto'" class="font-semibold text-red-600">scaduta {{ fmt(r.next_check_due) }}</span>
@@ -850,7 +850,7 @@ onMounted(async () => {
                                             <span v-if="! filtri.client_id && r.client_name" class="block truncate text-xs text-gray-400">{{ r.client_name }}</span>
                                         </td>
                                         <td class="px-4 py-2">
-                                            <span v-if="r.failure_class" class="rounded-full px-2 py-0.5 text-xs font-bold" :class="CLASS_COLORS[r.failure_class]">{{ r.failure_class }}</span>
+                                            <span v-if="r.failure_class" class="rounded-sm px-2 py-0.5 text-xs font-bold" :class="CLASS_COLORS[r.failure_class]">{{ r.failure_class }}</span>
                                             <span v-else-if="r.assessed_on" class="text-xs text-gray-400">n.d.</span>
                                         </td>
                                         <td class="whitespace-nowrap px-4 py-2 text-gray-500">

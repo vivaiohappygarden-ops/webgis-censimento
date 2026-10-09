@@ -70,14 +70,14 @@ const cambiaInterfaccia = () => router.post('/interfaccia', { modo: nuova.value 
                 <aside class="flex min-w-0 flex-col gap-4">
                     <section :class="CARTA" class="p-4" data-test="impostazioni-interfaccia">
                         <div class="flex flex-wrap items-center justify-between gap-2">
-                            <h2 class="text-base font-bold text-gray-900">Interfaccia</h2>
+                            <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Interfaccia</h2>
                             <span :class="nuova ? CHIP.ok : CHIP.neutra">{{ nuova ? 'nuova, in prova' : 'precedente' }}</span>
                         </div>
                         <p class="mt-2 text-sm text-gray-700">Stessi dati, stesse funzioni, ordinate per compiti: Oggi, Patrimonio, Lavori, Documenti, Committenti, Impostazioni. Chi preferisce la versione precedente la riattiva da qui, per il proprio utente, finché non si decide per tutti{{ interfaccia.predefinita === 'nuova' ? ' (di serie parte la nuova)' : ' (di serie parte la precedente)' }}.</p>
                         <button type="button" :class="nuova ? BOTTONE_SECONDARIO : BOTTONE" class="mt-3" data-test="impostazioni-cambia-interfaccia" @click="cambiaInterfaccia">{{ nuova ? 'Torna alla versione precedente' : 'Passa alla nuova interfaccia' }}</button>
                     </section>
                     <section :class="CARTA" class="p-4">
-                        <h2 class="text-base font-bold text-gray-900">Aggiornamenti</h2>
+                        <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Aggiornamenti</h2>
                         <p class="mt-1 text-sm text-gray-700">Il programma si aggiorna dal server: le novità arrivano da sole, senza fermare il lavoro. Se qualcosa "a volte non funziona", la diagnostica si lancia sul server dall'assistenza.</p>
                     </section>
                 </aside>

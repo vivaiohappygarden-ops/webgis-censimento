@@ -373,7 +373,7 @@ defineExpose({ load });
                         <td class="px-4 py-2 text-right">{{ fmtEur(estimate.subtotal) }}</td>
                         <td class="px-4 py-2 text-gray-600">{{ fmtDate(estimate.valid_until) }}</td>
                         <td class="px-4 py-2">
-                            <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="STATUS[estimate.status]?.cls">
+                            <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="STATUS[estimate.status]?.cls">
                                 {{ STATUS[estimate.status]?.label ?? estimate.status }}
                             </span>
                         </td>
@@ -426,7 +426,7 @@ defineExpose({ load });
                         <div>
                             <div class="text-xs uppercase tracking-wide text-gray-400">
                                 {{ detail.code }} ·
-                                <span class="rounded-full px-2 py-0.5 text-[10px] font-medium" :class="STATUS[detail.status]?.cls">{{ STATUS[detail.status]?.label }}</span>
+                                <span class="rounded-sm px-2 py-0.5 text-[10px] font-medium" :class="STATUS[detail.status]?.cls">{{ STATUS[detail.status]?.label }}</span>
                             </div>
                             <h2 class="text-lg font-semibold">{{ detail.title }}</h2>
                             <p class="text-xs text-gray-500">{{ detail.client?.name }}<template v-if="detail.valid_until"> · valido fino al {{ fmtDate(detail.valid_until) }}</template></p>

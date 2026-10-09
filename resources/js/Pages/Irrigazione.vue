@@ -439,7 +439,7 @@ onMounted(load);
                             <td class="px-4 py-2 text-right">{{ s.sectors_count }}</td>
                             <td class="px-4 py-2 text-gray-600">{{ seasonLabel(s) }}</td>
                             <td class="px-4 py-2">
-                                <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="STATUS_BADGE[s.status] ?? 'bg-gray-200 text-gray-500'">
+                                <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="STATUS_BADGE[s.status] ?? 'bg-gray-200 text-gray-500'">
                                     {{ STATUS_LABELS[s.status] ?? s.status }}
                                 </span>
                             </td>

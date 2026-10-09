@@ -1127,7 +1127,7 @@ watch(() => props.apriValutazione, (apri) => {
                     class="rounded-lg border border-gray-200 px-3 py-2 text-sm"
                 >
                     <div class="flex flex-wrap items-center gap-3">
-                        <span v-if="a.failure_class" class="rounded-full px-2.5 py-0.5 text-xs font-bold" :class="CLASS_COLORS[a.failure_class]">
+                        <span v-if="a.failure_class" class="rounded-sm px-2.5 py-0.5 text-xs font-bold" :class="CLASS_COLORS[a.failure_class]">
                             {{ a.failure_class }}
                         </span>
                         <span class="font-medium">{{ TYPES[a.assessment_type] }}</span>

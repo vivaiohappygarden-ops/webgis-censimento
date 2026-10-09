@@ -284,7 +284,7 @@ onMounted(() => {
                             <td class="px-4 py-2 text-gray-600">{{ c.issued_by ?? '—' }}</td>
                             <td class="px-4 py-2">{{ formatDate(c.expires_on) }}</td>
                             <td class="px-4 py-2">
-                                <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="STATE[c.state]?.cls" :data-test="`cert-state-${c.state}`">
+                                <span class="rounded-sm px-2.5 py-0.5 text-xs font-medium" :class="STATE[c.state]?.cls" :data-test="`cert-state-${c.state}`">
                                     {{ STATE[c.state]?.label }}
                                 </span>
                                 <span v-if="stateLine(c)" class="ml-1.5 text-xs text-gray-500">{{ stateLine(c) }}</span>

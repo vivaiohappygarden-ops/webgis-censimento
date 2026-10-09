@@ -20,8 +20,8 @@ const erroreEmail = computed(() => form.errors.email || page.props.errors?.email
 <template>
     <Head title="Accedi" />
 
-    <div class="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 to-gray-100 p-4">
-        <div class="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
+    <div class="flex min-h-screen items-center justify-center bg-gray-100 p-4">
+        <div class="w-full max-w-md rounded-sm border border-gray-300 bg-white p-8">
             <div class="mb-8 text-center">
                 <h1 class="text-xl font-semibold">WebGIS Censimento</h1>
                 <p class="text-sm text-gray-500">Gestione del patrimonio verde</p>

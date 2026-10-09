@@ -4,18 +4,60 @@ WebGIS multi-tenant per la gestione del verde (censimento, catasto alberi/VTA, l
 Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-MODEL.md`,
 `docs/OFFLINE-SYNC.md`, `docs/ZEBRA-INTEGRATION.md`.
 
-## Stile interfaccia (decisione committente 10/08/2026, agg. 11/08/2026)
+## Stile interfaccia (decisione committente 10/08/2026, agg. 11/08/2026 e 09/10/2026)
 
 - Stile **molto analitico, senza emoji**: nessuna emoji o icona pittografica in etichette,
-  pulsanti, titoli, messaggi o placeholder dell'interfaccia.
-- Stile **pulito e minimale**; carattere dell'interfaccia: **caratteri di sistema**
-  (`system-ui, -apple-system, 'Segoe UI', Roboto, …`, decisione committente 15/08/2026
-  che sostituisce Courier New), definiti in `resources/css/app.css`
-  (`--font-sans`/`--font-mono` + `.maplibregl-map`): niente webfont esterni.
-  Cifre tabellari (`font-variant-numeric: tabular-nums`) per tenere incolonnati i numeri.
+  pulsanti, titoli, messaggi o placeholder dell'interfaccia. Le sole icone ammesse sono
+  quelle **disegnate per il programma** (sotto), mai una libreria di icone.
+- **Veste "Lo strumento"** (bozza B, scelta dal committente il 09/10/2026 su tre bozze:
+  "Possiamo rifare il sito in modo che non sembra fatto dall'intelligenza artificiale?
+  Dico solo dal punto di vista grafico", riferito al gestionale). Le bozze stanno
+  nell'artefatto Design https://claude.ai/artifact/9FK9Rbfuv6Ur4R3YyfETos (A "Il
+  registro", B "Lo strumento", C "Il sobrio", piu' com'era prima). Che cosa sembrava "AI":
+  carattere di sistema, carte arrotondate con l'ombra, pillole tonde per gli stati, il
+  verde di serie di Tailwind, "Cerca... Ctrl K", nessuna icona.
+  - **Caratteri: IBM Plex Sans** (testo e titoli, pesi 400/500/600 e corsivo 400) e
+    **IBM Plex Mono** (cartellini, codici, date, misure, classe `font-mono`), licenza
+    SIL OFL, sostituiscono i caratteri di sistema del 15/08/2026. Arrivano dai pacchetti
+    npm `@fontsource/ibm-plex-sans` e `@fontsource/ibm-plex-mono` (solo i sottoinsiemi
+    latini, importati in `resources/css/app.css`): Vite li copia in `public/build` e li
+    serve **dal nostro dominio**, nessuna richiesta a server esterni. `font-bold` vale 600
+    (`--font-weight-bold`): il 700 non si carica e non si finge. Cifre tabellari.
+  - **Colori e angoli in un posto solo**: `app.css` ridefinisce i gettoni di Tailwind
+    (`--color-gray-*` grigio freddo, fondo #eceeeb, bordi #c6cdc8, testo #141a17, menu
+    #1d2b26; `--color-green-*` con il verde tecnico #2d5c46 al posto 700; ocra #b8862b
+    nell'ambra, rosso #b3261e, azzurro grigio #3d6a8a; `--radius-*` tutti a 2 px;
+    `--shadow-*` ridotte a un bordo). Le classi delle pagine restano `bg-green-700`,
+    `rounded-lg`, `text-gray-500`...: cambia che cosa valgono, cosi' tutte le pagine,
+    nuove e di prima, hanno la stessa veste, e per tornare indietro basta quel blocco.
+    Nessuna scelta per utente (a differenza dell'interfaccia nuova/precedente): la veste
+    grafica precedente e' il commit `a1aec09`.
+  - **Targhette al posto delle pillole**: stati e tipi sono targhette squadrate con il
+    bordo del loro colore, in maiuscolo a spaziatura fissa (`CHIP` e `TARGA_TIPO` in
+    `resources/js/nuovo/stile.js`); nelle pagine di prima le pillole con riempimento
+    orizzontale sono diventate squadrate (`rounded-sm`), i pallini restano tondi.
+    I titoli delle carte sono in maiuscoletto spaziato (`TITOLO_CARTA`), i pulsanti hanno
+    il bordo (primario verde pieno, secondario bianco con il bordo scuro).
+  - **Menu scuro** (`AppLayout.vue`): ardesia #1d2b26, voce attiva con la riga ocra a
+    sinistra, campo "Cerca nel programma" nel menu (Ctrl K resta nel `title`), "App di
+    campo" con il bordo, in fondo utente e uscita. Vale per le due interfacce.
+  - **Icone**: ventiquattro simboli disegnati per il programma piu' qualche aggiunta
+    (tratto 1,5 px, spigoli vivi, griglia 20) in `resources/js/nuovo/icone.js`, montati
+    da `Components/Nuovo/Icona.vue` (`<Icona nome="oggi" />`, `aria-hidden`: il testo
+    accanto dice tutto). Stanno nel menu e sui pulsanti di testa (Nuovo, Stampa, Altro,
+    Valuta VTA, Modifica, Esporta...). Una icona nuova si aggiunge li', non si prende da
+    una libreria.
+  - L'app di campo e l'area riservata del Comune prendono caratteri e colori dallo stesso
+    foglio di stile; il portale pubblico e il sito aziendale hanno il loro (Inter).
+  - Collaudo in `scratchpad/verifica-veste/verifica.mjs` della sessione: schermate a
+    390/768/1024/1440, caratteri serviti dal nostro dominio, niente fuori dallo schermo,
+    bersagli da 44 px sul telefono. Le schermate del **depliant** (`docs/depliant`) sono
+    ancora della veste precedente: si rifanno con `schermate.mjs` quando il committente
+    vuole aggiornarlo.
 - Le **stampe PDF** restano su **DejaVu Sans Mono** (font incorporato in dompdf): non
   seguono il foglio di stile dell'interfaccia.
-- Ammessi solo simboli tipografici funzionali: frecce di navigazione (← →), "✕" per chiudere.
+- Ammessi solo simboli tipografici funzionali: frecce di navigazione (← →), "✕" per chiudere
+  (o l'icona `chiudi`).
 - Preferire testo sobrio, dati in evidenza, tabelle dense; l'informazione prevale sulla decorazione.
 - Lingua dell'interfaccia e dei messaggi: italiano.
 - **Lista di controllo UI/UX** (dal 16/09/2026, richiesta del committente): in
@@ -292,8 +334,9 @@ Riferimenti: `PROPOSTA-ARCHITETTURA.md` (approvata 10/08/2026), `docs/GIS-DATA-M
   censimento o i lavori (nella precedente Oggi resta il cruscotto dei lavori e si atterra
   sulla mappa). L'operatore di campo atterra sempre sull'app di campo.
 - Le classi ricorrenti della veste nuova stanno in `resources/js/nuovo/stile.js` (pulsanti,
-  etichette di stato, carte): bersagli da 44px sul telefono, 36-38px con il mouse, fuoco
-  visibile. Collegamenti che aprono un modulo: `/lavori?nuovo=1` (nuovo ordine),
+  targhette di stato e di tipo, carte, titoli delle carte): bersagli da 44px sul telefono,
+  36-38px con il mouse, fuoco visibile. Dal 09/10/2026 seguono la veste "Lo strumento"
+  (sezione "Stile interfaccia"). Collegamenti che aprono un modulo: `/lavori?nuovo=1` (nuovo ordine),
   `/segnalazioni?nuova=1` (nuova segnalazione), `/lavori?ordine=CODICE`,
   `/censimento/{id}?vta=1`.
 - **Stato della veste nuova (26/09/2026)**: gli otto blocchi della scaletta sono fatti e

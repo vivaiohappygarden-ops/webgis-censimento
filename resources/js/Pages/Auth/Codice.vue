@@ -27,8 +27,8 @@ function cambiaModo() {
 <template>
     <Head title="Verifica in due passaggi" />
 
-    <div class="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 to-gray-100 p-4">
-        <div class="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
+    <div class="flex min-h-screen items-center justify-center bg-gray-100 p-4">
+        <div class="w-full max-w-md rounded-sm border border-gray-300 bg-white p-8">
             <div class="mb-6 text-center">
                 <h1 class="text-xl font-semibold">Verifica in due passaggi</h1>
                 <p class="mt-1 text-sm text-gray-500">Accesso di <span class="font-medium text-gray-700">{{ props.email }}</span></p>

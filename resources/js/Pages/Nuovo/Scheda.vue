@@ -5,6 +5,7 @@ import * as maplibregl from 'maplibre-gl';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
+import Icona from '@/Components/Nuovo/Icona.vue';
 import AssetEditPanel from '@/Components/AssetEditPanel.vue';
 import GestionalePanel from '@/Components/GestionalePanel.vue';
 import PlantingSitePanel from '@/Components/PlantingSitePanel.vue';
@@ -536,7 +537,7 @@ onBeforeUnmount(() => map?.remove());
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div class="min-w-0">
                         <div :class="ETICHETTA">{{ asset.census_code ? 'Cartellino' : asset.object_type?.code }}</div>
-                        <h1 class="text-2xl font-bold text-gray-900" data-test="scheda-titolo">{{ titolo }}</h1>
+                        <h1 class="text-3xl text-gray-900" :class="asset.census_code ? 'font-mono font-medium tracking-normal' : 'font-semibold'" data-test="scheda-titolo">{{ titolo }}</h1>
                         <div class="mt-0.5 text-base text-gray-900">
                             <template v-if="albero">
                                 <i v-if="albero.species">{{ albero.species }}</i><span v-else class="text-amber-800">specie da indicare</span>
@@ -549,14 +550,14 @@ onBeforeUnmount(() => map?.remove());
                             <span v-if="statoVta" :class="CHIP[statoVta.tono]" data-test="scheda-vta">{{ statoVta.testo }}</span>
                             <span v-if="asset.public_hidden" :class="CHIP.neutra">nascosto dal portale</span>
                             <span v-if="asset.public_token" :class="CHIP.info">pagina pubblica con QR</span>
-                            <span class="text-gray-500">v{{ asset.version }} · aggiornata il {{ formatData(asset.updated_at) }}</span>
+                            <span class="text-gray-500"><span class="font-mono">v{{ asset.version }}</span> · aggiornata il <span class="font-mono">{{ formatData(asset.updated_at) }}</span></span>
                         </div>
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <Link v-if="can('works.manage') && ! inArchivio(asset.status)" :href="`/lavori?nuovo=1&elementi=${asset.id}`" :class="BOTTONE">Nuovo lavoro</Link>
-                        <button v-if="canUpdate && albero" type="button" :class="BOTTONE_SECONDARIO" data-test="scheda-valuta" @click="valutaVta">Valuta VTA</button>
+                        <Link v-if="can('works.manage') && ! inArchivio(asset.status)" :href="`/lavori?nuovo=1&elementi=${asset.id}`" :class="BOTTONE"><Icona nome="nuovo" :size="16" />Nuovo lavoro</Link>
+                        <button v-if="canUpdate && albero" type="button" :class="BOTTONE_SECONDARIO" data-test="scheda-valuta" @click="valutaVta"><Icona nome="vta" :size="16" />Valuta VTA</button>
                         <details class="relative">
-                            <summary :class="BOTTONE_SECONDARIO" class="cursor-pointer list-none">Stampa</summary>
+                            <summary :class="BOTTONE_SECONDARIO" class="cursor-pointer list-none"><Icona nome="stampa" :size="16" />Stampa</summary>
                             <div :class="CARTA" class="absolute right-0 z-20 mt-1 w-72 p-3 text-sm shadow-lg" data-test="menu-stampa">
                                 <div :class="ETICHETTA">Scheda in PDF</div>
                                 <label v-for="(nome, chiave) in SEZIONI_STAMPA" :key="chiave" class="mt-1 flex min-h-9 items-center gap-2 text-[13px]">
@@ -571,7 +572,7 @@ onBeforeUnmount(() => map?.remove());
                             </div>
                         </details>
                         <details class="relative">
-                            <summary :class="BOTTONE_SECONDARIO" class="cursor-pointer list-none">Altro</summary>
+                            <summary :class="BOTTONE_SECONDARIO" class="cursor-pointer list-none"><Icona nome="altro" :size="16" />Altro</summary>
                             <div :class="CARTA" class="absolute right-0 z-20 mt-1 w-80 p-2 text-sm shadow-lg" data-test="menu-altro">
                                 <a v-if="streetView" :href="streetView" target="_blank" rel="noopener" class="flex min-h-11 items-center rounded-lg px-3 hover:bg-gray-50 md:min-h-9">Street View sul punto</a>
                                 <a v-if="naviga" :href="naviga" target="_blank" rel="noopener" class="flex min-h-11 items-center rounded-lg px-3 hover:bg-gray-50 md:min-h-9">Naviga fino all'elemento</a>
@@ -600,17 +601,17 @@ onBeforeUnmount(() => map?.remove());
                         <!-- Misure -->
                         <section :class="CARTA" class="p-4" data-test="sezione-misure">
                             <div class="flex flex-wrap items-center justify-between gap-2">
-                                <h2 class="text-base font-bold text-gray-900">{{ albero ? 'Misure' : 'Misura e geometria' }}</h2>
-                                <button v-if="canUpdate && albero && ! modifica.misure" type="button" :class="BOTTONE_PICCOLO" data-test="modifica-misure" @click="modifica.misure = true">Modifica</button>
+                                <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">{{ albero ? 'Misure' : 'Misura e geometria' }}</h2>
+                                <button v-if="canUpdate && albero && ! modifica.misure" type="button" :class="BOTTONE_PICCOLO" data-test="modifica-misure" @click="modifica.misure = true"><Icona nome="modifica" :size="15" />Modifica</button>
                             </div>
                             <template v-if="albero">
                                 <ModuloAlbero v-if="modifica.misure" :key="`misure-${asset.version}`" :asset="asset" sezione="misure" class="mt-3" @saved="onSaved" @close="modifica.misure = false" />
                                 <dl v-else class="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
-                                    <div><dt class="text-xs text-gray-500">Altezza</dt><dd class="text-lg font-bold text-gray-900">{{ misura(albero.height_m, 'm') }}</dd></div>
-                                    <div><dt class="text-xs text-gray-500">Diametro fusto</dt><dd class="text-lg font-bold text-gray-900">{{ misura(albero.dbh_cm, 'cm', 0) }}</dd></div>
-                                    <div><dt class="text-xs text-gray-500">Chioma</dt><dd class="text-lg font-bold text-gray-900">{{ misura(albero.crown_diameter_m, 'm') }}</dd></div>
-                                    <div><dt class="text-xs text-gray-500">Età stimata</dt><dd class="text-lg font-bold text-gray-900">{{ albero.age_years_est ? `${albero.age_qualifier === 'stimata' ? '~' : ''}${albero.age_years_est} anni` : '—' }}</dd></div>
-                                    <div><dt class="text-xs text-gray-500">Stato vegetativo</dt><dd class="text-lg font-bold text-gray-900">{{ voce('stato_vegetativo', albero.vegetative_state) }}</dd></div>
+                                    <div><dt class="text-xs text-gray-500">Altezza</dt><dd class="font-mono text-xl font-medium text-gray-900">{{ misura(albero.height_m, 'm') }}</dd></div>
+                                    <div><dt class="text-xs text-gray-500">Diametro fusto</dt><dd class="font-mono text-xl font-medium text-gray-900">{{ misura(albero.dbh_cm, 'cm', 0) }}</dd></div>
+                                    <div><dt class="text-xs text-gray-500">Chioma</dt><dd class="font-mono text-xl font-medium text-gray-900">{{ misura(albero.crown_diameter_m, 'm') }}</dd></div>
+                                    <div><dt class="text-xs text-gray-500">Età stimata</dt><dd class="font-mono text-xl font-medium text-gray-900">{{ albero.age_years_est ? `${albero.age_qualifier === 'stimata' ? '~' : ''}${albero.age_years_est} anni` : '—' }}</dd></div>
+                                    <div><dt class="text-xs text-gray-500">Stato vegetativo</dt><dd class="text-xl font-semibold text-gray-900">{{ voce('stato_vegetativo', albero.vegetative_state) }}</dd></div>
                                 </dl>
                                 <p v-if="! modifica.misure" class="mt-3 text-[13px] text-gray-500">
                                     Circonferenza {{ misura(albero.trunk_circumference_cm, 'cm', 0) }} · {{ albero.trunk_count ?? 1 }} {{ plurale(albero.trunk_count ?? 1, 'fusto', 'fusti') }} · inserzione chioma {{ misura(albero.crown_insertion_m, 'm') }}
@@ -625,18 +626,18 @@ onBeforeUnmount(() => map?.remove());
                                 </div>
                             </template>
                             <dl v-else class="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-                                <div><dt class="text-xs text-gray-500">Misura</dt><dd class="text-lg font-bold text-gray-900">{{ misuraGeometrica ?? '—' }}</dd></div>
-                                <div><dt class="text-xs text-gray-500">Geometria</dt><dd class="text-lg font-bold text-gray-900">{{ asset.geom_geojson?.type ?? '—' }}</dd></div>
-                                <div><dt class="text-xs text-gray-500">Tipo</dt><dd class="text-lg font-bold text-gray-900">{{ asset.object_type?.code }}</dd></div>
+                                <div><dt class="text-xs text-gray-500">Misura</dt><dd class="font-mono text-xl font-medium text-gray-900">{{ misuraGeometrica ?? '—' }}</dd></div>
+                                <div><dt class="text-xs text-gray-500">Geometria</dt><dd class="text-xl font-semibold text-gray-900">{{ asset.geom_geojson?.type ?? '—' }}</dd></div>
+                                <div><dt class="text-xs text-gray-500">Tipo</dt><dd class="font-mono text-xl font-medium text-gray-900">{{ asset.object_type?.code }}</dd></div>
                             </dl>
                         </section>
 
                         <!-- Identita' e posizione -->
                         <section :class="CARTA" class="p-4" data-test="sezione-identita">
                             <div class="flex flex-wrap items-center justify-between gap-2">
-                                <h2 class="text-base font-bold text-gray-900">Identità e posizione</h2>
+                                <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Identità e posizione</h2>
                                 <div v-if="canUpdate" class="flex flex-wrap gap-2">
-                                    <button v-if="albero && ! modifica.identita" type="button" :class="BOTTONE_PICCOLO" data-test="modifica-identita" @click="modifica.identita = true">Modifica</button>
+                                    <button v-if="albero && ! modifica.identita" type="button" :class="BOTTONE_PICCOLO" data-test="modifica-identita" @click="modifica.identita = true"><Icona nome="modifica" :size="15" />Modifica</button>
                                     <button v-if="! modifica.scheda" type="button" :class="BOTTONE_PICCOLO" data-test="modifica-scheda" @click="modifica.scheda = true">{{ albero ? 'Cartellino, stato, area e note' : 'Modifica' }}</button>
                                 </div>
                             </div>
@@ -678,7 +679,7 @@ onBeforeUnmount(() => map?.remove());
                                         <span class="font-semibold text-gray-900">{{ v.code }}</span><span class="text-gray-600">{{ v.name }}</span>
                                         <span :class="CHIP.neutra">{{ v.source === 'spatial' ? 'da perimetro' : 'a mano' }}</span>
                                         <span v-if="! v.is_public" :class="CHIP.attenzione">non pubblico</span>
-                                        <button v-if="canUpdate && v.source === 'manual'" type="button" class="min-h-9 text-[13px] text-red-700 underline-offset-2 hover:underline" @click="scollegaVincolo(v.id)">scollega</button>
+                                        <button v-if="canUpdate && v.source === 'manual'" type="button" class="inline-flex min-h-11 items-center text-[13px] text-red-700 underline-offset-2 hover:underline md:min-h-9" @click="scollegaVincolo(v.id)">scollega</button>
                                     </li>
                                 </ul>
                                 <p v-else class="mt-1 text-sm text-gray-500">Nessun vincolo collegato.</p>
@@ -695,7 +696,7 @@ onBeforeUnmount(() => map?.remove());
                         <!-- Stabilita' (VTA) -->
                         <section v-if="albero" id="sezione-vta" :class="CARTA" class="p-4" data-test="sezione-vta">
                             <div class="flex flex-wrap items-center justify-between gap-2">
-                                <h2 class="text-base font-bold text-gray-900">Stabilità (VTA)</h2>
+                                <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Stabilità (VTA)</h2>
                                 <button type="button" :class="BOTTONE_PICCOLO" :aria-expanded="pannelli.vta" data-test="apri-valutazioni" @click="pannelli.vta = ! pannelli.vta">
                                     {{ pannelli.vta ? 'Chiudi le valutazioni' : (canUpdate ? 'Valutazioni e nuova valutazione' : 'Tutte le valutazioni') }}
                                 </button>
@@ -749,7 +750,7 @@ onBeforeUnmount(() => map?.remove());
                         <!-- Lavori e segnalazioni -->
                         <section :class="CARTA" data-test="sezione-lavori">
                             <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-                                <h2 class="text-base font-bold text-gray-900">Lavori e segnalazioni</h2>
+                                <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Lavori e segnalazioni</h2>
                                 <Link v-if="can('works.view')" href="/lavori" :class="BOTTONE_PICCOLO">Vedi tutti i lavori</Link>
                             </div>
                             <div v-if="lavoriESegnalazioni.length" class="overflow-x-auto border-t border-gray-100">
@@ -777,7 +778,7 @@ onBeforeUnmount(() => map?.remove());
 
                         <!-- Pannelli aperti da "Altro" -->
                         <section v-if="pannelli.storia" :class="CARTA" class="p-4" data-test="storia-modifiche">
-                            <h2 class="text-base font-bold text-gray-900">Storia delle modifiche</h2>
+                            <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Storia delle modifiche</h2>
                             <p v-if="storia.caricamento" class="mt-2 text-sm text-gray-500">Carico la storia…</p>
                             <p v-else-if="storia.errore" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ storia.errore }}</p>
                             <p v-else-if="! storia.righe?.length" class="mt-2 text-sm text-gray-500">Nessuna modifica registrata: la scheda è ancora come è stata creata.</p>
@@ -805,7 +806,7 @@ onBeforeUnmount(() => map?.remove());
                         <GestionalePanel v-if="pannelli.gestionale && funzioni.gestionale_giardini" :asset="asset" />
 
                         <section v-if="pannelli.fineVita && (canUpdate || canDelete)" :class="CARTA" class="p-4" data-test="sezione-fine-vita">
-                            <h2 class="text-base font-bold text-gray-900">Abbattimento ed eliminazione</h2>
+                            <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Abbattimento ed eliminazione</h2>
                             <template v-if="canUpdate">
                                 <div v-if="asset.status === 'removed'" class="mt-2 flex flex-wrap items-center gap-3">
                                     <p class="text-sm text-gray-700">L'abbattimento è registrato<template v-if="removedOn"> con data {{ removedOn }}</template>.</p>
@@ -864,17 +865,17 @@ onBeforeUnmount(() => map?.remove());
                         <section :class="CARTA" class="overflow-hidden" data-test="sezione-mappa">
                             <div ref="mapEl" class="h-56 w-full bg-[#e8ede9]" />
                             <div class="flex flex-wrap gap-x-3 gap-y-1 px-4 py-2.5 text-[13px]">
-                                <Link href="/mappa" class="min-h-9 py-2 font-semibold text-green-800 underline-offset-2 hover:underline">Apri sulla mappa</Link>
-                                <a v-if="streetView" :href="streetView" target="_blank" rel="noopener" class="min-h-9 py-2 font-semibold text-green-800 underline-offset-2 hover:underline">Street View</a>
-                                <a v-if="naviga" :href="naviga" target="_blank" rel="noopener" class="min-h-9 py-2 font-semibold text-green-800 underline-offset-2 hover:underline">Naviga</a>
+                                <Link href="/mappa" class="inline-flex min-h-11 items-center py-2 font-semibold text-green-800 underline-offset-2 hover:underline md:min-h-9">Apri sulla mappa</Link>
+                                <a v-if="streetView" :href="streetView" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center py-2 font-semibold text-green-800 underline-offset-2 hover:underline md:min-h-9">Street View</a>
+                                <a v-if="naviga" :href="naviga" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center py-2 font-semibold text-green-800 underline-offset-2 hover:underline md:min-h-9">Naviga</a>
                             </div>
                         </section>
 
                         <section :class="CARTA" class="p-4" data-test="sezione-cronologia">
-                            <h2 class="text-base font-bold text-gray-900">Cronologia</h2>
+                            <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Cronologia</h2>
                             <ul v-if="cronologia?.eventi?.length" class="mt-1 divide-y divide-gray-100">
                                 <li v-for="(e, i) in cronologia.eventi" :key="i" class="flex gap-3 py-2">
-                                    <span class="w-20 shrink-0 pt-0.5 text-xs text-gray-500">{{ formatData(e.data) }}</span>
+                                    <span class="w-20 shrink-0 pt-0.5 font-mono text-xs text-gray-500">{{ formatData(e.data) }}</span>
                                     <div class="min-w-0 flex-1">
                                         <div class="text-sm font-semibold text-gray-900">
                                             <Link v-if="e.href && e.tipo !== 'valutazione'" :href="e.href" class="underline-offset-2 hover:underline">{{ e.titolo }}</Link>

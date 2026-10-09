@@ -332,7 +332,7 @@ onBeforeUnmount(() => map?.remove());
         <div class="mx-auto flex max-w-[1640px] flex-col gap-4 p-4 md:p-6 lg:px-7">
             <nav class="text-[13px] text-gray-500" aria-label="Percorso">
                 <Link href="/lavori" class="hover:underline">Lavori</Link> › <Link href="/lavori" class="hover:underline">Ordini</Link>
-                <template v-if="ordine"> › <span class="text-gray-900">{{ ordine.code }}</span></template>
+                <template v-if="ordine"> › <span class="font-mono text-gray-900">{{ ordine.code }}</span></template>
             </nav>
 
             <AvvisoErrore :messaggio="avviso" :in-corso="riprovaInCorso" @riprova="riprova" />
@@ -344,7 +344,7 @@ onBeforeUnmount(() => map?.remove());
             <template v-if="ordine">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div class="min-w-0">
-                        <div :class="ETICHETTA">Ordine di lavoro {{ ordine.code }}</div>
+                        <div :class="ETICHETTA">Ordine di lavoro <span class="font-mono">{{ ordine.code }}</span></div>
                         <h1 class="text-2xl font-bold text-gray-900" data-test="ordine-titolo">{{ ordine.title }}</h1>
                         <div class="mt-2 flex flex-wrap items-center gap-2 text-[13px]">
                             <span :class="CHIP[TONO_STATO[ordine.status] ?? 'neutra']" data-test="ordine-stato">{{ WORK_STATUS_LABELS[ordine.status] ?? ordine.status }}</span>
@@ -381,7 +381,7 @@ onBeforeUnmount(() => map?.remove());
                         <!-- Che cosa si fa -->
                         <section :class="CARTA" class="p-4" data-test="sezione-cosa">
                             <div class="flex flex-wrap items-center justify-between gap-2">
-                                <h2 class="text-base font-bold text-gray-900">Che cosa si fa</h2>
+                                <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Che cosa si fa</h2>
                                 <button v-if="canManage && ! chiuso && ! modifica.aperta" type="button" :class="BOTTONE_PICCOLO" data-test="ordine-modifica" @click="apriModifica">Modifica</button>
                             </div>
                             <form v-if="modifica.aperta" class="mt-3 rounded-lg border border-green-200 bg-green-50/40 p-3" data-test="ordine-modulo" @submit.prevent="salvaModifica">
@@ -429,7 +429,7 @@ onBeforeUnmount(() => map?.remove());
                         <!-- Elementi -->
                         <section :class="CARTA" data-test="sezione-elementi">
                             <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-                                <h2 class="text-base font-bold text-gray-900">Elementi ({{ ordine.assets.length }})<span v-if="ordine.assets.length" class="ml-2 text-sm font-normal text-gray-500">{{ fatti }} {{ plurale(fatti, 'fatto', 'fatti') }} su {{ ordine.assets.length }}</span></h2>
+                                <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Elementi ({{ ordine.assets.length }})<span v-if="ordine.assets.length" class="ml-2 text-sm font-normal text-gray-500">{{ fatti }} {{ plurale(fatti, 'fatto', 'fatti') }} su {{ ordine.assets.length }}</span></h2>
                                 <div v-if="canManage && ! chiuso" class="relative w-full sm:w-80">
                                     <input v-model="ricerca.q" placeholder="Aggiungi: cerca per cartellino o specie…" class="w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" data-test="ordine-cerca-elemento" @input="cercaElementi">
                                     <ul v-if="ricerca.risultati.length" class="absolute left-0 right-0 z-10 mt-1 divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white shadow-lg">
@@ -462,8 +462,8 @@ onBeforeUnmount(() => map?.remove());
                                                 <div v-if="canManage && ! chiuso && righeQuantita[r.id]" class="flex flex-wrap items-center gap-1.5">
                                                     <input v-model.number="righeQuantita[r.id].quantity" type="number" step="0.01" min="0" class="w-24 rounded-lg border border-gray-300 px-2 py-1.5 text-right text-sm" aria-label="Quantità prevista" data-test="ordine-riga-quantita" @input="righeQuantita[r.id].dirty = true">
                                                     <input v-model="righeQuantita[r.id].unit" maxlength="20" placeholder="unità" class="w-20 rounded-lg border border-gray-300 px-2 py-1.5 text-sm" aria-label="Unità" @input="righeQuantita[r.id].dirty = true">
-                                                    <button v-if="righeQuantita[r.id].dirty" type="button" class="min-h-9 text-[13px] font-semibold text-green-800 underline-offset-2 hover:underline" :disabled="righeQuantita[r.id].busy" data-test="ordine-riga-salva" @click="salvaQuantita(r)">Salva</button>
-                                                    <button v-if="mostraRiprendi(r)" type="button" class="min-h-9 text-[13px] text-gray-600 underline-offset-2 hover:underline" @click="riprendiDallaMappa(r)">Riprendi dalla mappa ({{ fmtQta(r.quantita_geometrica) }} {{ r.unita_geometrica ?? '' }})</button>
+                                                    <button v-if="righeQuantita[r.id].dirty" type="button" class="inline-flex min-h-11 items-center text-[13px] font-semibold text-green-800 underline-offset-2 hover:underline md:min-h-9" :disabled="righeQuantita[r.id].busy" data-test="ordine-riga-salva" @click="salvaQuantita(r)">Salva</button>
+                                                    <button v-if="mostraRiprendi(r)" type="button" class="inline-flex min-h-11 items-center text-[13px] text-gray-600 underline-offset-2 hover:underline md:min-h-9" @click="riprendiDallaMappa(r)">Riprendi dalla mappa ({{ fmtQta(r.quantita_geometrica) }} {{ r.unita_geometrica ?? '' }})</button>
                                                 </div>
                                                 <span v-else class="text-gray-700">{{ r.planned_quantity != null ? `${fmtQta(r.planned_quantity)} ${r.unit ?? ''}` : '—' }}</span>
                                             </td>
@@ -472,7 +472,7 @@ onBeforeUnmount(() => map?.remove());
                                             <td class="px-3 py-2 text-right text-gray-700">{{ perElemento[r.asset_id]?.foto ?? 0 }}</td>
                                             <td v-if="canManage && ! chiuso" class="px-3 py-2 text-right">
                                                 <div class="flex flex-col items-end gap-1">
-                                                    <button type="button" class="min-h-9 text-[13px] text-red-700 underline-offset-2 hover:underline" @click="togliElemento(r)">Togli</button>
+                                                    <button type="button" class="inline-flex min-h-11 items-center text-[13px] text-red-700 underline-offset-2 hover:underline md:min-h-9" @click="togliElemento(r)">Togli</button>
                                                     <select v-if="workTypes.length" class="max-w-[11rem] rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs" aria-label="Aggiungi un'altra lavorazione su questo elemento" data-test="ordine-riga-altra" @change="aggiungiLavorazione(r, $event)">
                                                         <option value="">+ altra lavorazione…</option>
                                                         <option v-for="w in workTypes" :key="w.id" :value="w.id">{{ w.name }}</option>
@@ -490,7 +490,7 @@ onBeforeUnmount(() => map?.remove());
                         <!-- Consuntivo -->
                         <section :class="CARTA" class="p-4" data-test="sezione-consuntivo">
                             <div class="flex flex-wrap items-center justify-between gap-2">
-                                <h2 class="text-base font-bold text-gray-900">Consuntivo</h2>
+                                <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Consuntivo</h2>
                                 <label v-if="canManage" class="flex items-center gap-2 text-[13px] text-gray-600">Listino applicato
                                     <select :value="ordine.price_list_id ?? ''" class="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm disabled:bg-gray-50" :disabled="azione.inCorso || chiuso" data-test="ordine-listino" @change="setListino($event.target.value)">
                                         <option value="">Nessuno</option><option v-for="l in priceLists" :key="l.id" :value="l.id">{{ l.code }} — {{ l.name }}</option>
@@ -525,7 +525,7 @@ onBeforeUnmount(() => map?.remove());
                         <!-- Controlli qualita' -->
                         <section :class="CARTA" class="p-4" data-test="sezione-controlli">
                             <div class="flex flex-wrap items-center justify-between gap-2">
-                                <h2 class="text-base font-bold text-gray-900">Controlli qualità ({{ (ordine.checks ?? []).length }})</h2>
+                                <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Controlli qualità ({{ (ordine.checks ?? []).length }})</h2>
                                 <button v-if="canManage && ['in_progress', 'suspended', 'completed'].includes(ordine.status)" type="button" :class="BOTTONE_PICCOLO" data-test="ordine-registra-controllo" @click="apriControllo">Registra controllo</button>
                             </div>
                             <ul v-if="(ordine.checks ?? []).length" class="mt-2 divide-y divide-gray-100">
@@ -551,12 +551,12 @@ onBeforeUnmount(() => map?.remove());
                             <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-[13px] text-gray-600">
                                 <span><span class="inline-block h-2.5 w-2.5 rounded-full bg-green-700"></span> fatto</span>
                                 <span><span class="inline-block h-2.5 w-2.5 rounded-full bg-amber-600"></span> da fare</span>
-                                <Link href="/mappa" class="ml-auto min-h-9 py-2 font-semibold text-green-800 underline-offset-2 hover:underline">Apri la mappa</Link>
+                                <Link href="/mappa" class="ml-auto inline-flex min-h-11 items-center py-2 font-semibold text-green-800 underline-offset-2 hover:underline md:min-h-9">Apri la mappa</Link>
                             </div>
                         </section>
 
                         <section :class="CARTA" class="p-4" data-test="sezione-documenti">
-                            <h2 class="text-base font-bold text-gray-900">Documenti collegati</h2>
+                            <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Documenti collegati</h2>
                             <ul v-if="documenti.length" class="mt-1 divide-y divide-gray-100">
                                 <li v-for="(d, i) in documenti" :key="i" class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
                                     <div class="min-w-0 flex-1 basis-40"><div class="font-semibold text-gray-900">{{ d.titolo }}</div><div class="text-[13px] text-gray-500">{{ [d.stato, d.data ? formatData(d.data) : null, d.importo != null ? fmtEuro(d.importo) : null].filter(Boolean).join(' · ') }}</div></div>
@@ -567,7 +567,7 @@ onBeforeUnmount(() => map?.remove());
                         </section>
 
                         <section :class="CARTA" class="p-4" data-test="sezione-cronologia-ordine">
-                            <h2 class="text-base font-bold text-gray-900">Cronologia</h2>
+                            <h2 class="text-[15px] font-semibold uppercase tracking-[0.05em] text-gray-900">Cronologia</h2>
                             <ul v-if="cronologia?.eventi?.length" class="mt-1 divide-y divide-gray-100">
                                 <li v-for="(e, i) in cronologia.eventi" :key="i" class="flex gap-3 py-2">
                                     <span class="w-14 shrink-0 pt-0.5 text-xs text-gray-500">{{ formatData(e.data, false) }}</span>

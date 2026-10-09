@@ -467,7 +467,7 @@ onBeforeUnmount(() => map?.remove());
                                     @click="editing = true"
                                 >Modifica</button>
                                 <span
-                                    class="rounded-full px-3 py-1 text-xs font-medium"
+                                    class="rounded-sm px-3 py-1 text-xs font-medium"
                                     data-test="asset-stato"
                                     :class="{
                                         'bg-green-100 text-green-800': asset.status === 'active',
@@ -598,7 +598,7 @@ onBeforeUnmount(() => map?.remove());
                                 <span
                                     v-for="tag in asset.tags"
                                     :key="tag.id"
-                                    class="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800"
+                                    class="rounded-sm bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800"
                                 >
                                     {{ tag.tag_type.toUpperCase() }} · {{ tag.uid }}
                                 </span>
