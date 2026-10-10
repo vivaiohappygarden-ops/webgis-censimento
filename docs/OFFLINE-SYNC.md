@@ -185,6 +185,13 @@ Nel working set le geometrie viaggiano **semplificate** per contenere peso e mem
 
 ### 2.4 Strategia tile offline
 
+> **Realizzato il 10/10/2026 (variante):** gli elementi e le aree non passano da tile ma
+> dalla replica Dexie (GeoJSON costruito in pagina); lo sfondo di contesto e' un archivio
+> **PMTiles** del territorio dell'organizzazione ritagliato dal server dalle costruzioni
+> Protomaps (`php artisan sfondo:prepara`), scaricato intero sul telefono e letto da MapLibre
+> dal Blob locale. Vedi `CLAUDE.md`, sezione "Sfondo della mappa senza rete".
+
+
 - **Formato**: vector tiles MVT dagli stessi endpoint `ST_AsMVT` usati online (stile MapLibre
   identico online/offline) + un **basemap vettoriale leggero** di contesto (strade/edifici/idro
   da estratto OpenMapTiles del comune) servito dal nostro server per non dipendere da terze

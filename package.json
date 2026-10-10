@@ -19,9 +19,11 @@
     },
     "dependencies": {
         "@inertiajs/vue3": "^3.6.1",
+        "@protomaps/basemaps": "^5.7.2",
         "axios": "^1.19.0",
         "dexie": "^4.4.4",
         "maplibre-gl": "^6.2.0",
+        "pmtiles": "^4.5.0",
         "vue": "^3.5.41"
     }
 }

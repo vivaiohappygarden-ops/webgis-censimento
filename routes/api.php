@@ -86,6 +86,9 @@ Route::prefix('v1')->group(function () {
         Route::get('sync/bootstrap', [\App\Http\Controllers\Api\V1\SyncController::class, 'bootstrap']);
         Route::get('sync/changes', [\App\Http\Controllers\Api\V1\SyncController::class, 'changes']);
         Route::post('sync/batch', [\App\Http\Controllers\Api\V1\SyncController::class, 'batch']);
+        // Lo sfondo della mappa per l'uso senza rete (dal 10/10/2026): stato e file a intervalli
+        Route::get('sfondo', [\App\Http\Controllers\Api\V1\SfondoController::class, 'stato']);
+        Route::get('sfondo/territorio.pmtiles', [\App\Http\Controllers\Api\V1\SfondoController::class, 'file']);
 
         Route::post('imports/geojson', [ImportController::class, 'geojson']);
         Route::post('imports/cam', [ImportController::class, 'cam']);

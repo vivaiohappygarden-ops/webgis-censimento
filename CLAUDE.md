@@ -966,6 +966,57 @@ attivo, come oggi un albero morto in piedi. Le **aree** del territorio hanno da 
   le toglie e conta gli elementi orfani); lo scarico porta anche l'elenco dei committenti a
   chi puo' aprire aree. Prove: `CampoAreeTest`, `tests/js/geometria.test.mjs`.
 
+## Sfondo della mappa senza rete nell'app di campo (dal 10/10/2026)
+
+- Segnalazione del committente: "quando si lavora senza connessione nell'app di campo, la
+  mappa non funziona". Gli elementi uscivano dalla copia locale, ma lo sfondo stradale
+  arrivava dai server di OpenStreetMap: senza rete restavano solo le tessere gia' viste
+  (cache del service worker, tetto 2000) e la mappa era grigia. Scaricare le tessere di
+  OpenStreetMap in blocco e' vietato dalle sue regole d'uso, quindi lo sfondo offline e'
+  **vettoriale e nostro**: il server ritaglia dalle costruzioni Protomaps (dati
+  OpenStreetMap, licenza ODbL, formato PMTiles) il territorio di ogni organizzazione e lo
+  serve ai telefoni.
+- **Il formato PMTiles e' scritto a mano in PHP** (`App\Services\Mappe\PmTiles`: `IdTessera`
+  numerazione di Hilbert, `Direttorio` varint, `Intestazione` 127 byte, `LettorePmTiles` con
+  i direttori foglia, `ScrittorePmTiles` con ripetizioni e foglie quando la radice supera i
+  16 KB, `Estrattore` che legge il pianeta a intervalli contigui, `SorgenteFile`/`SorgenteHttp`
+  con Range): nessun programma esterno sul server. Il metro e' la libreria ufficiale:
+  `tests/Fixtures/sfondo/pianeta-prova.pmtiles` e' un pianeta in miniatura attorno al Comune
+  Demo scritto dal pacchetto Python ufficiale (copione `genera-pianeta-prova.py` nello
+  scratchpad della sessione), e `tests/Fixtures/sfondo/estratto-php.pmtiles` e' un ritaglio
+  scritto dal PHP che la libreria JavaScript ufficiale rilegge in `tests/js/pmtiles.test.mjs`.
+- **Il servizio sta una volta sola in `App\Services\Mappe\SfondoOffline`**: il riquadro del
+  territorio (aree ed elementi dell'organizzazione con `sfondo.margine_km`), la sorgente
+  (l'ultima costruzione di `builds.json`, oppure `--sorgente=` un indirizzo https o un file sul
+  disco), l'estrazione in `storage/app/private/sfondi/{tenant}/territorio.pmtiles` con il
+  suo `territorio.json` (versione, byte, tessere, riquadro, impronta), `stato`, `eRecente`.
+  Comando `php artisan sfondo:prepara --tutte|--organizzazione=slug [--sorgente=] [--zoom-max=]
+  [--forza]`, in programma ogni notte (`routes/console.php`, 03:40): rifa' solo gli sfondi piu'
+  vecchi di `sfondo.giorni_validita` (30), salta chi non ha territorio. Regolazioni in
+  `config/sfondo.php` (zoom massimo 15: MapLibre ingrandisce da solo le tessere vettoriali
+  oltre; tetto di tessere 6000). Il server deve raggiungere `build.protomaps.com`: in questo
+  ambiente di lavoro il proxy lo blocca, quindi la prima estrazione vera si vede in produzione
+  (`storage/logs/sfondo.log`). Se non ci arriva nemmeno il server, si scarica il ritaglio a
+  mano con `pmtiles extract` e si passa il file con `--sorgente`.
+- **API** (`SfondoController`, gate `sync-campo`): `GET api/v1/sfondo` (stato, `disponibile`
+  false con il messaggio onesto se non e' pronto) e `GET api/v1/sfondo/territorio.pmtiles`
+  (`BinaryFileResponse`, risponde 206 agli intervalli Range, ETag con l'impronta).
+- **App di campo** (`resources/js/field/sfondo.js`, `stile-sfondo.js`, tabella Dexie `sfondo` v7):
+  dopo lo scarico dei dati di lavoro, al montaggio con la rete e al ritorno della rete
+  `aggiornaSfondo()` chiede lo stato al server e scarica il file intero (Blob in IndexedDB,
+  avanzamento in percentuale) quando manca o la versione e' cambiata; la scheda Sync ha la
+  carta "Sfondo della mappa senza rete" con lo stato e il pulsante. La mappa, se il Blob c'e',
+  nasce con lo stile Protomaps "light" in italiano (`@protomaps/basemaps`), sorgente
+  `pmtiles://sfondo-territorio` letta dal Blob tramite il protocollo della libreria `pmtiles`,
+  etichette con i **glifi di casa** (`/mappa/font`, DejaVu Sans al posto dei Noto; il service
+  worker li tiene in cache come gli asset; i livelli fatti solo di icone restano fuori perche'
+  non c'e' uno sprite); senza Blob resta OpenStreetMap, e senza rete la mappa dice che lo
+  sfondo manca. Prove: `SfondoOfflineTest`, `tests/js/stile-sfondo.test.mjs`,
+  `tests/js/pmtiles.test.mjs`; collaudo nel browser in `scratchpad/verifica-campo-offline/`
+  (prima `php artisan sfondo:prepara --organizzazione=demo --sorgente=tests/Fixtures/sfondo/pianeta-prova.pmtiles --forza`).
+- La mappa del gestionale resta su OpenStreetMap in linea: lo sfondo nostro serve al campo,
+  dove la rete manca; portarlo anche in ufficio e' un passo a parte.
+
 ## Sicurezza dell'accesso (dal 27/09/2026)
 
 - **Verifica in due passaggi** (TOTP, RFC 6238 su SHA1, sei cifre ogni 30 s): codici delle

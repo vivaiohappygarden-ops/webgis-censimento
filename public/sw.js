@@ -1,7 +1,7 @@
 /*
  * Service worker della PWA operatore (Fase 3, v1).
  * Strategia minima e prevedibile:
- *  - asset compilati (/build/*): cache-first, sono immutabili (nome con hash);
+ *  - asset compilati (/build/*) e glifi della mappa (/mappa/font/*): cache-first, immutabili;
  *  - navigazione su /operatore: network-first con ripiego sulla copia in cache,
  *    così l'app si apre anche senza rete;
  *  - tutto il resto (API incluse): solo rete — la coda offline vive in IndexedDB,
@@ -69,7 +69,10 @@ self.addEventListener('fetch', (event) => {
 
     if (url.origin !== self.location.origin) return;
 
-    if (url.pathname.startsWith('/build/') || url.pathname === '/manifest.webmanifest' || url.pathname.startsWith('/icons/')) {
+    // I glifi delle etichette della mappa (/mappa/font) sono immutabili come
+    // gli asset: in cache alla prima richiesta, cosi' le scritte dello sfondo
+    // escono anche senza rete
+    if (url.pathname.startsWith('/build/') || url.pathname === '/manifest.webmanifest' || url.pathname.startsWith('/icons/') || url.pathname.startsWith('/mappa/font/')) {
         event.respondWith((async () => {
             const cache = await caches.open(ASSET_CACHE);
             const cached = await cache.match(request);

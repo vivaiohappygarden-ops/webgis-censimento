@@ -7,6 +7,7 @@ import { openFieldDb } from '@/field/db';
 import { eDelGiorno, formattaDistanza, ordinaGiro, puntoDaGeoJson } from '@/field/giro';
 import { compressImage } from '@/field/photo';
 import { SyncManager } from '@/field/sync';
+import { montaSfondo, scaldaGlifi, scaricaSfondo, sfondoLocale, statoSfondoServer } from '@/field/sfondo';
 import { uuidv7 } from '@/field/uuidv7';
 
 const page = usePage();
@@ -47,6 +48,10 @@ const queueRows = ref([]);
 const logRows = ref([]);
 const busy = ref(false);
 const message = reactive({ text: '', ok: true });
+// Lo sfondo della mappa per l'uso senza rete: quello sul telefono, quello sul
+// server e lo scarico in corso (resources/js/field/sfondo.js)
+const sfondo = reactive({ locale: null, server: null, inCorso: false, avanzamento: 0, errore: '' });
+const mb = (n) => (Number(n || 0) / 1048576).toLocaleString('it-IT', { maximumFractionDigits: 1 });
 
 /** La scheda albero vuota: quello che non si misura resta vuoto, mai zero. */
 function alberoVuoto() {
@@ -633,7 +638,7 @@ const mapEl = ref(null);
 let map = null;
 let geoWatchId = null;
 let mapFitted = false;
-const mapState = reactive({ placing: false, drawing: false, located: false, clientId: '', areaId: '', disegnoPer: 'rilievo' });
+const mapState = reactive({ placing: false, drawing: false, located: false, clientId: '', areaId: '', disegnoPer: 'rilievo', conSfondo: false });
 
 // Durante il disegno il doppio tocco non deve far saltare l'inquadratura.
 // (Sta dopo la dichiarazione di mapState: un watch la legge subito, e prima
@@ -731,12 +736,17 @@ async function initOrRefreshMap() {
     }
     if (! mapEl.value) return;
 
+    // Con lo sfondo del territorio sul telefono la mappa lo legge da li', con
+    // la rete o senza; altrimenti resta lo sfondo di OpenStreetMap, che senza
+    // rete mostra solo le zone gia' viste
+    const sfondoSalvato = await sfondoLocale(db);
+    mapState.conSfondo = Boolean(sfondoSalvato?.blob);
     map = new maplibregl.Map({
         container: mapEl.value,
         zoom: 15,
         center: [9.19, 45.465],
         attributionControl: false,
-        style: {
+        style: mapState.conSfondo ? montaSfondo(sfondoSalvato.blob) : {
             version: 8,
             sources: {
                 // maxzoom: oltre il 19 lo sfondo non ha immagini e la
@@ -750,10 +760,12 @@ async function initOrRefreshMap() {
             ],
         },
     });
+    // Per il collaudo nel browser: la mappa si interroga dalla pagina
+    window.__wgMappaCampo = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }));
     map.addControl(new maplibregl.AttributionControl({
         compact: true,
-        customAttribution: '© OpenStreetMap contributors',
+        customAttribution: mapState.conSfondo ? '© OpenStreetMap contributors · Protomaps' : '© OpenStreetMap contributors',
     }));
 
     // 'style.load' e NON 'load': quest'ultimo attende anche le tile di sfondo,
@@ -889,6 +901,70 @@ const unsubscribe = sync.onChange((s) => Object.assign(state, s));
 function setMessage(text, ok = true) {
     message.text = text;
     message.ok = ok;
+}
+
+async function leggiSfondoLocale() {
+    const record = await sfondoLocale(db);
+    sfondo.locale = record
+        ? { versione: record.versione, byte: record.byte, scaricato_il: record.scaricato_il, generato_il: record.generato_il }
+        : null;
+
+    return record;
+}
+
+/**
+ * Scarica (o aggiorna) lo sfondo del territorio quando c'e' la rete: una
+ * volta, poi solo se il server ne ha uno piu' nuovo. Senza sfondo preparato
+ * sul server non si finge: la scheda Sync lo dice.
+ */
+let controlloSfondo = null;
+
+async function aggiornaSfondo(forza = false) {
+    // Un solo giro alla volta: lo scarico dei dati e il montaggio lo chiamano insieme
+    if (! state.online || controlloSfondo) return;
+    controlloSfondo = (async () => {
+        try {
+            sfondo.server = await statoSfondoServer();
+        } catch {
+            // Senza rete o senza permesso: si riprova al prossimo giro
+            return;
+        }
+        if (! sfondo.server?.disponibile) return;
+        const locale = await leggiSfondoLocale();
+        if (locale && locale.versione === sfondo.server.versione && ! forza) return;
+        await scaricaSfondoLocale();
+    })();
+    try {
+        await controlloSfondo;
+    } finally {
+        controlloSfondo = null;
+    }
+}
+
+async function scaricaSfondoLocale() {
+    sfondo.inCorso = true;
+    sfondo.errore = '';
+    sfondo.avanzamento = 0;
+    try {
+        await scaricaSfondo(db, sfondo.server, (letti, totale) => {
+            sfondo.avanzamento = totale ? Math.min(100, Math.round((letti / totale) * 100)) : 0;
+        });
+        await leggiSfondoLocale();
+        scaldaGlifi();
+        await sync.log('info', `Sfondo della mappa scaricato (${mb(sfondo.locale.byte)} MB): la mappa funziona anche senza rete.`);
+        logRows.value = await db.sync_log.orderBy('seq').reverse().limit(30).toArray();
+        // La mappa aperta rinasce con lo sfondo nuovo
+        if (map && tab.value === 'mappa') {
+            map.remove();
+            map = null;
+            mapFitted = false;
+            await initOrRefreshMap();
+        }
+    } catch (e) {
+        sfondo.errore = e?.message ?? 'Scarico dello sfondo non riuscito.';
+    } finally {
+        sfondo.inCorso = false;
+    }
 }
 
 /*
@@ -1065,6 +1141,7 @@ async function downloadWorkingSet() {
         await sync.bootstrap();
         await refreshLocal();
         setMessage('Dati di lavoro scaricati sul dispositivo.');
+        aggiornaSfondo();
     } catch {
         setMessage('Scarico non riuscito: serve la connessione.', false);
     } finally {
@@ -1635,6 +1712,7 @@ const badge = computed(() => {
 function onOnline() {
     sync.notify();
     runSync();
+    aggiornaSfondo();
 }
 function onOffline() {
     sync.notify();
@@ -1647,11 +1725,13 @@ onMounted(async () => {
     // Il giro acceso l'ultima volta resta acceso, con la posizione riletta ora
     giro.attivo = (await db.meta.get('giro_del_giorno'))?.value === true;
     if (giro.attivo) await ricalcolaGiro();
+    await leggiSfondoLocale();
     if (state.online && ! bootstrapped.value) {
         await downloadWorkingSet();
     } else if (state.online && state.pending > 0) {
         await runSync();
     }
+    if (state.online && bootstrapped.value) aggiornaSfondo();
 });
 
 onBeforeUnmount(() => {
@@ -2138,6 +2218,15 @@ onBeforeUnmount(() => {
             <section v-show="tab === 'mappa'" class="-m-4 h-full">
                 <div class="relative" style="height: calc(100vh - 3.5rem - 3.5rem);">
                     <div ref="mapEl" class="h-full w-full" data-test="field-map" />
+                    <p
+                        v-if="! state.online && ! mapState.conSfondo"
+                        class="absolute inset-x-3 bottom-10 rounded-lg bg-gray-900/85 px-3 py-2 text-xs text-white"
+                        data-test="mappa-senza-sfondo"
+                    >Senza rete lo sfondo stradale manca: gli elementi sono quelli sul telefono. Con la rete, scaricalo dalla scheda Sync.</p>
+                    <p
+                        v-else-if="sfondo.inCorso && ! mapState.conSfondo"
+                        class="absolute inset-x-3 bottom-10 rounded-lg bg-gray-900/85 px-3 py-2 text-xs text-white"
+                    >Scarico lo sfondo per l'uso senza rete: {{ sfondo.avanzamento }}%</p>
                     <div class="absolute left-3 right-3 top-3 flex flex-col gap-2">
                         <!-- Filtri: chi guardo e dove. Leggono la copia locale,
                              quindi funzionano anche senza rete -->
@@ -2397,6 +2486,25 @@ onBeforeUnmount(() => {
                                 @click="runSync"
                             >Sincronizza ora</button>
                         </div>
+                    </div>
+
+                    <!-- Lo sfondo della mappa per l'uso senza rete -->
+                    <div class="rounded-xl border border-gray-200 bg-white p-4" data-test="sfondo-card">
+                        <h2 class="text-sm font-semibold">Sfondo della mappa senza rete</h2>
+                        <p class="mt-1 text-sm text-gray-700" data-test="sfondo-stato">
+                            <template v-if="sfondo.locale">Sul telefono: {{ mb(sfondo.locale.byte) }} MB, scaricato il {{ fmtDate(sfondo.locale.scaricato_il) }}<template v-if="sfondo.server?.disponibile && sfondo.server.versione !== sfondo.locale.versione">; sul server ce n'è uno più nuovo</template>.</template>
+                            <template v-else-if="sfondo.server && ! sfondo.server.disponibile">Non ancora preparato sul server per questa organizzazione: senza rete la mappa mostra solo gli elementi.</template>
+                            <template v-else>Non ancora scaricato: senza rete la mappa mostra solo gli elementi.</template>
+                        </p>
+                        <p v-if="sfondo.inCorso" class="mt-1 text-sm text-green-800" data-test="sfondo-avanzamento">Scarico in corso: {{ sfondo.avanzamento }}%</p>
+                        <p v-if="sfondo.errore" class="mt-1 text-sm text-red-700" data-test="sfondo-errore">{{ sfondo.errore }}</p>
+                        <button
+                            v-if="! sfondo.server || sfondo.server.disponibile"
+                            class="mt-3 min-h-11 rounded-lg border border-green-700 px-3 py-2.5 text-sm font-medium text-green-700 disabled:opacity-50"
+                            :disabled="sfondo.inCorso || ! state.online"
+                            data-test="sfondo-scarica"
+                            @click="aggiornaSfondo(true)"
+                        >{{ sfondo.locale ? 'Scarica di nuovo lo sfondo' : 'Scarica lo sfondo' }}<template v-if="sfondo.server?.byte"> ({{ mb(sfondo.server.byte) }} MB)</template></button>
                     </div>
 
                     <div v-if="queueRows.length" class="rounded-xl border border-gray-200 bg-white">

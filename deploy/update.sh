@@ -76,6 +76,19 @@ chown -R www-data:www-data "${APP_DIR}"
 systemctl restart webgis-queue
 systemctl reload php8.4-fpm || true
 
+echo "==> Sfondo della mappa per l'app di campo"
+# Lo sfondo per l'uso senza rete (sfondo:prepara) si rifa' ogni notte dallo
+# scheduler; dopo un aggiornamento parte subito in sottofondo, cosi' i
+# telefoni lo trovano senza aspettare la notte. Salta da solo gli sfondi
+# recenti e chi non ha territorio; l'esito sta in storage/logs/sfondo.log
+if command -v runuser >/dev/null 2>&1; then
+  runuser -u www-data -- bash -c "cd '${APP_DIR}' && nohup php artisan sfondo:prepara --tutte >> storage/logs/sfondo.log 2>&1 &" \
+    && echo "  avviato in sottofondo (storage/logs/sfondo.log)" \
+    || echo "  (non avviato: php artisan sfondo:prepara --tutte si lancia a mano)"
+else
+  echo "  (runuser assente: php artisan sfondo:prepara --tutte si lancia a mano)"
+fi
+
 # La configurazione del server web nasce dal file .env e da caddy-config.sh:
 # quando lo script cambia (per esempio quando ha imparato a servire il sito
 # aziendale sul dominio nudo) il server deve saperlo senza aspettare che

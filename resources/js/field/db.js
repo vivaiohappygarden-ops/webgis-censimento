@@ -47,5 +47,10 @@ export function openFieldDb(tenantId, userId) {
         specie: '&id, species',
     });
 
+    // v7: lo sfondo della mappa (archivio PMTiles del territorio) per l'uso senza rete
+    db.version(7).stores({
+        sfondo: '&key',
+    });
+
     return db;
 }
