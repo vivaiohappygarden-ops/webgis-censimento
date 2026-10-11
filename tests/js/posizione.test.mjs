@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { PRECISIONE_BUONA, impedimento, piattaforma, prendiPosizione, spiegaErrore, testoPrecisione } from '../../resources/js/posizione.js';
+import { PRECISIONE_BUONA, impedimento, piattaforma, prendiPosizione, spiegaErrore, testoPrecisione, diagnostica, nomePiattaforma, testoPermesso } from '../../resources/js/posizione.js';
 
 const UA_IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 const UA_WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36';
@@ -87,6 +87,10 @@ test('il permesso negato si spiega subito, con che cosa fare su quel dispositivo
     assert.match(spiegaErrore({ code: 1 }, { ua: UA_IPHONE, sicuro: true }), /Su iPhone: Impostazioni > Privacy e sicurezza > Localizzazione/);
     assert.match(spiegaErrore({ code: 1 }, { ua: UA_WINDOWS, sicuro: true }), /Su Windows: Impostazioni > Privacy e sicurezza > Posizione/);
     assert.match(spiegaErrore({ code: 1 }, { ua: UA_WINDOWS, sicuro: true }), /lucchetto/);
+    assert.match(spiegaErrore({ code: 1 }, { ua: UA_WINDOWS, sicuro: true }), /permesso dato al sito da solo non basta/);
+    // La frase del browser resta in coda, quella nostra no
+    assert.match(spiegaErrore({ code: 1, message: 'User denied Geolocation' }, { ua: UA_WINDOWS, sicuro: true }), /Dettaglio del browser: User denied Geolocation$/);
+    assert.doesNotMatch(spiegaErrore({ code: 1, message: 'Permesso negato.' }, { ua: UA_WINDOWS, sicuro: true }), /Dettaglio/);
 });
 
 test('se il browser dice gia\' che il permesso e\' negato non si aspetta nemmeno', async () => {
@@ -139,4 +143,20 @@ test('piattaforma e testo della precisione', () => {
     assert.equal(testoPrecisione(12.34), 'precisione 12,3 m');
     assert.equal(testoPrecisione(850.7), 'precisione 851 m');
     assert.equal(testoPrecisione(null), '');
+});
+
+test('la diagnostica dice quale cancello e\' chiuso', async () => {
+    const d = await diagnostica({ geolocation: {}, permissions: { query: async () => ({ state: 'denied' }) }, sicuro: true, ua: UA_WINDOWS });
+    assert.deepEqual(d, { sicuro: true, api: true, permesso: 'denied', piattaforma: 'windows' });
+    // Safari non risponde alla domanda sul permesso: null, non un errore
+    const s = await diagnostica({ geolocation: {}, permissions: { query: async () => { throw new TypeError('no'); } }, sicuro: false, ua: UA_IPHONE });
+    assert.deepEqual(s, { sicuro: false, api: true, permesso: null, piattaforma: 'ios' });
+    const n = await diagnostica({ geolocation: undefined, permissions: undefined, sicuro: true, ua: '' });
+    assert.deepEqual(n, { sicuro: true, api: false, permesso: null, piattaforma: 'altro' });
+    assert.match(testoPermesso('granted'), /concesso/);
+    assert.match(testoPermesso('denied'), /negato/);
+    assert.match(testoPermesso('prompt'), /da chiedere/);
+    assert.match(testoPermesso(null), /non lo dice/);
+    assert.equal(nomePiattaforma('ios'), 'iPhone o iPad');
+    assert.equal(nomePiattaforma('boh'), 'altro');
 });

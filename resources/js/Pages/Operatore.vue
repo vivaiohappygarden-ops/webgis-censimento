@@ -9,7 +9,7 @@ import { compressImage } from '@/field/photo';
 import { SyncManager } from '@/field/sync';
 import { montaSfondo, scaldaGlifi, scaricaSfondo, sfondoLocale, statoSfondoServer } from '@/field/sfondo';
 import { uuidv7 } from '@/field/uuidv7';
-import { impedimento, prendiPosizione, spiegaErrore, testoPrecisione } from '@/posizione';
+import { diagnostica, impedimento, nomePiattaforma, prendiPosizione, spiegaErrore, testoPermesso, testoPrecisione } from '@/posizione';
 
 const page = usePage();
 const user = page.props.auth.user;
@@ -53,6 +53,10 @@ const message = reactive({ text: '', ok: true });
 // da quanti secondi, con quale precisione finora, e il controllo per
 // accettare la lettura che c'e' o annullare (resources/js/posizione.js)
 const gps = reactive({ attivo: false, per: null, trascorsi: 0, precisione: null });
+// La carta "Posizione del dispositivo" della scheda Sync: lo stato dei tre
+// cancelli (pagina sicura, permesso del sito, dispositivo) e una prova
+const diagnosi = reactive({ letta: false, sicuro: true, api: true, permesso: null, piattaforma: 'altro', inCorso: false, trascorsi: 0, precisione: null, esito: '', errore: '' });
+let controlloDiagnosi = null;
 // Il controllo del rilevamento in corso sta fuori dallo stato reattivo: dentro
 // diventerebbe un Proxy e il confronto con l'oggetto originale fallirebbe
 let controlloGps = null;
@@ -1174,6 +1178,47 @@ async function downloadWorkingSet() {
  * dice perche' e che cosa fare su quel dispositivo. Restituisce la posizione
  * o null (il messaggio e' gia' a video).
  */
+async function leggiDiagnosi() {
+    const d = await diagnostica();
+    Object.assign(diagnosi, d, { letta: true });
+}
+
+async function provaPosizione() {
+    controlloDiagnosi?.annulla();
+    diagnosi.inCorso = true;
+    diagnosi.trascorsi = 0;
+    diagnosi.precisione = null;
+    diagnosi.esito = '';
+    diagnosi.errore = '';
+    const controllo = prendiPosizione({
+        suAggiornamento: (a) => {
+            diagnosi.trascorsi = Math.round(a.trascorsi / 1000);
+            diagnosi.precisione = a.accuracy;
+        },
+    });
+    controlloDiagnosi = controllo;
+    try {
+        const p = await controllo.promessa;
+        diagnosi.esito = `Posizione trovata in ${Math.max(1, Math.round(p.trascorsi / 1000))} s: ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}, ${testoPrecisione(p.accuracy)}.`;
+    } catch (e) {
+        if (e?.code !== 'annullata') diagnosi.errore = spiegaErrore(e);
+    } finally {
+        if (controlloDiagnosi === controllo) {
+            diagnosi.inCorso = false;
+            controlloDiagnosi = null;
+        }
+        // Dopo la prova il permesso puo' essere cambiato (la finestra ha avuto risposta)
+        leggiDiagnosi();
+    }
+}
+
+function annullaProvaPosizione() {
+    controlloDiagnosi?.annulla();
+}
+
+// La scheda Sync si apre: si rilegge lo stato (il permesso puo' essere cambiato)
+watch(tab, (t) => { if (t === 'sync') leggiDiagnosi(); }, { immediate: true });
+
 async function rilevaPosizione(per, applica) {
     controlloGps?.annulla();
     gps.attivo = true;
@@ -2544,6 +2589,31 @@ onBeforeUnmount(() => {
                             data-test="sfondo-scarica"
                             @click="aggiornaSfondo(true)"
                         >{{ sfondo.locale ? 'Scarica di nuovo lo sfondo' : 'Scarica lo sfondo' }}<template v-if="sfondo.server?.byte"> ({{ mb(sfondo.server.byte) }} MB)</template></button>
+                    </div>
+
+                    <!-- Lo stato della posizione: quale dei tre cancelli e' chiuso -->
+                    <div class="rounded-xl border border-gray-200 bg-white p-4" data-test="posizione-card">
+                        <h2 class="text-sm font-semibold">Posizione del dispositivo</h2>
+                        <dl v-if="diagnosi.letta" class="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                            <dt class="text-gray-500">Pagina sicura (https)</dt>
+                            <dd data-test="posizione-sicura">{{ diagnosi.sicuro ? 'sì' : 'no: il browser non fornisce la posizione in http' }}</dd>
+                            <dt class="text-gray-500">Permesso del sito</dt>
+                            <dd data-test="posizione-permesso">{{ diagnosi.api ? testoPermesso(diagnosi.permesso) : 'questo browser non fornisce la posizione' }}</dd>
+                            <dt class="text-gray-500">Dispositivo</dt>
+                            <dd data-test="posizione-dispositivo">{{ nomePiattaforma(diagnosi.piattaforma) }}</dd>
+                        </dl>
+                        <p class="mt-2 text-xs text-gray-500">Il permesso del sito è uno dei tre passaggi: servono anche la localizzazione accesa nel telefono o nel computer per il browser, e un segnale (GPS all'aperto, oppure reti Wi-Fi vicine).</p>
+                        <p v-if="diagnosi.esito" class="mt-2 text-sm text-green-800" data-test="posizione-esito">{{ diagnosi.esito }}</p>
+                        <p v-if="diagnosi.errore" class="mt-2 text-sm text-red-700" data-test="posizione-errore">{{ diagnosi.errore }}</p>
+                        <div class="mt-3 flex flex-wrap items-center gap-3">
+                            <button
+                                class="min-h-11 rounded-lg border border-green-700 px-3 py-2.5 text-sm font-medium text-green-700 disabled:opacity-50"
+                                :disabled="diagnosi.inCorso"
+                                data-test="posizione-prova"
+                                @click="provaPosizione"
+                            ><template v-if="diagnosi.inCorso">Rilevamento… {{ diagnosi.trascorsi }} s<template v-if="diagnosi.precisione != null">, {{ testoPrecisione(diagnosi.precisione) }}</template></template><template v-else>Prova la posizione</template></button>
+                            <button v-if="diagnosi.inCorso" type="button" class="inline-flex min-h-11 items-center text-sm text-gray-600 underline" data-test="posizione-annulla" @click="annullaProvaPosizione">Annulla</button>
+                        </div>
                     </div>
 
                     <div v-if="queueRows.length" class="rounded-xl border border-gray-200 bg-white">

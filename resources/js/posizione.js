@@ -47,7 +47,7 @@ function contestoSicuro() {
  */
 export function impedimento({ geolocation = typeof navigator !== 'undefined' ? navigator.geolocation : undefined, sicuro = contestoSicuro() } = {}) {
     if (! sicuro) {
-        return 'La posizione non arriva perche\' il sito e\' aperto in http: il browser la fornisce solo sui siti sicuri (https, il lucchetto accanto all\'indirizzo).';
+        return 'La posizione non arriva perché il sito è aperto in http: il browser la fornisce solo sui siti sicuri (https, il lucchetto accanto all\'indirizzo).';
     }
     if (! geolocation) {
         return 'Questo browser non fornisce la posizione del dispositivo.';
@@ -58,7 +58,7 @@ export function impedimento({ geolocation = typeof navigator !== 'undefined' ? n
 
 const COME_CONSENTIRE = {
     ios: 'Su iPhone: Impostazioni > Privacy e sicurezza > Localizzazione, accendi "Localizzazione" e in "Siti web Safari" scegli "Mentre usi l\'app" con "Posizione esatta". '
-        + 'Se Safari aveva chiesto il permesso e si e\' risposto no: tocca "AA" accanto all\'indirizzo > Impostazioni sito web > Posizione > Consenti (oppure Impostazioni > Safari > Posizione).',
+        + 'Se Safari aveva chiesto il permesso e si è risposto no: tocca "AA" accanto all\'indirizzo > Impostazioni sito web > Posizione > Consenti (oppure Impostazioni > Safari > Posizione).',
     android: 'Su Android: Impostazioni > Posizione, accendila; poi in Chrome tocca il lucchetto accanto all\'indirizzo > Autorizzazioni > Posizione > Consenti e ricarica la pagina.',
     windows: 'Su Windows: Impostazioni > Privacy e sicurezza > Posizione, accendi "Servizi di localizzazione" e "Consenti alle app desktop di accedere alla posizione". '
         + 'Poi in Chrome clicca il lucchetto accanto all\'indirizzo > Autorizzazioni > Posizione > Consenti e ricarica la pagina.',
@@ -67,10 +67,10 @@ const COME_CONSENTIRE = {
 };
 
 const SENZA_SEGNALE = {
-    windows: 'Il computer non ha un GPS: Chrome stima la posizione dalle reti Wi-Fi vicine, e serve che in Windows i Servizi di localizzazione siano accesi. Con il solo cavo di rete, o in una stanza senza Wi-Fi, la posizione puo\' mancare: in ufficio e\' normale. Prendila dalla mappa o inserisci le coordinate.',
-    mac: 'Il computer stima la posizione dalle reti Wi-Fi vicine: con il Wi-Fi spento puo\' mancare. Prendila dalla mappa o inserisci le coordinate.',
+    windows: 'Il computer non ha un GPS: Chrome stima la posizione dalle reti Wi-Fi vicine, e serve che in Windows i Servizi di localizzazione siano accesi. Con il solo cavo di rete, o in una stanza senza Wi-Fi, la posizione può mancare: in ufficio è normale. Prendila dalla mappa o inserisci le coordinate.',
+    mac: 'Il computer stima la posizione dalle reti Wi-Fi vicine: con il Wi-Fi spento può mancare. Prendila dalla mappa o inserisci le coordinate.',
     ios: 'Il telefono non riesce a stabilire dove si trova: controlla che la Localizzazione sia accesa, esci all\'aperto e riprova fra qualche secondo.',
-    android: 'Il telefono non riesce a stabilire dove si trova: controlla che la Posizione sia accesa (meglio in modalita\' "alta precisione"), esci all\'aperto e riprova.',
+    android: 'Il telefono non riesce a stabilire dove si trova: controlla che la Posizione sia accesa (meglio in modalità "alta precisione"), esci all\'aperto e riprova.',
     altro: 'Il dispositivo non riesce a stabilire dove si trova: controlla che la localizzazione sia accesa e riprova all\'aperto.',
 };
 
@@ -91,11 +91,20 @@ export function spiegaErrore(err, { ua = navigatorUa(), sicuro = contestoSicuro(
     if (codice === 'contesto') {
         return err.message;
     }
+    // La frase del browser (in inglese) in coda: a chi legge una schermata
+    // dice la causa esatta, che le parole nostre riassumono
+    const dettaglio = typeof err?.message === 'string' && err.message !== '' && ! /^(Permesso negato|Tempo scaduto|Rilevamento)/.test(err.message)
+        ? ` Dettaglio del browser: ${err.message}`
+        : '';
     if (codice === 1) {
-        return 'Posizione negata dal browser. '.concat(COME_CONSENTIRE[dove]);
+        // Il permesso del sito da solo non basta: anche il telefono o il
+        // computer devono consentire la localizzazione al browser, e il
+        // browser dice "negata" in tutti e due i casi
+        return 'Il browser non ha potuto usare la posizione. Il permesso dato al sito da solo non basta: anche il telefono o il computer devono consentire la localizzazione al browser (succede spesso con il sito già autorizzato). '
+            .concat(COME_CONSENTIRE[dove], dettaglio);
     }
     if (codice === 2) {
-        return SENZA_SEGNALE[dove];
+        return SENZA_SEGNALE[dove] + dettaglio;
     }
     if (codice === 3) {
         // Il browser ha chiesto il permesso e nessuno ha risposto (o la finestra
@@ -107,7 +116,8 @@ export function spiegaErrore(err, { ua = navigatorUa(), sicuro = contestoSicuro(
 
         return senzaRisposta
             + 'Nessuna posizione entro il tempo massimo: all\'aperto il GPS impiega anche mezzo minuto a partire, e al chiuso spesso non arriva. '
-            + 'Riprova, oppure prendi la posizione dalla mappa.';
+            + 'Riprova, oppure prendi la posizione dalla mappa.'
+            + dettaglio;
     }
 
     return 'Posizione non disponibile in questo momento: riprova, oppure prendila dalla mappa.';
@@ -264,6 +274,45 @@ export function prendiPosizione({
             rifiuta({ code: 'annullata', message: 'Rilevamento annullato.' });
         },
     };
+}
+
+/**
+ * Lo stato della posizione su questo dispositivo, prima di chiederla: pagina
+ * sicura, API presente, permesso del sito secondo il browser ('granted',
+ * 'denied', 'prompt', oppure null se il browser non lo dice), piattaforma.
+ * Serve alla carta "Posizione del dispositivo" dell'app di campo: da una
+ * schermata si capisce quale dei tre cancelli e' chiuso.
+ */
+export async function diagnostica({
+    geolocation = typeof navigator !== 'undefined' ? navigator.geolocation : undefined,
+    permissions = typeof navigator !== 'undefined' ? navigator.permissions : undefined,
+    sicuro = contestoSicuro(),
+    ua = navigatorUa(),
+} = {}) {
+    let permesso = null;
+    try {
+        permesso = (await permissions?.query?.({ name: 'geolocation' }))?.state ?? null;
+    } catch {
+        permesso = null;
+    }
+
+    return { sicuro: Boolean(sicuro), api: Boolean(geolocation), permesso, piattaforma: piattaforma(ua) };
+}
+
+const NOMI_PIATTAFORMA = { ios: 'iPhone o iPad', android: 'Android', windows: 'Windows', mac: 'Mac', altro: 'altro' };
+
+/** "iPhone o iPad", "Windows"... per la piattaforma rilevata. */
+export function nomePiattaforma(codice) {
+    return NOMI_PIATTAFORMA[codice] ?? NOMI_PIATTAFORMA.altro;
+}
+
+/** Che cosa dice il browser del permesso del sito, in italiano. */
+export function testoPermesso(stato) {
+    if (stato === 'granted') return 'concesso al sito';
+    if (stato === 'denied') return 'negato: il browser lo ricorda e non chiede più';
+    if (stato === 'prompt') return 'da chiedere: il browser mostra la finestra alla prossima richiesta';
+
+    return 'il browser non lo dice (succede con Safari)';
 }
 
 /** "precisione 12 m", o "" se manca. */

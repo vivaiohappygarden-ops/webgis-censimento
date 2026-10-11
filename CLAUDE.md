@@ -1041,9 +1041,26 @@ attivo, come oggi un albero morto in piedi. Le **aree** del territorio hanno da 
   continuo (30 s di tempo, errori spiegati). Lo scatto delle foto tiene il fix silenzioso di
   3,5 s. **Mappa del gestionale** (`Mappa.vue`): il `GeolocateControl` aspetta 30 s, la guardia
   35 s, il permesso gia' negato si dice subito; il portale pubblico ha lo stesso tempo.
+- **Il permesso del sito da solo non basta** (osservazione del committente 11/10/2026: "la
+  posizione e' autorizzata su quel sito, non capisco perche' non gliela fa vedere comunque"):
+  i cancelli sono tre. Il permesso del sito nel browser; la localizzazione del telefono o del
+  computer concessa al browser (Windows: Impostazioni > Privacy e sicurezza > Posizione,
+  "Servizi di localizzazione" e "Consenti alle app desktop"; iPhone: Localizzazione > "Siti
+  web Safari" con "Posizione esatta"); un segnale (GPS all'aperto, oppure reti Wi-Fi vicine:
+  un computer con il solo cavo di rete non si localizza, e in ufficio e' normale). Il browser
+  risponde "negata" (codice 1) sia per il primo sia per il secondo cancello, quindi il
+  messaggio lo spiega e porta in coda la frase originale del browser ("Dettaglio del browser:
+  User denied Geolocation"): da una schermata si legge la causa esatta. Nella scheda Sync
+  dell'app di campo la carta **"Posizione del dispositivo"** (`diagnostica()`, `testoPermesso`,
+  `nomePiattaforma` in `posizione.js`, riletta a ogni apertura della scheda) dice pagina
+  sicura, permesso del sito secondo il browser (concesso, negato, da chiedere, oppure "non lo
+  dice" con Safari, che non risponde alla Permissions API) e dispositivo, con il pulsante
+  "Prova la posizione" che mostra la lettura o l'errore spiegato dentro la carta: e' la
+  schermata da farsi mandare quando "non funziona".
 - Collaudo in `scratchpad/verifica-gps/verifica.mjs` della sessione: lettura precisa, lettura
   imprecisa accettata con "Usa questa", permesso negato su Windows e su iPhone con le
-  istruzioni giuste, anche sulla mappa del gestionale.
+  istruzioni giuste, anche sulla mappa del gestionale; la carta della scheda Sync con il
+  permesso concesso (la prova trova la posizione) e negato (lo dice prima di provare).
 
 ## Sicurezza dell'accesso (dal 27/09/2026)
 
