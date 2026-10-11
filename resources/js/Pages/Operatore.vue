@@ -9,6 +9,7 @@ import { compressImage } from '@/field/photo';
 import { SyncManager } from '@/field/sync';
 import { montaSfondo, scaldaGlifi, scaricaSfondo, sfondoLocale, statoSfondoServer } from '@/field/sfondo';
 import { uuidv7 } from '@/field/uuidv7';
+import { impedimento, prendiPosizione, spiegaErrore, testoPrecisione } from '@/posizione';
 
 const page = usePage();
 const user = page.props.auth.user;
@@ -48,6 +49,15 @@ const queueRows = ref([]);
 const logRows = ref([]);
 const busy = ref(false);
 const message = reactive({ text: '', ok: true });
+// Il rilevamento della posizione in corso: per chi (punto, vertice, area),
+// da quanti secondi, con quale precisione finora, e il controllo per
+// accettare la lettura che c'e' o annullare (resources/js/posizione.js)
+const gps = reactive({ attivo: false, per: null, trascorsi: 0, precisione: null });
+// Il controllo del rilevamento in corso sta fuori dallo stato reattivo: dentro
+// diventerebbe un Proxy e il confronto con l'oggetto originale fallirebbe
+let controlloGps = null;
+const accettaGps = () => controlloGps?.accetta();
+const annullaGps = () => controlloGps?.annulla();
 // Lo sfondo della mappa per l'uso senza rete: quello sul telefono, quello sul
 // server e lo scarico in corso (resources/js/field/sfondo.js)
 const sfondo = reactive({ locale: null, server: null, inCorso: false, avanzamento: 0, errore: '' });
@@ -865,7 +875,13 @@ async function initOrRefreshMap() {
 }
 
 function locateOnMap() {
-    if (! navigator.geolocation || ! map) return;
+    if (! map) return;
+    const motivo = impedimento();
+    if (motivo) {
+        setMessage(motivo, false);
+
+        return;
+    }
     if (geoWatchId !== null) navigator.geolocation.clearWatch(geoWatchId);
     // Un secondo tocco ricentra sulla posizione appena questa arriva
     mapState.located = false;
@@ -885,9 +901,11 @@ function locateOnMap() {
             map.easeTo({ center: lngLat, zoom: 17 });
             mapState.located = true;
         }
-    }, () => {
-        setMessage('Posizione GPS non disponibile.', false);
-    }, { enableHighAccuracy: true });
+    }, (err) => {
+        // Il tempo scaduto in ascolto continuo non e' un errore: il GPS riprova da solo
+        if (err?.code === 3 && mapState.located) return;
+        setMessage(spiegaErrore(err), false);
+    }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
 }
 
 function stopCamera() {
@@ -1149,25 +1167,56 @@ async function downloadWorkingSet() {
     }
 }
 
-function locate() {
-    if (! navigator.geolocation) {
-        setMessage('Geolocalizzazione non disponibile su questo dispositivo.', false);
-        return;
+/**
+ * Prende la posizione con la regola di casa (stima rapida subito, poi il GPS
+ * fino a mezzo minuto tenendo la lettura migliore; "Usa questa" accetta prima
+ * quella che c'e'). Un rilevamento alla volta. Se non arriva, il messaggio
+ * dice perche' e che cosa fare su quel dispositivo. Restituisce la posizione
+ * o null (il messaggio e' gia' a video).
+ */
+async function rilevaPosizione(per, applica) {
+    controlloGps?.annulla();
+    gps.attivo = true;
+    gps.per = per;
+    gps.trascorsi = 0;
+    gps.precisione = null;
+    setMessage('');
+    const controllo = prendiPosizione({
+        suAggiornamento: (a) => {
+            gps.trascorsi = Math.round(a.trascorsi / 1000);
+            gps.precisione = a.accuracy;
+        },
+    });
+    controlloGps = controllo;
+    try {
+        const posizione = await controllo.promessa;
+        applica(posizione);
+
+        return posizione;
+    } catch (e) {
+        if (e?.code !== 'annullata') setMessage(spiegaErrore(e), false);
+
+        return null;
+    } finally {
+        if (controlloGps === controllo) {
+            gps.attivo = false;
+            gps.per = null;
+            controlloGps = null;
+        }
     }
+}
+
+async function locate() {
     form.locating = true;
-    navigator.geolocation.getCurrentPosition(
-        (pos) => {
-            form.lat = pos.coords.latitude.toFixed(6);
-            form.lon = pos.coords.longitude.toFixed(6);
-            form.accuracy = Math.round(pos.coords.accuracy * 10) / 10;
-            form.locating = false;
-        },
-        () => {
-            form.locating = false;
-            setMessage('Posizione GPS non disponibile: inserisci le coordinate a mano.', false);
-        },
-        { enableHighAccuracy: true, timeout: 10000 },
-    );
+    try {
+        await rilevaPosizione('punto', (p) => {
+            form.lat = p.lat.toFixed(6);
+            form.lon = p.lon.toFixed(6);
+            form.accuracy = p.accuracy;
+        });
+    } finally {
+        form.locating = false;
+    }
 }
 
 /** L'anteprima dei punti raccolti sulla mappa del dispositivo. */
@@ -1215,48 +1264,23 @@ function annullaUltimoVertice(per = null) {
 }
 
 /** Un vertice dalla posizione GPS: si traccia il bordo camminando. */
-function aggiungiVerticeGps(per = 'rilievo') {
-    if (! navigator.geolocation) {
-        setMessage('Geolocalizzazione non disponibile su questo dispositivo.', false);
-        return;
-    }
+async function aggiungiVerticeGps(per = 'rilievo') {
     mapState.disegnoPer = per;
     const stato = per === 'area' ? nuovaArea : form;
     stato.locating = true;
-    navigator.geolocation.getCurrentPosition(
-        (pos) => {
-            verticiCorrenti(per).push({
-                lon: pos.coords.longitude, lat: pos.coords.latitude,
-                gps: true, accuracy: Math.round(pos.coords.accuracy * 10) / 10,
-            });
-            stato.locating = false;
+    try {
+        await rilevaPosizione(per === 'area' ? 'vertice-area' : 'vertice-rilievo', (p) => {
+            verticiCorrenti(per).push({ lon: p.lon, lat: p.lat, gps: true, accuracy: p.accuracy });
             aggiornaDisegnoLocale();
-        },
-        () => {
-            stato.locating = false;
-            setMessage('Posizione GPS non disponibile.', false);
-        },
-        { enableHighAccuracy: true, timeout: 10000 },
-    );
+        });
+    } finally {
+        stato.locating = false;
+    }
 }
 
-/** La posizione GPS una volta sola, come promessa. */
+/** La posizione una volta sola, per il perimetro attorno a dove si e' (null se non arriva: il messaggio e' gia' a video). */
 function posizioneAttuale() {
-    return new Promise((resolve, reject) => {
-        if (! navigator.geolocation) {
-            reject(new Error('Geolocalizzazione non disponibile.'));
-
-            return;
-        }
-        navigator.geolocation.getCurrentPosition(
-            (pos) => resolve({
-                lon: pos.coords.longitude, lat: pos.coords.latitude,
-                accuracy: Math.round(pos.coords.accuracy * 10) / 10,
-            }),
-            (err) => reject(err),
-            { enableHighAccuracy: true, timeout: 10000 },
-        );
-    });
+    return rilevaPosizione('attorno', () => {});
 }
 
 function apriNuovaArea() {
@@ -1314,11 +1338,11 @@ async function creaArea() {
     busy.value = true;
     try {
         if (nuovaArea.modo === 'attorno') {
-            let posizione;
-            try {
-                posizione = await posizioneAttuale();
-            } catch {
-                setMessage('Posizione GPS non disponibile: cammina il perimetro o disegnalo sulla mappa.', false);
+            const posizione = await posizioneAttuale();
+            if (! posizione) {
+                // Il messaggio con il perche' e' gia' a video; qui si aggiunge l'alternativa
+                message.text = `${message.text} In alternativa cammina il perimetro o disegnalo sulla mappa.`.trim();
+
                 return;
             }
             geometry = poligonoAttorno(posizione.lon, posizione.lat, Number(nuovaArea.raggio));
@@ -1958,10 +1982,15 @@ onBeforeUnmount(() => {
                                     class="rounded-lg border border-green-700 bg-white px-3 py-2.5 text-sm font-medium text-green-700 disabled:opacity-50"
                                     :disabled="nuovaArea.locating"
                                     @click="aggiungiVerticeGps('area')"
-                                >{{ nuovaArea.locating ? 'Rilevamento…' : 'Aggiungi posizione GPS' }}</button>
+                                >{{ nuovaArea.locating ? `Rilevamento… ${gps.trascorsi} s` : 'Aggiungi posizione GPS' }}</button>
                                 <button class="rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm disabled:opacity-50" :disabled="! nuovaArea.vertici.length" @click="annullaUltimoVertice('area')">← Ultimo punto</button>
                                 <button class="rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm disabled:opacity-50" :disabled="! nuovaArea.vertici.length" @click="nuovaArea.vertici = []; aggiornaDisegnoLocale()">Svuota i punti</button>
                             </div>
+                            <p v-if="gps.attivo && gps.per === 'vertice-area'" class="flex flex-wrap items-center gap-x-3 text-xs text-gray-700" data-test="gps-stato">
+                                <span>Cerco la posizione… {{ gps.trascorsi }} s<template v-if="gps.precisione != null">, {{ testoPrecisione(gps.precisione) }}</template>.</span>
+                                <button v-if="gps.precisione != null" type="button" class="inline-flex min-h-11 items-center font-medium text-green-800 underline" data-test="gps-accetta" @click="accettaGps">Usa questa</button>
+                                <button type="button" class="inline-flex min-h-11 items-center text-gray-600 underline" data-test="gps-annulla" @click="annullaGps">Annulla</button>
+                            </p>
                         </template>
                         <label v-else class="block text-xs">
                             <span class="text-gray-500">Raggio attorno alla posizione</span>
@@ -2007,9 +2036,14 @@ onBeforeUnmount(() => {
                                 class="rounded-lg border border-green-700 px-3 py-2 text-sm font-medium text-green-700"
                                 :disabled="form.locating"
                                 @click="locate"
-                            >{{ form.locating ? 'Rilevamento…' : 'Usa posizione GPS' }}</button>
-                            <span v-if="form.accuracy" class="text-xs text-gray-500">Precisione: {{ form.accuracy }} m</span>
+                            >{{ form.locating ? `Rilevamento… ${gps.trascorsi} s` : 'Usa posizione GPS' }}</button>
+                            <span v-if="form.accuracy && ! form.locating" class="text-xs text-gray-500" data-test="gps-precisione">Precisione: {{ form.accuracy }} m</span>
                         </div>
+                        <p v-if="gps.attivo && gps.per === 'punto'" class="flex flex-wrap items-center gap-x-3 text-xs text-gray-700" data-test="gps-stato">
+                            <span>Cerco la posizione… {{ gps.trascorsi }} s<template v-if="gps.precisione != null">, {{ testoPrecisione(gps.precisione) }}</template>.</span>
+                            <button v-if="gps.precisione != null" type="button" class="inline-flex min-h-11 items-center font-medium text-green-800 underline" data-test="gps-accetta" @click="accettaGps">Usa questa</button>
+                            <button type="button" class="inline-flex min-h-11 items-center text-gray-600 underline" data-test="gps-annulla" @click="annullaGps">Annulla</button>
+                        </p>
                     </template>
                     <template v-else>
                         <p class="text-xs text-gray-500" data-test="op-vertici">
@@ -2028,7 +2062,7 @@ onBeforeUnmount(() => {
                                 class="rounded-lg border border-green-700 px-3 py-2.5 text-sm font-medium text-green-700 disabled:opacity-50"
                                 :disabled="form.locating"
                                 @click="aggiungiVerticeGps('rilievo')"
-                            >{{ form.locating ? 'Rilevamento…' : 'Aggiungi posizione GPS' }}</button>
+                            >{{ form.locating ? `Rilevamento… ${gps.trascorsi} s` : 'Aggiungi posizione GPS' }}</button>
                             <button
                                 class="rounded-lg border border-gray-300 px-3 py-2.5 text-sm disabled:opacity-50"
                                 :disabled="! form.vertici.length"
@@ -2040,6 +2074,11 @@ onBeforeUnmount(() => {
                                 @click="form.vertici = []; aggiornaDisegnoLocale()"
                             >Svuota i punti</button>
                         </div>
+                        <p v-if="gps.attivo && gps.per === 'vertice-rilievo'" class="flex flex-wrap items-center gap-x-3 text-xs text-gray-700" data-test="gps-stato">
+                            <span>Cerco la posizione… {{ gps.trascorsi }} s<template v-if="gps.precisione != null">, {{ testoPrecisione(gps.precisione) }}</template>.</span>
+                            <button v-if="gps.precisione != null" type="button" class="inline-flex min-h-11 items-center font-medium text-green-800 underline" data-test="gps-accetta" @click="accettaGps">Usa questa</button>
+                            <button type="button" class="inline-flex min-h-11 items-center text-gray-600 underline" data-test="gps-annulla" @click="annullaGps">Annulla</button>
+                        </p>
                     </template>
 
                     <!-- Scheda dell'albero: specie e misure nascono con il rilievo -->

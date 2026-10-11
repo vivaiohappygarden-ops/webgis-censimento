@@ -186,7 +186,7 @@ function avvia(config) {
     }
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-    map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: false }), 'top-right');
+    map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: false, positionOptions: { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 } }), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-left');
 
     if (config.estensione) {

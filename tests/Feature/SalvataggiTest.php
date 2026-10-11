@@ -23,9 +23,16 @@ class SalvataggiTest extends TestCase
 
     private string $dest;
 
+    /** Il timbro dell'istantanea di prova: ieri alle 3, mai piu' vecchio dei giorni conservati. */
+    private string $stamp;
+
     protected function setUp(): void
     {
         parent::setUp();
+        // Una data fissa (26/09/2026) dopo quattordici giorni finiva oltre il
+        // limite di conservazione e lo script cancellava l'istantanea appena
+        // fatta: la prova falliva da sola con il passare del calendario
+        $this->stamp = now()->subDay()->format('Ymd').'-030000';
 
         foreach (['rsync', 'pg_dump', 'pg_restore'] as $comando) {
             if (trim((string) shell_exec("command -v {$comando} 2>/dev/null")) === '') {
@@ -85,19 +92,19 @@ class SalvataggiTest extends TestCase
 
     public function test_salva_banca_dati_e_file_e_le_istantanee_condividono_i_file_immutati(): void
     {
-        [$esito, $uscita] = $this->esegui('20260926-030000');
+        [$esito, $uscita] = $this->esegui("{$this->stamp}");
         $this->assertSame(0, $esito, $uscita);
 
-        $dump = $this->dest.'/db/db-20260926-030000.dump';
+        $dump = $this->dest."/db/db-{$this->stamp}.dump";
         $this->assertFileExists($dump);
         $this->assertGreaterThan(1000, filesize($dump));
         // Il dump si rilegge davvero
         exec('pg_restore --list '.escapeshellarg($dump).' >/dev/null 2>&1', $o, $verifica);
         $this->assertSame(0, $verifica);
 
-        $this->assertFileExists($this->dest.'/file/20260926-030000/photos/a.jpg');
-        $this->assertFileExists($this->dest.'/file/20260926-030000/.completata');
-        $this->assertSame('20260926-030000', readlink($this->dest.'/file/ultima'));
+        $this->assertFileExists($this->dest."/file/{$this->stamp}/photos/a.jpg");
+        $this->assertFileExists($this->dest."/file/{$this->stamp}/.completata");
+        $this->assertSame("{$this->stamp}", readlink($this->dest.'/file/ultima'));
 
         // Seconda notte: un file nuovo, uno cancellato per sbaglio
         file_put_contents($this->cartellaApp.'/storage/app/photos/c.jpg', str_repeat('C', 1024));
@@ -108,10 +115,10 @@ class SalvataggiTest extends TestCase
         $this->assertFileExists($this->dest.'/file/20260927-030000/photos/c.jpg');
         $this->assertFileDoesNotExist($this->dest.'/file/20260927-030000/photos/b.jpg');
         // ...ma la foto cancellata resta nell'istantanea di ieri
-        $this->assertFileExists($this->dest.'/file/20260926-030000/photos/b.jpg');
+        $this->assertFileExists($this->dest."/file/{$this->stamp}/photos/b.jpg");
         // Il file immutato e' lo stesso contenuto su disco (collegamento fisico), non una seconda copia
         $this->assertSame(
-            fileinode($this->dest.'/file/20260926-030000/photos/a.jpg'),
+            fileinode($this->dest."/file/{$this->stamp}/photos/a.jpg"),
             fileinode($this->dest.'/file/20260927-030000/photos/a.jpg'),
         );
         $this->assertSame('20260927-030000', readlink($this->dest.'/file/ultima'));
@@ -131,34 +138,34 @@ class SalvataggiTest extends TestCase
             touch($this->dest.$f, $vecchia);
         }
 
-        [$esito, $uscita] = $this->esegui('20260926-030000');
+        [$esito, $uscita] = $this->esegui("{$this->stamp}");
         $this->assertSame(0, $esito, $uscita);
 
         $this->assertDirectoryDoesNotExist($this->dest.'/file/20200101-000000');
         $this->assertFileDoesNotExist($this->dest.'/db/db-20200101-000000.dump');
         $this->assertFileDoesNotExist($this->dest.'/storage-20200101-0000.tar.gz');
         $this->assertFileDoesNotExist($this->dest.'/db-20200101-0000.dump');
-        $this->assertFileExists($this->dest.'/db/db-20260926-030000.dump');
+        $this->assertFileExists($this->dest."/db/db-{$this->stamp}.dump");
         $this->assertStringContainsString("eliminata l'istantanea 20200101-000000", $uscita);
     }
 
     public function test_senza_spazio_non_parte_e_lo_dice(): void
     {
-        [$esito, $uscita] = $this->esegui('20260926-030000', ['WEBGIS_BACKUP_MB_MINIMI' => '999999999']);
+        [$esito, $uscita] = $this->esegui("{$this->stamp}", ['WEBGIS_BACKUP_MB_MINIMI' => '999999999']);
 
         $this->assertNotSame(0, $esito);
         $this->assertStringContainsString('spazio insufficiente', $uscita);
-        $this->assertDirectoryDoesNotExist($this->dest.'/file/20260926-030000');
-        $this->assertFileDoesNotExist($this->dest.'/db/db-20260926-030000.dump');
+        $this->assertDirectoryDoesNotExist($this->dest."/file/{$this->stamp}");
+        $this->assertFileDoesNotExist($this->dest."/db/db-{$this->stamp}.dump");
     }
 
     public function test_senza_rsync_la_banca_dati_si_salva_lo_stesso_e_l_errore_si_vede(): void
     {
-        [$esito, $uscita] = $this->esegui('20260926-030000', ['WEBGIS_BACKUP_RSYNC' => 'rsync-che-non-esiste']);
+        [$esito, $uscita] = $this->esegui("{$this->stamp}", ['WEBGIS_BACKUP_RSYNC' => 'rsync-che-non-esiste']);
 
         $this->assertNotSame(0, $esito);
-        $this->assertFileExists($this->dest.'/db/db-20260926-030000.dump');
-        $this->assertDirectoryDoesNotExist($this->dest.'/file/20260926-030000');
+        $this->assertFileExists($this->dest."/db/db-{$this->stamp}.dump");
+        $this->assertDirectoryDoesNotExist($this->dest."/file/{$this->stamp}");
         $this->assertStringContainsString('rsync non installato', $uscita);
         $this->assertStringContainsString('la banca dati e\' salvata', $uscita);
     }
@@ -169,25 +176,25 @@ class SalvataggiTest extends TestCase
         mkdir($remoto, 0700, true);
         file_put_contents($this->radice.'/webgis-backup.conf', 'BACKUP_REMOTO='.$remoto."\n");
 
-        [$esito, $uscita] = $this->esegui('20260926-030000', ['WEBGIS_BACKUP_CONF' => $this->radice.'/webgis-backup.conf']);
+        [$esito, $uscita] = $this->esegui("{$this->stamp}", ['WEBGIS_BACKUP_CONF' => $this->radice.'/webgis-backup.conf']);
         $this->assertSame(0, $esito, $uscita);
 
-        $this->assertFileExists($remoto.'/db/db-20260926-030000.dump');
-        $this->assertFileExists($remoto.'/file/20260926-030000/photos/a.jpg');
+        $this->assertFileExists($remoto."/db/db-{$this->stamp}.dump");
+        $this->assertFileExists($remoto."/file/{$this->stamp}/photos/a.jpg");
         $this->assertStringContainsString('copia fuori dal server aggiornata', $uscita);
     }
 
     public function test_lo_stato_racconta_l_ultimo_salvataggio(): void
     {
-        [, $prima] = $this->esegui('20260926-030000', [], 'stato');
+        [, $prima] = $this->esegui("{$this->stamp}", [], 'stato');
         $this->assertStringContainsString('nessun salvataggio trovato', $prima);
 
-        $this->esegui('20260926-030000');
-        [$esito, $dopo] = $this->esegui('20260926-030000', [], 'stato');
+        $this->esegui("{$this->stamp}");
+        [$esito, $dopo] = $this->esegui("{$this->stamp}", [], 'stato');
 
         $this->assertSame(0, $esito, $dopo);
-        $this->assertStringContainsString('banca dati: db-20260926-030000.dump', $dopo);
-        $this->assertStringContainsString('istantanea 20260926-030000', $dopo);
+        $this->assertStringContainsString("banca dati: db-{$this->stamp}.dump", $dopo);
+        $this->assertStringContainsString("istantanea {$this->stamp}", $dopo);
         $this->assertStringContainsString('NON configurata', $dopo);
     }
 }

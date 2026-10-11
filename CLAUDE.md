@@ -1017,6 +1017,34 @@ attivo, come oggi un albero morto in piedi. Le **aree** del territorio hanno da 
 - La mappa del gestionale resta su OpenStreetMap in linea: lo sfondo nostro serve al campo,
   dove la rete manca; portarlo anche in ufficio e' un passo a parte.
 
+## Posizione del dispositivo (dal 11/10/2026)
+
+- Segnalazione del committente: "la posizione GPS spesso e volentieri non me la fa funzionare,
+  ne' da Chrome su Windows ne' da Safari su iPhone". Le cause sono poche e vanno spiegate:
+  il permesso negato una volta e ricordato dal browser, i servizi di localizzazione spenti nel
+  telefono o in Windows (il computer non ha un GPS e stima la posizione dalle reti Wi-Fi), il
+  GPS che all'aperto impiega anche mezzo minuto mentre il programma aspettava dieci secondi e
+  rinunciava, il sito in http. Prima il messaggio era "Posizione GPS non disponibile" e basta.
+- **La posizione si prende una volta sola in `resources/js/posizione.js`**: `prendiPosizione()`
+  chiede subito una stima rapida (reti vicine, ultima posizione nota) e insieme ascolta il GPS
+  fino a `TEMPO_MASSIMO` (30 s) tenendo la lettura piu' precisa; si ferma da sola sotto
+  `PRECISIONE_BUONA` (15 m), alla scadenza vale la migliore, il controllo restituito ha
+  `accetta()` ("Usa questa") e `annulla()`; il permesso negato (anche letto dalla Permissions
+  API) si spiega subito senza aspettare. `spiegaErrore()` da' il messaggio in italiano con che
+  cosa fare su quel dispositivo (`piattaforma()`: iPhone, Android, Windows, Mac), `impedimento()`
+  dice se non si puo' nemmeno provare (http, API assente). Modulo senza browser al caricamento:
+  prove in `tests/js/posizione.test.mjs` con una geolocalizzazione finta.
+- **App di campo** (`Operatore.vue`): `rilevaPosizione(per, applica)` e' l'unico passaggio per
+  il punto del rilievo, i vertici (rilievo e area) e il perimetro attorno a dove si e'; sotto i
+  pulsanti la riga `gps-stato` ("Cerco la posizione… 12 s, precisione 35 m", "Usa questa",
+  "Annulla"), il pulsante conta i secondi. "La mia posizione" sulla mappa resta in ascolto
+  continuo (30 s di tempo, errori spiegati). Lo scatto delle foto tiene il fix silenzioso di
+  3,5 s. **Mappa del gestionale** (`Mappa.vue`): il `GeolocateControl` aspetta 30 s, la guardia
+  35 s, il permesso gia' negato si dice subito; il portale pubblico ha lo stesso tempo.
+- Collaudo in `scratchpad/verifica-gps/verifica.mjs` della sessione: lettura precisa, lettura
+  imprecisa accettata con "Usa questa", permesso negato su Windows e su iPhone con le
+  istruzioni giuste, anche sulla mappa del gestionale.
+
 ## Sicurezza dell'accesso (dal 27/09/2026)
 
 - **Verifica in due passaggi** (TOTP, RFC 6238 su SHA1, sei cifre ogni 30 s): codici delle

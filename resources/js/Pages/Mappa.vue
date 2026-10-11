@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import * as maplibregl from 'maplibre-gl';
+import { impedimento, spiegaErrore } from '@/posizione';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AvvisoErrore from '@/Components/AvvisoErrore.vue';
@@ -542,15 +543,10 @@ async function applyVista(refit = true) {
 // Il browser dà la posizione solo in contesto sicuro: senza https il rifiuto
 // arriva subito e va spiegato, altrimenti sembra un difetto dell'applicazione
 function messaggioPosizione(error) {
-    if (! window.isSecureContext) {
-        return 'La posizione non è disponibile perché il sito è in http: il browser la fornisce solo sui siti sicuri (https). '
-            + 'Nel frattempo la mappa si apre sulle aree censite.';
-    }
-    if (error?.code === 1) {
-        return 'Posizione negata: consentila al sito nelle impostazioni del browser, poi premi di nuovo "La mia posizione".';
-    }
+    // La spiegazione, con che cosa fare su quel dispositivo, sta in resources/js/posizione.js
+    const base = error ? spiegaErrore(error) : (impedimento() ?? spiegaErrore({ code: 3 }));
 
-    return 'Posizione non disponibile in questo momento.';
+    return `${base} Nel frattempo la mappa si apre sulle aree censite.`;
 }
 
 function vaiAllaPosizione() {
@@ -573,7 +569,17 @@ function vaiAllaPosizione() {
             posizione.error = messaggioPosizione(null);
             if (! mossaDaChiGuarda) fitToAreas();
         }
-    }, 12000);
+    }, 35000);
+    // Se il browser sa gia' che il permesso e' negato lo si dice subito,
+    // senza far aspettare mezzo minuto davanti a una mappa ferma
+    navigator.permissions?.query?.({ name: 'geolocation' }).then((stato) => {
+        if (stato?.state === 'denied' && ! posizione.located) {
+            clearTimeout(posizioneTimer);
+            posizione.cercando = false;
+            posizione.error = messaggioPosizione({ code: 1 });
+            if (! mossaDaChiGuarda) fitToAreas();
+        }
+    }).catch(() => {});
     geolocate?.trigger();
 }
 
@@ -1081,7 +1087,9 @@ onMounted(async () => {
 
     // Posizione del dispositivo: il puntino blu con il cerchio di precisione
     geolocate = new maplibregl.GeolocateControl({
-        positionOptions: { enableHighAccuracy: true, timeout: 10000 },
+        // All'aperto il GPS impiega anche mezzo minuto a partire: dieci secondi
+        // non bastavano e il pulsante sembrava rotto
+        positionOptions: { enableHighAccuracy: true, timeout: 30000, maximumAge: 10000 },
         showAccuracyCircle: true,
         showUserLocation: true,
         fitBoundsOptions: { maxZoom: 18 },
