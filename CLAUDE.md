@@ -375,6 +375,16 @@ Stato per punto; i dettagli stanno nelle sezioni che seguono.
    compilano genere, famiglia e nome comune ("pino romano" -> Pinus pinea). L'app di campo scarica il
    dizionario nel bootstrap (tabella Dexie `specie`, v6), lo mette nelle proposte e compila da sola
    genere e nome botanico quando il nome scritto e' una voce conosciuta. Prove: `DizionarioSpecieTest`.
+   **Dal 11/10/2026 niente `<datalist>` nell'app di campo** (segnalazione del committente: "quando
+   inserisco un nuovo albero da iPhone, mentre digito la specie si blocca il sito"): la lista nativa
+   con tutti i nomi (fino a 800 voci) la ripassava Safari a ogni lettera. Le proposte le calcola
+   `resources/js/field/specie.js` (`proposteSpecie`: nome uguale, inizia cosi', parola che inizia
+   cosi', contiene; al massimo `LIMITE` 8; `unisciVoci` aggiunge le specie gia' scritte sul telefono
+   che il dizionario non conosce) e le mostra `Components/CampoSpecie.vue` sotto il campo (bersagli da
+   44 px, Invio sceglie la prima). Il campo si completa dal dizionario **quando lo si lascia** o si
+   tocca una proposta (`completaDaDizionario`, `applicaVoce` in `Operatore.vue`), non a ogni lettera:
+   prima veniva riscritto sotto le dita appena il testo coincideva con un nome. Prove in
+   `tests/js/specie.test.mjs`; collaudo in `scratchpad/verifica-specie/` della sessione.
 3. **Fatto**: "Invia al gestionale" e' una **funzione per organizzazione** (`App\Support\Funzioni`,
    `organizations.settings['funzioni']['gestionale_giardini']`), **spenta di serie**: la accende solo la
    console della piattaforma (`PUT piattaforma/organizzazioni/{id}/funzioni`,

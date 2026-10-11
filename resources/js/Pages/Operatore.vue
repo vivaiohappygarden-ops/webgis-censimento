@@ -9,6 +9,8 @@ import { compressImage } from '@/field/photo';
 import { SyncManager } from '@/field/sync';
 import { montaSfondo, scaldaGlifi, scaricaSfondo, sfondoLocale, statoSfondoServer } from '@/field/sfondo';
 import { uuidv7 } from '@/field/uuidv7';
+import { stessoNome, unisciVoci, voceEsatta } from '@/field/specie';
+import CampoSpecie from '@/Components/CampoSpecie.vue';
 import { diagnostica, impedimento, nomePiattaforma, prendiPosizione, spiegaErrore, testoPermesso, testoPrecisione } from '@/posizione';
 
 const page = usePage();
@@ -90,8 +92,9 @@ const form = reactive({
 // Il tipo scelto ha una scheda albero? Allora il modulo chiede specie e misure
 const tipoConAlbero = computed(() => Boolean(typesById.value[form.typeId]?.requires_tree_record));
 
-// Le specie gia' scritte sul telefono: suggerimenti che valgono anche offline
-const specieNote = ref([]);
+// Le voci proposte nei campi della specie: il dizionario scaricato piu' le
+// specie gia' scritte su questo telefono (resources/js/field/specie.js)
+const vociSpecie = ref([]);
 
 // Nuova area di lavoro aperta dal campo (decisione committente 23/09/2026):
 // committente esistente o nuovo, nome e perimetro
@@ -280,25 +283,35 @@ async function submitAreaIssue() {
 const measureForm = reactive(alberoVuoto());
 
 // Il dizionario delle specie sul telefono: quando il nome scritto (botanico,
-// comune o regionale) e' una voce conosciuta, genere e altro nome si compilano
+// comune o regionale) e' una voce conosciuta, genere e altro nome si compilano.
+// Si completa quando si LASCIA il campo o si sceglie una proposta, non a ogni
+// lettera: prima il campo veniva riscritto sotto le dita appena il testo
+// coincideva con un nome (11/10/2026)
 const dizionarioSpecie = ref([]);
 function completaDaDizionario(albero, campo) {
-    const scritto = String(albero[campo] ?? '').trim().toLowerCase();
-    if (scritto.length < 3) return;
-    const voce = dizionarioSpecie.value.find((v) => [v.species, v.common_name, ...(v.synonyms ?? [])]
-        .filter(Boolean).some((n) => String(n).toLowerCase() === scritto));
+    const voce = voceEsatta(vociSpecie.value, albero[campo]);
     if (! voce) return;
-    const perNomeBotanico = String(voce.species).toLowerCase() === scritto;
+    const perNomeBotanico = stessoNome(voce.species, albero[campo]);
     // Un nome comune scritto nel campo della specie diventa il nome botanico;
     // il nome comune si compila solo se e' vuoto (quello scritto a mano resta)
-    if (! perNomeBotanico) albero.species = voce.species;
+    if (! perNomeBotanico || ! String(albero.species ?? '').trim()) albero.species = voce.species;
     if (campo === 'species' && voce.common_name && ! String(albero.common_name ?? '').trim()) albero.common_name = voce.common_name;
+    // Il nome botanico scritto nel campo del nome comune: ognuno al suo posto
+    if (campo === 'common_name' && perNomeBotanico && voce.common_name) albero.common_name = voce.common_name;
     if (voce.genus) albero.genus = voce.genus;
 }
-watch(() => form.albero.species, () => completaDaDizionario(form.albero, 'species'));
-watch(() => form.albero.common_name, () => completaDaDizionario(form.albero, 'common_name'));
-watch(() => measureForm.species, () => completaDaDizionario(measureForm, 'species'));
-watch(() => measureForm.common_name, () => completaDaDizionario(measureForm, 'common_name'));
+
+// Una proposta scelta: e' un gesto esplicito, la specie segue sempre la scelta.
+// Il nome comune scritto a mano (che il dizionario non conosce) resta: e' il
+// dato che insegna al dizionario; uno vuoto o preso dal dizionario segue la voce
+function applicaVoce(albero, voce, campo) {
+    albero.species = voce.species;
+    if (voce.genus) albero.genus = voce.genus;
+    const comune = String(albero.common_name ?? '').trim();
+    if (voce.common_name && (campo === 'common_name' || comune === '' || voceEsatta(vociSpecie.value, comune))) {
+        albero.common_name = voce.common_name;
+    }
+}
 const tagForm = reactive({ uid: '', tagType: 'qr' });
 
 // Scansione tag (fotocamera dove disponibile, inserimento manuale sempre)
@@ -1114,14 +1127,7 @@ async function refreshLocal() {
     // Le proposte: le specie gia' sul telefono piu' il dizionario scaricato
     // (nomi botanici, comuni e regionali), che compila anche genere e nome comune
     dizionarioSpecie.value = await db.specie.toArray().catch(() => []);
-    specieNote.value = [...new Set([
-        ...alberiLocali.flatMap((t) => [t.species, t.common_name]),
-        ...dizionarioSpecie.value.flatMap((v) => [v.species, v.common_name, ...(v.synonyms ?? [])]),
-    ]
-        .filter(Boolean)
-        .map((s) => String(s).trim()))]
-        .sort((a, b) => a.localeCompare(b))
-        .slice(0, 800);
+    vociSpecie.value = unisciVoci(dizionarioSpecie.value, alberiLocali);
     clientiScaricati.value = (await db.meta.get('clients'))?.value ?? [];
     localOrders.value = await db.work_orders.toArray();
     // I punti seguono i lavori: dopo un sync un ordine nuovo o cambiato deve
@@ -2130,14 +2136,32 @@ onBeforeUnmount(() => {
                     <div v-if="tipoConAlbero" class="space-y-3 border-t border-gray-200 pt-3" data-test="op-scheda-albero">
                         <h2 class="text-sm font-semibold">Specie e misure</h2>
                         <div class="grid grid-cols-2 gap-3">
-                            <label class="col-span-2 block text-xs">
-                                <span class="text-gray-500">Specie (nome botanico)</span>
-                                <input v-model="form.albero.species" list="specie-note" data-test="op-specie" autocomplete="off" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Tilia cordata">
-                            </label>
-                            <label class="col-span-2 block text-xs">
-                                <span class="text-gray-500">Nome comune</span>
-                                <input v-model="form.albero.common_name" list="specie-note" autocomplete="off" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" placeholder="es. Tiglio selvatico">
-                            </label>
+                            <div class="col-span-2 text-xs">
+                                <label for="op-specie" class="text-gray-500">Specie (nome botanico)</label>
+                                <CampoSpecie
+                                    id="op-specie"
+                                    v-model="form.albero.species"
+                                    campo="species"
+                                    :voci="vociSpecie"
+                                    prova="op-specie"
+                                    placeholder="es. Tilia cordata"
+                                    @scelta="(voce) => applicaVoce(form.albero, voce, 'species')"
+                                    @lascia="completaDaDizionario(form.albero, 'species')"
+                                />
+                            </div>
+                            <div class="col-span-2 text-xs">
+                                <label for="op-nome-comune" class="text-gray-500">Nome comune</label>
+                                <CampoSpecie
+                                    id="op-nome-comune"
+                                    v-model="form.albero.common_name"
+                                    campo="common_name"
+                                    :voci="vociSpecie"
+                                    prova="op-nome-comune"
+                                    placeholder="es. Tiglio selvatico"
+                                    @scelta="(voce) => applicaVoce(form.albero, voce, 'common_name')"
+                                    @lascia="completaDaDizionario(form.albero, 'common_name')"
+                                />
+                            </div>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Altezza (m)</span>
                                 <input v-model.number="form.albero.height_m" type="number" inputmode="decimal" step="0.1" min="0" data-test="op-altezza" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
@@ -2687,14 +2711,30 @@ onBeforeUnmount(() => {
                 <div v-if="selected.tree" class="rounded-xl border border-gray-200 bg-white p-4">
                     <h2 class="text-sm font-semibold">Specie e misure</h2>
                     <div class="mt-2 grid grid-cols-2 gap-3">
-                        <label class="col-span-2 block text-xs">
-                            <span class="text-gray-500">Specie (nome botanico)</span>
-                            <input v-model="measureForm.species" list="specie-note" autocomplete="off" data-test="measure-species" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
-                        </label>
-                        <label class="col-span-2 block text-xs">
-                            <span class="text-gray-500">Nome comune</span>
-                            <input v-model="measureForm.common_name" list="specie-note" autocomplete="off" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
-                        </label>
+                        <div class="col-span-2 text-xs">
+                            <label for="misure-specie" class="text-gray-500">Specie (nome botanico)</label>
+                            <CampoSpecie
+                                id="misure-specie"
+                                v-model="measureForm.species"
+                                campo="species"
+                                :voci="vociSpecie"
+                                prova="measure-species"
+                                @scelta="(voce) => applicaVoce(measureForm, voce, 'species')"
+                                @lascia="completaDaDizionario(measureForm, 'species')"
+                            />
+                        </div>
+                        <div class="col-span-2 text-xs">
+                            <label for="misure-nome-comune" class="text-gray-500">Nome comune</label>
+                            <CampoSpecie
+                                id="misure-nome-comune"
+                                v-model="measureForm.common_name"
+                                campo="common_name"
+                                :voci="vociSpecie"
+                                prova="measure-common-name"
+                                @scelta="(voce) => applicaVoce(measureForm, voce, 'common_name')"
+                                @lascia="completaDaDizionario(measureForm, 'common_name')"
+                            />
+                        </div>
                         <label class="block text-xs">
                             <span class="text-gray-500">Altezza (m)</span>
                             <input v-model.number="measureForm.height_m" type="number" inputmode="decimal" step="0.1" min="0" data-test="measure-height" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
@@ -3082,10 +3122,6 @@ onBeforeUnmount(() => {
             </div>
         </div>
 
-        <!-- Le specie gia' sul telefono, suggerite nel modulo e nella scheda -->
-        <datalist id="specie-note">
-            <option v-for="s in specieNote" :key="s" :value="s" />
-        </datalist>
 
         <!-- Barra di navigazione inferiore (uso a una mano in campo) -->
         <nav
