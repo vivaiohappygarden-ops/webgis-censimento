@@ -4,6 +4,7 @@ import { usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { BOTTONE, BOTTONE_SECONDARIO } from '@/nuovo/stile';
 import CercaSpecie from '@/Components/CercaSpecie.vue';
+import { legaTronco } from '@/dendrometria';
 
 /*
  * La modifica dei dati dell'albero, una sezione per volta: "misure" (altezza,
@@ -29,7 +30,7 @@ const albero = reactive({
 
 const MISURE = [
     { chiave: 'height_m', etichetta: 'Altezza (m)', tipo: 'number', passo: '0.1' },
-    { chiave: 'dbh_cm', etichetta: 'Diametro del tronco a 1,30 m (cm)', tipo: 'number', passo: '1' },
+    { chiave: 'dbh_cm', etichetta: 'Diametro del tronco a 1,30 m (cm)', tipo: 'number', passo: '0.1' },
     { chiave: 'trunk_circumference_cm', etichetta: 'Circonferenza del tronco (cm)', tipo: 'number', passo: '1' },
     { chiave: 'trunk_count', etichetta: 'Numero di fusti', tipo: 'number', passo: '1' },
     { chiave: 'crown_diameter_m', etichetta: 'Diametro della chioma (m)', tipo: 'number', passo: '0.1' },
@@ -149,9 +150,13 @@ async function salva() {
                     :min="c.tipo === 'number' ? 0 : undefined"
                     class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-sm"
                     :data-test="`campo-${c.chiave}`"
+                    @input="legaTronco(albero, c.chiave, $event.target.value)"
                 >
             </label>
         </div>
+        <p v-if="props.sezione === 'misure'" class="mt-2 text-xs text-gray-500" data-test="nota-tronco">
+            Diametro e circonferenza del tronco si completano a vicenda: basta misurarne uno.
+        </p>
         <p v-if="props.sezione === 'identita'" class="mt-2 text-xs text-gray-500" data-test="nota-dizionario">
             Scrivendo il nome botanico o quello comune il programma propone le voci del dizionario delle specie:
             scegliendone una si compilano genere, famiglia e nome comune. Una specie nuova, una volta salvata,

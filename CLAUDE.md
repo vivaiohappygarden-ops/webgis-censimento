@@ -909,6 +909,15 @@ attivo, come oggi un albero morto in piedi. Le **aree** del territorio hanno da 
   conta le schede che cambierebbero davvero (un valore gia' uguale non e' una modifica).
   Vale l'**ordine di scrittura** delle specializzazioni: fill dell'albero senza save,
   bump della versione di `assets` (li' scatta la fotografia), poi save dell'albero.
+- **Diametro e circonferenza del tronco si completano a vicenda (dal 18/10/2026)**, richiesta del
+  committente davanti ai due campi ("questi calcoli non si possono mettere automatici?"): la
+  formula sta una volta sola in `resources/js/dendrometria.js` (`legaTronco`: scritto un campo
+  l'altro si riscrive, circonferenza al centimetro, diametro al decimo; svuotando un campo l'altro
+  resta) e la usano `ModuloAlbero` (scheda nuova, con la nota sotto le misure), `TreeVtaPanel`
+  (scheda precedente) e i due moduli dell'app di campo. Il passo del diametro e' 0,1 in tutti i
+  moduli (la colonna ha un decimale). Il server non inventa il valore mancante: quello che si
+  salva e' quello che si vede nel modulo. Prove: `tests/js/dendrometria.test.mjs`; collaudo in
+  `scratchpad/verifica-tronco/` della sessione.
 - **Corredo aree gioco** (`ModelloAreeGioco`): campi della scheda attrezzo e tre liste
   EN 1176 si installano con un gesto e sono **idempotenti**; quello che c'e' si dichiara
   "presente" e non si tocca, cosi' gli adattamenti del tecnico restano. Le liste non
@@ -1234,6 +1243,22 @@ attivo, come oggi un albero morto in piedi. Le **aree** del territorio hanno da 
   installa rsync), altrimenti i server gia' in piedi terrebbero la versione vecchia.
   Prove: `SalvataggiTest` (lancia davvero lo script su cartelle temporanee).
 - Verifica ogni blocco anche nel browser reale (Playwright/Chromium) oltre che con i test.
+- **Ambiente di lavoro della sessione ripartito vuoto** (successo il 18/10/2026: niente `vendor`,
+  `node_modules`, `.env`, banche dati, PostGIS, scratchpad, e PHP 8.3 al posto di 8.4). Per
+  rimetterlo in piedi: `apt-get install postgresql-16-postgis-3`; ruolo `webgis`/`webgis` e banche
+  dati `webgis` e `webgis_test` con le estensioni di `deploy/provision.sh` (postgis, pg_trgm,
+  citext, btree_gist, unaccent); **PHP 8.4 dall'archivio Ubuntu plucky** (il PPA ondrej e php.net
+  sono bloccati dal proxy): sorgente `deb http://archive.ubuntu.com/ubuntu plucky main universe`
+  con priorita' 100 e `apt-get install -t plucky php8.4-cli php8.4-pgsql php8.4-redis php8.4-gd
+  php8.4-mbstring php8.4-xml php8.4-curl php8.4-zip php8.4-intl php8.4-bcmath php8.4-igbinary
+  php8.4-sqlite3 php8.4-readline` (non tocca libc); `composer install`, `npm ci`; `.env` da
+  `.env.example` con `APP_URL=http://127.0.0.1:8000` e **`SANCTUM_STATEFUL_DOMAINS` con la porta**
+  (`127.0.0.1:8000`, altrimenti le chiamate API rispondono 401 e il browser rimbalza all'accesso);
+  `key:generate`, `migrate`, `db:seed`, `demo:patrimonio`; `redis-server --daemonize yes --save ''
+  --appendonly no`; `php artisan serve --host=127.0.0.1 --port=8000`. Nel `.env` copiato dall'esempio vanno **tolte le righe `SITO_*` vuote**
+  (`SITO_RAGIONE_SOCIALE=` e le altre): una chiave vuota vince sul valore di serie di
+  `config/sito.php` e `SitoAziendaleTest` non trova piu' "DAMA S.R.L." nel pie'. Mai `pkill -f`
+  con un testo che compare anche nel comando della shell corrente: uccide la shell stessa.
 - **Prove d'uso** (dal 04/10/2026, richiesta del committente "puoi fare delle prove pratiche di
   utilizzo?", riferite al gestionale e all'app di campo, non al portale pubblico): si percorre
   nel browser un flusso intero come farebbe l'ufficio, sul Comune Demo in locale (copioni in

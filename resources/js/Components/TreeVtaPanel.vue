@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
+import { legaTronco } from '@/dendrometria';
 import { usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { fetchPdf } from '@/pdf';
@@ -710,11 +711,11 @@ watch(() => props.apriValutazione, (apri) => {
             </label>
             <label class="block text-xs">
                 <span class="text-gray-500">Ø fusto DBH (cm)</span>
-                <input v-model.number="tree.dbh_cm" type="number" step="0.5" :disabled="! canUpdate" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                <input v-model.number="tree.dbh_cm" type="number" step="0.1" :disabled="! canUpdate" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" @input="legaTronco(tree, 'dbh_cm', $event.target.value)">
             </label>
             <label class="block text-xs">
                 <span class="text-gray-500">Circonf. fusto (cm)</span>
-                <input v-model.number="tree.trunk_circumference_cm" type="number" step="1" :disabled="! canUpdate" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm">
+                <input v-model.number="tree.trunk_circumference_cm" type="number" step="1" :disabled="! canUpdate" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" @input="legaTronco(tree, 'trunk_circumference_cm', $event.target.value)">
             </label>
             <label class="block text-xs">
                 <span class="text-gray-500">Ø chioma (m)</span>

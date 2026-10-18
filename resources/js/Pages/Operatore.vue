@@ -10,6 +10,7 @@ import { SyncManager } from '@/field/sync';
 import { montaSfondo, scaldaGlifi, scaricaSfondo, sfondoLocale, statoSfondoServer } from '@/field/sfondo';
 import { uuidv7 } from '@/field/uuidv7';
 import { stessoNome, unisciVoci, voceEsatta } from '@/field/specie';
+import { legaTronco } from '@/dendrometria';
 import CampoSpecie from '@/Components/CampoSpecie.vue';
 import { diagnostica, impedimento, nomePiattaforma, prendiPosizione, spiegaErrore, testoPermesso, testoPrecisione } from '@/posizione';
 
@@ -2168,7 +2169,7 @@ onBeforeUnmount(() => {
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Diametro fusto a 1,30 m (cm)</span>
-                                <input v-model.number="form.albero.dbh_cm" type="number" inputmode="decimal" step="0.5" min="0" data-test="op-diametro" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                                <input v-model.number="form.albero.dbh_cm" type="number" inputmode="decimal" step="0.1" min="0" data-test="op-diametro" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @input="legaTronco(form.albero, 'dbh_cm', $event.target.value)">
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Diametro chioma (m)</span>
@@ -2191,7 +2192,7 @@ onBeforeUnmount(() => {
                                 </label>
                                 <label class="block text-xs">
                                     <span class="text-gray-500">Circonferenza fusto (cm)</span>
-                                    <input v-model.number="form.albero.trunk_circumference_cm" type="number" inputmode="decimal" step="1" min="0" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                                    <input v-model.number="form.albero.trunk_circumference_cm" type="number" inputmode="decimal" step="1" min="0" data-test="op-circonferenza" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @input="legaTronco(form.albero, 'trunk_circumference_cm', $event.target.value)">
                                 </label>
                                 <label class="block text-xs">
                                     <span class="text-gray-500">Numero di fusti</span>
@@ -2741,7 +2742,7 @@ onBeforeUnmount(() => {
                         </label>
                         <label class="block text-xs">
                             <span class="text-gray-500">Diametro fusto a 1,30 m (cm)</span>
-                            <input v-model.number="measureForm.dbh_cm" type="number" inputmode="decimal" step="0.5" min="0" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                            <input v-model.number="measureForm.dbh_cm" type="number" inputmode="decimal" step="0.1" min="0" data-test="measure-dbh" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @input="legaTronco(measureForm, 'dbh_cm', $event.target.value)">
                         </label>
                         <label class="block text-xs">
                             <span class="text-gray-500">Diametro chioma (m)</span>
@@ -2764,7 +2765,7 @@ onBeforeUnmount(() => {
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Circonferenza fusto (cm)</span>
-                                <input v-model.number="measureForm.trunk_circumference_cm" type="number" inputmode="decimal" step="1" min="0" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm">
+                                <input v-model.number="measureForm.trunk_circumference_cm" type="number" inputmode="decimal" step="1" min="0" data-test="measure-circonferenza" class="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm" @input="legaTronco(measureForm, 'trunk_circumference_cm', $event.target.value)">
                             </label>
                             <label class="block text-xs">
                                 <span class="text-gray-500">Numero di fusti</span>
